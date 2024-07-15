@@ -1,0 +1,51 @@
+.haiku-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  height: 100%;
+  width: 100%;
+}
+.haiku-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: 100%;
+}
+.haiku-list-item,
+.new-haiku-button {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  width: calc(100% - 40px);
+  padding: 10px;
+  margin: 10px;
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+  transition: background-color 0.2s;
+}
+
+.haiku-list-item-controls {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+textarea {
+  width: 300px;
+  height: 100px;
+  margin: 10px;
+  padding: 10px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  resize: none;
+  background-color: rgba(0, 0, 0, 0.1);
+}
+textarea:focus,
+textarea:active {
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  outline: none;
+}

@@ -1,10 +1,11 @@
 import Header from "./components/header";
 import "./App.css";
 import { Route, Routes } from "react-router-dom";
-import Home from "./pages/home";
+import Home from "./pages/home/home";
 import Haiku from "./pages/haiku/haiku";
-import Haiga from "./pages/haiga";
-import Blog from "./pages/blog";
+import Haiga from "./pages/haiga/haiga";
+import Blog from "./pages/blog/blog";
+import Admin from "./pages/admin/admin";
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
             <Route path="haiku" element={<Haiku />} />
             <Route path="haiga" element={<Haiga />} />
             <Route path="blog" element={<Blog />} />
+            <Route path="admin" element={<Admin />} />
           </Routes>
         </div>
       </div>
