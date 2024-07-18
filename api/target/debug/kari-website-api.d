@@ -1,1 +1,0 @@
-/Users/adamdavidson/Personal\ Projects/Kari\ Website/kari_website_v2/kari-website/api/target/debug/kari-website-api: /Users/adamdavidson/Personal\ Projects/Kari\ Website/kari_website_v2/kari-website/api/src/main.rs
