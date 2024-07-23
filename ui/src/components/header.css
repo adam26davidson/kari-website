@@ -12,10 +12,11 @@
   width: calc(100% - 60px);
   margin: 0px 30px;
   height: 0px;
-  border-top: 2px dotted rgba(0, 0, 0, 0.4);
+  border-top: 2px dotted #1c3100;
 }
 
 .header-title {
+  font-size: 60px;
   margin: 0px 20px 0px 40px;
 }
 
@@ -25,16 +26,20 @@
   justify-content: flex-start;
   align-items: center;
   flex: 1;
-  padding: 0px 40px 0px 40px;
-  font-size: 15px;
+  margin: 0px 40px 0px 40px;
+  font-size: 20px;
 }
 
 .pages a {
   text-decoration: none;
   margin: 0px 30px 2px 30px;
-  opacity: 0.5;
-  color: black;
+  color: white;
   transition: opacity 0.5s;
+  min-width: 90px;
+  text-align: center;
+  padding: 5px 10px;
+  border-radius: 3px;
+  background-color: #1c3100a2;
 }
 
 .pages .active {
@@ -44,7 +49,7 @@
 
 .pages a:hover {
   margin-bottom: 0px;
-  border-bottom: 2px solid black;
+  border-bottom: 2px solid white;
   opacity: 1;
   cursor: pointer;
 }
