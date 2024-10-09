@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./haikuEditor.css";
 import "../admin.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -8,15 +8,35 @@ import {
   faArrowDown,
   faTrash,
 } from "@fortawesome/free-solid-svg-icons";
+import { useAuth0 } from "@auth0/auth0-react";
+
+interface Haiku {
+  lines: Array<string>;
+}
 
 function HaikuEditor() {
-  const [haikuList, setHaikuList] = useState<Array<Array<string>>>([
-    ["what's left", "of the afternoon", "empty pea pods"],
-    ["first cherry blossoms", "a child’s breath", "on the windowpane"],
-    ["drifting cherry petals", "for a moment", "we let down our masks"],
-  ]);
+  const { getAccessTokenSilently } = useAuth0();
+
+  const [haikuList, setHaikuList] = useState<Array<Haiku>>([]);
   const [newHaiku, setNewHaiku] = useState("");
   const [addingHaiku, setAddingHaiku] = useState(false);
+
+  const getHaikus = async () => {
+    const token = await getAccessTokenSilently();
+    const response = await fetch("http://localhost:3000/haikus", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const data: Array<Haiku> = await response.json();
+    console.log(data);
+    setHaikuList(data);
+  };
+
+  // on page load, get the haikus
+  useEffect(() => {
+    getHaikus();
+  });
 
   const newHaikuEditor = () => {
     return (
@@ -32,9 +52,9 @@ function HaikuEditor() {
             className="admin-icon-button"
             onClick={() => {
               const newHaikuList = haikuList.slice();
-              newHaikuList.push(
-                newHaiku.split("\n").map((line) => line.trim())
-              );
+              newHaikuList.push({
+                lines: newHaiku.split("\n").map((line) => line.trim()),
+              });
               setHaikuList(newHaikuList);
               setAddingHaiku(false);
             }}
@@ -71,7 +91,7 @@ function HaikuEditor() {
           {haikuList.map((currentHaiku, hi) => (
             <div key={hi} className="admin-haiku-list-item">
               <div className="admin-haiku-list-item-text">
-                {currentHaiku.map((line, li) => (
+                {currentHaiku.lines.map((line, li) => (
                   <div key={li} className="haiku-list-line">
                     {line}
                   </div>

@@ -7,6 +7,7 @@ use axum::{
 use axum::response::Json;
 use serde_json::{json, Value};
 use serde::{Serialize, Deserialize};
+use tower_http::cors::CorsLayer;
 
 #[derive(Serialize, Deserialize)]
 struct Haiku {
@@ -20,7 +21,8 @@ struct Haiku {
 async fn main() {
     let app = Router::new()
         .route("/test", get(|| async { "WHATS AAAAAP" }))
-        .route("/haikus", get(haikus_handler));
+        .route("/haikus", get(haikus_handler))
+        .layer(CorsLayer::permissive());
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
