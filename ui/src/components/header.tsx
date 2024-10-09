@@ -50,7 +50,7 @@ function Header() {
         )}
         {location.pathname == "/admin" && isLoading && "Logging in..."}
       </div>
-      <div className="header-separator"></div>
+      {/* <div className="header-separator"></div> */}
     </>
   );
 }

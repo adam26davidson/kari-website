@@ -20,14 +20,14 @@ function HaikuEditor() {
 
   const newHaikuEditor = () => {
     return (
-      <div className="haiku-list-item">
-        <div className="haiku-list-item-input">
+      <div className="admin-haiku-list-item">
+        <div className="admin-haiku-list-item-input">
           <textarea
             value={newHaiku}
             onChange={(e) => setNewHaiku(e.target.value)}
           />
         </div>
-        <div className="haiku-list-item-controls">
+        <div className="admin-haiku-list-item-controls">
           <div
             className="admin-icon-button"
             onClick={() => {
@@ -57,8 +57,8 @@ function HaikuEditor() {
 
   return (
     <>
-      <div className="haiku-container">
-        <div className="haiku-list">
+      <div className="admin-haiku-container">
+        <div className="admin-haiku-list">
           {!addingHaiku && (
             <div
               className="admin-icon-button"
@@ -69,15 +69,15 @@ function HaikuEditor() {
           )}
           {addingHaiku && newHaikuEditor()}
           {haikuList.map((currentHaiku, hi) => (
-            <div key={hi} className="haiku-list-item">
-              <div className="haiku-list-item-text">
+            <div key={hi} className="admin-haiku-list-item">
+              <div className="admin-haiku-list-item-text">
                 {currentHaiku.map((line, li) => (
                   <div key={li} className="haiku-list-line">
                     {line}
                   </div>
                 ))}
               </div>
-              <div className="haiku-list-item-controls">
+              <div className="admin-haiku-list-item-controls">
                 <div
                   className="admin-icon-button"
                   onClick={() => {

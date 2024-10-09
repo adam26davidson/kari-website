@@ -4,8 +4,9 @@
   justify-content: space-between;
   align-items: flex-end;
   font-size: 25px;
-  margin: 20px 0px 10px 0px;
+  padding: 15px 0px 15px 0px;
   width: 100%;
+  background-color: rgba(28, 49, 0, 0.7);
 }
 
 .header-separator {
@@ -16,8 +17,9 @@
 }
 
 .header-title {
-  font-size: 60px;
+  font-size: 40px;
   margin: 0px 20px 0px 40px;
+  color: white;
 }
 
 .pages {
@@ -35,11 +37,9 @@
   margin: 0px 30px 2px 30px;
   color: white;
   transition: opacity 0.5s;
-  min-width: 90px;
+  /* min-width: 90px; */
   text-align: center;
-  padding: 5px 10px;
-  border-radius: 3px;
-  background-color: #1c3100a2;
+  /* border-radius: 3px; */
 }
 
 .pages .active {

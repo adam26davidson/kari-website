@@ -1,0 +1,23 @@
+.haiku-list-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  width: 100%;
+  height: 100%;
+}
+
+.haiku-list-item {
+  padding: 20px 20px 20px 40px;
+  margin: 10px;
+  width: calc(100% - 60px);
+  max-width: 500px;
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+.haiku-list-line {
+  font-size: 22px;
+  margin: 10px 0px 10px 0px;
+  transition: opacity 2s ease-in-out;
+  color: black;
+}
