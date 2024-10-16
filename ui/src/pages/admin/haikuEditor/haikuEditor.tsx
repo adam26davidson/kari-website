@@ -21,22 +21,21 @@ function HaikuEditor() {
   const [newHaiku, setNewHaiku] = useState("");
   const [addingHaiku, setAddingHaiku] = useState(false);
 
-  const getHaikus = async () => {
-    const token = await getAccessTokenSilently();
-    const response = await fetch("http://localhost:3000/haikus", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    const data: Array<Haiku> = await response.json();
-    console.log(data);
-    setHaikuList(data);
-  };
-
   // on page load, get the haikus
   useEffect(() => {
+    const getHaikus = async () => {
+      const token = await getAccessTokenSilently();
+      const response = await fetch("http://localhost:3000/haikus", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data: Array<Haiku> = await response.json();
+      console.log(data);
+      setHaikuList(data);
+    };
     getHaikus();
-  });
+  }, [getAccessTokenSilently]);
 
   const newHaikuEditor = () => {
     return (

@@ -12,6 +12,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
       clientId="gEuLXgSWSpVoqjJSv5gs5qb2a83Tz0JM"
       authorizationParams={{
         redirect_uri: window.location.origin + "/admin",
+        audience: "https://api.karidavidson.com/",
       }}
     >
       <BrowserRouter>
