@@ -1,5 +1,4 @@
 use std::net::SocketAddr;
-
 use axum::{
     http::StatusCode,
     extract::{Request, State},
@@ -16,6 +15,8 @@ use tower_http::cors::CorsLayer;
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation, jwk::{AlgorithmParameters, JwkSet}};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use aws_sdk_s3::Client;
+
 
 #[derive(Serialize, Deserialize)]
 struct Haiku {
@@ -32,7 +33,12 @@ struct AppState {
 
 #[tokio::main]
 async fn main() {
+    let sdk_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+    let client = Client::new(&sdk_config);
+    let buckets = client.list_buckets().send().await.unwrap().buckets.unwrap();
+    println!("Buckets: {:?}", buckets);
     // Fetch JWKS and store in shared state
+
     let jwks = fetch_jwks().await.expect("Failed to fetch JWKS");
     let state = AppState {
         jwks: Arc::new(RwLock::new(jwks)),
