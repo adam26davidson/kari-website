@@ -15,7 +15,7 @@ use tower_http::cors::CorsLayer;
 use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation, jwk::{AlgorithmParameters, JwkSet}};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use aws_sdk_s3::Client;
+use aws_sdk_s3::{primitives::ByteStream, Client};
 
 
 #[derive(Serialize, Deserialize)]
@@ -29,23 +29,25 @@ struct Haiku {
 #[derive(Clone)]
 struct AppState {
     jwks: Arc<RwLock<JwkSet>>,
+    s3_client: Client,
 }
 
 #[tokio::main]
 async fn main() {
+    // Initialize S3 client
     let sdk_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
     let client = Client::new(&sdk_config);
-    let buckets = client.list_buckets().send().await.unwrap().buckets.unwrap();
-    println!("Buckets: {:?}", buckets);
-    // Fetch JWKS and store in shared state
 
+    // Fetch JWKS and store in shared state
     let jwks = fetch_jwks().await.expect("Failed to fetch JWKS");
     let state = AppState {
         jwks: Arc::new(RwLock::new(jwks)),
+        s3_client: client,
     };
 
     let app = Router::new()
-        .route("/haikus", get(haikus_handler))
+        .route("/haiku", get(get_haikus_handler))
+        .route("/haiku", axum::routing::put(update_haikus_handler))
         .layer(middleware::from_fn_with_state(
             state.clone(), 
             auth_middleware))
@@ -58,27 +60,34 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn haikus_handler() -> Json<Value> {
-    let haikus = vec![
-        Haiku {
-            id: 1,
-            title: "Empty Pea Pods".to_string(),
-            lines: vec!["what's left".to_string(), "of the afternoon".to_string(), "empty pea pods".to_string()],
-            publisher: "placeholder publisher 1".to_string()
-        }, Haiku {
-            id: 2,
-            title: "a child’s breath".to_string(),
-            lines: vec!["first cherry blossoms".to_string(), "a child’s breath".to_string(), "on the windowpane".to_string()],
-            publisher: "placeholder publisher 2".to_string()
-        }, Haiku {
-            id: 3,
-            title: "drifting cherry petals".to_string(),
-            lines: vec!["drifting cherry petals".to_string(), "for a moment".to_string(), "we let down our masks".to_string()],
-            publisher: "placeholder publisher 3".to_string()
-        }
-    ];
+async fn get_haikus_handler(
+    State(state): State<AppState>
+) -> Json<Value> {
+    //get haikus from S3 in bucket "karidavidson.com/haiku.json"
+    let haiku_str = String::from_utf8(state.s3_client.get_object()
+        .bucket("karidavidson.com")
+        .key("haiku.json")
+        .send().await.unwrap()
+        .body.collect().await.unwrap().to_vec()).unwrap();
 
-    Json(json!(haikus))
+    let haiku: Vec<Haiku> = serde_json::from_str(&haiku_str).unwrap();
+
+    return Json(json!(haiku));
+}
+
+async fn update_haikus_handler(
+    State(state): State<AppState>,
+    Json(haiku): Json<Vec<Haiku>>
+) -> Json<Value> {
+    //update haikus in S3 in bucket "karidavidson.com/haiku.json"
+    let haiku_str = serde_json::to_string(&haiku).unwrap();
+    state.s3_client.put_object()
+        .bucket("karidavidson.com")
+        .key("haiku.json")
+        .body(ByteStream::from(haiku_str.as_bytes().to_vec()))
+        .send().await.unwrap();
+
+    return Json(json!({"message": "Haiku list updated"}));
 }
 
 async fn auth_middleware(
@@ -92,15 +101,9 @@ async fn auth_middleware(
         .get("Authorization")
         .and_then(|v| v.to_str().ok());
 
-
     if let Some(auth_header) = auth_header {
-        println!("Auth Header: {}", auth_header);
-
         if let Some(token) = auth_header.strip_prefix("Bearer ") {
-            // log the token (for dev only)
-            println!("Token: {}", token);
-            let token_valid = validate_token(token, &state).await.is_ok();
-            if token_valid {
+            if validate_token(token, &state).await.is_ok() {
                 return next.run(request).await;
             }
         }

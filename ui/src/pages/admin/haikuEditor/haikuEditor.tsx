@@ -10,6 +10,8 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { useAuth0 } from "@auth0/auth0-react";
 
+const HAIKU_ENDPOINT = "http://localhost:3000/haiku";
+
 interface Haiku {
   lines: Array<string>;
 }
@@ -20,12 +22,29 @@ function HaikuEditor() {
   const [haikuList, setHaikuList] = useState<Array<Haiku>>([]);
   const [newHaiku, setNewHaiku] = useState("");
   const [addingHaiku, setAddingHaiku] = useState(false);
+  //const [loading, setLoading] = useState(false);
+
+  const updateHaikus = async () => {
+    //setLoading(true);
+    const token = await getAccessTokenSilently();
+    const response = await fetch(HAIKU_ENDPOINT, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(haikuList),
+    });
+    console.log(response);
+    //setLoading(false);
+  };
 
   // on page load, get the haikus
   useEffect(() => {
     const getHaikus = async () => {
+      //setLoading(true);
       const token = await getAccessTokenSilently();
-      const response = await fetch("http://localhost:3000/haikus", {
+      const response = await fetch("http://localhost:3000/haiku", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -33,9 +52,31 @@ function HaikuEditor() {
       const data: Array<Haiku> = await response.json();
       console.log(data);
       setHaikuList(data);
+      //setLoading(false);
     };
     getHaikus();
   }, [getAccessTokenSilently]);
+
+  const deleteHaiku = (haikuIdx: number) => () => {
+    const newHaikuList = haikuList.slice();
+    newHaikuList.splice(haikuIdx, 1);
+    updateHaikus();
+    setHaikuList(newHaikuList);
+  };
+
+  const moveHaiku =
+    (haikuIdx: number, haiku: Haiku, direction: "up" | "down") => () => {
+      if (haikuIdx === 0 && direction === "up") return;
+      if (haikuIdx === haikuList.length - 1 && direction === "down") return;
+
+      const newHaikuList = haikuList.slice();
+      newHaikuList.splice(haikuIdx, 1);
+      const offset = direction === "up" ? -1 : 1;
+      newHaikuList.splice(haikuIdx + offset, 0, haiku);
+      updateHaikus();
+      setHaikuList(newHaikuList);
+      return;
+    };
 
   const newHaikuEditor = () => {
     return (
@@ -54,6 +95,7 @@ function HaikuEditor() {
               newHaikuList.push({
                 lines: newHaiku.split("\n").map((line) => line.trim()),
               });
+              updateHaikus();
               setHaikuList(newHaikuList);
               setAddingHaiku(false);
             }}
@@ -87,8 +129,8 @@ function HaikuEditor() {
             </div>
           )}
           {addingHaiku && newHaikuEditor()}
-          {haikuList.map((currentHaiku, hi) => (
-            <div key={hi} className="admin-haiku-list-item">
+          {haikuList.map((currentHaiku, haikuIdx) => (
+            <div key={haikuIdx} className="admin-haiku-list-item">
               <div className="admin-haiku-list-item-text">
                 {currentHaiku.lines.map((line, li) => (
                   <div key={li} className="haiku-list-line">
@@ -99,37 +141,19 @@ function HaikuEditor() {
               <div className="admin-haiku-list-item-controls">
                 <div
                   className="admin-icon-button"
-                  onClick={() => {
-                    // Move Haiku Up in the List
-                    if (hi === 0) return;
-                    const newHaiku = haikuList.slice();
-                    newHaiku.splice(hi, 1);
-                    newHaiku.splice(hi - 1, 0, currentHaiku);
-                    setHaikuList(newHaiku);
-                  }}
+                  onClick={moveHaiku(haikuIdx, currentHaiku, "up")}
                 >
                   <FontAwesomeIcon icon={faArrowUp} />
                 </div>
                 <div
                   className="admin-icon-button"
-                  onClick={() => {
-                    // Move Haiku Down in the List
-                    if (hi === haikuList.length - 1) return;
-                    const newHaiku = haikuList.slice();
-                    newHaiku.splice(hi, 1);
-                    newHaiku.splice(hi + 1, 0, currentHaiku);
-                    setHaikuList(newHaiku);
-                  }}
+                  onClick={moveHaiku(haikuIdx, currentHaiku, "down")}
                 >
                   <FontAwesomeIcon icon={faArrowDown} />
                 </div>
                 <div
                   className="admin-icon-button"
-                  onClick={() => {
-                    const newHaiku = haikuList.slice();
-                    newHaiku.splice(hi, 1);
-                    setHaikuList(newHaiku);
-                  }}
+                  onClick={deleteHaiku(haikuIdx)}
                 >
                   <FontAwesomeIcon icon={faTrash} />
                 </div>

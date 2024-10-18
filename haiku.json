@@ -1,0 +1,24 @@
+[
+  {
+    "id": 1,
+    "title": "Empty Pea Pods",
+    "lines": ["what's left", "of the afternoon", "empty pea pods"],
+    "publisher": "placeholder publisher 1"
+  },
+  {
+    "id": 2,
+    "title": "a child's breath",
+    "lines": ["first cherry blossoms", "a child's breath", "on the windowpane"],
+    "publisher": "placeholder publisher 2"
+  },
+  {
+    "id": 3,
+    "title": "drifting cherry petals",
+    "lines": [
+      "drifting cherry petals",
+      "for a moment",
+      "we let down our masks"
+    ],
+    "publisher": "placeholder publisher 3"
+  }
+]

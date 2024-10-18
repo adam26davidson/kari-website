@@ -22,7 +22,7 @@
   width: calc(100% - 40px);
   padding: 10px;
   margin: 10px;
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: rgba(28, 49, 0, 0.7);
   border-radius: 3px;
   transition: background-color 0.2s;
 }

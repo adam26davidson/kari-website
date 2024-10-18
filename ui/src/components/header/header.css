@@ -7,13 +7,20 @@
   padding: 15px 0px 15px 0px;
   width: 100%;
   background-color: rgba(28, 49, 0, 0.7);
+  color: white;
 }
 
-.header-separator {
-  width: calc(100% - 60px);
-  margin: 0px 30px;
-  height: 0px;
-  border-top: 2px dotted #1c3100;
+.header-user-section {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  align-items: center;
+  margin-right: 20px;
+}
+
+.header-user-name {
+  font-size: 20px;
+  margin: 0px 20px 0px 10px;
 }
 
 .header-title {

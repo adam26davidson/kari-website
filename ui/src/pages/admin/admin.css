@@ -16,13 +16,14 @@
 }
 
 .admin-menu-item {
+  color: white;
   display: flex;
   justify-content: center;
   align-items: center;
   width: 80px;
   padding: 5px;
   margin: 10px;
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: rgba(28, 49, 0, 0.7);
   border-radius: 3px;
   transition: background-color 0.2s;
 }
