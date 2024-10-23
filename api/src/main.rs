@@ -20,7 +20,6 @@ use aws_sdk_s3::{primitives::ByteStream, Client};
 
 #[derive(Serialize, Deserialize)]
 struct Haiku {
-    id: i32,
     title: String,
     lines: Vec<String>,
     publisher: String,
@@ -81,6 +80,7 @@ async fn update_haikus_handler(
 ) -> Json<Value> {
     //update haikus in S3 in bucket "karidavidson.com/haiku.json"
     let haiku_str = serde_json::to_string(&haiku).unwrap();
+    
     state.s3_client.put_object()
         .bucket("karidavidson.com")
         .key("haiku.json")

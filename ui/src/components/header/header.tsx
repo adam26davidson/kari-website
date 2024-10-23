@@ -40,6 +40,7 @@ function Header() {
               <FontAwesomeIcon icon={faUser} />
               <div className="header-user-name">{user?.name}</div>
               <button
+                className="header-logout"
                 onClick={() =>
                   logout({ logoutParams: { returnTo: window.location.origin } })
                 }

@@ -16,11 +16,20 @@
   justify-content: flex-end;
   align-items: center;
   margin-right: 20px;
+  align-self: center;
 }
 
 .header-user-name {
-  font-size: 20px;
   margin: 0px 20px 0px 10px;
+  color: #c9c9c9;
+}
+
+.header-logout,
+.header-user-name {
+  font-size: 18px;
+  font-family: "Roboto", sans-serif;
+  font-weight: 400;
+  font-style: normal;
 }
 
 .header-title {

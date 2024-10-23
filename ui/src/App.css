@@ -1,24 +1,5 @@
 .content {
   display: flex;
-  width: calc(100% - 40px);
-  margin: 0 auto;
-  /* max-width: 800px; */
-  flex-grow: 1;
-  height: calc(100% - 87.5px);
-}
-
-textarea {
-  width: 300px;
-  height: 100px;
-  margin: 10px;
-  padding: 10px;
-  border-radius: 3px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  resize: none;
-  background-color: rgba(0, 0, 0, 0.1);
-}
-textarea:focus,
-textarea:active {
-  border: 1px solid rgba(0, 0, 0, 0.3);
-  outline: none;
+  width: 100%;
+  height: calc(100vh - 87.5px);
 }
