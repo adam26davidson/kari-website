@@ -4,10 +4,28 @@ import HaikuEditor from "./haikuEditor/haikuEditor";
 import { useAuth0 } from "@auth0/auth0-react";
 
 type Page = "home" | "haiku" | "haiga" | "blog";
+export interface Loading {
+  isLoading: boolean;
+  message: string;
+}
+export interface Confirmation {
+  message: string;
+  show: boolean;
+  options: Array<{ label: string; callback: () => void }>;
+}
 
-function Haiku() {
+function Admin() {
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
+  const [loading, setLoading] = useState<Loading>({
+    isLoading: false,
+    message: "",
+  });
+  const [confirmation, setConfirmation] = useState<Confirmation>({
+    message: "",
+    show: false,
+    options: [],
+  });
 
   return (
     <>
@@ -33,8 +51,37 @@ function Haiku() {
               ))}
             </div>
             <div className="admin-content">
+              {confirmation.show && (
+                <div className="admin-confirmation">
+                  {confirmation.message}
+                  <div className="admin-confirmation-options">
+                    {confirmation.options.map((option, idx) => (
+                      <button
+                        className="admin-confirmation-option"
+                        key={idx}
+                        onClick={() => {
+                          option.callback();
+                          setConfirmation({ ...confirmation, show: false });
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {loading.isLoading && (
+                <div className="admin-loading">{loading.message}</div>
+              )}
               {currentPage === "home" && <div>Home</div>}
-              {currentPage === "haiku" && <HaikuEditor />}
+              {currentPage === "haiku" && (
+                <HaikuEditor
+                  setLoading={setLoading}
+                  isConfirming={confirmation.show}
+                  setConfirmation={setConfirmation}
+                  isLoading={loading.isLoading}
+                />
+              )}
               {currentPage === "haiga" && <div>Haiga</div>}
               {currentPage === "blog" && <div>Blog</div>}
             </div>
@@ -45,4 +92,4 @@ function Haiku() {
   );
 }
 
-export default Haiku;
+export default Admin;
