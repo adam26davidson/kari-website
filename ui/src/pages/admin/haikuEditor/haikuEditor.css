@@ -1,25 +1,3 @@
-.admin-haiku-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  height: 100%;
-  width: 100%;
-}
-.admin-haiku-list {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
-  width: 100%;
-  max-width: 800px;
-  padding: 8px 0px;
-}
-.admin-haiku-list-item-content {
-  display: flex;
-  flex-direction: column;
-}
-
 .admin-haiku-list-line {
   color: #181818;
   font-size: 18px;
@@ -31,42 +9,3 @@
   margin-top: 15px;
 }
 
-.admin-haiku-list-item {
-  background-color: rgba(226, 226, 226, 0.8);
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  width: calc(100% - 52px);
-  padding: 18px;
-  margin: 8px;
-  border-radius: 3px;
-}
-
-.admin-new-haiku-button {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  width: calc(100% - 40px);
-  padding: 10px;
-  margin: 10px;
-  background-color: rgba(212, 212, 212, 0.7);
-  border-radius: 3px;
-  transition: background-color 0.2s;
-}
-
-.admin-haiku-list-item-inputs {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
-  width: 100%;
-}
-
-.admin-haiku-list-item-controls {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-end;
-}

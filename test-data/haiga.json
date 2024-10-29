@@ -1,15 +1,16 @@
 [
   {
-    "id": 1,
-    "title": "Example 1",
+    "id": "1",
+    "title": "Test Haiga 1",
     "lines": ["haiga 1 line 1", "haiga 1 line 2", "haiga 1 line 3"],
-
-    "publisher": "placeholder publisher 1"
+    "publisher": "placeholder publisher 1",
+    "image": "example-haiga-1.jpg"
   },
   {
-    "id": 2,
-    "title": "a child's breath",
-    "lines": ["first cherry blossoms", "a child's breath", "on the windowpane"],
-    "publisher": "placeholder publisher 2"
+    "id": "2",
+    "title": "Test Haiga 2",
+    "lines": ["haiga 2 line 1", "haiga 2 line 2", "haiga 2 line 3"],
+    "publisher": "placeholder publisher 2",
+    "image": "example-haiga-2.jpg"
   }
 ]

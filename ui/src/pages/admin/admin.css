@@ -23,7 +23,7 @@
   display: flex;
   justify-content: flex-start;
   align-items: center;
-  width: calc(100% - 20px);
+  width: calc(100% - 30px);
   padding: 12px 0px 12px 30px;
   margin: 0px;
   transition: color 0.2s;
@@ -43,7 +43,7 @@
 }
 
 .admin-menu-item:active {
-  background-color: rgba(0, 0, 0, 0.4);
+  color: #181818;
 }
 
 .admin-content {
@@ -105,4 +105,8 @@
 
 .admin-confirmation-option {
   margin: 10px;
+}
+
+.admin-login-button {
+  margin: auto;
 }

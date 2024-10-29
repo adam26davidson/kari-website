@@ -2,6 +2,7 @@ import { useState } from "react";
 import "./admin.css";
 import HaikuEditor from "./haikuEditor/haikuEditor";
 import { useAuth0 } from "@auth0/auth0-react";
+import HaigaEditor from "./haigaEditor/haigaEditor";
 
 type Page = "home" | "haiku" | "haiga" | "blog";
 export interface Loading {
@@ -31,7 +32,10 @@ function Admin() {
     <>
       <div className="admin-container">
         {!isAuthenticated && !isLoading && (
-          <button className="login-button" onClick={() => loginWithRedirect()}>
+          <button
+            className="admin-login-button"
+            onClick={() => loginWithRedirect()}
+          >
             Log In
           </button>
         )}
@@ -82,7 +86,14 @@ function Admin() {
                   isLoading={loading.isLoading}
                 />
               )}
-              {currentPage === "haiga" && <div>Haiga</div>}
+              {currentPage === "haiga" && (
+                <HaigaEditor
+                  setLoading={setLoading}
+                  isConfirming={confirmation.show}
+                  setConfirmation={setConfirmation}
+                  isLoading={loading.isLoading}
+                />
+              )}
               {currentPage === "blog" && <div>Blog</div>}
             </div>
           </>

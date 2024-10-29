@@ -20,9 +20,19 @@ use aws_sdk_s3::{primitives::ByteStream, Client};
 
 #[derive(Serialize, Deserialize)]
 struct Haiku {
+    id: String,
     title: String,
     lines: Vec<String>,
     publisher: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Haiga {
+    id: String,
+    title: String,
+    lines: Vec<String>,
+    publisher: String,
+    image: String,
 }
 
 #[derive(Clone)]
@@ -45,8 +55,9 @@ async fn main() {
     };
 
     let app = Router::new()
-        .route("/haiku", get(get_haikus_handler))
-        .route("/haiku", axum::routing::put(update_haikus_handler))
+        .route("/haiku", get(get_haiku_handler))
+        .route("/haiku", axum::routing::put(update_haiku_handler))
+        .route("/haiga", get(get_haiga_handler))
         .layer(middleware::from_fn_with_state(
             state.clone(), 
             auth_middleware))
@@ -59,10 +70,10 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn get_haikus_handler(
+async fn get_haiku_handler(
     State(state): State<AppState>
 ) -> Json<Value> {
-    //get haikus from S3 in bucket "karidavidson.com/haiku.json"
+    //get haiku from S3 in bucket "karidavidson.com/haiku.json"
     let haiku_str = String::from_utf8(state.s3_client.get_object()
         .bucket("karidavidson.com")
         .key("haiku.json")
@@ -74,7 +85,22 @@ async fn get_haikus_handler(
     return Json(json!(haiku));
 }
 
-async fn update_haikus_handler(
+async fn get_haiga_handler(
+    State(state): State<AppState>
+) -> Json<Value> {
+    //get haiga from S3 in bucket "karidavidson.com/haiga.json"
+    let haiga_str = String::from_utf8(state.s3_client.get_object()
+        .bucket("karidavidson.com")
+        .key("haiga.json")
+        .send().await.unwrap()
+        .body.collect().await.unwrap().to_vec()).unwrap();
+
+    let haiga: Vec<Haiga> = serde_json::from_str(&haiga_str).unwrap();
+
+    return Json(json!(haiga));
+}
+
+async fn update_haiku_handler(
     State(state): State<AppState>,
     Json(haiku): Json<Vec<Haiku>>
 ) -> Json<Value> {
