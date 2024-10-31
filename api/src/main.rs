@@ -1,22 +1,28 @@
-use std::net::SocketAddr;
-use axum::{
-    http::StatusCode,
-    extract::{Request, State},
-    middleware::{self, Next}, 
-    response::{IntoResponse, Response},
-    routing::get, 
-    Router
-};
-use reqwest;
+use aws_sdk_s3::{primitives::ByteStream, Client};
+use axum::extract::DefaultBodyLimit;
 use axum::response::Json;
+use axum::{
+    extract::{Multipart, Request, State},
+    http::StatusCode,
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
+    routing::{get, post, put},
+    Router,
+};
+use jsonwebtoken::{
+    decode, decode_header,
+    jwk::{AlgorithmParameters, JwkSet},
+    Algorithm, DecodingKey, Validation,
+};
+use mime_guess;
+use reqwest;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use serde::{Serialize, Deserialize};
-use tower_http::cors::CorsLayer;
-use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation, jwk::{AlgorithmParameters, JwkSet}};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use aws_sdk_s3::{primitives::ByteStream, Client};
-
+use tower_http::cors::CorsLayer;
+use tower_http::limit::RequestBodyLimitLayer;
 
 #[derive(Serialize, Deserialize)]
 struct Haiku {
@@ -54,73 +60,177 @@ async fn main() {
         s3_client: client,
     };
 
-    let app = Router::new()
-        .route("/haiku", get(get_haiku_handler))
-        .route("/haiku", axum::routing::put(update_haiku_handler))
-        .route("/haiga", get(get_haiga_handler))
+    let secure_routes = Router::new()
+        .route("/haiku", put(update_haiku_handler))
+        .route("/images", post(upload_image_handler))
+        .layer(DefaultBodyLimit::disable())
+        .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024 /* 10mb */))
         .layer(middleware::from_fn_with_state(
-            state.clone(), 
-            auth_middleware))
+            state.clone(),
+            auth_middleware,
+        ));
+
+    let public_routes = Router::new()
+        .route("/haiku", get(get_haiku_handler))
+        .route("/haiga", get(get_haiga_handler))
+        .route("/images/:filename", get(get_image_handler));
+
+    let app = Router::new()
+        .merge(secure_routes)
+        .merge(public_routes)
         .layer(CorsLayer::permissive())
         .with_state(state);
-
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn get_haiku_handler(
-    State(state): State<AppState>
-) -> Json<Value> {
+async fn get_haiku_handler(State(state): State<AppState>) -> Json<Value> {
     //get haiku from S3 in bucket "karidavidson.com/haiku.json"
-    let haiku_str = String::from_utf8(state.s3_client.get_object()
-        .bucket("karidavidson.com")
-        .key("haiku.json")
-        .send().await.unwrap()
-        .body.collect().await.unwrap().to_vec()).unwrap();
+    let haiku_str = String::from_utf8(
+        state
+            .s3_client
+            .get_object()
+            .bucket("karidavidson.com")
+            .key("haiku.json")
+            .send()
+            .await
+            .unwrap()
+            .body
+            .collect()
+            .await
+            .unwrap()
+            .to_vec(),
+    )
+    .unwrap();
 
     let haiku: Vec<Haiku> = serde_json::from_str(&haiku_str).unwrap();
 
     return Json(json!(haiku));
 }
 
-async fn get_haiga_handler(
-    State(state): State<AppState>
-) -> Json<Value> {
+async fn get_haiga_handler(State(state): State<AppState>) -> Json<Value> {
     //get haiga from S3 in bucket "karidavidson.com/haiga.json"
-    let haiga_str = String::from_utf8(state.s3_client.get_object()
-        .bucket("karidavidson.com")
-        .key("haiga.json")
-        .send().await.unwrap()
-        .body.collect().await.unwrap().to_vec()).unwrap();
+    let haiga_str = String::from_utf8(
+        state
+            .s3_client
+            .get_object()
+            .bucket("karidavidson.com")
+            .key("haiga.json")
+            .send()
+            .await
+            .unwrap()
+            .body
+            .collect()
+            .await
+            .unwrap()
+            .to_vec(),
+    )
+    .unwrap();
 
     let haiga: Vec<Haiga> = serde_json::from_str(&haiga_str).unwrap();
 
     return Json(json!(haiga));
 }
 
+async fn get_image_handler(
+    State(state): State<AppState>,
+    axum::extract::Path(filename): axum::extract::Path<String>,
+) -> impl IntoResponse {
+    // print request path
+    println!("Request path: {}", filename);
+
+    let bucket_name = "karidavidson.com";
+    let image_key = format!("images/{}", filename);
+
+    let response = state
+        .s3_client
+        .get_object()
+        .bucket(bucket_name)
+        .key(&image_key)
+        .send()
+        .await;
+
+    //print response status
+    println!("Response status: {:?}", response);
+
+    match response {
+        Ok(output) => {
+            let bytes = output.body.collect().await.unwrap().to_vec();
+            let content_type = mime_guess::from_path(&filename).first_or_octet_stream();
+            (
+                StatusCode::OK,
+                [("Content-Type", content_type.as_ref())],
+                bytes,
+            )
+                .into_response()
+        }
+        Err(_) => (StatusCode::NOT_FOUND, "Image not found").into_response(),
+    }
+}
+
+async fn upload_image_handler(
+    State(state): State<AppState>,
+    mut multipart: Multipart,
+) -> impl IntoResponse {
+    // Iterate over the fields
+    while let Some(field) = multipart.next_field().await.unwrap() {
+        //let name = field.name().unwrap_or_default().to_string();
+        let file_name = field
+            .file_name()
+            .map(|name| name.to_string())
+            .unwrap_or_default();
+        let content_type = field
+            .content_type()
+            .map(|ct| ct.to_string())
+            .unwrap_or_default();
+        let data = field.bytes().await.unwrap();
+
+        // Construct the key for the S3 bucket
+        let key = format!("images/{}", file_name);
+
+        // Upload the file to S3
+        let res = state
+            .s3_client
+            .put_object()
+            .bucket("karidavidson.com")
+            .key(&key)
+            .body(ByteStream::from(data.to_vec()))
+            .content_type(content_type)
+            .send()
+            .await;
+
+        match res {
+            Ok(_) => println!("File uploaded successfully: {}", file_name),
+            Err(e) => eprintln!("Error uploading file: {}", e),
+        }
+    }
+
+    (StatusCode::OK, "Files uploaded successfully")
+}
+
 async fn update_haiku_handler(
     State(state): State<AppState>,
-    Json(haiku): Json<Vec<Haiku>>
+    Json(haiku): Json<Vec<Haiku>>,
 ) -> Json<Value> {
     //update haikus in S3 in bucket "karidavidson.com/haiku.json"
     let haiku_str = serde_json::to_string(&haiku).unwrap();
-    
-    state.s3_client.put_object()
+
+    state
+        .s3_client
+        .put_object()
         .bucket("karidavidson.com")
         .key("haiku.json")
         .body(ByteStream::from(haiku_str.as_bytes().to_vec()))
-        .send().await.unwrap();
+        .send()
+        .await
+        .unwrap();
 
     return Json(json!({"message": "Haiku list updated"}));
 }
 
-async fn auth_middleware(
-    State(state): State<AppState>,
-    request: Request,
-    next: Next,
-) -> Response {
+async fn auth_middleware(State(state): State<AppState>, request: Request, next: Next) -> Response {
     // Extract the token from the Authorization header
     let auth_header = request
         .headers()
@@ -133,7 +243,7 @@ async fn auth_middleware(
                 return next.run(request).await;
             }
         }
-    } 
+    }
 
     return StatusCode::UNAUTHORIZED.into_response();
 }

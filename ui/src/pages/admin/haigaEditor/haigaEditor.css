@@ -1,23 +1,21 @@
-.admin-haiga-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  height: 100%;
-  width: 100%;
-}
-.admin-haiga-list {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
-  width: 100%;
-  max-width: 800px;
-  padding: 8px 0px;
-}
 .admin-haiga-list-item-content {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.admin-haiga-list-item-image-box {
+  height: 200px;
+  width: 400px;
+}
+
+.admin-haiga-list-item-image {
+  height: 100%;
+  max-width: 100%;
+  object-fit: cover;
+  border-radius: 3px;
 }
 
 .admin-haiga-list-line {
@@ -43,30 +41,10 @@
   border-radius: 3px;
 }
 
-.admin-new-haiga-button {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  width: calc(100% - 40px);
-  padding: 10px;
-  margin: 10px;
-  background-color: rgba(212, 212, 212, 0.7);
-  border-radius: 3px;
-  transition: background-color 0.2s;
-}
-
 .admin-haiga-list-item-inputs {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: flex-start;
   width: 100%;
-}
-
-.admin-haiga-list-item-controls {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-end;
 }
