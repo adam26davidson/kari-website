@@ -7,7 +7,7 @@ import EditorList from "../../../components/editorList/editorList";
 import { v4 as uuidv4 } from "uuid";
 
 const HAIGA_ENDPOINT = "http://localhost:3000/haiga";
-const IMAGES_ENDPOINT = "http://localhost:3000/images/";
+const IMAGES_ENDPOINT = "http://localhost:3000/images";
 
 interface Haiga {
   id: string;
@@ -61,10 +61,11 @@ function HaigaEditor(props: HaigaEditorProps) {
     });
     const responseBody = await response.json();
     console.log(responseBody);
-    props.setLoading({ isLoading: true, message: "Uploading " });
+    props.setLoading({ isLoading: false, message: "" });
   };
 
   const uploadImage = async (file: File | null) => {
+    props.setLoading({ isLoading: true, message: "Uploading image..." });
     if (!file) {
       console.error("No file provided for upload.");
       return;
@@ -72,6 +73,12 @@ function HaigaEditor(props: HaigaEditorProps) {
 
     // Get the access token from Auth0
     const token = await getAccessTokenSilently();
+
+    // give the file a unique name - replace spaces with underscores
+    const fileName = `${uuidv4()}-${file.name.replace(/\s/g, "_")}`;
+
+    // rename thge file to the unique name
+    file = new File([file], fileName, { type: file.type });
 
     // Create a FormData object and append the file
     const formData = new FormData();
@@ -94,30 +101,44 @@ function HaigaEditor(props: HaigaEditorProps) {
 
       const result = await response.json();
       console.log("Upload successful", result);
-      return result; // This could be the URL to the uploaded image or any other relevant data
+      props.setLoading({ isLoading: false, message: "" });
+      return fileName;
     } catch (error) {
       console.error("Failed to upload image", error);
+      props.setLoading({ isLoading: false, message: "" });
+      throw error;
     }
   };
 
   const saveNewHaiga = async () => {
-    const newDataList = [...haigaList, { ...newHaiga, id: uuidv4() }];
-    saveHaiga(newDataList);
+    const fileName = await uploadImage(imageFile);
+    if (!fileName) {
+      console.error("Failed to upload image - aborting save");
+      return;
+    }
+    const newDataList = [
+      ...haigaList,
+      { ...newHaiga, id: uuidv4(), image: fileName },
+    ];
+    await saveHaiga(newDataList);
     setHaigaList(newDataList);
-    await uploadImage(imageFile);
+  };
+
+  const newHaigaIsValid = () => {
+    return (
+      newHaiga.title.trim().length > 0 &&
+      newHaiga.lines.length > 0 &&
+      newHaiga.lines[0].length > 0 &&
+      imageFile !== null
+    );
   };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
       const file: File = event.target.files[0];
-      uploadImage(file)
-        .then((uploadResponse) => {
-          console.log("Image uploaded:", uploadResponse);
-        })
-        .catch((error) => {
-          // Handle any errors during upload
-          console.error("Error uploading file:", error);
-        });
+      setImageFile(file);
+    } else {
+      setImageFile(null);
     }
   };
 
@@ -158,7 +179,7 @@ function HaigaEditor(props: HaigaEditorProps) {
         <div className="admin-haiga-list-item-content">
           <div className="admin-haiga-list-item-image-box">
             <img
-              src={`${IMAGES_ENDPOINT}${haigaList[idx].image}`}
+              src={`${IMAGES_ENDPOINT}/${haigaList[idx].image}`}
               alt={haigaList[idx].title}
               className="admin-haiga-list-item-image"
             />
@@ -191,6 +212,8 @@ function HaigaEditor(props: HaigaEditorProps) {
       setConfirmation={props.setConfirmation}
       loadData={loadHaiga}
       saveData={saveHaiga}
+      saveNewItem={saveNewHaiga}
+      newItemIsValid={newHaigaIsValid}
       itemEditor={newHaigaEditor}
       itemContent={haigaContent}
     />

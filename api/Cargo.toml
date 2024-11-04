@@ -7,7 +7,10 @@ edition = "2021"
 
 [dependencies]
 axum = { version="0.7.7", features = ["multipart"] }
+bytes = "1.8.0"
+futures = "0.3.31"
 tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7.1"
 tower = {version = "0.5", features = ["full"] }
 tower-http = { version = "0.6", features = ["cors", "limit"] }
 jsonwebtoken = "9"
@@ -17,4 +20,7 @@ hyper = "1.4.1"
 reqwest = { version = "0.12", features = ["json"] }
 aws-config = "1.5.8"
 aws-sdk-s3 = "1.57.0"
+aws-smithy-types = "1.2.8"
+aws-smithy-http = "0.60.11"
+aws-sig-auth = "0.60.3"
 mime_guess = "2.0"

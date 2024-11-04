@@ -67,6 +67,13 @@
   transition: background-color 0.2s;
 }
 
+.admin-icon-button.disabled,
+.admin-icon-button.disabled:hover {
+  background-color: #675347b5;
+  color: #a5a5a5b5;
+  cursor: not-allowed;
+}
+
 .admin-icon-button:hover {
   background-color: #6d3513ee;
   cursor: pointer;

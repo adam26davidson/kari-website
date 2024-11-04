@@ -5,6 +5,7 @@ import "../admin.css";
 import { useAuth0 } from "@auth0/auth0-react";
 import { Confirmation, Loading } from "../admin";
 import EditorList from "../../../components/editorList/editorList";
+import { v4 as uuidv4 } from "uuid";
 
 const HAIKU_ENDPOINT = "http://localhost:3000/haiku";
 
@@ -58,6 +59,20 @@ function HaikuEditor(props: HaikuEditorProps) {
     const responseBody = await response.json();
     console.log(responseBody);
     props.setLoading({ isLoading: false, message: "" });
+  };
+
+  const saveNewHaiku = async (newHaiku: Haiku) => {
+    const newDataList = [...haikuList, { ...newHaiku, id: uuidv4() }];
+    await saveHaiku(newDataList);
+    setHaikuList(newDataList);
+  };
+
+  const newHaikuIsValid = () => {
+    return (
+      newHaiku.title.trim().length > 0 &&
+      newHaiku.lines.length > 0 &&
+      newHaiku.lines[0].length > 0
+    );
   };
 
   const newHaikuEditor = () => {
@@ -118,6 +133,8 @@ function HaikuEditor(props: HaikuEditorProps) {
       setConfirmation={props.setConfirmation}
       loadData={loadHaiku}
       saveData={saveHaiku}
+      saveNewItem={saveNewHaiku}
+      newItemIsValid={newHaikuIsValid}
       itemEditor={newHaikuEditor}
       itemContent={haikuContent}
     />

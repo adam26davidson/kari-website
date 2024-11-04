@@ -1,4 +1,5 @@
 use aws_sdk_s3::{primitives::ByteStream, Client};
+use aws_smithy_types::body::SdkBody;
 use axum::extract::DefaultBodyLimit;
 use axum::response::Json;
 use axum::{
@@ -9,6 +10,9 @@ use axum::{
     routing::{get, post, put},
     Router,
 };
+
+use futures::{StreamExt, TryStreamExt};
+use hyper::body::Body;
 use jsonwebtoken::{
     decode, decode_header,
     jwk::{AlgorithmParameters, JwkSet},
@@ -18,9 +22,12 @@ use mime_guess;
 use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::error::Error;
+use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tokio_util::io::StreamReader;
 use tower_http::cors::CorsLayer;
 use tower_http::limit::RequestBodyLimitLayer;
 
@@ -62,6 +69,7 @@ async fn main() {
 
     let secure_routes = Router::new()
         .route("/haiku", put(update_haiku_handler))
+        .route("/haiga", put(update_haiga_handler))
         .route("/images", post(upload_image_handler))
         .layer(DefaultBodyLimit::disable())
         .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024 /* 10mb */))
@@ -174,21 +182,37 @@ async fn upload_image_handler(
     State(state): State<AppState>,
     mut multipart: Multipart,
 ) -> impl IntoResponse {
-    // Iterate over the fields
-    while let Some(field) = multipart.next_field().await.unwrap() {
-        //let name = field.name().unwrap_or_default().to_string();
+    // Get the next field (assuming only one file being uploaded)
+    if let Some(field) = match multipart.next_field().await {
+        Ok(field) => field,
+        Err(e) => {
+            eprintln!("Error reading field: {}", e);
+            return (StatusCode::BAD_REQUEST, "Error reading multipart field").into_response();
+        }
+    } {
         let file_name = field
             .file_name()
             .map(|name| name.to_string())
-            .unwrap_or_default();
+            .unwrap_or_else(|| "upload_file".to_string());
         let content_type = field
             .content_type()
             .map(|ct| ct.to_string())
-            .unwrap_or_default();
-        let data = field.bytes().await.unwrap();
+            .unwrap_or_else(|| "application/octet-stream".to_string());
 
         // Construct the key for the S3 bucket
         let key = format!("images/{}", file_name);
+
+        // Map the field's errors into std::io::Error
+        let stream = field.map_err(|err| io::Error::new(io::ErrorKind::Other, err));
+
+        // Create a hyper::Body from the stream
+        let hyper_body = Body::wrap_stream(stream);
+
+        // Create an SdkBody from the hyper::Body
+        let sdk_body = SdkBody::from(hyper_body);
+
+        // Create a ByteStream from the SdkBody
+        let byte_stream = ByteStream::new(sdk_body);
 
         // Upload the file to S3
         let res = state
@@ -196,18 +220,27 @@ async fn upload_image_handler(
             .put_object()
             .bucket("karidavidson.com")
             .key(&key)
-            .body(ByteStream::from(data.to_vec()))
+            .body(byte_stream)
             .content_type(content_type)
             .send()
             .await;
 
         match res {
             Ok(_) => println!("File uploaded successfully: {}", file_name),
-            Err(e) => eprintln!("Error uploading file: {}", e),
+            Err(e) => {
+                eprintln!("Error uploading file: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Error uploading file to S3",
+                )
+                    .into_response();
+            }
         }
+    } else {
+        return (StatusCode::BAD_REQUEST, "No file found in the request").into_response();
     }
 
-    (StatusCode::OK, "Files uploaded successfully")
+    Json(json!({"message": "File uploaded successfully"}))
 }
 
 async fn update_haiku_handler(
@@ -223,6 +256,26 @@ async fn update_haiku_handler(
         .bucket("karidavidson.com")
         .key("haiku.json")
         .body(ByteStream::from(haiku_str.as_bytes().to_vec()))
+        .send()
+        .await
+        .unwrap();
+
+    return Json(json!({"message": "Haiku list updated"}));
+}
+
+async fn update_haiga_handler(
+    State(state): State<AppState>,
+    Json(haiga): Json<Vec<Haiga>>,
+) -> Json<Value> {
+    //update haikus in S3 in bucket "karidavidson.com/haiku.json"
+    let haiga_str = serde_json::to_string(&haiga).unwrap();
+
+    state
+        .s3_client
+        .put_object()
+        .bucket("karidavidson.com")
+        .key("haiga.json")
+        .body(ByteStream::from(haiga_str.as_bytes().to_vec()))
         .send()
         .await
         .unwrap();

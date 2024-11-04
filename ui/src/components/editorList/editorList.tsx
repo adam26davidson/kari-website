@@ -5,7 +5,6 @@ import "../editorListItem/editorListItem.css";
 import "../../pages/admin/admin.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus, faTrash } from "@fortawesome/free-solid-svg-icons";
-import { v4 as uuidv4 } from "uuid";
 import { Confirmation, Loading } from "../../pages/admin/admin";
 import EditorListItem from "../editorListItem/editorListItem";
 
@@ -19,6 +18,8 @@ interface EditorListProps<T> {
   setConfirmation: (confirmation: Confirmation) => void;
   loadData: () => Promise<void>;
   saveData: (newDataList: Array<T>) => Promise<void>;
+  saveNewItem: (newItem: T) => Promise<void>;
+  newItemIsValid: () => boolean;
   itemEditor: () => JSX.Element;
   itemContent: (idx: number) => JSX.Element;
 }
@@ -33,6 +34,8 @@ function EditorList<T>({
   setConfirmation,
   loadData,
   saveData,
+  saveNewItem,
+  newItemIsValid,
   itemEditor,
   itemContent,
 }: EditorListProps<T>) {
@@ -62,9 +65,7 @@ function EditorList<T>({
   };
 
   const addNewItem = () => {
-    const newDataList = [...dataList, { ...newItem, id: uuidv4() }];
-    saveData(newDataList);
-    setDataList(newDataList);
+    saveNewItem(newItem);
     setAddingItem(false);
   };
 
@@ -112,7 +113,10 @@ function EditorList<T>({
               <div className="editor-list-item">
                 <div className="editor-list-item-inputs">{itemEditor()}</div>
                 <div className="editor-list-item-controls">
-                  <div className="admin-icon-button" onClick={addNewItem}>
+                  <div
+                    className={`admin-icon-button${newItemIsValid() ? "" : " disabled"}`}
+                    onClick={newItemIsValid() ? addNewItem : () => {}}
+                  >
                     <FontAwesomeIcon icon={faPlus} />
                   </div>
                   <div className="admin-icon-button" onClick={cancelNewItem}>
