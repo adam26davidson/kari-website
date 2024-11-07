@@ -1,5 +1,5 @@
+use aws_sdk_s3::operation::create_multipart_upload::CreateMultipartUploadOutput;
 use aws_sdk_s3::{primitives::ByteStream, Client};
-use aws_smithy_types::body::SdkBody;
 use axum::extract::DefaultBodyLimit;
 use axum::response::Json;
 use axum::{
@@ -11,8 +11,6 @@ use axum::{
     Router,
 };
 
-use futures::{StreamExt, TryStreamExt};
-use hyper::body::Body;
 use jsonwebtoken::{
     decode, decode_header,
     jwk::{AlgorithmParameters, JwkSet},
@@ -22,12 +20,10 @@ use mime_guess;
 use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::error::Error;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tokio_util::io::StreamReader;
 use tower_http::cors::CorsLayer;
 use tower_http::limit::RequestBodyLimitLayer;
 
@@ -183,7 +179,7 @@ async fn upload_image_handler(
     mut multipart: Multipart,
 ) -> impl IntoResponse {
     // Get the next field (assuming only one file being uploaded)
-    if let Some(field) = match multipart.next_field().await {
+    if let Some(mut field) = match multipart.next_field().await {
         Ok(field) => field,
         Err(e) => {
             eprintln!("Error reading field: {}", e);
@@ -194,34 +190,62 @@ async fn upload_image_handler(
             .file_name()
             .map(|name| name.to_string())
             .unwrap_or_else(|| "upload_file".to_string());
-        let content_type = field
-            .content_type()
-            .map(|ct| ct.to_string())
-            .unwrap_or_else(|| "application/octet-stream".to_string());
 
         // Construct the key for the S3 bucket
         let key = format!("images/{}", file_name);
 
-        // Map the field's errors into std::io::Error
-        let stream = field.map_err(|err| io::Error::new(io::ErrorKind::Other, err));
-
-        // Create a hyper::Body from the stream
-        let hyper_body = Body::wrap_stream(stream);
-
-        // Create an SdkBody from the hyper::Body
-        let sdk_body = SdkBody::from(hyper_body);
-
-        // Create a ByteStream from the SdkBody
-        let byte_stream = ByteStream::new(sdk_body);
-
-        // Upload the file to S3
-        let res = state
+        let multipart_upload_res: CreateMultipartUploadOutput = state
             .s3_client
-            .put_object()
+            .create_multipart_upload()
             .bucket("karidavidson.com")
             .key(&key)
-            .body(byte_stream)
-            .content_type(content_type)
+            .send()
+            .await
+            .unwrap();
+
+        let upload_id = multipart_upload_res.upload_id.unwrap();
+        let mut upload_parts: Vec<aws_sdk_s3::types::CompletedPart> = Vec::new();
+        let mut part_number = 1;
+        while let Ok(Some(chunk)) = field
+            .chunk()
+            .await
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+        {
+            let upload_part_res = state
+                .s3_client
+                .upload_part()
+                .bucket("karidavidson.com")
+                .key(&key)
+                .upload_id(&upload_id)
+                .part_number(part_number)
+                .body(ByteStream::from(chunk.to_vec()))
+                .send()
+                .await
+                .unwrap();
+
+            upload_parts.push(
+                aws_sdk_s3::types::CompletedPart::builder()
+                    .e_tag(upload_part_res.e_tag.unwrap_or_default())
+                    .part_number(part_number)
+                    .build(),
+            );
+
+            part_number += 1;
+        }
+
+        // upload_parts: Vec<aws_sdk_s3::types::CompletedPart>
+        let completed_multipart_upload: aws_sdk_s3::types::CompletedMultipartUpload =
+            aws_sdk_s3::types::CompletedMultipartUpload::builder()
+                .set_parts(Some(upload_parts))
+                .build();
+
+        let res = state
+            .s3_client
+            .complete_multipart_upload()
+            .bucket("karidavidson.com")
+            .key(&key)
+            .upload_id(&upload_id)
+            .multipart_upload(completed_multipart_upload)
             .send()
             .await;
 
@@ -240,7 +264,7 @@ async fn upload_image_handler(
         return (StatusCode::BAD_REQUEST, "No file found in the request").into_response();
     }
 
-    Json(json!({"message": "File uploaded successfully"}))
+    return (StatusCode::OK, "File uploaded successfully").into_response();
 }
 
 async fn update_haiku_handler(

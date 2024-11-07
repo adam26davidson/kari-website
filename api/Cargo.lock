@@ -1273,7 +1273,7 @@ dependencies = [
  "axum",
  "bytes",
  "futures",
- "hyper 1.4.1",
+ "hyper 0.14.31",
  "jsonwebtoken",
  "mime_guess",
  "reqwest",
