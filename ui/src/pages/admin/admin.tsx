@@ -1,14 +1,17 @@
 import { useState } from "react";
 import "./admin.css";
-import HaikuEditor from "./haikuEditor/haikuEditor";
+import AdminHaikuPage from "./adminHaikuPage/adminHaikuPage";
 import { useAuth0 } from "@auth0/auth0-react";
-import HaigaEditor from "./haigaEditor/haigaEditor";
+import AdminHaigaPage from "./adminHaigaPage/adminHaigaPage";
+import { HomePageEditor } from "./homePageEditor/homePageEditor";
 
 type Page = "home" | "haiku" | "haiga" | "blog";
+
 export interface Loading {
   isLoading: boolean;
   message: string;
 }
+
 export interface Confirmation {
   message: string;
   show: boolean;
@@ -77,9 +80,11 @@ function Admin() {
               {loading.isLoading && (
                 <div className="admin-loading">{loading.message}</div>
               )}
-              {currentPage === "home" && <div>Home</div>}
+              {currentPage === "home" && (
+                <HomePageEditor setLoading={setLoading} />
+              )}
               {currentPage === "haiku" && (
-                <HaikuEditor
+                <AdminHaikuPage
                   setLoading={setLoading}
                   isConfirming={confirmation.show}
                   setConfirmation={setConfirmation}
@@ -87,7 +92,7 @@ function Admin() {
                 />
               )}
               {currentPage === "haiga" && (
-                <HaigaEditor
+                <AdminHaigaPage
                   setLoading={setLoading}
                   isConfirming={confirmation.show}
                   setConfirmation={setConfirmation}

@@ -3,7 +3,8 @@
   flex-direction: row;
   align-items: flex-start;
   justify-content: flex-start;
-  height: 100%;
+  max-height: 100%;
+  height: calc(100%);
   width: 100%;
 }
 
@@ -50,7 +51,7 @@
   flex: 1;
   margin: 0px;
   height: 100%;
-  overflow-y: auto;
+  overflow-y: scroll;
   scrollbar-width: medium;
   scrollbar-color: #6d3513b5 transparent;
 }
@@ -67,6 +68,46 @@
   transition: background-color 0.2s;
 }
 
+.admin-image-upload {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  height: 30px;
+  width: fit-content;
+  padding: 0px 10px;
+  margin: 10px;
+  background-color: #6d3513b5;
+  border-radius: 3px;
+  transition: background-color 0.2s;
+  font-family: "Roboto", sans-serif;
+}
+.admin-image-upload .spacer {
+  width: 10px;
+}
+
+.admin-image-preview {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100px;
+  margin-top: 10px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.admin-image-upload-selection {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  margin: 10px;
+  width: fit-content;
+  color: #181818;
+  font-family: "Roboto", sans-serif;
+}
+
 .admin-icon-button.disabled,
 .admin-icon-button.disabled:hover {
   background-color: #675347b5;
@@ -74,7 +115,8 @@
   cursor: not-allowed;
 }
 
-.admin-icon-button:hover {
+.admin-icon-button:hover,
+.admin-image-upload:hover {
   background-color: #6d3513ee;
   cursor: pointer;
 }
@@ -116,4 +158,15 @@
 
 .admin-login-button {
   margin: auto;
+}
+
+.admin-button {
+  color: #f9f5f2;
+  background-color: #6d3513b5;
+  border-width: 0px;
+  font-size: 20px;
+  font-family: "Roboto", sans-serif;
+  padding: 10px;
+  border-radius: 3px;
+  transition: background-color 0.2s;
 }

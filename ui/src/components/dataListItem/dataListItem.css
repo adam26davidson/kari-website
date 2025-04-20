@@ -1,0 +1,24 @@
+.data-list-item-content {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.data-list-item {
+  background-color: rgba(226, 226, 226, 0.8);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  width: calc(100% - 52px);
+  padding: 18px;
+  margin: 8px;
+  border-radius: 3px;
+}
+
+.data-list-item-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}

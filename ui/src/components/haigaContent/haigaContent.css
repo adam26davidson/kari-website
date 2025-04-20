@@ -1,0 +1,43 @@
+.haiga-list-item-content {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.haiga-list-item-content-mobile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.haiga-list-item-image-box-mobile {
+  height: 200px;
+  margin-bottom: 20px;
+}
+
+.haiga-list-item-image-box {
+  height: 200px;
+  width: 400px;
+}
+
+.haiga-list-item-image {
+  height: 100%;
+  max-width: 100%;
+  object-fit: cover;
+  border-radius: 3px;
+}
+
+.haiga-list-line {
+  color: #181818;
+  font-size: 18px;
+}
+
+.haiga-list-publisher {
+  font-size: 16px;
+  color: #4b4b4b;
+  margin-top: 15px;
+}

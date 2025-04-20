@@ -1,4 +1,3 @@
-use aws_sdk_s3::operation::create_multipart_upload::CreateMultipartUploadOutput;
 use aws_sdk_s3::{primitives::ByteStream, Client};
 use axum::extract::DefaultBodyLimit;
 use axum::response::Json;
@@ -7,7 +6,7 @@ use axum::{
     http::StatusCode,
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
     Router,
 };
 
@@ -20,7 +19,6 @@ use mime_guess;
 use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -42,6 +40,13 @@ struct Haiga {
     lines: Vec<String>,
     publisher: String,
     image: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct HomePageData {
+    #[serde(rename = "featuredHaiku")]
+    featured_haiku: Haiku,
+    blurb: String,
 }
 
 #[derive(Clone)]
@@ -66,7 +71,9 @@ async fn main() {
     let secure_routes = Router::new()
         .route("/haiku", put(update_haiku_handler))
         .route("/haiga", put(update_haiga_handler))
+        .route("/home-page", put(update_home_page_handler))
         .route("/images", post(upload_image_handler))
+        .route("/images/:filename", delete(delete_image_handler))
         .layer(DefaultBodyLimit::disable())
         .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024 /* 10mb */))
         .layer(middleware::from_fn_with_state(
@@ -77,6 +84,7 @@ async fn main() {
     let public_routes = Router::new()
         .route("/haiku", get(get_haiku_handler))
         .route("/haiga", get(get_haiga_handler))
+        .route("/home-page", get(get_home_page_handler))
         .route("/images/:filename", get(get_image_handler));
 
     let app = Router::new()
@@ -138,6 +146,30 @@ async fn get_haiga_handler(State(state): State<AppState>) -> Json<Value> {
     return Json(json!(haiga));
 }
 
+async fn get_home_page_handler(State(state): State<AppState>) -> Json<Value> {
+    //get home page data from S3 in bucket "karidavidson.com/home-page.json"
+    let home_page_data_str = String::from_utf8(
+        state
+            .s3_client
+            .get_object()
+            .bucket("karidavidson.com")
+            .key("home-page.json")
+            .send()
+            .await
+            .unwrap()
+            .body
+            .collect()
+            .await
+            .unwrap()
+            .to_vec(),
+    )
+    .unwrap();
+
+    let home_page_data: HomePageData = serde_json::from_str(&home_page_data_str).unwrap();
+
+    return Json(json!(home_page_data));
+}
+
 async fn get_image_handler(
     State(state): State<AppState>,
     axum::extract::Path(filename): axum::extract::Path<String>,
@@ -155,9 +187,6 @@ async fn get_image_handler(
         .key(&image_key)
         .send()
         .await;
-
-    //print response status
-    println!("Response status: {:?}", response);
 
     match response {
         Ok(output) => {
@@ -178,93 +207,69 @@ async fn upload_image_handler(
     State(state): State<AppState>,
     mut multipart: Multipart,
 ) -> impl IntoResponse {
-    // Get the next field (assuming only one file being uploaded)
-    if let Some(mut field) = match multipart.next_field().await {
-        Ok(field) => field,
+    // Pull out the first (and only) file field
+    let mut field = match multipart.next_field().await {
+        Ok(Some(f)) => f,
+        Ok(None) => return (StatusCode::BAD_REQUEST, "No file found").into_response(),
         Err(e) => {
-            eprintln!("Error reading field: {}", e);
-            return (StatusCode::BAD_REQUEST, "Error reading multipart field").into_response();
+            eprintln!("Error reading multipart field: {}", e);
+            return (StatusCode::BAD_REQUEST, "Invalid multipart").into_response();
         }
-    } {
-        let file_name = field
-            .file_name()
-            .map(|name| name.to_string())
-            .unwrap_or_else(|| "upload_file".to_string());
+    };
 
-        // Construct the key for the S3 bucket
-        let key = format!("images/{}", file_name);
+    // Get original filename (or fallback)
+    let file_name = field
+        .file_name()
+        .map(|n| n.to_string())
+        .unwrap_or_else(|| "upload_file".to_string());
+    let key = format!("images/{}", file_name);
 
-        let multipart_upload_res: CreateMultipartUploadOutput = state
-            .s3_client
-            .create_multipart_upload()
-            .bucket("karidavidson.com")
-            .key(&key)
-            .send()
-            .await
-            .unwrap();
-
-        let upload_id = multipart_upload_res.upload_id.unwrap();
-        let mut upload_parts: Vec<aws_sdk_s3::types::CompletedPart> = Vec::new();
-        let mut part_number = 1;
-        while let Ok(Some(chunk)) = field
-            .chunk()
-            .await
-            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
-        {
-            let upload_part_res = state
-                .s3_client
-                .upload_part()
-                .bucket("karidavidson.com")
-                .key(&key)
-                .upload_id(&upload_id)
-                .part_number(part_number)
-                .body(ByteStream::from(chunk.to_vec()))
-                .send()
-                .await
-                .unwrap();
-
-            upload_parts.push(
-                aws_sdk_s3::types::CompletedPart::builder()
-                    .e_tag(upload_part_res.e_tag.unwrap_or_default())
-                    .part_number(part_number)
-                    .build(),
-            );
-
-            part_number += 1;
-        }
-
-        // upload_parts: Vec<aws_sdk_s3::types::CompletedPart>
-        let completed_multipart_upload: aws_sdk_s3::types::CompletedMultipartUpload =
-            aws_sdk_s3::types::CompletedMultipartUpload::builder()
-                .set_parts(Some(upload_parts))
-                .build();
-
-        let res = state
-            .s3_client
-            .complete_multipart_upload()
-            .bucket("karidavidson.com")
-            .key(&key)
-            .upload_id(&upload_id)
-            .multipart_upload(completed_multipart_upload)
-            .send()
-            .await;
-
-        match res {
-            Ok(_) => println!("File uploaded successfully: {}", file_name),
-            Err(e) => {
-                eprintln!("Error uploading file: {}", e);
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Error uploading file to S3",
-                )
-                    .into_response();
-            }
-        }
-    } else {
-        return (StatusCode::BAD_REQUEST, "No file found in the request").into_response();
+    // Read entire stream into a Vec<u8>
+    let mut data = Vec::new();
+    while let Ok(Some(chunk)) = field.chunk().await {
+        data.extend_from_slice(&chunk);
     }
 
-    return (StatusCode::OK, "File uploaded successfully").into_response();
+    // Upload in one shot
+    match state
+        .s3_client
+        .put_object()
+        .bucket("karidavidson.com")
+        .key(&key)
+        .body(ByteStream::from(data))
+        .send()
+        .await
+    {
+        Ok(_) => {
+            println!("File uploaded successfully: {}", file_name);
+            (StatusCode::OK, "File uploaded successfully").into_response()
+        }
+        Err(err) => {
+            eprintln!("PutObject error: {:?}", err);
+            (StatusCode::INTERNAL_SERVER_ERROR, "Upload failed").into_response()
+        }
+    }
+}
+
+async fn delete_image_handler(
+    State(state): State<AppState>,
+    axum::extract::Path(filename): axum::extract::Path<String>,
+) -> impl IntoResponse {
+    let bucket_name = "karidavidson.com";
+    let image_key = format!("images/{}", filename);
+
+    let response = state
+        .s3_client
+        .delete_object()
+        .bucket(bucket_name)
+        .key(&image_key)
+        .send()
+        .await;
+
+    match response {
+        Ok(_) => (StatusCode::OK, "Image deleted successfully").into_response(),
+        Err(_) => (StatusCode::NOT_FOUND, "Image not found").into_response(),
+    }
 }
 
 async fn update_haiku_handler(
@@ -305,6 +310,26 @@ async fn update_haiga_handler(
         .unwrap();
 
     return Json(json!({"message": "Haiku list updated"}));
+}
+
+async fn update_home_page_handler(
+    State(state): State<AppState>,
+    Json(home_page_data): Json<HomePageData>,
+) -> Json<Value> {
+    //update home page data in S3 in bucket "karidavidson.com/home-page.json"
+    let home_page_data_str = serde_json::to_string(&home_page_data).unwrap();
+
+    state
+        .s3_client
+        .put_object()
+        .bucket("karidavidson.com")
+        .key("home-page.json")
+        .body(ByteStream::from(home_page_data_str.as_bytes().to_vec()))
+        .send()
+        .await
+        .unwrap();
+
+    return Json(json!({"message": "Home page data updated"}));
 }
 
 async fn auth_middleware(State(state): State<AppState>, request: Request, next: Next) -> Response {

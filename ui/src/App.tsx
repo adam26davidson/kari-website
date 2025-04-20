@@ -1,25 +1,38 @@
 import Header from "./components/header/header";
 import "./App.css";
 import { Route, Routes } from "react-router-dom";
-import Home from "./pages/home/home";
-import Haiku from "./pages/haiku/haiku";
-import Haiga from "./pages/haiga/haiga";
+import Home from "./pages/homePage/homePage";
+import { HaikuPage } from "./pages/haikuPage/haikuPage";
+import { HaigaPage } from "./pages/haigaPage/haigaPage";
 import Blog from "./pages/blog/blog";
 import Admin from "./pages/admin/admin";
+import { useIsMobile } from "./hooks/isMobile";
+import { MobileMenu } from "./components/mobileMenu/mobileMenu";
+import { useState } from "react";
 
 function App() {
+  const [showingMobileMobileMenu, setShowingMobileMenu] = useState(false);
+  const isMobile = useIsMobile();
   return (
     <>
       <div className="whole-page">
-        <Header />
+        <Header
+          showingMobileMenu={showingMobileMobileMenu}
+          setShowingMobileMenu={setShowingMobileMenu}
+        />
         <div className="content">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="haiku" element={<Haiku />} />
-            <Route path="haiga" element={<Haiga />} />
-            <Route path="blog" element={<Blog />} />
-            <Route path="admin" element={<Admin />} />
-          </Routes>
+          {isMobile && showingMobileMobileMenu && (
+            <MobileMenu setShowingMobileMenu={setShowingMobileMenu} />
+          )}
+          {!showingMobileMobileMenu && (
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="haiku" element={<HaikuPage />} />
+              <Route path="haiga" element={<HaigaPage />} />
+              <Route path="blog" element={<Blog />} />
+              <Route path="admin" element={<Admin />} />
+            </Routes>
+          )}
         </div>
       </div>
     </>

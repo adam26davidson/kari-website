@@ -1,5 +1,6 @@
 .content {
   display: flex;
   width: 100%;
-  height: calc(100vh - 87.5px);
+  flex-grow: 1;
+  overflow-y: scroll;
 }

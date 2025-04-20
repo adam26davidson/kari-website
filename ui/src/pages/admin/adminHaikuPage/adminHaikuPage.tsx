@@ -1,29 +1,25 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import { useState } from "react";
-import "./haikuEditor.css";
+import "./adminHaikuPage.css";
 import "../admin.css";
 import { useAuth0 } from "@auth0/auth0-react";
 import { Confirmation, Loading } from "../admin";
-import EditorList from "../../../components/editorList/editorList";
+import DataList from "../../../components/dataList/dataList";
 import { v4 as uuidv4 } from "uuid";
+import { Haiku } from "../../../Models";
+import { HaikuContent } from "../../../components/haikuContent/haikuContent";
+import { HaikuEditor } from "../../../components/haikuEditor/haikuEditor";
 
-const HAIKU_ENDPOINT = "http://localhost:3000/haiku";
+const HAIKU_ENDPOINT = import.meta.env.VITE_API_URL + "/haiku";
 
-interface Haiku {
-  id: string;
-  title: string;
-  lines: Array<string>;
-  publisher: string;
-}
-
-interface HaikuEditorProps {
+interface AdminHaikuPageProps {
   isLoading: boolean;
   setLoading: (loading: Loading) => void;
   isConfirming: boolean;
   setConfirmation: (confirmation: Confirmation) => void;
 }
 
-function HaikuEditor(props: HaikuEditorProps) {
+function AdminHaikuPage(props: AdminHaikuPageProps) {
   const { getAccessTokenSilently } = useAuth0();
   const [haikuList, setHaikuList] = useState<Array<Haiku>>([]);
   const [newHaiku, setNewHaiku] = useState<Haiku>({
@@ -67,6 +63,13 @@ function HaikuEditor(props: HaikuEditorProps) {
     setHaikuList(newDataList);
   };
 
+  const deleteHaiku = (idx: number) => async () => {
+    const newList = haikuList.slice();
+    newList.splice(idx, 1);
+    await saveHaiku(newList);
+    setHaikuList(newList);
+  };
+
   const newHaikuIsValid = () => {
     return (
       newHaiku.title.trim().length > 0 &&
@@ -75,70 +78,31 @@ function HaikuEditor(props: HaikuEditorProps) {
     );
   };
 
-  const newHaikuEditor = () => {
-    return (
-      <>
-        <input
-          type="text"
-          placeholder="Title"
-          value={newHaiku.title}
-          onChange={(e) => {
-            setNewHaiku({ ...newHaiku, title: e.target.value });
-          }}
-        />
-        <textarea
-          value={newHaiku.lines.join("\n")}
-          placeholder={"line 1\nline 2\nline 3"}
-          onChange={(e) =>
-            setNewHaiku({ ...newHaiku, lines: e.target.value.split("\n") })
-          }
-        />
-        <input
-          type="text"
-          placeholder="Publisher"
-          value={newHaiku.publisher}
-          onChange={(e) =>
-            setNewHaiku({ ...newHaiku, publisher: e.target.value })
-          }
-        />
-      </>
-    );
-  };
-
-  const haikuContent = (idx: number) => {
-    return (
-      <>
-        <div className="admin-haiku-list-item-lines">
-          {haikuList[idx].lines.map((line, li) => (
-            <div key={li} className="admin-haiku-list-line">
-              {line}
-            </div>
-          ))}
-        </div>
-        <div className="admin-haiku-list-publisher">
-          {haikuList[idx].publisher}
-        </div>
-      </>
-    );
-  };
-
   return (
-    <EditorList<Haiku>
+    <DataList<Haiku>
       dataList={haikuList}
-      newItem={newHaiku}
       isLoading={props.isLoading}
-      isConfirming={props.isConfirming}
-      setDataList={setHaikuList}
-      setLoading={props.setLoading}
-      setConfirmation={props.setConfirmation}
-      loadData={loadHaiku}
-      saveData={saveHaiku}
-      saveNewItem={saveNewHaiku}
-      newItemIsValid={newHaikuIsValid}
-      itemEditor={newHaikuEditor}
-      itemContent={haikuContent}
+      isAdmin={true}
+      itemContent={(idx: number) => (
+        <HaikuContent haikuList={haikuList} idx={idx} />
+      )}
+      adminProps={{
+        newItem: newHaiku,
+        isConfirming: props.isConfirming,
+        setDataList: setHaikuList,
+        setLoading: props.setLoading,
+        setConfirmation: props.setConfirmation,
+        loadData: loadHaiku,
+        saveData: saveHaiku,
+        saveNewItem: saveNewHaiku,
+        deleteItem: deleteHaiku,
+        newItemIsValid: newHaikuIsValid,
+        itemEditor: () => (
+          <HaikuEditor newHaiku={newHaiku} setNewHaiku={setNewHaiku} />
+        ),
+      }}
     />
   );
 }
 
-export default HaikuEditor;
+export default AdminHaikuPage;

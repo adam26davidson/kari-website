@@ -1,29 +1,38 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import "./header.css";
-import { faUser } from "@fortawesome/free-solid-svg-icons";
+import { faUser, faBars } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { useIsMobile } from "../../hooks/isMobile";
+import { PAGES } from "../../constants";
 
-const pages = [
-  { name: "Home", path: "/" },
-  { name: "Haiku", path: "/haiku" },
-  { name: "Haiga", path: "/haiga" },
-  { name: "Blog", path: "/blog" },
-];
-
-function Header() {
+function Header({
+  showingMobileMenu,
+  setShowingMobileMenu,
+}: {
+  showingMobileMenu: boolean;
+  setShowingMobileMenu: (showing: boolean) => void;
+}) {
   const location = useLocation();
+  const isMobile = useIsMobile();
   const { user, isAuthenticated, isLoading, logout } = useAuth0();
 
   return (
     <>
       <div className="header">
-        <div className="header-title">
+        {isMobile && (
+          <FontAwesomeIcon
+            icon={faBars}
+            className="header-menu-icon"
+            onClick={() => setShowingMobileMenu(!showingMobileMenu)}
+          />
+        )}
+        <div className={isMobile ? "header-title-mobile" : "header-title"}>
           {"Kari Davidson" + (location.pathname === "/admin" ? " - Admin" : "")}
         </div>
-        {location.pathname !== "/admin" && (
+        {location.pathname !== "/admin" && !isMobile && (
           <div className="pages">
-            {pages.map((page) => (
+            {PAGES.map((page) => (
               <Link
                 key={page.path}
                 to={page.path}

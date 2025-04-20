@@ -1,21 +1,17 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import { useState } from "react";
-import "./haigaEditor.css";
+import "./adminHaigaPage.css";
 import { Confirmation, Loading } from "../admin";
 import { useAuth0 } from "@auth0/auth0-react";
-import EditorList from "../../../components/editorList/editorList";
+import DataList from "../../../components/dataList/dataList";
 import { v4 as uuidv4 } from "uuid";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faArrowPointer } from "@fortawesome/free-solid-svg-icons";
+import { Haiga } from "../../../Models";
+import { HaigaContent } from "../../../components/haigaContent/haigaContent";
 
-const HAIGA_ENDPOINT = "http://localhost:3000/haiga";
-const IMAGES_ENDPOINT = "http://localhost:3000/images";
-
-interface Haiga {
-  id: string;
-  title: string;
-  lines: Array<string>;
-  image: string;
-  publisher: string;
-}
+const HAIGA_ENDPOINT = import.meta.env.VITE_API_URL + "/haiga";
+const IMAGES_ENDPOINT = import.meta.env.VITE_API_URL + "/images";
 
 interface HaigaEditorProps {
   isLoading: boolean;
@@ -24,7 +20,7 @@ interface HaigaEditorProps {
   setConfirmation: (confirmation: Confirmation) => void;
 }
 
-function HaigaEditor(props: HaigaEditorProps) {
+function AdminHaigaPage(props: HaigaEditorProps) {
   const { getAccessTokenSilently } = useAuth0();
   const [haigaList, setHaigaList] = useState<Array<Haiga>>([]);
   const [newHaiga, setNewHaiga] = useState<Haiga>({
@@ -74,8 +70,8 @@ function HaigaEditor(props: HaigaEditorProps) {
     // Get the access token from Auth0
     const token = await getAccessTokenSilently();
 
-    // give the file a unique name - replace spaces with underscores
-    const fileName = `${uuidv4()}-${file.name.replace(/\s/g, "_")}`;
+    // give the file a unique name - you could use the original name, but this is safer
+    const fileName = `${uuidv4()}.${file.name.split(".").pop()}`;
 
     // rename thge file to the unique name
     file = new File([file], fileName, { type: file.type });
@@ -99,8 +95,7 @@ function HaigaEditor(props: HaigaEditorProps) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const result = await response.json();
-      console.log("Upload successful", result);
+      console.log("Upload successful", await response.text());
       props.setLoading({ isLoading: false, message: "" });
       return fileName;
     } catch (error) {
@@ -108,6 +103,21 @@ function HaigaEditor(props: HaigaEditorProps) {
       props.setLoading({ isLoading: false, message: "" });
       throw error;
     }
+  };
+
+  const deleteImage = async (fileName: string) => {
+    props.setLoading({ isLoading: true, message: "Deleting image..." });
+    const token = await getAccessTokenSilently();
+    const response = await fetch(`${IMAGES_ENDPOINT}/${fileName}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      console.error(`Failed to delete image: ${fileName}`);
+    }
+    props.setLoading({ isLoading: false, message: "" });
   };
 
   const saveNewHaiga = async () => {
@@ -120,6 +130,14 @@ function HaigaEditor(props: HaigaEditorProps) {
       ...haigaList,
       { ...newHaiga, id: uuidv4(), image: fileName },
     ];
+    await saveHaiga(newDataList);
+    setHaigaList(newDataList);
+  };
+
+  const deleteHaiga = (idx: number) => async () => {
+    const newDataList = haigaList.slice();
+    newDataList.splice(idx, 1);
+    await deleteImage(haigaList[idx].image);
     await saveHaiga(newDataList);
     setHaigaList(newDataList);
   };
@@ -168,56 +186,55 @@ function HaigaEditor(props: HaigaEditorProps) {
             setNewHaiga({ ...newHaiga, publisher: e.target.value })
           }
         />
-        <input type="file" accept="image/*" onChange={handleFileSelect} />
-      </>
-    );
-  };
-
-  const haigaContent = (idx: number) => {
-    return (
-      <>
-        <div className="admin-haiga-list-item-content">
-          <div className="admin-haiga-list-item-image-box">
+        <input
+          id="image-upload"
+          type="file"
+          accept="image/*"
+          onChange={handleFileSelect}
+          hidden
+        />
+        {imageFile && (
+          <div className="admin-image-upload-selection">
+            <span>{imageFile.name}</span>
             <img
-              src={`${IMAGES_ENDPOINT}/${haigaList[idx].image}`}
-              alt={haigaList[idx].title}
-              className="admin-haiga-list-item-image"
+              src={URL.createObjectURL(imageFile)}
+              alt="Selected"
+              className="admin-image-preview"
             />
           </div>
-          <div className="admin-haiga-list-item-text">
-            <div className="admin-haiga-list-item-lines">
-              {haigaList[idx].lines.map((line, li) => (
-                <div key={li} className="admin-haiga-list-line">
-                  {line}
-                </div>
-              ))}
-            </div>
-            <div className="admin-haiga-list-publisher">
-              {haigaList[idx].publisher}
-            </div>
-          </div>
-        </div>
+        )}
+        <label htmlFor="image-upload" className="admin-image-upload">
+          <FontAwesomeIcon icon={faArrowPointer} />
+          <div className="spacer"></div>
+          {imageFile ? "Select Different Image" : "Select Image"}
+        </label>
       </>
     );
   };
 
   return (
-    <EditorList<Haiga>
+    <DataList<Haiga>
       dataList={haigaList}
-      newItem={newHaiga}
       isLoading={props.isLoading}
-      isConfirming={props.isConfirming}
-      setDataList={setHaigaList}
-      setLoading={props.setLoading}
-      setConfirmation={props.setConfirmation}
-      loadData={loadHaiga}
-      saveData={saveHaiga}
-      saveNewItem={saveNewHaiga}
-      newItemIsValid={newHaigaIsValid}
-      itemEditor={newHaigaEditor}
-      itemContent={haigaContent}
+      isAdmin={true}
+      itemContent={(idx: number) => (
+        <HaigaContent haigaList={haigaList} idx={idx} />
+      )}
+      adminProps={{
+        newItem: newHaiga,
+        isConfirming: props.isConfirming,
+        setDataList: setHaigaList,
+        setLoading: props.setLoading,
+        setConfirmation: props.setConfirmation,
+        loadData: loadHaiga,
+        saveData: saveHaiga,
+        saveNewItem: saveNewHaiga,
+        deleteItem: deleteHaiga,
+        newItemIsValid: newHaigaIsValid,
+        itemEditor: newHaigaEditor,
+      }}
     />
   );
 }
 
-export default HaigaEditor;
+export default AdminHaigaPage;
