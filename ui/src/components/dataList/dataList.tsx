@@ -93,7 +93,7 @@ function DataList<T>({
     !adminProps?.isConfirming && (
       <>
         <div className="data-list-container">
-          <div className="data-list">
+          <div className={isAdmin ? "admin-data-list" : "data-list fade-in"}>
             {!addingItem && isAdmin && (
               <div
                 className="admin-icon-button"
@@ -123,17 +123,22 @@ function DataList<T>({
               </div>
             )}
             {dataList.map((_curr, idx) => (
-              <DataListItem
-                key={idx}
-                idx={idx}
-                isFirst={idx === 0}
-                isLast={idx === dataList.length - 1}
-                isAdmin={isAdmin}
-                moveItem={moveItem}
-                deleteItem={deleteItemWithConfirmation(idx)}
-              >
-                {itemContent(idx)}
-              </DataListItem>
+              <>
+                <DataListItem
+                  key={idx}
+                  idx={idx}
+                  isFirst={idx === 0}
+                  isLast={idx === dataList.length - 1}
+                  isAdmin={isAdmin}
+                  moveItem={moveItem}
+                  deleteItem={deleteItemWithConfirmation(idx)}
+                >
+                  {itemContent(idx)}
+                </DataListItem>
+                {idx !== dataList.length - 1 && !isAdmin && (
+                  <div className="data-list-item-separator" />
+                )}
+              </>
             ))}
           </div>
         </div>

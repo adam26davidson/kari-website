@@ -4,7 +4,6 @@ import {
   faTrash,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Card } from "../card/card";
 
 interface DataListItemProps {
   children?: React.ReactNode;
@@ -26,7 +25,7 @@ const DataListItem = ({
   deleteItem,
 }: DataListItemProps) => {
   return (
-    <Card>
+    <div className={isAdmin ? "admin-data-list-item" : "data-list-item"}>
       <div className="data-list-item-content">{children}</div>
       {isAdmin && (
         <div className="data-list-item-controls">
@@ -45,7 +44,7 @@ const DataListItem = ({
           </div>
         </div>
       )}
-    </Card>
+    </div>
   );
 };
 

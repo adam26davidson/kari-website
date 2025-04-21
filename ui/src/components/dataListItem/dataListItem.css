@@ -5,6 +5,18 @@
 }
 
 .data-list-item {
+  /* background-color: rgba(226, 226, 226, 0.8); */
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  width: calc(100% - 52px);
+  padding: 18px;
+  margin: 12px;
+  border-radius: 3px;
+}
+
+.admin-data-list-item {
   background-color: rgba(226, 226, 226, 0.8);
   display: flex;
   flex-direction: row;

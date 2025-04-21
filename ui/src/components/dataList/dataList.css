@@ -5,9 +5,10 @@
   justify-content: flex-start;
   height: 100%;
   width: 100%;
+  overflow-y: auto;
 }
 
-.data-list {
+.admin-data-list {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -15,4 +16,44 @@
   width: 100%;
   max-width: 800px;
   padding: 8px 0px;
+}
+
+.data-list {
+  background-color: rgba(226, 226, 226, 0.8);
+  backdrop-filter: blur(10px);
+  border: 0px solid #ccc; /* Adding a border for better visibility */
+  border-radius: 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: calc(100% - 16px);
+  max-width: 800px;
+  padding: 40px 0px;
+  margin: 8px 0px;
+}
+
+.data-list-item-separator {
+  width: 300px;
+  max-width: 100%;
+  height: 1px;
+  background-color: #bbb; /* Light gray color for the separator */
+  margin: 25px 0; /* Space around the separator */
+  align-self: center; /* Center the separator */
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  opacity: 0;
+  animation: fadeIn 0.8s ease-out forwards;
 }

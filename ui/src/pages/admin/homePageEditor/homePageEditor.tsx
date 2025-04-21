@@ -10,9 +10,10 @@ const HOME_PAGE_DATA_ENDPOINT = `${API_URL}/home-page`;
 
 export interface HomePageEditorProps {
   setLoading: (loading: { isLoading: boolean; message: string }) => void;
+  isLoading: boolean;
 }
 
-export function HomePageEditor({setLoading}: HomePageEditorProps) {
+export function HomePageEditor({ setLoading, isLoading }: HomePageEditorProps) {
   const [homePageData, setHomePageData] = useState<HomePageData>({
     featuredHaiku: {
       title: "",
@@ -64,45 +65,47 @@ export function HomePageEditor({setLoading}: HomePageEditorProps) {
   };
 
   return (
-    <div className="home-page-editor-container">
-      <div className="home-page-editor">
-        <Card>
-          <div className="home-page-editor-card-content">
-            <div className="home-page-editor-haiku">
-              <HaikuEditor
-                newHaiku={homePageData.featuredHaiku}
-                setNewHaiku={(haiku) => {
-                  setHomePageData({
-                    ...homePageData,
-                    featuredHaiku: haiku,
-                  });
-                }}
-              />
+    !isLoading && (
+      <div className="home-page-editor-container">
+        <div className="home-page-editor">
+          <Card>
+            <div className="home-page-editor-card-content">
+              <div className="home-page-editor-haiku">
+                <HaikuEditor
+                  newHaiku={homePageData.featuredHaiku}
+                  setNewHaiku={(haiku) => {
+                    setHomePageData({
+                      ...homePageData,
+                      featuredHaiku: haiku,
+                    });
+                  }}
+                />
+              </div>
+              <div className="home-page-editor-blurb">
+                <textarea
+                  value={homePageData.blurb}
+                  placeholder="Blurb"
+                  onChange={(e) => {
+                    setHomePageData({
+                      ...homePageData,
+                      blurb: e.target.value,
+                    });
+                  }}
+                />
+              </div>
+              <div>
+                <button
+                  className="admin-button"
+                  style={{ marginLeft: "10px" }}
+                  onClick={saveData}
+                >
+                  Save
+                </button>
+              </div>
             </div>
-            <div className="home-page-editor-blurb">
-              <textarea
-                value={homePageData.blurb}
-                placeholder="Blurb"
-                onChange={(e) => {
-                  setHomePageData({
-                    ...homePageData,
-                    blurb: e.target.value,
-                  });
-                }}
-              />
-            </div>
-            <div>
-              <button
-                className="admin-button"
-                style={{ marginLeft: "10px" }}
-                onClick={saveData}
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        </div>
       </div>
-    </div>
+    )
   );
 }

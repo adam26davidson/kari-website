@@ -81,7 +81,7 @@ function Admin() {
                 <div className="admin-loading">{loading.message}</div>
               )}
               {currentPage === "home" && (
-                <HomePageEditor setLoading={setLoading} />
+                <HomePageEditor setLoading={setLoading} isLoading={isLoading}/>
               )}
               {currentPage === "haiku" && (
                 <AdminHaikuPage

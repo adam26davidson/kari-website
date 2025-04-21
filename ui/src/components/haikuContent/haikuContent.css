@@ -1,10 +1,13 @@
 .haiku-list-line {
   color: #181818;
-  font-size: 18px;
+  font-size: 20px;
+  text-align: center;
+  margin: 10px 0;
 }
 
 .haiku-list-publisher {
-  font-size: 16px;
+  font-size: 14px;
   color: #4b4b4b;
-  margin-top: 15px;
+  margin-top: 20px;
+  text-align: center;
 }
