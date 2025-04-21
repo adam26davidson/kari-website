@@ -1,15 +1,30 @@
 # Kari Website
 
-to run api:
+## to run api:
+
+first login to aws:
+
+```
+aws sso login
+```
+
+then start the api:
 
 ```
 cargo watch -x 'run dev'
 ```
 
-to run ui
+## to run ui
 
 ```
 npm run dev
+```
+
+## to sync prod s3 to test
+
+```
+chmod +x scripts/sync_s3_prod_to_test.sh
+./scripts/sync_s3_prod_to_test.sh
 ```
 
 # React + TypeScript + Vite
