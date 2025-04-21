@@ -717,6 +717,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dotenv"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
+
+[[package]]
 name = "ecdsa"
 version = "0.14.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1272,6 +1278,7 @@ dependencies = [
  "aws-smithy-types",
  "axum",
  "bytes",
+ "dotenv",
  "futures",
  "hyper 0.14.31",
  "jsonwebtoken",

@@ -53,19 +53,25 @@ struct HomePageData {
 struct AppState {
     jwks: Arc<RwLock<JwkSet>>,
     s3_client: Client,
+    bucket_name: String,
 }
 
 #[tokio::main]
 async fn main() {
+    // Load environment variables
+    dotenv::dotenv().ok();
+
     // Initialize S3 client
     let sdk_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
     let client = Client::new(&sdk_config);
 
     // Fetch JWKS and store in shared state
     let jwks = fetch_jwks().await.expect("Failed to fetch JWKS");
+    let bucket_name = std::env::var("BUCKET_NAME").expect("BUCKET_NAME not set");
     let state = AppState {
         jwks: Arc::new(RwLock::new(jwks)),
         s3_client: client,
+        bucket_name,
     };
 
     let secure_routes = Router::new()
@@ -109,7 +115,7 @@ async fn get_haiku_handler(State(state): State<AppState>) -> Json<Value> {
         state
             .s3_client
             .get_object()
-            .bucket("karidavidson.com")
+            .bucket(&state.bucket_name)
             .key("haiku.json")
             .send()
             .await
@@ -133,7 +139,7 @@ async fn get_haiga_handler(State(state): State<AppState>) -> Json<Value> {
         state
             .s3_client
             .get_object()
-            .bucket("karidavidson.com")
+            .bucket(&state.bucket_name)
             .key("haiga.json")
             .send()
             .await
@@ -157,7 +163,7 @@ async fn get_home_page_handler(State(state): State<AppState>) -> Json<Value> {
         state
             .s3_client
             .get_object()
-            .bucket("karidavidson.com")
+            .bucket(&state.bucket_name)
             .key("home-page.json")
             .send()
             .await
@@ -182,7 +188,7 @@ async fn get_image_handler(
     // print request path
     println!("Request path: {}", filename);
 
-    let bucket_name = "karidavidson.com";
+    let bucket_name = &state.bucket_name;
     let image_key = format!("images/{}", filename);
 
     let response = state
@@ -239,7 +245,7 @@ async fn upload_image_handler(
     match state
         .s3_client
         .put_object()
-        .bucket("karidavidson.com")
+        .bucket(&state.bucket_name)
         .key(&key)
         .body(ByteStream::from(data))
         .send()
@@ -260,7 +266,7 @@ async fn delete_image_handler(
     State(state): State<AppState>,
     axum::extract::Path(filename): axum::extract::Path<String>,
 ) -> impl IntoResponse {
-    let bucket_name = "karidavidson.com";
+    let bucket_name = &state.bucket_name;
     let image_key = format!("images/{}", filename);
 
     let response = state
@@ -287,7 +293,7 @@ async fn update_haiku_handler(
     state
         .s3_client
         .put_object()
-        .bucket("karidavidson.com")
+        .bucket(&state.bucket_name)
         .key("haiku.json")
         .body(ByteStream::from(haiku_str.as_bytes().to_vec()))
         .send()
@@ -307,14 +313,14 @@ async fn update_haiga_handler(
     state
         .s3_client
         .put_object()
-        .bucket("karidavidson.com")
+        .bucket(&state.bucket_name)
         .key("haiga.json")
         .body(ByteStream::from(haiga_str.as_bytes().to_vec()))
         .send()
         .await
         .unwrap();
 
-    return Json(json!({"message": "Haiku list updated"}));
+    return Json(json!({"message": "Haiga list updated"}));
 }
 
 async fn update_home_page_handler(
@@ -327,7 +333,7 @@ async fn update_home_page_handler(
     state
         .s3_client
         .put_object()
-        .bucket("karidavidson.com")
+        .bucket(&state.bucket_name)
         .key("home-page.json")
         .body(ByteStream::from(home_page_data_str.as_bytes().to_vec()))
         .send()
