@@ -23,7 +23,6 @@ function AdminHaikuPage(props: AdminHaikuPageProps) {
   const { getAccessTokenSilently } = useAuth0();
   const [haikuList, setHaikuList] = useState<Array<Haiku>>([]);
   const [newHaiku, setNewHaiku] = useState<Haiku>({
-    title: "",
     lines: [],
     publisher: "",
     id: "",
@@ -72,7 +71,6 @@ function AdminHaikuPage(props: AdminHaikuPageProps) {
 
   const newHaikuIsValid = () => {
     return (
-      newHaiku.title.trim().length > 0 &&
       newHaiku.lines.length > 0 &&
       newHaiku.lines[0].length > 0
     );

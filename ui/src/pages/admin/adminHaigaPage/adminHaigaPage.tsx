@@ -24,7 +24,6 @@ function AdminHaigaPage(props: HaigaEditorProps) {
   const { getAccessTokenSilently } = useAuth0();
   const [haigaList, setHaigaList] = useState<Array<Haiga>>([]);
   const [newHaiga, setNewHaiga] = useState<Haiga>({
-    title: "",
     lines: [],
     image: "",
     publisher: "",
@@ -144,7 +143,6 @@ function AdminHaigaPage(props: HaigaEditorProps) {
 
   const newHaigaIsValid = () => {
     return (
-      newHaiga.title.trim().length > 0 &&
       newHaiga.lines.length > 0 &&
       newHaiga.lines[0].length > 0 &&
       imageFile !== null
@@ -163,14 +161,6 @@ function AdminHaigaPage(props: HaigaEditorProps) {
   const newHaigaEditor = () => {
     return (
       <>
-        <input
-          type="text"
-          placeholder="Title"
-          value={newHaiga.title}
-          onChange={(e) => {
-            setNewHaiga({ ...newHaiga, title: e.target.value });
-          }}
-        />
         <textarea
           value={newHaiga.lines.join("\n")}
           placeholder={"line 1\nline 2\nline 3"}

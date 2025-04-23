@@ -16,7 +16,6 @@ export interface HomePageEditorProps {
 export function HomePageEditor({ setLoading, isLoading }: HomePageEditorProps) {
   const [homePageData, setHomePageData] = useState<HomePageData>({
     featuredHaiku: {
-      title: "",
       lines: [],
       publisher: "",
       id: "",

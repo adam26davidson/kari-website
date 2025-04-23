@@ -6,14 +6,6 @@ export function HaikuEditor(props: {
 }) {
   return (
     <>
-      <input
-        type="text"
-        placeholder="Title"
-        value={props.newHaiku.title}
-        onChange={(e) => {
-          props.setNewHaiku({ ...props.newHaiku, title: e.target.value });
-        }}
-      />
       <textarea
         value={props.newHaiku.lines.join("\n")}
         placeholder={"line 1\nline 2\nline 3"}
