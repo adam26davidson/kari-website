@@ -103,7 +103,7 @@ function DataList<T>({
               </div>
             )}
             {addingItem && isAdmin && (
-              <div className="data-list-item">
+              <div className="admin-data-list-item">
                 <div className="data-list-item-inputs">
                   {adminProps?.itemEditor()}
                 </div>
