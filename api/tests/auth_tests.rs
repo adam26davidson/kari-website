@@ -31,8 +31,9 @@ fn create_test_app() -> Router {
     Router::new().route("/protected", get(auth_middleware))
 }
 
+// Make test functions public so they can be called from mod.rs
 #[tokio::test]
-async fn test_valid_token() {
+pub async fn test_valid_token() {
     let app = create_test_app();
 
     let response = app
@@ -50,7 +51,7 @@ async fn test_valid_token() {
 }
 
 #[tokio::test]
-async fn test_invalid_token() {
+pub async fn test_invalid_token() {
     let app = create_test_app();
 
     let response = app
@@ -68,7 +69,7 @@ async fn test_invalid_token() {
 }
 
 #[tokio::test]
-async fn test_missing_token() {
+pub async fn test_missing_token() {
     let app = create_test_app();
 
     let response = app
