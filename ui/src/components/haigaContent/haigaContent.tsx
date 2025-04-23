@@ -2,7 +2,7 @@ import { useIsMobile } from "../../hooks/isMobile";
 import { Haiga } from "../../Models";
 import "./haigaContent.css";
 
-const S3_URL = "https://s3.us-east-2.amazonaws.com/karidavidson.com";
+const S3_URL = import.meta.env.VITE_S3_URL;
 
 export function HaigaContent({
   haigaList,
