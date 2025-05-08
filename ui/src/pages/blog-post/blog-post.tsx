@@ -29,11 +29,13 @@ export function BlogPost() {
 
   return (
     <ContentPage isLoading={isLoading}>
-      <div className="blog-post-page">
-        <h1>{post?.title}</h1>
-        <div>{new Date(post?.date || "").toLocaleDateString()}</div>
-        <div dangerouslySetInnerHTML={{ __html: postContent }}></div>
-      </div>
+      {!isLoading && (
+        <div className="blog-post-page">
+          <h1>{post?.title}</h1>
+          <div>{new Date(post?.date || "").toLocaleDateString()}</div>
+          <div dangerouslySetInnerHTML={{ __html: postContent }}></div>
+        </div>
+      )}
     </ContentPage>
   );
 }
