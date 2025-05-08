@@ -23,8 +23,12 @@ pub async fn update_haiku_handler(
     Json(haiku): Json<Vec<Haiku>>,
 ) -> Json<Value> {
     let haiku_str = serde_json::to_string(&haiku).unwrap();
-    
-    match state.s3_service.put_object("haiku.json", haiku_str.as_bytes().to_vec()).await {
+
+    match state
+        .s3_service
+        .put_object("haiku.json", haiku_str.as_bytes().to_vec(), true)
+        .await
+    {
         Ok(_) => Json(json!({"message": "Haiku list updated"})),
         Err(e) => {
             eprintln!("Error updating haiku: {}", e);

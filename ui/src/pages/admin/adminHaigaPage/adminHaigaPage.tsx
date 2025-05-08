@@ -1,152 +1,150 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./adminHaigaPage.css";
 import { Confirmation, Loading } from "../admin";
 import { useAuth0 } from "@auth0/auth0-react";
 import DataList from "../../../components/dataList/dataList";
 import { v4 as uuidv4 } from "uuid";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowPointer } from "@fortawesome/free-solid-svg-icons";
 import { Haiga } from "../../../Models";
+import { HaigaService } from "../../../services/haiga";
+import { ImageService } from "../../../services/images";
+import { HaigaEditor } from "./components/haiga-editor/haiga-editor";
+import { moveItemByOne } from "../../../utils/data-list-helpers";
+import DataListItem from "../../../components/dataListItem/dataListItem";
 import { HaigaContent } from "../../../components/haigaContent/haigaContent";
 
-const HAIGA_ENDPOINT = import.meta.env.VITE_API_URL + "/haiga";
-const IMAGES_ENDPOINT = import.meta.env.VITE_API_URL + "/images";
-
 interface HaigaEditorProps {
-  isLoading: boolean;
   setLoading: (loading: Loading) => void;
-  isConfirming: boolean;
   setConfirmation: (confirmation: Confirmation) => void;
 }
 
-function AdminHaigaPage(props: HaigaEditorProps) {
+function AdminHaigaPage({ setLoading, setConfirmation }: HaigaEditorProps) {
   const { getAccessTokenSilently } = useAuth0();
   const [haigaList, setHaigaList] = useState<Array<Haiga>>([]);
-  const [newHaiga, setNewHaiga] = useState<Haiga>({
-    lines: [],
-    image: "",
-    publisher: "",
-    id: "",
-  });
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [openHaiga, setOpenHaiga] = useState<Haiga | null>(null);
 
-  const loadHaiga = async () => {
-    const token = await getAccessTokenSilently();
-    const response = await fetch(HAIGA_ENDPOINT, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    const data: Array<Haiga> = await response.json();
-    console.log(data);
-    setHaigaList(data);
-  };
+  useEffect(() => {
+    const load = async () => {
+      setLoading({ isLoading: true, message: "Loading haiga..." });
+      const data = await HaigaService.getListFromApi(getAccessTokenSilently);
+      setHaigaList(data);
+      setLoading({ isLoading: false, message: "" });
+    };
+    load();
+  }, []);
 
-  const saveHaiga = async (newHaigaList: Array<Haiga>) => {
-    props.setLoading({ isLoading: true, message: "Updating haiga..." });
-    const token = await getAccessTokenSilently();
-    const response = await fetch(HAIGA_ENDPOINT, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(newHaigaList),
-    });
-    const responseBody = await response.json();
-    console.log(responseBody);
-    props.setLoading({ isLoading: false, message: "" });
-  };
-
-  const uploadImage = async (file: File | null) => {
-    props.setLoading({ isLoading: true, message: "Uploading image..." });
-    if (!file) {
-      console.error("No file provided for upload.");
-      return;
-    }
-
-    // Get the access token from Auth0
-    const token = await getAccessTokenSilently();
-
-    // give the file a unique name - you could use the original name, but this is safer
-    const fileName = `${uuidv4()}.${file.name.split(".").pop()}`;
-
-    // rename thge file to the unique name
-    file = new File([file], fileName, { type: file.type });
-
-    // Create a FormData object and append the file
-    const formData = new FormData();
-    formData.append("file", file); // Ensure that your server is expecting the file under the key "file"
-
-    // Set up the request to your file upload endpoint
-    try {
-      const response = await fetch(IMAGES_ENDPOINT, {
-        method: "POST",
-        headers: {
-          // Normally, Content-Type is automatically set to multipart/form-data by the browser when you use FormData
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      console.log("Upload successful", await response.text());
-      props.setLoading({ isLoading: false, message: "" });
-      return fileName;
-    } catch (error) {
-      console.error("Failed to upload image", error);
-      props.setLoading({ isLoading: false, message: "" });
-      throw error;
-    }
-  };
-
-  const deleteImage = async (fileName: string) => {
-    props.setLoading({ isLoading: true, message: "Deleting image..." });
-    const token = await getAccessTokenSilently();
-    const response = await fetch(`${IMAGES_ENDPOINT}/${fileName}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) {
-      console.error(`Failed to delete image: ${fileName}`);
-    }
-    props.setLoading({ isLoading: false, message: "" });
-  };
-
-  const saveNewHaiga = async () => {
-    const fileName = await uploadImage(imageFile);
-    if (!fileName) {
-      console.error("Failed to upload image - aborting save");
-      return;
-    }
-    const newDataList = [
-      ...haigaList,
-      { ...newHaiga, id: uuidv4(), image: fileName },
-    ];
-    await saveHaiga(newDataList);
-    setHaigaList(newDataList);
+  const saveHaigaList = async (newHaigaList: Array<Haiga>) => {
+    setLoading({ isLoading: true, message: "Updating haiga..." });
+    await HaigaService.updateList(newHaigaList, getAccessTokenSilently);
+    setHaigaList(newHaigaList);
+    setLoading({ isLoading: false, message: "" });
   };
 
   const deleteHaiga = (idx: number) => async () => {
     const newDataList = haigaList.slice();
     newDataList.splice(idx, 1);
     await deleteImage(haigaList[idx].image);
-    await saveHaiga(newDataList);
-    setHaigaList(newDataList);
+    await saveHaigaList(newDataList);
   };
 
-  const newHaigaIsValid = () => {
-    return (
-      newHaiga.lines.length > 0 &&
-      newHaiga.lines[0].length > 0 &&
-      imageFile !== null
+  // List display functions ---------------------------------------------------
+
+  const onNewItem = async () => {
+    const newHaiga: Haiga = {
+      lines: [],
+      publisher: "",
+      id: uuidv4(),
+      image: "",
+    };
+    setImageFile(null);
+    setOpenHaiga(newHaiga);
+    const newHaigaList = [...haigaList, { ...newHaiga }];
+    await saveHaigaList(newHaigaList);
+  };
+
+  const onDelete = (idx: number) => () => {
+    setConfirmation({
+      show: true,
+      message: "Are you sure you want to delete this haiga?",
+      options: [
+        {
+          label: "Yes",
+          callback: () => deleteHaiga(idx)(),
+        },
+        {
+          label: "No",
+          callback: () => {},
+        },
+      ],
+    });
+  };
+
+  const onMove = (idx: number, direction: "up" | "down") => async () => {
+    const newHaigaList = moveItemByOne(haigaList, idx, direction);
+    await saveHaigaList(newHaigaList);
+  };
+
+  const onEdit = (idx: number) => () => {
+    // copy the haiga to openHaiga
+    // this is to avoid mutating the original haiga
+    const openItem = { ...haigaList[idx] };
+    setOpenHaiga(openItem);
+    setImageFile(null);
+  };
+
+  // Editor functions ---------------------------------------------------------
+
+  const uploadImage = async (file: File | null) => {
+    setLoading({ isLoading: true, message: "Uploading image..." });
+    const fileName = await ImageService.upload(
+      file,
+      true,
+      getAccessTokenSilently,
     );
+    setLoading({ isLoading: false, message: "" });
+    return fileName;
+  };
+
+  const deleteImage = async (fileName: string) => {
+    setLoading({ isLoading: true, message: "Deleting image..." });
+    await ImageService.delete(fileName, getAccessTokenSilently);
+    setLoading({ isLoading: false, message: "" });
+  };
+
+  const saveOpenHaiga = async () => {
+    if (!openHaiga) return;
+    let fileName = openHaiga.image;
+    if (imageFile) {
+      // delete the old image if it exists
+      if (openHaiga.image) {
+        await deleteImage(openHaiga.image);
+      }
+
+      // upload the new image
+      const newFileName = await uploadImage(imageFile);
+      if (!newFileName) {
+        console.error("Failed to upload image");
+        return;
+      }
+      openHaiga.image = newFileName;
+      fileName = newFileName;
+    }
+    const editedHaiga: Haiga = { ...openHaiga, image: fileName };
+    const newDataList = haigaList.slice();
+    const idx = newDataList.findIndex((haiga) => haiga.id === openHaiga.id);
+    if (idx === -1) {
+      console.error("Haiga not found");
+      return;
+    }
+    newDataList[idx] = editedHaiga;
+    await saveHaigaList(newDataList);
+  };
+
+  const openHaigaIsValid = () => {
+    if (!openHaiga) return false;
+
+    return openHaiga.lines.length > 0 && openHaiga.lines[0].length > 0;
   };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -158,72 +156,32 @@ function AdminHaigaPage(props: HaigaEditorProps) {
     }
   };
 
-  const newHaigaEditor = () => {
-    return (
-      <>
-        <textarea
-          value={newHaiga.lines.join("\n")}
-          placeholder={"line 1\nline 2\nline 3"}
-          onChange={(e) =>
-            setNewHaiga({ ...newHaiga, lines: e.target.value.split("\n") })
-          }
-        />
-        <input
-          type="text"
-          placeholder="Publisher"
-          value={newHaiga.publisher}
-          onChange={(e) =>
-            setNewHaiga({ ...newHaiga, publisher: e.target.value })
-          }
-        />
-        <input
-          id="image-upload"
-          type="file"
-          accept="image/*"
-          onChange={handleFileSelect}
-          hidden
-        />
-        {imageFile && (
-          <div className="admin-image-upload-selection">
-            <span>{imageFile.name}</span>
-            <img
-              src={URL.createObjectURL(imageFile)}
-              alt="Selected"
-              className="admin-image-preview"
-            />
-          </div>
-        )}
-        <label htmlFor="image-upload" className="admin-image-upload">
-          <FontAwesomeIcon icon={faArrowPointer} />
-          <div className="spacer"></div>
-          {imageFile ? "Select Different Image" : "Select Image"}
-        </label>
-      </>
-    );
-  };
-
-  return (
-    <DataList<Haiga>
-      dataList={haigaList}
-      isLoading={props.isLoading}
-      isAdmin={true}
-      itemContent={(idx: number) => (
-        <HaigaContent haigaList={haigaList} idx={idx} />
-      )}
-      adminProps={{
-        newItem: newHaiga,
-        isConfirming: props.isConfirming,
-        setDataList: setHaigaList,
-        setLoading: props.setLoading,
-        setConfirmation: props.setConfirmation,
-        loadData: loadHaiga,
-        saveData: saveHaiga,
-        saveNewItem: saveNewHaiga,
-        deleteItem: deleteHaiga,
-        newItemIsValid: newHaigaIsValid,
-        itemEditor: newHaigaEditor,
-      }}
+  return openHaiga ? (
+    <HaigaEditor
+      haiga={openHaiga}
+      setHaiga={setOpenHaiga}
+      validate={openHaigaIsValid}
+      handleFileSelect={handleFileSelect}
+      imageFile={imageFile}
+      onSave={saveOpenHaiga}
+      onClose={() => setOpenHaiga(null)}
     />
+  ) : (
+    <DataList isAdmin={true} onNewItem={onNewItem}>
+      {haigaList.map((haiga, idx) => (
+        <DataListItem
+          isAdmin={true}
+          isLast={idx === haigaList.length - 1}
+          isFirst={idx === 0}
+          onEdit={onEdit(idx)}
+          onDelete={onDelete(idx)}
+          onMoveUp={onMove(idx, "up")}
+          onMoveDown={onMove(idx, "down")}
+        >
+          <HaigaContent haiga={haiga} />
+        </DataListItem>
+      ))}
+    </DataList>
   );
 }
 

@@ -28,8 +28,15 @@ pub async fn update_home_page_handler(
     Json(home_page_data): Json<HomePageData>,
 ) -> Json<Value> {
     let home_page_data_str = serde_json::to_string(&home_page_data).unwrap();
-    
-    match state.s3_service.put_object("home-page.json", home_page_data_str.as_bytes().to_vec()).await {
+
+    match state
+        .s3_service
+        .put_object(
+            "home-page.json",
+            home_page_data_str.as_bytes().to_vec(),
+            true,
+        ).await
+    {
         Ok(_) => Json(json!({"message": "Home page data updated"})),
         Err(e) => {
             eprintln!("Error updating home page data: {}", e);

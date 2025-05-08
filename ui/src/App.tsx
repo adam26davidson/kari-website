@@ -4,11 +4,12 @@ import { Route, Routes } from "react-router-dom";
 import Home from "./pages/homePage/homePage";
 import { HaikuPage } from "./pages/haikuPage/haikuPage";
 import { HaigaPage } from "./pages/haigaPage/haigaPage";
-import Blog from "./pages/blog/blog";
+import { BlogList } from "./pages/blog-list/blog-list";
 import Admin from "./pages/admin/admin";
 import { useIsMobile } from "./hooks/isMobile";
 import { MobileMenu } from "./components/mobileMenu/mobileMenu";
 import { useState } from "react";
+import { BlogPost } from "./pages/blog-post/blog-post";
 
 function App() {
   const [showingMobileMobileMenu, setShowingMobileMenu] = useState(false);
@@ -29,7 +30,8 @@ function App() {
               <Route path="/" element={<Home />} />
               <Route path="haiku" element={<HaikuPage />} />
               <Route path="haiga" element={<HaigaPage />} />
-              <Route path="blog" element={<Blog />} />
+              <Route path="blog" element={<BlogList />} />
+              <Route path="blog/:id" element={<BlogPost />} />
               <Route path="admin" element={<Admin />} />
             </Routes>
           )}

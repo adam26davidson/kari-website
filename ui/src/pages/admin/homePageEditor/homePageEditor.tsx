@@ -1,28 +1,32 @@
 import { useEffect, useState } from "react";
 import { Card } from "../../../components/card/card";
-import { HaikuEditor } from "../../../components/haikuEditor/haikuEditor";
 import "./homePageEditor.css";
 import { useAuth0 } from "@auth0/auth0-react";
 import { HomePageData } from "../../../Models";
+import { PhotoPicker } from "../../../components/photo-picker/photo-picker";
+import { ImageService } from "../../../services/images";
+import { Confirmation } from "../admin";
 
 const API_URL = import.meta.env.VITE_API_URL;
 const HOME_PAGE_DATA_ENDPOINT = `${API_URL}/home-page`;
 
 export interface HomePageEditorProps {
+  setConfirmation: (confirmation: Confirmation) => void;
   setLoading: (loading: { isLoading: boolean; message: string }) => void;
   isLoading: boolean;
 }
 
-export function HomePageEditor({ setLoading, isLoading }: HomePageEditorProps) {
+export function HomePageEditor({
+  setConfirmation,
+  setLoading,
+  isLoading,
+}: HomePageEditorProps) {
   const [homePageData, setHomePageData] = useState<HomePageData>({
-    featuredHaiku: {
-      lines: [],
-      publisher: "",
-      id: "",
-    },
+    photo: "",
     blurb: "",
   });
   const { getAccessTokenSilently } = useAuth0();
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
   useEffect(() => {
     const fetchHomePageData = async () => {
@@ -49,6 +53,27 @@ export function HomePageEditor({ setLoading, isLoading }: HomePageEditorProps) {
       isLoading: true,
       message: "Updating home page data...",
     });
+    const newHomePageData = { ...homePageData };
+    if (imageFile) {
+      // delete the old image if it exists
+      if (homePageData.photo) {
+        await ImageService.delete(homePageData.photo, getAccessTokenSilently);
+      }
+
+      // upload the new image
+      const newFileName = await ImageService.upload(
+        imageFile,
+        true,
+        getAccessTokenSilently,
+      );
+      if (!newFileName) {
+        console.error("Failed to upload image");
+        return;
+      }
+      newHomePageData.photo = newFileName;
+      setHomePageData(newHomePageData);
+    }
+
     const token = await getAccessTokenSilently();
     const response = await fetch(HOME_PAGE_DATA_ENDPOINT, {
       method: "PUT",
@@ -56,11 +81,25 @@ export function HomePageEditor({ setLoading, isLoading }: HomePageEditorProps) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(homePageData),
+      body: JSON.stringify(newHomePageData),
     });
     const responseBody = await response.json();
     console.log(responseBody);
     setLoading({ isLoading: false, message: "" });
+    setConfirmation({
+      show: true,
+      message: "Home page data has been saved",
+      options: [{ label: "Ok", callback: () => {} }],
+    });
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      const file: File = event.target.files[0];
+      setImageFile(file);
+    } else {
+      setImageFile(null);
+    }
   };
 
   return (
@@ -69,17 +108,11 @@ export function HomePageEditor({ setLoading, isLoading }: HomePageEditorProps) {
         <div className="home-page-editor">
           <Card>
             <div className="home-page-editor-card-content">
-              <div className="home-page-editor-haiku">
-                <HaikuEditor
-                  newHaiku={homePageData.featuredHaiku}
-                  setNewHaiku={(haiku) => {
-                    setHomePageData({
-                      ...homePageData,
-                      featuredHaiku: haiku,
-                    });
-                  }}
-                />
-              </div>
+              <PhotoPicker
+                imageFile={imageFile}
+                fileName={homePageData.photo}
+                handleFileSelect={handleFileSelect}
+              />
               <div className="home-page-editor-blurb">
                 <textarea
                   value={homePageData.blurb}

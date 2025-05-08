@@ -23,8 +23,12 @@ pub async fn update_haiga_handler(
     Json(haiga): Json<Vec<Haiga>>,
 ) -> Json<Value> {
     let haiga_str = serde_json::to_string(&haiga).unwrap();
-    
-    match state.s3_service.put_object("haiga.json", haiga_str.as_bytes().to_vec()).await {
+
+    match state
+        .s3_service
+        .put_object("haiga.json", haiga_str.as_bytes().to_vec(), true)
+        .await
+    {
         Ok(_) => Json(json!({"message": "Haiga list updated"})),
         Err(e) => {
             eprintln!("Error updating haiga: {}", e);

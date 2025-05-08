@@ -11,6 +11,19 @@
   color: white;
 }
 
+.admin-header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 16px;
+  padding: 10px 0px 10px 0px;
+  width: 100%;
+  background-color: rgba(28, 49, 0, 0.7);
+  backdrop-filter: blur(10px);
+  color: white;
+}
+
 .header-user-section {
   display: flex;
   flex-direction: row;
@@ -35,6 +48,12 @@
 
 .header-title {
   font-size: 40px;
+  margin: 0px 20px 0px 40px;
+  color: white;
+}
+
+.admin-header-title {
+  font-size: 20px;
   margin: 0px 20px 0px 40px;
   color: white;
 }

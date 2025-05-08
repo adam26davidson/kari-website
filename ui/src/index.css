@@ -50,11 +50,19 @@ button:active {
   background-color: #6d3513ee;
 }
 
-input,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
 textarea {
   width: 400px;
+}
+
+input,
+textarea {
   margin: 10px;
-  padding: 10px;
+  padding: 5px;
   border-radius: 3px;
   border: 1px solid rgba(0, 0, 0, 0.1);
   background-color: rgba(0, 0, 0, 0.1);

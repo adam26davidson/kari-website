@@ -1,26 +1,16 @@
 import { useEffect, useState } from "react";
-import { HaikuContent } from "../../components/haikuContent/haikuContent";
 import { useIsMobile } from "../../hooks/isMobile";
 import "./homePage.css";
-
-const featuredHaiku = {
-  id: "0",
-  title: "Featured Haiku",
-  lines: ["autumn sunset", "all that glitters", "is gold"],
-  publisher: "Mainichi Japan, 10/24/17",
-};
-
-const blurb =
-  'This haiku represents, to me, a simple wonder at what is--which basically, is the essence of haiku!  As we grow older (as implied in "autumn sunset"), hopefully we start to shed our fools\' gold and see more of the real stuff that\'s been glowing all around us all along. What has changed is not the sunset, but our eyes, now seeing what is most valuable, content with the glow of a sunset. The old wise saying "all that glitters isn\'t gold" is no longer relevant!  And maybe we become children again.';
+import { HomePageData } from "../../Models";
 
 const S3_URL = import.meta.env.VITE_S3_URL;
 
 function Home() {
   const isMobile = useIsMobile();
   const [isLoading, setIsLoading] = useState(false);
-  const [homePageData, setHomePageData] = useState({
-    featuredHaiku: featuredHaiku,
-    blurb: blurb,
+  const [homePageData, setHomePageData] = useState<HomePageData>({
+    photo: "",
+    blurb: "",
   });
 
   useEffect(() => {
@@ -73,11 +63,14 @@ function Home() {
           <div
             className="fade-in"
             style={{
-              minWidth: "200px",
+              minWidth: "300px",
               padding: "20px",
             }}
           >
-            <HaikuContent haikuList={[homePageData.featuredHaiku]} idx={0} />
+            <img
+              style={{ maxHeight: "300px" }}
+              src={`${S3_URL}/images/${homePageData.photo}`}
+            />
           </div>
           <div
             className="fade-in"

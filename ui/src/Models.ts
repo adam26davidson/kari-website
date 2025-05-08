@@ -12,6 +12,19 @@ export interface Haiga {
 }
 
 export interface HomePageData {
-  featuredHaiku: Haiku;
+  photo: string;
   blurb: string;
+}
+
+export interface BlogPost {
+  id: string;
+  title: string;
+  date: string;
+  isPublished: boolean;
+}
+
+export interface BlogPostContentUpdate {
+  id: string;
+  isPublished: boolean;
+  content: string;
 }

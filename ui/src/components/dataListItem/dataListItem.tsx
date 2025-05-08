@@ -2,27 +2,30 @@ import {
   faArrowDown,
   faArrowUp,
   faTrash,
+  faPencil,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
 interface DataListItemProps {
   children?: React.ReactNode;
-  idx: number;
   isFirst: boolean;
   isLast: boolean;
   isAdmin: boolean;
-  moveItem: (idx: number, direction: "up" | "down") => () => void;
-  deleteItem: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  onDelete?: () => void;
+  onEdit?: () => void;
 }
 
 const DataListItem = ({
   children,
-  idx,
   isLast,
   isFirst,
   isAdmin,
-  moveItem,
-  deleteItem,
+  onMoveUp,
+  onMoveDown,
+  onDelete,
+  onEdit,
 }: DataListItemProps) => {
   return (
     <div className={isAdmin ? "admin-data-list-item" : "data-list-item"}>
@@ -30,17 +33,20 @@ const DataListItem = ({
       {isAdmin && (
         <div className="data-list-item-controls">
           {!isFirst && (
-            <div className="admin-icon-button" onClick={moveItem(idx, "up")}>
+            <div className="admin-icon-button" onClick={onMoveUp}>
               <FontAwesomeIcon icon={faArrowUp} />
             </div>
           )}
           {!isLast && (
-            <div className="admin-icon-button" onClick={moveItem(idx, "down")}>
+            <div className="admin-icon-button" onClick={onMoveDown}>
               <FontAwesomeIcon icon={faArrowDown} />
             </div>
           )}
-          <div className="admin-icon-button" onClick={deleteItem}>
+          <div className="admin-icon-button" onClick={onDelete}>
             <FontAwesomeIcon icon={faTrash} />
+          </div>
+          <div className="admin-icon-button" onClick={onEdit}>
+            <FontAwesomeIcon icon={faPencil} />
           </div>
         </div>
       )}

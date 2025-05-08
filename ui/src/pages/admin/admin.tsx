@@ -4,6 +4,7 @@ import AdminHaikuPage from "./adminHaikuPage/adminHaikuPage";
 import { useAuth0 } from "@auth0/auth0-react";
 import AdminHaigaPage from "./adminHaigaPage/adminHaigaPage";
 import { HomePageEditor } from "./homePageEditor/homePageEditor";
+import { AdminBlogPage } from "./adminBlogPage/admin-blog-page";
 
 type Page = "home" | "haiku" | "haiga" | "blog";
 
@@ -81,25 +82,30 @@ function Admin() {
                 <div className="admin-loading">{loading.message}</div>
               )}
               {currentPage === "home" && (
-                <HomePageEditor setLoading={setLoading} isLoading={isLoading}/>
+                <HomePageEditor
+                  setConfirmation={setConfirmation}
+                  setLoading={setLoading}
+                  isLoading={isLoading}
+                />
               )}
               {currentPage === "haiku" && (
                 <AdminHaikuPage
                   setLoading={setLoading}
-                  isConfirming={confirmation.show}
                   setConfirmation={setConfirmation}
-                  isLoading={loading.isLoading}
                 />
               )}
               {currentPage === "haiga" && (
                 <AdminHaigaPage
                   setLoading={setLoading}
-                  isConfirming={confirmation.show}
                   setConfirmation={setConfirmation}
-                  isLoading={loading.isLoading}
                 />
               )}
-              {currentPage === "blog" && <div>Blog</div>}
+              {currentPage === "blog" && (
+                <AdminBlogPage
+                  setLoading={setLoading}
+                  setConfirmation={setConfirmation}
+                />
+              )}
             </div>
           </>
         )}

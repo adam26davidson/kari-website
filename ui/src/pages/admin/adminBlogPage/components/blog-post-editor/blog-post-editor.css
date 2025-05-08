@@ -1,0 +1,25 @@
+.blog-post-editor-status {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  color: #333;
+}
+
+.blog-post-editor-status-checkbox {
+  width: 16px;
+  height: 16px;
+}
+
+.blog-post-editor-input-line {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.blog-post-editor-input-line input[type="date"] {
+  width: 150px;
+}

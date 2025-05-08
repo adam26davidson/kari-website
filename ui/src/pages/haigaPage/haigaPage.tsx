@@ -1,10 +1,10 @@
-import "./haigaPage.css";
 import { useEffect, useState } from "react";
 import { Haiga } from "../../Models";
 import DataList from "../../components/dataList/dataList";
 import { HaigaContent } from "../../components/haigaContent/haigaContent";
-
-const S3_URL = import.meta.env.VITE_S3_URL;
+import DataListItem from "../../components/dataListItem/dataListItem";
+import { HaigaService } from "../../services/haiga";
+import { ContentPage } from "../../components/content-page/content-page";
 
 export function HaigaPage() {
   const [haigaList, setHaigaList] = useState<Array<Haiga>>([]);
@@ -14,14 +14,7 @@ export function HaigaPage() {
     // get haiga from s3
     const getHaiga = async () => {
       setIsLoading(true);
-      const response = await fetch(`${S3_URL}/haiga.json`);
-      if (!response.ok) {
-        console.error("Failed to fetch haiga", response.status);
-        console.error("error", response);
-        return;
-      }
-      const data = await response.json();
-      console.log(data);
+      const data = await HaigaService.getListFromS3();
       setHaigaList(data);
       setIsLoading(false);
     };
@@ -29,15 +22,19 @@ export function HaigaPage() {
   }, []);
 
   return (
-    <div className="haiga-container">
-      <DataList<Haiga>
-        dataList={haigaList}
-        isLoading={isLoading}
-        isAdmin={false}
-        itemContent={(idx: number) => (
-          <HaigaContent haigaList={haigaList} idx={idx} />
-        )}
-      />
-    </div>
+    <ContentPage isLoading={isLoading}>
+      <DataList isAdmin={false} onNewItem={() => {}}>
+        {haigaList.map((haiga, idx) => (
+          <DataListItem
+            key={haiga.id}
+            isAdmin={false}
+            isLast={idx === haigaList.length - 1}
+            isFirst={idx === 0}
+          >
+            <HaigaContent haiga={haiga} />
+          </DataListItem>
+        ))}
+      </DataList>
+    </ContentPage>
   );
 }

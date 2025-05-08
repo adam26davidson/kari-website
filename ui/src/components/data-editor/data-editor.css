@@ -1,0 +1,43 @@
+.data-editor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.data-editor-content {
+  position: relative;
+  margin: 12px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  max-width: 1000px;
+  min-width: 550px;
+  max-height: calc(100% - (24px + 16px));
+  padding: 8px;
+  background-color: rgba(226, 226, 226, 0.8);
+  border-radius: 3px; /* Fixed typo from 'broder-radius' to 'border-radius' */
+}
+
+.data-list-item-inputs {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  color: #333;
+  max-height: 100%; /* Added max-height property */
+}
+
+.data-editor-item-controls {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+}

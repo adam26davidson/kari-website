@@ -1,7 +1,11 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import "./header.css";
-import { faUser, faBars } from "@fortawesome/free-solid-svg-icons";
+import {
+  faUser,
+  faBars,
+  faRightFromBracket,
+} from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useIsMobile } from "../../hooks/isMobile";
 import { PAGES } from "../../constants";
@@ -16,10 +20,11 @@ function Header({
   const location = useLocation();
   const isMobile = useIsMobile();
   const { user, isAuthenticated, isLoading, logout } = useAuth0();
+  const isAdminPage = location.pathname === "/admin";
 
   return (
     <>
-      <div className="header">
+      <div className={isAdminPage ? "admin-header" : "header"}>
         {isMobile && (
           <FontAwesomeIcon
             icon={faBars}
@@ -27,7 +32,13 @@ function Header({
             onClick={() => setShowingMobileMenu(!showingMobileMenu)}
           />
         )}
-        <div className={isMobile ? "header-title-mobile" : "header-title"}>
+        <div
+          className={
+            isMobile
+              ? "header-title-mobile"
+              : (isAdminPage ? "admin-" : "") + "header-title"
+          }
+        >
           {"Kari Davidson" + (location.pathname === "/admin" ? " - Admin" : "")}
         </div>
         {location.pathname !== "/admin" && !isMobile && (
@@ -54,7 +65,7 @@ function Header({
                   logout({ logoutParams: { returnTo: window.location.origin } })
                 }
               >
-                Log Out
+                <FontAwesomeIcon icon={faRightFromBracket} />
               </button>
             </div>
           </>

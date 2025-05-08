@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./adminHaikuPage.css";
 import "../admin.css";
 import { useAuth0 } from "@auth0/auth0-react";
@@ -8,98 +8,117 @@ import DataList from "../../../components/dataList/dataList";
 import { v4 as uuidv4 } from "uuid";
 import { Haiku } from "../../../Models";
 import { HaikuContent } from "../../../components/haikuContent/haikuContent";
-import { HaikuEditor } from "../../../components/haikuEditor/haikuEditor";
-
-const HAIKU_ENDPOINT = import.meta.env.VITE_API_URL + "/haiku";
+import { HaikuService } from "../../../services/haiku";
+import DataListItem from "../../../components/dataListItem/dataListItem";
+import { moveItemByOne } from "../../../utils/data-list-helpers";
+import { HaikuEditor } from "./components/haiku-editor/haiku-editor";
 
 interface AdminHaikuPageProps {
-  isLoading: boolean;
   setLoading: (loading: Loading) => void;
-  isConfirming: boolean;
   setConfirmation: (confirmation: Confirmation) => void;
 }
 
-function AdminHaikuPage(props: AdminHaikuPageProps) {
+function AdminHaikuPage({ setLoading, setConfirmation }: AdminHaikuPageProps) {
   const { getAccessTokenSilently } = useAuth0();
   const [haikuList, setHaikuList] = useState<Array<Haiku>>([]);
-  const [newHaiku, setNewHaiku] = useState<Haiku>({
-    lines: [],
-    publisher: "",
-    id: "",
-  });
+  const [openHaiku, setOpenHaiku] = useState<Haiku | null>(null);
 
-  const loadHaiku = async () => {
-    const token = await getAccessTokenSilently();
-    const response = await fetch(HAIKU_ENDPOINT, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    const data: Array<Haiku> = await response.json();
-    console.log(data);
-    setHaikuList(data);
-  };
+  useEffect(() => {
+    const load = async () => {
+      setLoading({ isLoading: true, message: "Loading haiku..." });
+      const data = await HaikuService.getListFromApi(getAccessTokenSilently);
+      setHaikuList(data);
+      setLoading({ isLoading: false, message: "" });
+    };
+    load();
+  }, []);
 
-  const saveHaiku = async (newHaikuList: Array<Haiku>) => {
-    props.setLoading({ isLoading: true, message: "Updating haiku..." });
-    const token = await getAccessTokenSilently();
-    const response = await fetch(HAIKU_ENDPOINT, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(newHaikuList),
-    });
-    const responseBody = await response.json();
-    console.log(responseBody);
-    props.setLoading({ isLoading: false, message: "" });
-  };
-
-  const saveNewHaiku = async (newHaiku: Haiku) => {
-    const newDataList = [...haikuList, { ...newHaiku, id: uuidv4() }];
-    await saveHaiku(newDataList);
-    setHaikuList(newDataList);
+  const saveHaikuList = async (newHaikuList: Array<Haiku>) => {
+    setLoading({ isLoading: true, message: "Updating haiku..." });
+    await HaikuService.updateList(newHaikuList, getAccessTokenSilently);
+    setHaikuList(newHaikuList);
+    setLoading({ isLoading: false, message: "" });
   };
 
   const deleteHaiku = (idx: number) => async () => {
     const newList = haikuList.slice();
     newList.splice(idx, 1);
-    await saveHaiku(newList);
-    setHaikuList(newList);
+    await saveHaikuList(newList);
   };
 
-  const newHaikuIsValid = () => {
-    return (
-      newHaiku.lines.length > 0 &&
-      newHaiku.lines[0].length > 0
-    );
+  // List display functions ---------------------------------------------------
+
+  const onNewItem = async () => {
+    const newHaiku: Haiku = { lines: [], publisher: "", id: uuidv4() };
+    const newHaikuList = [...haikuList, { ...newHaiku }];
+    await saveHaikuList(newHaikuList);
+    setOpenHaiku(newHaiku);
   };
 
-  return (
-    <DataList<Haiku>
-      dataList={haikuList}
-      isLoading={props.isLoading}
-      isAdmin={true}
-      itemContent={(idx: number) => (
-        <HaikuContent haikuList={haikuList} idx={idx} />
-      )}
-      adminProps={{
-        newItem: newHaiku,
-        isConfirming: props.isConfirming,
-        setDataList: setHaikuList,
-        setLoading: props.setLoading,
-        setConfirmation: props.setConfirmation,
-        loadData: loadHaiku,
-        saveData: saveHaiku,
-        saveNewItem: saveNewHaiku,
-        deleteItem: deleteHaiku,
-        newItemIsValid: newHaikuIsValid,
-        itemEditor: () => (
-          <HaikuEditor newHaiku={newHaiku} setNewHaiku={setNewHaiku} />
-        ),
-      }}
+  const onDelete = (idx: number) => () => {
+    setConfirmation({
+      show: true,
+      message: "Are you sure you want to delete this haiku?",
+      options: [
+        { label: "Yes", callback: () => deleteHaiku(idx)() },
+        { label: "No", callback: () => {} },
+      ],
+    });
+  };
+
+  const onMove = (idx: number, direction: "up" | "down") => async () => {
+    const newHaikuList = moveItemByOne(haikuList, idx, direction);
+    await saveHaikuList(newHaikuList);
+  };
+
+  const onEdit = (idx: number) => () => {
+    const openItem = { ...haikuList[idx] };
+    setOpenHaiku(openItem);
+  };
+
+  // Editor functions ---------------------------------------------------------
+
+  const saveOpenHaiku = async () => {
+    if (!openHaiku) return;
+    const newHaikuList = haikuList.slice();
+    const idx = newHaikuList.findIndex((haiku) => haiku.id === openHaiku.id);
+    if (idx === -1) {
+      console.error("Haiku not found");
+      return;
+    }
+    newHaikuList[idx] = { ...openHaiku };
+    await saveHaikuList(newHaikuList);
+  };
+
+  const openHaikuIsValid = () => {
+    if (!openHaiku) return false;
+    return openHaiku.lines.length > 0 && openHaiku.lines[0].length > 0;
+  };
+
+  return openHaiku ? (
+    <HaikuEditor
+      haiku={openHaiku}
+      setHaiku={setOpenHaiku}
+      validate={openHaikuIsValid}
+      onSave={saveOpenHaiku}
+      onClose={() => setOpenHaiku(null)}
     />
+  ) : (
+    <DataList isAdmin={true} onNewItem={onNewItem}>
+      {haikuList.map((haiku, idx) => (
+        <DataListItem
+          isAdmin={true}
+          isLast={idx === haikuList.length - 1}
+          isFirst={idx === 0}
+          onEdit={onEdit(idx)}
+          onDelete={onDelete(idx)}
+          onMoveUp={onMove(idx, "up")}
+          onMoveDown={onMove(idx, "down")}
+        >
+          <HaikuContent haiku={haiku} />
+        </DataListItem>
+      ))}
+    </DataList>
   );
 }
 

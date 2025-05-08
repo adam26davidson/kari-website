@@ -1,0 +1,20 @@
+[
+  {
+    "id": "1",
+    "title": "Test Post 1",
+    "isPublished": true,
+    "date": "2023-10-01T12:00:00Z"
+  },
+  {
+    "id": "2",
+    "title": "Test Post 2",
+    "isPublished": false,
+    "date": "2023-10-02T12:00:00Z"
+  },
+  {
+    "id": "3",
+    "title": "Test Post 3",
+    "isPublished": true,
+    "date": "2023-10-03T12:00:00Z"
+  }
+]

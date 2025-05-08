@@ -1,11 +1,11 @@
+use aws_sdk_s3::primitives::ByteStream;
 use axum::{
-    extract::{Multipart, State, Path},
+    extract::{Multipart, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
 };
-use aws_sdk_s3::primitives::ByteStream;
 
-use crate::AppState;
+use crate::{models::IsPublishedQuery, AppState};
 
 pub async fn get_image_handler(
     State(state): State<AppState>,
@@ -27,10 +27,15 @@ pub async fn get_image_handler(
     }
 }
 
+#[axum::debug_handler]
 pub async fn upload_image_handler(
     State(state): State<AppState>,
+    Query(query): Query<IsPublishedQuery>,
     mut multipart: Multipart,
 ) -> impl IntoResponse {
+    // extract "isPublished" from query string
+    let is_published = query.is_published;
+
     // Pull out the first field
     let mut field = match multipart.next_field().await {
         Ok(Some(f)) => f,
@@ -55,11 +60,13 @@ pub async fn upload_image_handler(
     }
 
     // Upload to S3
-    match state.s3_client
+    match state
+        .s3_client
         .put_object()
         .bucket(&state.bucket_name)
         .key(&key)
         .body(ByteStream::from(data))
+        .set_tagging(Some(format!("public={}", is_published)))
         .send()
         .await
     {
@@ -71,6 +78,39 @@ pub async fn upload_image_handler(
             eprintln!("PutObject error: {:?}", err);
             (StatusCode::INTERNAL_SERVER_ERROR, "Upload failed").into_response()
         }
+    }
+}
+
+pub async fn set_image_published_handler(
+    State(state): State<AppState>,
+    Path(filename): Path<String>,
+    Query(query): Query<IsPublishedQuery>,
+) -> impl IntoResponse {
+    let image_key = format!("images/{}", filename);
+    let is_published = query.is_published;
+
+    match state
+        .s3_client
+        .put_object_tagging()
+        .bucket(&state.bucket_name)
+        .key(&image_key)
+        .tagging(
+            aws_sdk_s3::types::Tagging::builder()
+                .tag_set(
+                    aws_sdk_s3::types::Tag::builder()
+                        .key("public")
+                        .value(is_published.to_string())
+                        .build()
+                        .expect("Failed to build tag"),
+                )
+                .build()
+                .expect("Failed to build tagging"),
+        )
+        .send()
+        .await
+    {
+        Ok(_) => (StatusCode::OK, "Image published status updated").into_response(),
+        Err(_) => (StatusCode::NOT_FOUND, "Image not found").into_response(),
     }
 }
 

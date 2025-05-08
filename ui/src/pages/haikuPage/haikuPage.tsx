@@ -1,9 +1,9 @@
-import "./haikuPage.css";
-// import HaikuZenViewer from "../../components/haikuZenViewer/haikuZenviewer";
 import { useEffect, useState } from "react";
 import { Haiku } from "../../Models";
 import DataList from "../../components/dataList/dataList";
 import { HaikuContent } from "../../components/haikuContent/haikuContent";
+import DataListItem from "../../components/dataListItem/dataListItem";
+import { ContentPage } from "../../components/content-page/content-page";
 
 const S3_URL = import.meta.env.VITE_S3_URL;
 
@@ -30,15 +30,19 @@ export function HaikuPage() {
   }, []);
 
   return (
-    <div className="haiku-container">
-      <DataList<Haiku>
-        dataList={haikuList}
-        isLoading={isLoading}
-        isAdmin={false}
-        itemContent={(idx: number) => (
-          <HaikuContent haikuList={haikuList} idx={idx} />
-        )}
-      />
-    </div>
+    <ContentPage isLoading={isLoading}>
+      <DataList isAdmin={false} onNewItem={() => {}}>
+        {haikuList.map((haiku, idx) => (
+          <DataListItem
+            key={haiku.id}
+            isAdmin={false}
+            isLast={idx === haikuList.length - 1}
+            isFirst={idx === 0}
+          >
+            <HaikuContent haiku={haiku} />
+          </DataListItem>
+        ))}
+      </DataList>
+    </ContentPage>
   );
 }

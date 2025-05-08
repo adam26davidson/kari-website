@@ -1,0 +1,119 @@
+.editor {
+  width: 100%;
+  flex: 1;
+  overflow-y: scroll;
+}
+
+.tiptap-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: 800px;
+  min-height: 350px;
+  max-height: calc(100% - 24px);
+  margin: 10px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.tiptap {
+  height: content-fit;
+  margin: 10px;
+}
+
+.tiptap:focus,
+.tiptap:active {
+  outline: none;
+}
+
+.control-group {
+  width: 100%;
+}
+
+.button-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  width: 100%;
+}
+
+.button-group button {
+  /* height: 34px; */
+  padding: 5px;
+  margin: 3px;
+  font-size: 14px;
+  background-color: rgb(232, 232, 232);
+  color: rgb(55, 55, 55);
+  border-width: 0px;
+}
+
+.button-group button.is-active {
+  background-color: rgb(55, 55, 55);
+  color: rgb(232, 232, 232);
+}
+
+.button-group button[disabled] {
+  color: rgb(111, 111, 111);
+  cursor: not-allowed;
+}
+
+.button-group button[disabled]:hover {
+  background-color: rgb(232, 232, 232);
+  color: rgb(111, 111, 111);
+}
+
+.button-group button:hover {
+  background-color: rgb(72, 72, 72);
+  color: rgb(232, 232, 232);
+}
+
+.grouped-buttons {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  background-color: rgb(232, 232, 232);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 5px;
+}
+
+.grouped-buttons button {
+  margin: 0px;
+  border-radius: 0px;
+}
+
+.button-group select {
+  font-size: 14px;
+  height: 30px;
+  background-color: rgb(232, 232, 232);
+  color: rgb(55, 55, 55);
+  margin: 3px;
+  padding: 5px;
+  border-radius: 3px;
+  border-width: 0px;
+}
+
+.button-group select:focus,
+.button-group select:active {
+  outline: none;
+}
+
+.button-group select:hover {
+  background-color: rgb(72, 72, 72);
+  color: rgb(232, 232, 232);
+  cursor: pointer;
+}
+
+.blog-post-image {
+  width: 100px;
+}
+
+img {
+  max-width: 90%;
+  max-height: 100%;
+}

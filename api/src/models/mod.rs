@@ -17,7 +17,29 @@ pub struct Haiga {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct HomePageData {
-    #[serde(rename = "featuredHaiku")]
-    pub featured_haiku: Haiku,
+    pub photo: String,
     pub blurb: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BlogPost {
+    pub id: String,
+    pub title: String,
+    pub date: String,
+    #[serde(rename = "isPublished")]
+    pub is_published: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BlogPostUpdate {
+    pub id: String,
+    pub content: String,
+    #[serde(rename = "isPublished")]
+    pub is_published: bool,
+}
+
+#[derive(Deserialize)]
+pub struct IsPublishedQuery {
+    #[serde(rename = "isPublished")]
+    pub is_published: bool,
 }

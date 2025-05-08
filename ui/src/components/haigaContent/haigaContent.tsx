@@ -4,13 +4,7 @@ import "./haigaContent.css";
 
 const S3_URL = import.meta.env.VITE_S3_URL;
 
-export function HaigaContent({
-  haigaList,
-  idx,
-}: {
-  haigaList: Array<Haiga>;
-  idx: number;
-}) {
+export function HaigaContent({ haiga }: { haiga: Haiga }) {
   const isMobile = useIsMobile();
   return (
     <>
@@ -29,13 +23,13 @@ export function HaigaContent({
           }
         >
           <img
-            src={`${S3_URL}/images/${haigaList[idx].image}`}
-            alt={haigaList[idx].lines.join(", ")}
+            src={`${S3_URL}/images/${haiga.image}`}
+            alt={haiga.lines.join(", ")}
             className="haiga-list-item-image"
           />
         </div>
         <div>
-          <div className="haiga-list-publisher">{haigaList[idx].publisher}</div>
+          <div className="haiga-list-publisher">{haiga.publisher}</div>
         </div>
       </div>
     </>

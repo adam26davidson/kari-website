@@ -61,12 +61,14 @@ impl S3Service {
         Ok(data.to_vec())
     }
 
-    pub async fn put_object(&self, key: &str, data: Vec<u8>) -> Result<(), S3Error> {
+    pub async fn put_object(&self, key: &str, data: Vec<u8>, public: bool) -> Result<(), S3Error> {
+        // set tag public=
         self.client
             .put_object()
             .bucket(&self.bucket_name)
             .key(key)
             .body(ByteStream::from(data))
+            .set_tagging(Some(format!("public={}", public)))
             .send()
             .await?;
 
