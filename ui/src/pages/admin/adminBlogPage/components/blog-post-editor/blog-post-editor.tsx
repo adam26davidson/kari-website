@@ -23,6 +23,12 @@ export function BlogPostEditor({
   setLoading: (loading: { isLoading: boolean; message: string }) => void;
   onAddImage: (image: File, id: string) => void;
 }) {
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const date = new Date(e.target.value);
+    const formattedDate = date.toISOString();
+    setPost({ ...post, date: formattedDate });
+  };
+
   return (
     <DataEditor onSave={onSave} onClose={onClose} disableSave={!validate(post)}>
       <input
@@ -35,7 +41,7 @@ export function BlogPostEditor({
         <input
           type="date"
           value={new Date(post.date).toISOString().split("T")[0]}
-          onChange={(e) => setPost({ ...post, date: e.target.value })}
+          onChange={handleDateChange}
         />
         <div className="blog-post-editor-status">
           <input
