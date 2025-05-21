@@ -31,7 +31,12 @@ export function BlogList() {
             isLast={idx === posts.length - 1}
             isFirst={idx === 0}
           >
-            <BlogPostSummary post={post} showPublished={false} />
+            <BlogPostSummary
+              post={post}
+              showPublished={false}
+              isAdmin={false}
+              onClick={() => {}}
+            />
           </DataListItem>
         ))}
       </DataList>

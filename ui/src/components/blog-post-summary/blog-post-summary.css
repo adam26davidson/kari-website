@@ -11,6 +11,11 @@
   color: #333;
 }
 
+.blog-post-summary-title:hover {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .blog-post-summary-status {
   font-size: 14px;
   color: #666;

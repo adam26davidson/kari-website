@@ -4,5 +4,6 @@
   "editor.tabSize": 2,
   "[rust]": {
     "editor.defaultFormatter": "rust-lang.rust-analyzer"
-  }
+  },
+  "cSpell.words": ["haiga"]
 }

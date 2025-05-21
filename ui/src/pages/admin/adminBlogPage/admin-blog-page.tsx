@@ -317,7 +317,12 @@ export function AdminBlogPage({
           onMoveUp={onMove(idx, "up")}
           onMoveDown={onMove(idx, "down")}
         >
-          <BlogPostSummary post={post} showPublished={true} />
+          <BlogPostSummary
+            post={post}
+            showPublished={true}
+            isAdmin={true}
+            onClick={onEdit(idx)}
+          />
         </DataListItem>
       ))}
     </DataList>

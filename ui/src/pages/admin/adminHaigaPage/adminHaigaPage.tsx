@@ -44,8 +44,21 @@ function AdminHaigaPage({ setLoading, setConfirmation }: HaigaEditorProps) {
   const deleteHaiga = (idx: number) => async () => {
     const newDataList = haigaList.slice();
     newDataList.splice(idx, 1);
-    await deleteImage(haigaList[idx].image);
+    if (haigaList[idx].image) {
+      await deleteImage(haigaList[idx].image);
+    }
     await saveHaigaList(newDataList);
+    setConfirmation({
+      show: true,
+      message: "Haiga deleted successfully",
+      options: [
+        {
+          label: "OK",
+          callback: () =>
+            setConfirmation({ show: false, message: "", options: [] }),
+        },
+      ],
+    });
   };
 
   // List display functions ---------------------------------------------------
