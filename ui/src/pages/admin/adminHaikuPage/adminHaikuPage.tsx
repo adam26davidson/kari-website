@@ -48,7 +48,19 @@ function AdminHaikuPage({ setLoading, setConfirmation }: AdminHaikuPageProps) {
 
   // List display functions ---------------------------------------------------
 
-  const onNewItem = async () => {
+  const onNewItem = () => {
+    setConfirmation({
+      show: true,
+      message:
+        "This will create a new empty haiku which you can edit. Do you want to continue?",
+      options: [
+        { label: "Yes", callback: () => createNewHaiku() },
+        { label: "No", callback: () => {} },
+      ],
+    });
+  };
+
+  const createNewHaiku = async () => {
     const newHaiku: Haiku = { lines: [], publisher: "", id: uuidv4() };
     const newHaikuList = [...haikuList, { ...newHaiku }];
     await saveHaikuList(newHaikuList);

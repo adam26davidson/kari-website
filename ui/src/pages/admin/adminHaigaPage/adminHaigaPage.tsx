@@ -63,7 +63,25 @@ function AdminHaigaPage({ setLoading, setConfirmation }: HaigaEditorProps) {
 
   // List display functions ---------------------------------------------------
 
-  const onNewItem = async () => {
+  const onNewItem = () => {
+    setConfirmation({
+      show: true,
+      message:
+        "This will create a new empty haiga that you can edit. Do you want to continue?",
+      options: [
+        {
+          label: "Yes",
+          callback: () => createNewHaiga(),
+        },
+        {
+          label: "No",
+          callback: () => {},
+        },
+      ],
+    });
+  };
+
+  const createNewHaiga = async () => {
     const newHaiga: Haiga = {
       lines: [],
       publisher: "",

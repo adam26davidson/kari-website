@@ -99,6 +99,24 @@ export function AdminBlogPage({
   // List display functions ---------------------------------------------------
 
   const onNewItem = async () => {
+    setConfirmation({
+      show: true,
+      message:
+        "This will create a new empty blog post which you can then edit. Do you want to continue?",
+      options: [
+        {
+          label: "Yes",
+          callback: () => createNewPost(),
+        },
+        {
+          label: "No",
+          callback: () => {},
+        },
+      ],
+    });
+  };
+
+  const createNewPost = async () => {
     const id = uuidv4();
     const newPost: BlogPost = {
       id,
