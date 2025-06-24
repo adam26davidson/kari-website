@@ -1,19 +1,16 @@
-import "./blog-post.css";
-import { useParams } from "react-router-dom";
-import { ContentPage } from "../../components/content-page/content-page";
+import "./other-works-item.css";
 import { useEffect, useState } from "react";
-import { BlogService } from "../../services/blog";
-import { BlogPost as BlogPostData } from "../../Models";
+import { BlogService } from "../../../../services/blog";
+import { BlogPost as BlogPostData } from "../../../../Models";
 
-export function BlogPost() {
-  const { id } = useParams();
+export function OtherWorksItem({ id }: { id: string }) {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [postContent, setPostContent] = useState<string>("");
   const [post, setPost] = useState<BlogPostData>();
 
   useEffect(() => {
     // get haiku from s3
-    const getHaiku = async () => {
+    const getOtherWorksItem = async () => {
       setIsLoading(true);
       const newContent = await BlogService.getSanitizedContentFromS3(id || "");
       const postList = await BlogService.getPublicListFromS3();
@@ -24,18 +21,23 @@ export function BlogPost() {
       setPostContent(newContent);
       setIsLoading(false);
     };
-    getHaiku();
+    getOtherWorksItem();
   }, [id]);
 
   return (
-    <ContentPage isLoading={isLoading}>
+    <>
       {!isLoading && (
-        <div className="blog-post-page">
+        <div className="other-works-item">
           <h1>{post?.title}</h1>
-          <div>{new Date(post?.date || "").toLocaleDateString()}</div>
-          <div dangerouslySetInnerHTML={{ __html: postContent }}></div>
+          <div className="other-works-date">
+            {new Date(post?.date || "").toLocaleDateString()}
+          </div>
+          <div
+            className="other-works-item-content"
+            dangerouslySetInnerHTML={{ __html: postContent }}
+          ></div>
         </div>
       )}
-    </ContentPage>
+    </>
   );
 }

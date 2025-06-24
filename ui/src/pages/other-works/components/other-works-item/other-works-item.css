@@ -1,0 +1,27 @@
+.other-works-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  color: black;
+  margin: 0px 20px;
+}
+
+.other-works-item h1 {
+  margin-top: 0;
+}
+
+.other-works-date {
+  margin-bottom: 20px;
+}
+
+.other-works-item-content {
+  width: 100%;
+}
+
+.other-works-item-content img {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  max-height: 80vh;
+}

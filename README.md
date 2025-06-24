@@ -27,6 +27,10 @@ chmod +x scripts/sync_s3_prod_to_test.sh
 ./scripts/sync_s3_prod_to_test.sh
 ```
 
+## Note About Other Works
+
+Other Works are called "blog" in the back end.
+
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

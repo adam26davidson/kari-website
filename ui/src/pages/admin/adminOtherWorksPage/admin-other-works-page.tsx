@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import { useEffect, useState } from "react";
-import "./admin-blog-page.css";
+import "./admin-other-works-page.css";
 import "../admin.css";
 import { useAuth0 } from "@auth0/auth0-react";
 import { Confirmation, Loading } from "../admin";
@@ -22,15 +22,15 @@ import {
 const S3_URL = import.meta.env.VITE_S3_URL;
 const API_URL = import.meta.env.VITE_API_URL;
 
-interface AdminBlogPageProps {
+interface AdminOtherWorksPageProps {
   setLoading: (loading: Loading) => void;
   setConfirmation: (confirmation: Confirmation) => void;
 }
 
-export function AdminBlogPage({
+export function AdminOtherWorksPage({
   setLoading,
   setConfirmation,
-}: AdminBlogPageProps) {
+}: AdminOtherWorksPageProps) {
   const { getAccessTokenSilently } = useAuth0();
   const [postList, setPostList] = useState<Array<BlogPost>>([]);
   const [openPost, setOpenPost] = useState<BlogPost | null>(null);
@@ -44,7 +44,7 @@ export function AdminBlogPage({
 
   useEffect(() => {
     const load = async () => {
-      setLoading({ isLoading: true, message: "Loading blog posts..." });
+      setLoading({ isLoading: true, message: "Loading other works..." });
       const data = await BlogService.getListFromApi(getAccessTokenSilently);
       setPostList(data);
       setLoading({ isLoading: false, message: "" });
@@ -53,7 +53,7 @@ export function AdminBlogPage({
   }, []);
 
   const savePostList = async (newPostList: Array<BlogPost>) => {
-    setLoading({ isLoading: true, message: "Updating blog posts..." });
+    setLoading({ isLoading: true, message: "Updating other works..." });
     await BlogService.updateList(newPostList, getAccessTokenSilently);
     setPostList(newPostList);
     setLoading({ isLoading: false, message: "" });
@@ -65,7 +65,10 @@ export function AdminBlogPage({
       console.error("Post not found");
       return;
     }
-    setLoading({ isLoading: true, message: "Deleting blog post images..." });
+    setLoading({
+      isLoading: true,
+      message: "Deleting other works item images...",
+    });
 
     // first get the content of the post
     const content = await BlogService.getContent(
@@ -86,7 +89,7 @@ export function AdminBlogPage({
       await ImageService.delete(fileName, getAccessTokenSilently);
     }
 
-    setLoading({ isLoading: true, message: "Deleting blog post..." });
+    setLoading({ isLoading: true, message: "Deleting other works item..." });
     // delete the content
     await BlogService.deleteContent(postToDelete.id, getAccessTokenSilently);
 
@@ -102,7 +105,7 @@ export function AdminBlogPage({
     setConfirmation({
       show: true,
       message:
-        "This will create a new empty blog post which you can then edit. Do you want to continue?",
+        "This will create a new empty other works item which you can then edit. Do you want to continue?",
       options: [
         {
           label: "Yes",
@@ -126,7 +129,10 @@ export function AdminBlogPage({
     };
     const newPostList = [...postList, { ...newPost }];
     await savePostList(newPostList);
-    setLoading({ isLoading: true, message: "Creating new blog post..." });
+    setLoading({
+      isLoading: true,
+      message: "Creating new other works item...",
+    });
     await BlogService.updateContent(id, "", false, getAccessTokenSilently);
     setLoading({ isLoading: false, message: "" });
     setImageFiles([]);
@@ -138,7 +144,7 @@ export function AdminBlogPage({
   const onDelete = (idx: number) => () => {
     setConfirmation({
       show: true,
-      message: "Are you sure you want to delete this blog post?",
+      message: "Are you sure you want to delete this other works item?",
       options: [
         { label: "Yes", callback: () => deletePost(idx)() },
         { label: "No", callback: () => {} },
@@ -288,7 +294,7 @@ export function AdminBlogPage({
 
     setLoading({
       isLoading: true,
-      message: "Saving blog post content...",
+      message: "Saving other works item content...",
     });
     await BlogService.updateContent(
       openPost.id,

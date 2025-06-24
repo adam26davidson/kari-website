@@ -4,9 +4,9 @@ import AdminHaikuPage from "./adminHaikuPage/adminHaikuPage";
 import { useAuth0 } from "@auth0/auth0-react";
 import AdminHaigaPage from "./adminHaigaPage/adminHaigaPage";
 import { HomePageEditor } from "./homePageEditor/homePageEditor";
-import { AdminBlogPage } from "./adminBlogPage/admin-blog-page";
+import { AdminOtherWorksPage } from "./adminOtherWorksPage/admin-other-works-page";
 
-type Page = "home" | "haiku" | "haiga" | "blog";
+type Page = "home" | "haiku" | "haiga" | "other-works";
 
 export interface Loading {
   isLoading: boolean;
@@ -46,7 +46,7 @@ function Admin() {
         {isAuthenticated && !isLoading && (
           <>
             <div className="admin-menu">
-              {["home", "haiku", "haiga", "blog"].map((page) => (
+              {["home", "haiku", "haiga", "other-works"].map((page) => (
                 <div
                   key={page}
                   className={`admin-menu-item ${
@@ -54,7 +54,8 @@ function Admin() {
                   }`}
                   onClick={() => setCurrentPage(page as Page)}
                 >
-                  {page.charAt(0).toUpperCase() + page.slice(1)}
+                  {page.charAt(0).toUpperCase() +
+                    page.slice(1).replace("-", " ")}
                 </div>
               ))}
             </div>
@@ -100,8 +101,8 @@ function Admin() {
                   setConfirmation={setConfirmation}
                 />
               )}
-              {currentPage === "blog" && (
-                <AdminBlogPage
+              {currentPage === "other-works" && (
+                <AdminOtherWorksPage
                   setLoading={setLoading}
                   setConfirmation={setConfirmation}
                 />
