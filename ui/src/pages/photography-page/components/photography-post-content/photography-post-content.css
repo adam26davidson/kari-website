@@ -1,0 +1,49 @@
+.photography-post-content {
+  color: black;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0px 20px;
+  box-sizing: border-box;
+}
+
+.photography-post-header {
+  margin-top: 0;
+}
+
+.photography-post-subtitle {
+  margin-bottom: 30px;
+  font-size: 16px;
+  color: #4b4b4b;
+}
+
+.photography-post-blurb {
+  margin-bottom: 40px;
+}
+
+.photography-post-image-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+}
+
+.photography-post-images {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  align-items: center;
+  gap: 40px;
+}
+
+.photography-post-image {
+  //max-width: 100%;
+  width: content-fit;
+  border-radius: 3px;
+}
+.photography-post-image-caption {
+  font-size: 16px;
+  color: #4b4b4b;
+}

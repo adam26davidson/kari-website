@@ -17,18 +17,18 @@
   max-width: 1000px;
   min-width: 550px;
   max-height: calc(100% - (24px + 16px));
-  padding: 8px;
+  padding: 20px;
   background-color: rgba(226, 226, 226, 0.8);
-  border-radius: 3px; /* Fixed typo from 'broder-radius' to 'border-radius' */
+  border-radius: 3px;
 }
 
 .data-list-item-inputs {
   display: flex;
   flex: 1;
   flex-direction: column;
+  gap: 15px;
   align-items: flex-start;
   justify-content: flex-start;
-  color: #333;
   max-height: 100%; /* Added max-height property */
 }
 

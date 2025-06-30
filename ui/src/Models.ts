@@ -28,3 +28,16 @@ export interface BlogPostContentUpdate {
   isPublished: boolean;
   content: string;
 }
+
+export interface PhotographyImage {
+  image: string;
+  blurb: string;
+}
+
+export class PhotographyPost {
+  id: string = "";
+  title: string = "";
+  subtitle: string = "";
+  blurb: string = "";
+  images: Array<PhotographyImage> = [];
+}

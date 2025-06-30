@@ -1,0 +1,27 @@
+.photo-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.photo-picker-image {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  max-height: 200px;
+  max-width: 200px;
+  border-radius: 3px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.photo-picker-selection {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  width: fit-content;
+  color: #181818;
+  font-family: "Roboto", sans-serif;
+}

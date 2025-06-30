@@ -1,8 +1,8 @@
 .admin-container {
   display: flex;
   flex-direction: row;
-  align-items: flex-start;
-  justify-content: flex-start;
+  align-items: center;
+  justify-content: center;
   max-height: 100%;
   height: calc(100%);
   width: 100%;
@@ -48,12 +48,10 @@
 }
 
 .admin-content {
-  flex: 1;
+  flex-grow: 1;
   margin: 0px;
   height: 100%;
-  overflow-y: scroll;
-  scrollbar-width: medium;
-  scrollbar-color: #6d3513b5 transparent;
+  overflow-y: auto;
 }
 
 .admin-icon-button {
@@ -66,46 +64,6 @@
   background-color: #6d3513b5;
   border-radius: 50%;
   transition: background-color 0.2s;
-}
-
-.admin-image-upload {
-  display: flex;
-  flex-direction: row;
-  justify-content: center;
-  align-items: center;
-  height: 30px;
-  width: fit-content;
-  padding: 0px 10px;
-  margin: 10px;
-  background-color: #6d3513b5;
-  border-radius: 3px;
-  transition: background-color 0.2s;
-  font-family: "Roboto", sans-serif;
-}
-.admin-image-upload .spacer {
-  width: 10px;
-}
-
-.admin-image-preview {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100px;
-  margin-top: 10px;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-}
-
-.admin-image-upload-selection {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  margin: 10px;
-  width: fit-content;
-  color: #181818;
-  font-family: "Roboto", sans-serif;
 }
 
 .admin-icon-button.disabled,
@@ -150,6 +108,7 @@
   align-items: center;
   justify-content: center;
   margin-top: 20px;
+  gap: 40px;
 }
 
 .admin-confirmation-option {
@@ -160,13 +119,11 @@
   margin: auto;
 }
 
-.admin-button {
-  color: #f9f5f2;
-  background-color: #6d3513b5;
-  border-width: 0px;
-  font-size: 20px;
-  font-family: "Roboto", sans-serif;
-  padding: 10px;
-  border-radius: 3px;
-  transition: background-color 0.2s;
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0);
+}
+
+* {
+  scrollbar-width: medium; /* "auto" | "thin" | "none" */
+  scrollbar-color: #888 transparent; /* thumb color, track color */
 }

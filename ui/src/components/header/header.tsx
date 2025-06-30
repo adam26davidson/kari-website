@@ -9,6 +9,7 @@ import {
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useIsMobile } from "../../hooks/isMobile";
 import { PAGES } from "../../constants";
+import { AdminButton } from "../admin-button/admin-button";
 
 function Header({
   showingMobileMenu,
@@ -59,14 +60,13 @@ function Header({
             <div className="header-user-section">
               <FontAwesomeIcon icon={faUser} />
               <div className="header-user-name">{user?.name}</div>
-              <button
-                className="header-logout"
+              <AdminButton
                 onClick={() =>
                   logout({ logoutParams: { returnTo: window.location.origin } })
                 }
               >
                 <FontAwesomeIcon icon={faRightFromBracket} />
-              </button>
+              </AdminButton>
             </div>
           </>
         )}

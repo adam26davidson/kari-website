@@ -1,0 +1,10 @@
+.title-link {
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+}
+
+.title-link:hover {
+  text-decoration: underline;
+  cursor: pointer;
+}

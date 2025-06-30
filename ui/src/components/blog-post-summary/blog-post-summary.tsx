@@ -1,4 +1,5 @@
 import { BlogPost } from "../../Models";
+import { TitleLink } from "../title-link/title-link";
 import "./blog-post-summary.css";
 
 export function BlogPostSummary({
@@ -14,16 +15,12 @@ export function BlogPostSummary({
 }) {
   return (
     <div className="blog-post-summary">
-      {!isAdmin && (
-        <a className="blog-post-summary-title" href={`/blog/${post.id}`}>
-          {post.title}
-        </a>
-      )}
-      {isAdmin && (
-        <div className="blog-post-summary-title" onClick={() => onClick(post)}>
-          {post.title}
-        </div>
-      )}
+      <TitleLink
+        href={!isAdmin ? `/blog/${post.id}` : undefined}
+        onClick={isAdmin ? () => onClick(post) : undefined}
+      >
+        {post.title}
+      </TitleLink>
       <span>{new Date(post.date).toLocaleDateString()}</span>
       {showPublished && (
         <span className="blog-post-summary-status">

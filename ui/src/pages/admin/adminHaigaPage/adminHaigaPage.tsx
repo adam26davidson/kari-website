@@ -178,21 +178,12 @@ function AdminHaigaPage({ setLoading, setConfirmation }: HaigaEditorProps) {
     return openHaiga.lines.length > 0 && openHaiga.lines[0].length > 0;
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      const file: File = event.target.files[0];
-      setImageFile(file);
-    } else {
-      setImageFile(null);
-    }
-  };
-
   return openHaiga ? (
     <HaigaEditor
       haiga={openHaiga}
       setHaiga={setOpenHaiga}
       validate={openHaigaIsValid}
-      handleFileSelect={handleFileSelect}
+      setImageFile={setImageFile}
       imageFile={imageFile}
       onSave={saveOpenHaiga}
       onClose={() => setOpenHaiga(null)}

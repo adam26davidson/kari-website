@@ -6,6 +6,7 @@ import { HomePageData } from "../../../Models";
 import { PhotoPicker } from "../../../components/photo-picker/photo-picker";
 import { ImageService } from "../../../services/images";
 import { Confirmation } from "../admin";
+import { AdminButton } from "../../../components/admin-button/admin-button";
 
 const API_URL = import.meta.env.VITE_API_URL;
 const HOME_PAGE_DATA_ENDPOINT = `${API_URL}/home-page`;
@@ -93,15 +94,6 @@ export function HomePageEditor({
     });
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      const file: File = event.target.files[0];
-      setImageFile(file);
-    } else {
-      setImageFile(null);
-    }
-  };
-
   return (
     !isLoading && (
       <div className="home-page-editor-container">
@@ -111,29 +103,19 @@ export function HomePageEditor({
               <PhotoPicker
                 imageFile={imageFile}
                 fileName={homePageData.photo}
-                handleFileSelect={handleFileSelect}
+                setImageFile={setImageFile}
               />
-              <div className="home-page-editor-blurb">
-                <textarea
-                  value={homePageData.blurb}
-                  placeholder="Blurb"
-                  onChange={(e) => {
-                    setHomePageData({
-                      ...homePageData,
-                      blurb: e.target.value,
-                    });
-                  }}
-                />
-              </div>
-              <div>
-                <button
-                  className="admin-button"
-                  style={{ marginLeft: "10px" }}
-                  onClick={saveData}
-                >
-                  Save
-                </button>
-              </div>
+              <textarea
+                value={homePageData.blurb}
+                placeholder="Blurb"
+                onChange={(e) => {
+                  setHomePageData({
+                    ...homePageData,
+                    blurb: e.target.value,
+                  });
+                }}
+              />
+              <AdminButton onClick={saveData}>Save</AdminButton>
             </div>
           </Card>
         </div>

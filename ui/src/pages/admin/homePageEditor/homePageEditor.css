@@ -16,3 +16,10 @@
   max-width: 800px;
   padding: 8px 0px;
 }
+
+.home-page-editor-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 10px;
+}

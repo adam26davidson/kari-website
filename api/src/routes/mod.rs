@@ -3,6 +3,7 @@ pub mod haiga;
 pub mod haiku;
 pub mod home;
 pub mod images;
+pub mod photography;
 
 use axum::{
     extract::DefaultBodyLimit,
@@ -18,6 +19,8 @@ pub fn create_router(state: AppState) -> Router {
     let secure_routes = Router::new()
         .route("/haiku", put(haiku::update_haiku_handler))
         .route("/haiga", put(haiga::update_haiga_handler))
+        .route("/photography", put(photography::update_photography_handler))
+        .route("/photography", get(photography::get_photography_handler))
         .route("/home-page", put(home::update_home_page_handler))
         .route("/images", post(images::upload_image_handler))
         .route("/images/:filename", delete(images::delete_image_handler))

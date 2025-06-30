@@ -31,6 +31,21 @@ pub struct BlogPost {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PhotographyImage {
+    pub image: String,
+    pub blurb: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PhotographyPost {
+    pub id: String,
+    pub title: String,
+    pub subtitle: String,
+    pub blurb: String,
+    pub images: Vec<PhotographyImage>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BlogPostUpdate {
     pub id: String,
     pub content: String,

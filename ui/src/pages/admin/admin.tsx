@@ -5,8 +5,10 @@ import { useAuth0 } from "@auth0/auth0-react";
 import AdminHaigaPage from "./adminHaigaPage/adminHaigaPage";
 import { HomePageEditor } from "./homePageEditor/homePageEditor";
 import { AdminOtherWorksPage } from "./adminOtherWorksPage/admin-other-works-page";
+import { AdminPhotographyPage } from "./admin-photography-page/admin-photography-page";
+import { AdminButton } from "../../components/admin-button/admin-button";
 
-type Page = "home" | "haiku" | "haiga" | "other-works";
+type Page = "home" | "haiku" | "haiga" | "other-works" | "photography";
 
 export interface Loading {
   isLoading: boolean;
@@ -36,28 +38,25 @@ function Admin() {
     <>
       <div className="admin-container">
         {!isAuthenticated && !isLoading && (
-          <button
-            className="admin-login-button"
-            onClick={() => loginWithRedirect()}
-          >
-            Log In
-          </button>
+          <AdminButton onClick={() => loginWithRedirect()}>Log In</AdminButton>
         )}
         {isAuthenticated && !isLoading && (
           <>
             <div className="admin-menu">
-              {["home", "haiku", "haiga", "other-works"].map((page) => (
-                <div
-                  key={page}
-                  className={`admin-menu-item ${
-                    currentPage === page ? "selected" : ""
-                  }`}
-                  onClick={() => setCurrentPage(page as Page)}
-                >
-                  {page.charAt(0).toUpperCase() +
-                    page.slice(1).replace("-", " ")}
-                </div>
-              ))}
+              {["home", "haiku", "haiga", "photography", "other-works"].map(
+                (page) => (
+                  <div
+                    key={page}
+                    className={`admin-menu-item ${
+                      currentPage === page ? "selected" : ""
+                    }`}
+                    onClick={() => setCurrentPage(page as Page)}
+                  >
+                    {page.charAt(0).toUpperCase() +
+                      page.slice(1).replace("-", " ")}
+                  </div>
+                ),
+              )}
             </div>
             <div className="admin-content">
               {confirmation.show && (
@@ -65,8 +64,7 @@ function Admin() {
                   {confirmation.message}
                   <div className="admin-confirmation-options">
                     {confirmation.options.map((option, idx) => (
-                      <button
-                        className="admin-confirmation-option"
+                      <AdminButton
                         key={idx}
                         onClick={() => {
                           option.callback();
@@ -74,7 +72,7 @@ function Admin() {
                         }}
                       >
                         {option.label}
-                      </button>
+                      </AdminButton>
                     ))}
                   </div>
                 </div>
@@ -86,7 +84,7 @@ function Admin() {
                 <HomePageEditor
                   setConfirmation={setConfirmation}
                   setLoading={setLoading}
-                  isLoading={isLoading}
+                  isLoading={loading.isLoading}
                 />
               )}
               {currentPage === "haiku" && (
@@ -103,6 +101,12 @@ function Admin() {
               )}
               {currentPage === "other-works" && (
                 <AdminOtherWorksPage
+                  setLoading={setLoading}
+                  setConfirmation={setConfirmation}
+                />
+              )}
+              {currentPage === "photography" && (
+                <AdminPhotographyPage
                   setLoading={setLoading}
                   setConfirmation={setConfirmation}
                 />

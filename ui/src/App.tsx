@@ -9,6 +9,7 @@ import { useIsMobile } from "./hooks/isMobile";
 import { MobileMenu } from "./components/mobileMenu/mobileMenu";
 import { useState } from "react";
 import { OtherWorksPage } from "./pages/other-works/other-works-page";
+import { PhotographyPage } from "./pages/photography-page/photography-page";
 
 function App() {
   const [showingMobileMobileMenu, setShowingMobileMenu] = useState(false);
@@ -31,6 +32,7 @@ function App() {
               <Route path="haiga" element={<HaigaPage />} />
               <Route path="other-works" element={<OtherWorksPage />} />
               <Route path="admin" element={<Admin />} />
+              <Route path="photography" element={<PhotographyPage />} />
             </Routes>
           )}
         </div>

@@ -15,6 +15,7 @@ interface DataListItemProps {
   onMoveDown?: () => void;
   onDelete?: () => void;
   onEdit?: () => void;
+  hideEdit?: boolean;
 }
 
 const DataListItem = ({
@@ -26,6 +27,7 @@ const DataListItem = ({
   onMoveDown,
   onDelete,
   onEdit,
+  hideEdit,
 }: DataListItemProps) => {
   return (
     <div className={isAdmin ? "admin-data-list-item" : "data-list-item"}>
@@ -45,9 +47,11 @@ const DataListItem = ({
           <div className="admin-icon-button" onClick={onDelete}>
             <FontAwesomeIcon icon={faTrash} />
           </div>
-          <div className="admin-icon-button" onClick={onEdit}>
-            <FontAwesomeIcon icon={faPencil} />
-          </div>
+          {!hideEdit && (
+            <div className="admin-icon-button" onClick={onEdit}>
+              <FontAwesomeIcon icon={faPencil} />
+            </div>
+          )}
         </div>
       )}
     </div>
