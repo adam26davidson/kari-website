@@ -63,8 +63,11 @@ function Home() {
           <div
             className="fade-in"
             style={{
-              minWidth: "400px",
+              minWidth: isMobile ? "300px" : "400px",
               padding: "20px",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
             }}
           >
             <img
