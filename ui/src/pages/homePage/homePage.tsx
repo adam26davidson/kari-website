@@ -63,12 +63,12 @@ function Home() {
           <div
             className="fade-in"
             style={{
-              minWidth: "300px",
+              minWidth: "400px",
               padding: "20px",
             }}
           >
             <img
-              style={{ maxHeight: "300px" }}
+              style={{ maxHeight: "400px" }}
               src={`${S3_URL}/images/${homePageData.photo}`}
             />
           </div>
