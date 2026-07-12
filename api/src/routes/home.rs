@@ -35,7 +35,8 @@ pub async fn update_home_page_handler(
             "home-page.json",
             home_page_data_str.as_bytes().to_vec(),
             true,
-        ).await
+        )
+        .await
     {
         Ok(_) => Json(json!({"message": "Home page data updated"})),
         Err(e) => {

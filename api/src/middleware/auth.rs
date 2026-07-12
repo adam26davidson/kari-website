@@ -20,7 +20,11 @@ pub struct Claims {
     // Add required claims here
 }
 
-pub async fn auth_middleware(State(state): State<AppState>, request: Request, next: Next) -> Response {
+pub async fn auth_middleware(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> Response {
     // Extract the token from the Authorization header
     let auth_header = request
         .headers()
@@ -49,10 +53,7 @@ async fn validate_token(
     let jwks = jwks.read().await;
     let jwk = jwks.find(&kid).ok_or("Key ID not found in JWKS")?;
     let decoding_key = match &jwk.algorithm {
-        AlgorithmParameters::RSA(ref rsa) => {
-            let key = DecodingKey::from_rsa_components(&rsa.n, &rsa.e)?;
-            key
-        }
+        AlgorithmParameters::RSA(ref rsa) => DecodingKey::from_rsa_components(&rsa.n, &rsa.e)?,
         _ => return Err("Unsupported key type".into()),
     };
 

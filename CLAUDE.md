@@ -10,6 +10,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - API: `cargo watch -x 'run dev'` - Run API in watch mode
 - API: `cargo build` - Build the Rust API
 
+## Test Commands
+- UI: `npm run test` - Vitest in watch mode
+- UI: `npm run test:run` - Vitest once (used in CI)
+- UI: `npm run test:coverage` - Vitest with coverage
+- UI: `npm run test:e2e` - Playwright smoke tests (builds + previews the app)
+- API: `cargo test` - Run Rust integration tests
+- API: `cargo clippy --all-targets -- -D warnings` - Lint (CI enforces no warnings)
+- API: `cargo fmt --check` - Formatting check
+
+CI (`.github/workflows/ci.yml`) runs all of the above on every pull request.
+Dependency updates are managed by Renovate (`renovate.json`); non-major updates
+auto-merge once these checks pass.
+
 ## Code Style Guidelines
 - TypeScript: Use strict typing with interfaces (see Models.ts)
 - React components: Use functional components with typed props

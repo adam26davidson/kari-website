@@ -1,53 +1,51 @@
 # API Testing Guide
 
-This directory contains tests for the Kari Website API. Tests are organized by functionality area.
+Integration tests for the Kari Website API, organized by functionality area.
+Each top-level file in this directory is compiled as its own test binary; shared
+setup lives in `common/` (a subdirectory, so it is not compiled as a test on its
+own).
 
 ## Running Tests
 
-To run all tests:
 ```bash
-cargo test
+cargo test              # run all (non-ignored) tests
+cargo test --test auth_tests   # run one test binary
+cargo test -- --ignored        # run the opt-in live AWS test (needs credentials)
 ```
 
-To run specific tests:
+Before committing, also run (CI enforces both):
+
 ```bash
-cargo test auth_tests # Run all auth tests
-cargo test test_auth_middleware_with_valid_token # Run a specific test
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
 ```
 
 ## Test Structure
 
-- `auth_tests.rs` - Tests for authentication and authorization
-- `test_utils.rs` - Common test utilities and helpers
-- `mod.rs` - Module definitions
+- `common/mod.rs` — shared helpers: a throwaway RSA test keypair, a JWKS built
+  from its public half, a `signed_token` factory, a dummy (offline) S3 client,
+  and a real `AppState` builder.
+- `auth_tests.rs` — drives the **real** `middleware::auth::auth_middleware`
+  against a real `AppState`. Signs tokens with the test key and asserts that
+  valid tokens pass and that missing / malformed / expired / wrong-kid /
+  wrong-audience / wrong-issuer tokens are rejected with 401.
+- `route_tests.rs` — builds the **real** router from `routes::create_router` and
+  verifies the secure/public split and the auth layer wiring.
+- `model_tests.rs` — serde (de)serialization of the `models` types, guarding the
+  `isPublished` camelCase wire contract shared with the frontend.
+- `s3_service_tests.rs` — unit tests for the real `S3Error` type/formatting, plus
+  an `#[ignore]`d end-to-end test against a live bucket.
 
-## Test Strategy
+## Principles
 
-1. **Auth Testing**: 
-   - Tests JWT validation and middleware
-   - Simulates valid and invalid tokens
-   - Mocks Auth0 JWKS responses
+Per `api/CLAUDE.md`, tests exercise real source code — no parallel
+re-implementations of the logic under test. The test keypair in `common/mod.rs`
+is generated solely for tests and is not a real credential.
 
-2. **API Endpoint Testing** (Future):
-   - Test public and secure endpoints
-   - Mock S3 responses
-   - Verify data serialization/deserialization
-   
-3. **S3 Integration Testing** (Future):
-   - Mock AWS S3 interactions
-   - Verify content upload/download
-   - Test error handling
+## Future Work
 
-## Mocking Strategy
-
-Most tests use mock implementations rather than actual external services:
-- JWT validation uses test keys rather than calling Auth0
-- S3 operations use local mock data rather than actual AWS resources
-- HTTP requests are intercepted and mocked responses are returned
-
-## Adding New Tests
-
-1. Create a new test file in this directory for your feature area
-2. Add it to the `mod.rs` file
-3. Use the test utils where possible
-4. Follow the existing patterns for consistency
+- Mock the AWS SDK with `aws-smithy-mocks` to cover `S3Service::get_object` /
+  `put_object` / `delete_object` and the `From<SdkError>` 404 → `NotFound`
+  mapping without hitting real AWS.
+- Add handler-level tests that assert response bodies for the route handlers
+  (currently only auth wiring is asserted) once S3 is mockable.

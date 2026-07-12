@@ -1,0 +1,68 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits"
+  ],
+  "timezone": "America/New_York",
+  "schedule": ["before 6am on monday"],
+  "labels": ["dependencies"],
+  "prConcurrentLimit": 5,
+  "rangeStrategy": "bump",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true,
+    "schedule": ["before 6am on monday"]
+  },
+  "packageRules": [
+    {
+      "description": "Auto-merge non-major updates once CI passes",
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "automerge": true
+    },
+    {
+      "description": "Require manual review for major updates",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "addLabels": ["major-update"]
+    },
+    {
+      "description": "Group the TipTap editor packages",
+      "matchPackageNames": ["@tiptap/**"],
+      "groupName": "tiptap"
+    },
+    {
+      "description": "Group React core and its type definitions",
+      "matchPackageNames": [
+        "react",
+        "react-dom",
+        "@types/react",
+        "@types/react-dom"
+      ],
+      "groupName": "react"
+    },
+    {
+      "description": "Group ESLint and its plugins",
+      "matchPackageNames": ["*eslint*", "@typescript-eslint/**"],
+      "groupName": "eslint"
+    },
+    {
+      "description": "Group the JS/TS test tooling",
+      "matchPackageNames": [
+        "vitest",
+        "@vitest/**",
+        "@testing-library/**",
+        "@playwright/test",
+        "jsdom"
+      ],
+      "groupName": "test tooling"
+    },
+    {
+      "description": "Group the AWS Rust SDK crates",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["/^aws-/", "/^aws_/"],
+      "groupName": "aws sdk (rust)"
+    }
+  ]
+}

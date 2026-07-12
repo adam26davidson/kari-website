@@ -3,13 +3,13 @@ mod models;
 mod routes;
 mod services;
 
+use aws_sdk_s3::Client;
 use jsonwebtoken::jwk::JwkSet;
 use services::s3::S3Service;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
-use aws_sdk_s3::Client;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -27,16 +27,18 @@ async fn main() {
     // Initialize AWS SDK
     let sdk_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
     let s3_client = Client::new(&sdk_config);
-    
+
     // Get bucket name from environment
     let bucket_name = std::env::var("BUCKET_NAME").expect("BUCKET_NAME not set");
-    
+
     // Create S3 service
     let s3_service = Arc::new(S3Service::new(s3_client.clone(), bucket_name.clone()));
 
     // Fetch JWKS and store in shared state
-    let jwks = middleware::auth::fetch_jwks().await.expect("Failed to fetch JWKS");
-    
+    let jwks = middleware::auth::fetch_jwks()
+        .await
+        .expect("Failed to fetch JWKS");
+
     // Create application state
     let state = AppState {
         jwks: Arc::new(RwLock::new(jwks)),
@@ -46,8 +48,7 @@ async fn main() {
     };
 
     // Create router with routes
-    let app = routes::create_router(state)
-        .layer(CorsLayer::permissive());
+    let app = routes::create_router(state).layer(CorsLayer::permissive());
 
     // Get port from environment or use default
     let port = std::env::var("PORT")
