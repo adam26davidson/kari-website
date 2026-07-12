@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 import "./dataList.css";
 import "../dataListItem/dataListItem.css";
 import "../../pages/admin/admin.css";

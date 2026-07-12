@@ -16,12 +16,3 @@ pub struct AppState {
     pub bucket_name: String,
     pub s3_service: Arc<S3Service>,
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_modular_structure() {
-        // A simple test to verify our modular structure works
-        assert!(true);
-    }
-}

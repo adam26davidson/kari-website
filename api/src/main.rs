@@ -1,23 +1,15 @@
-mod middleware;
-mod models;
-mod routes;
-mod services;
-
-use jsonwebtoken::jwk::JwkSet;
-use services::s3::S3Service;
+// The binary drives the same library crate the integration tests exercise, so
+// `AppState`, the router, and the middleware are defined once and tests cover
+// exactly what ships (rather than a second, separately-compiled copy).
+use aws_sdk_s3::Client;
+use kari_website_api::middleware::auth::fetch_jwks;
+use kari_website_api::routes::create_router;
+use kari_website_api::services::s3::S3Service;
+use kari_website_api::AppState;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
-use aws_sdk_s3::Client;
-
-#[derive(Clone)]
-pub struct AppState {
-    jwks: Arc<RwLock<JwkSet>>,
-    s3_client: Client,
-    bucket_name: String,
-    s3_service: Arc<S3Service>,
-}
 
 #[tokio::main]
 async fn main() {
@@ -27,16 +19,16 @@ async fn main() {
     // Initialize AWS SDK
     let sdk_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
     let s3_client = Client::new(&sdk_config);
-    
+
     // Get bucket name from environment
     let bucket_name = std::env::var("BUCKET_NAME").expect("BUCKET_NAME not set");
-    
+
     // Create S3 service
     let s3_service = Arc::new(S3Service::new(s3_client.clone(), bucket_name.clone()));
 
     // Fetch JWKS and store in shared state
-    let jwks = middleware::auth::fetch_jwks().await.expect("Failed to fetch JWKS");
-    
+    let jwks = fetch_jwks().await.expect("Failed to fetch JWKS");
+
     // Create application state
     let state = AppState {
         jwks: Arc::new(RwLock::new(jwks)),
@@ -46,8 +38,7 @@ async fn main() {
     };
 
     // Create router with routes
-    let app = routes::create_router(state)
-        .layer(CorsLayer::permissive());
+    let app = create_router(state).layer(CorsLayer::permissive());
 
     // Get port from environment or use default
     let port = std::env::var("PORT")
