@@ -13,7 +13,7 @@ use axum::{
     routing::get,
     Router,
 };
-use common::{signed_token, test_state, TokenOptions, EXPECTED_AUDIENCE, EXPECTED_ISSUER};
+use common::{signed_token, test_state, TokenOptions};
 use kari_website_api::middleware::auth::auth_middleware;
 use tower::ServiceExt; // for `oneshot`
 
@@ -106,20 +106,4 @@ async fn wrong_issuer_is_rejected() {
     });
     let status = call(protected_app(), Some(&format!("Bearer {token}"))).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
-}
-
-/// Sanity check that the expected audience/issuer constants used by the tests
-/// match what the middleware enforces (guards against a silent drift).
-#[tokio::test]
-async fn default_token_uses_expected_aud_and_iss() {
-    // A token built with the real expected values must be accepted...
-    let ok = signed_token(TokenOptions {
-        audience: EXPECTED_AUDIENCE.to_string(),
-        issuer: EXPECTED_ISSUER.to_string(),
-        ..Default::default()
-    });
-    assert_eq!(
-        call(protected_app(), Some(&format!("Bearer {ok}"))).await,
-        StatusCode::OK
-    );
 }

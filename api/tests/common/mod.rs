@@ -122,13 +122,16 @@ pub fn signed_token(opts: TokenOptions) -> String {
     .expect("token should encode")
 }
 
-/// A dummy S3 client with static bogus credentials. It never touches the
-/// network unless an S3 operation is actually invoked, so it is safe to embed
-/// in an `AppState` for tests that only exercise routing / auth.
+/// A dummy S3 client with static bogus credentials, pointed at an unroutable
+/// endpoint. Tests that only exercise routing / auth never invoke an S3
+/// operation; tests that do reach a handler (e.g. a valid token hitting a
+/// secure route) fail the S3 call instantly and locally instead of sending
+/// signed requests to real AWS, so the suite stays hermetic and fast offline.
 pub fn dummy_s3_client() -> Client {
     let conf = aws_sdk_s3::config::Builder::new()
         .behavior_version(BehaviorVersion::latest())
         .region(Region::new("us-east-2"))
+        .endpoint_url("http://127.0.0.1:1")
         .credentials_provider(Credentials::new(
             "test",
             "test",

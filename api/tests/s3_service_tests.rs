@@ -29,7 +29,7 @@ fn s3_error_implements_std_error() {
 }
 
 /// Opt-in end-to-end test. Requires real AWS credentials and a writable test
-/// bucket; run with `cargo test --ignored` and `TEST_S3_BUCKET` set.
+/// bucket; run with `cargo test -- --ignored` and `TEST_S3_BUCKET` set.
 #[tokio::test]
 #[ignore]
 async fn s3_service_round_trips_against_live_bucket() {
