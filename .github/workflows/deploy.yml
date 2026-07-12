@@ -1,0 +1,77 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # required for AWS OIDC
+  contents: read
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Build frontend
+        working-directory: ui
+        run: |
+          npm ci
+          npm run build
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Build aarch64 API binary (true cross-compile, no emulation)
+        working-directory: api
+        run: cross build --release --target aarch64-unknown-linux-gnu
+
+      - name: Assemble deploy bundle
+        run: |
+          rm -rf bundle && mkdir -p bundle/scripts
+          cp appspec.yml bundle/
+          cp -r scripts/deploy bundle/scripts/deploy
+          cp -r ui/dist bundle/dist
+          cp api/target/aarch64-unknown-linux-gnu/release/kari-website-api bundle/kari-website-api
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::336231940806:role/kari-website-ci
+          aws-region: us-east-2
+
+      - name: Upload bundle and create deployment
+        run: |
+          KEY="kari-website/${GITHUB_SHA}.zip"
+          aws deploy push \
+            --application-name kari-website \
+            --s3-location "s3://kari-website-deploy-336231940806/${KEY}" \
+            --source bundle
+          DID=$(aws deploy create-deployment \
+            --application-name kari-website \
+            --deployment-group-name kari-website-cd \
+            --s3-location "bucket=kari-website-deploy-336231940806,key=${KEY},bundleType=zip" \
+            --file-exists-behavior OVERWRITE \
+            --description "GHA ${GITHUB_SHA}" \
+            --query deploymentId --output text)
+          echo "Deployment: $DID"
+          aws deploy wait deployment-successful --deployment-id "$DID"
+          echo "Deploy succeeded: $DID"
