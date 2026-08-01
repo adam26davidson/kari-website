@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import "./adminHaigaPage.css";
 import { Confirmation, Loading, Notify } from "../admin";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAdminToken } from "../../../hooks/useAdminToken";
 import DataList from "../../../components/dataList/dataList";
 import { v4 as uuidv4 } from "uuid";
 import { Haiga } from "../../../Models";
@@ -25,7 +25,7 @@ function AdminHaigaPage({
   setConfirmation,
   notify,
 }: HaigaEditorProps) {
-  const { getAccessTokenSilently } = useAuth0();
+  const getAccessTokenSilently = useAdminToken();
   const [haigaList, setHaigaList] = useState<Array<Haiga>>([]);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [openHaiga, setOpenHaiga] = useState<Haiga | null>(null);

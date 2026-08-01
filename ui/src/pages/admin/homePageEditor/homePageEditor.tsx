@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Card } from "../../../components/card/card";
 import "./homePageEditor.css";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAdminToken } from "../../../hooks/useAdminToken";
 import { HomePageData } from "../../../Models";
 import { PhotoPicker } from "../../../components/photo-picker/photo-picker";
 import { ImageService } from "../../../services/images";
@@ -27,7 +27,7 @@ export function HomePageEditor({
     photo: "",
     blurb: "",
   });
-  const { getAccessTokenSilently } = useAuth0();
+  const getAccessTokenSilently = useAdminToken();
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
 
