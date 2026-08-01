@@ -32,8 +32,6 @@ async fn main() {
     // Create application state
     let state = AppState {
         jwks: Arc::new(RwLock::new(jwks)),
-        s3_client,
-        bucket_name,
         s3_service,
     };
 

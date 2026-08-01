@@ -78,6 +78,33 @@ impl S3Service {
         Ok(())
     }
 
+    pub async fn set_object_tagging(&self, key: &str, public: bool) -> Result<(), S3Error> {
+        self.client
+            .put_object_tagging()
+            .bucket(&self.bucket_name)
+            .key(key)
+            .tagging(
+                aws_sdk_s3::types::Tagging::builder()
+                    .tag_set(
+                        aws_sdk_s3::types::Tag::builder()
+                            .key("public")
+                            .value(public.to_string())
+                            .build()
+                            .map_err(|e| {
+                                S3Error::OperationFailed(format!("Failed to build tag: {e}"))
+                            })?,
+                    )
+                    .build()
+                    .map_err(|e| {
+                        S3Error::OperationFailed(format!("Failed to build tagging: {e}"))
+                    })?,
+            )
+            .send()
+            .await?;
+
+        Ok(())
+    }
+
     pub async fn delete_object(&self, key: &str) -> Result<(), S3Error> {
         self.client
             .delete_object()
