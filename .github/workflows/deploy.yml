@@ -1,7 +1,12 @@
 name: Deploy to EC2
 
+# Deploys only after the CI workflow succeeds on main (or manually via
+# workflow_dispatch). The workflow_run branches filter matches CI runs whose
+# head branch is main, i.e. push-to-main runs, not PR runs.
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -15,9 +20,14 @@ concurrency:
 
 jobs:
   build-and-deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
+      # Pin to the exact commit CI validated (falls back to the default branch
+      # head for manual dispatches).
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
