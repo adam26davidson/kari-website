@@ -1,4 +1,4 @@
-use axum::{extract::State, response::Json};
+use axum::{extract::State, http::StatusCode, response::Json};
 use serde_json::{json, Value};
 
 use crate::models::PhotographyPost;
@@ -21,7 +21,7 @@ pub async fn get_photography_handler(State(state): State<AppState>) -> Json<Valu
 pub async fn update_photography_handler(
     State(state): State<AppState>,
     Json(posts): Json<Vec<PhotographyPost>>,
-) -> Json<Value> {
+) -> (StatusCode, Json<Value>) {
     let posts_str = serde_json::to_string(&posts).unwrap();
 
     match state
@@ -29,10 +29,16 @@ pub async fn update_photography_handler(
         .put_object("photography.json", posts_str.as_bytes().to_vec(), true)
         .await
     {
-        Ok(_) => Json(json!({"message": "Photography posts updated"})),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(json!({"message": "Photography posts updated"})),
+        ),
         Err(e) => {
             eprintln!("Error updating photography: {}", e);
-            Json(json!({"error": "Failed to update photography posts"}))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to update photography posts"})),
+            )
         }
     }
 }

@@ -38,7 +38,7 @@ export class HaikuService {
   static async updateList(
     haikuList: Array<Haiku>,
     getAccessTokenSilently: () => Promise<string>,
-  ): Promise<Array<Haiku>> {
+  ): Promise<void> {
     const token = await getAccessTokenSilently();
     const response = await fetch(API_HAIKU_URL, {
       method: "PUT",
@@ -50,11 +50,7 @@ export class HaikuService {
     });
     if (!response.ok) {
       console.error("Failed to update haiku list", response.status);
-      console.error("error", response);
-      return [];
+      throw new Error(`Failed to update haiku list (HTTP ${response.status})`);
     }
-    const responseBody = await response.json();
-    console.log("Saved Haiku List:", responseBody);
-    return responseBody;
   }
 }

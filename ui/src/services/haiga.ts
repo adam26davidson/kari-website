@@ -38,7 +38,7 @@ export class HaigaService {
   static async updateList(
     haigaList: Array<Haiga>,
     getAccessTokenSilently: () => Promise<string>,
-  ): Promise<Array<Haiga>> {
+  ): Promise<void> {
     const token = await getAccessTokenSilently();
     const response = await fetch(API_HAIGA_URL, {
       method: "PUT",
@@ -50,11 +50,7 @@ export class HaigaService {
     });
     if (!response.ok) {
       console.error("Failed to update haiga list", response.status);
-      console.error("error", response);
-      return [];
+      throw new Error(`Failed to update haiga list (HTTP ${response.status})`);
     }
-    const responseBody = await response.json();
-    console.log("Saved Haiga List:", responseBody);
-    return responseBody;
   }
 }

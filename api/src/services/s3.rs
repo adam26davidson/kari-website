@@ -20,7 +20,7 @@ impl fmt::Display for S3Error {
 
 impl Error for S3Error {}
 
-impl<E> From<SdkError<E>> for S3Error {
+impl<E: std::fmt::Debug> From<SdkError<E>> for S3Error {
     fn from(err: SdkError<E>) -> Self {
         // Check if the error is a 404 Not Found
         if let SdkError::ServiceError(service_err) = &err {
@@ -28,7 +28,10 @@ impl<E> From<SdkError<E>> for S3Error {
                 return S3Error::NotFound;
             }
         }
-        S3Error::OperationFailed(err.to_string())
+        // Debug-format the SdkError: its Display ("service error") hides the
+        // underlying cause (e.g. AccessDenied), which makes failures undiagnosable
+        // from the logs.
+        S3Error::OperationFailed(format!("{:?}", err))
     }
 }
 
