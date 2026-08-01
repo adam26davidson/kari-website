@@ -146,12 +146,9 @@ pub fn dummy_s3_client() -> Client {
 /// Build a real [`AppState`] with the given JWKS and a dummy S3 client.
 pub fn test_state(jwks: JwkSet) -> AppState {
     let client = dummy_s3_client();
-    let bucket_name = "test-bucket".to_string();
-    let s3_service = Arc::new(S3Service::new(client.clone(), bucket_name.clone()));
+    let s3_service = Arc::new(S3Service::new(client, "test-bucket".to_string()));
     AppState {
         jwks: Arc::new(RwLock::new(jwks)),
-        s3_client: client,
-        bucket_name,
         s3_service,
     }
 }

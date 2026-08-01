@@ -1,57 +1,36 @@
-use axum::{extract::State, http::StatusCode, response::Json};
+use axum::{extract::State, response::Json};
 use serde_json::{json, Value};
 
+use crate::error::AppError;
 use crate::models::Haiku;
 use crate::services::s3::S3Error;
 use crate::AppState;
 
-pub async fn get_haiku_handler(State(state): State<AppState>) -> (StatusCode, Json<Value>) {
-    match state.s3_service.get_object("haiku.json").await {
-        Ok(data) => match serde_json::from_slice::<Vec<Haiku>>(&data) {
-            Ok(haiku) => (StatusCode::OK, Json(json!(haiku))),
-            // A parse failure must NOT become an empty list: the admin UI
-            // would render an empty editor and a save would wipe the data.
-            Err(e) => {
-                eprintln!("Error parsing haiku.json: {}", e);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"error": "Stored haiku data is invalid"})),
-                )
-            }
-        },
+pub async fn get_haiku_handler(State(state): State<AppState>) -> Result<Json<Value>, AppError> {
+    let haiku: Vec<Haiku> = match state.s3_service.get_object("haiku.json").await {
+        // A parse failure must NOT become an empty list: the admin UI would
+        // render an empty editor and a save would wipe the data.
+        Ok(data) => serde_json::from_slice(&data)
+            .map_err(|e| AppError::internal("Stored haiku data is invalid", e))?,
         // The object not existing yet is a legitimate empty list (new site).
-        Err(S3Error::NotFound) => (StatusCode::OK, Json(json!([]))),
-        Err(e) => {
-            eprintln!("Error fetching haiku: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Failed to fetch haiku"})),
-            )
-        }
-    }
+        Err(S3Error::NotFound) => Vec::new(),
+        Err(e) => return Err(AppError::internal("Failed to fetch haiku", e)),
+    };
+    Ok(Json(json!(haiku)))
 }
 
 pub async fn update_haiku_handler(
     State(state): State<AppState>,
     Json(haiku): Json<Vec<Haiku>>,
-) -> (StatusCode, Json<Value>) {
-    let haiku_str = serde_json::to_string(&haiku).unwrap();
+) -> Result<Json<Value>, AppError> {
+    let haiku_str = serde_json::to_string(&haiku)
+        .map_err(|e| AppError::internal("Failed to serialize haiku", e))?;
 
-    match state
+    state
         .s3_service
-        .put_object("haiku.json", haiku_str.as_bytes().to_vec(), true)
+        .put_object("haiku.json", haiku_str.into_bytes(), true)
         .await
-    {
-        Ok(_) => (
-            StatusCode::OK,
-            Json(json!({"message": "Haiku list updated"})),
-        ),
-        Err(e) => {
-            eprintln!("Error updating haiku: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Failed to update haiku"})),
-            )
-        }
-    }
+        .map_err(|e| AppError::internal("Failed to update haiku", e))?;
+
+    Ok(Json(json!({"message": "Haiku list updated"})))
 }

@@ -1,48 +1,49 @@
-use aws_sdk_s3::primitives::ByteStream;
 use axum::{
     extract::{Multipart, Path, Query, State},
     http::StatusCode,
-    response::IntoResponse,
+    response::{IntoResponse, Json, Response},
 };
 
+use crate::error::AppError;
+use crate::services::s3::S3Error;
 use crate::{models::IsPublishedQuery, AppState};
 
 pub async fn get_image_handler(
     State(state): State<AppState>,
     Path(filename): Path<String>,
-) -> impl IntoResponse {
+) -> Result<Response, AppError> {
     let image_key = format!("images/{}", filename);
 
     match state.s3_service.get_object(&image_key).await {
         Ok(bytes) => {
             let content_type = mime_guess::from_path(&filename).first_or_octet_stream();
-            (
+            Ok((
                 StatusCode::OK,
                 [("Content-Type", content_type.as_ref())],
                 bytes,
             )
-                .into_response()
+                .into_response())
         }
-        Err(_) => (StatusCode::NOT_FOUND, "Image not found").into_response(),
+        Err(S3Error::NotFound) => Err(AppError::NotFound("Image not found")),
+        Err(e) => Err(AppError::internal("Failed to fetch image", e)),
     }
 }
 
-#[axum::debug_handler]
 pub async fn upload_image_handler(
     State(state): State<AppState>,
     Query(query): Query<IsPublishedQuery>,
     mut multipart: Multipart,
-) -> impl IntoResponse {
+) -> Result<Json<serde_json::Value>, AppError> {
     // extract "isPublished" from query string
     let is_published = query.is_published;
 
     // Pull out the first field
     let mut field = match multipart.next_field().await {
         Ok(Some(f)) => f,
-        Ok(None) => return (StatusCode::BAD_REQUEST, "No file found").into_response(),
+        Ok(None) => return Err(AppError::BadRequest("No file found")),
         Err(e) => {
             eprintln!("Error reading multipart field: {}", e);
-            return (StatusCode::BAD_REQUEST, "Invalid multipart").into_response();
+            return Err(AppError::BadRequest("Invalid multipart"));
         }
     };
 
@@ -62,74 +63,57 @@ pub async fn upload_image_handler(
             Ok(None) => break,
             Err(e) => {
                 eprintln!("Error reading upload stream: {}", e);
-                return (StatusCode::BAD_REQUEST, "Failed to read uploaded file").into_response();
+                return Err(AppError::BadRequest("Failed to read uploaded file"));
             }
         }
     }
 
-    // Upload to S3
-    match state
-        .s3_client
-        .put_object()
-        .bucket(&state.bucket_name)
-        .key(&key)
-        .body(ByteStream::from(data))
-        .set_tagging(Some(format!("public={}", is_published)))
-        .send()
+    state
+        .s3_service
+        .put_object(&key, data, is_published)
         .await
-    {
-        Ok(_) => {
-            println!("File uploaded successfully: {}", file_name);
-            (StatusCode::OK, "File uploaded successfully").into_response()
-        }
-        Err(err) => {
-            eprintln!("PutObject error: {:?}", err);
-            (StatusCode::INTERNAL_SERVER_ERROR, "Upload failed").into_response()
-        }
-    }
+        .map_err(|e| AppError::internal("Failed to upload image", e))?;
+
+    println!("File uploaded successfully: {}", file_name);
+    Ok(Json(serde_json::json!({
+        "message": "File uploaded successfully"
+    })))
 }
 
 pub async fn set_image_published_handler(
     State(state): State<AppState>,
     Path(filename): Path<String>,
     Query(query): Query<IsPublishedQuery>,
-) -> impl IntoResponse {
+) -> Result<Json<serde_json::Value>, AppError> {
     let image_key = format!("images/{}", filename);
-    let is_published = query.is_published;
 
     match state
-        .s3_client
-        .put_object_tagging()
-        .bucket(&state.bucket_name)
-        .key(&image_key)
-        .tagging(
-            aws_sdk_s3::types::Tagging::builder()
-                .tag_set(
-                    aws_sdk_s3::types::Tag::builder()
-                        .key("public")
-                        .value(is_published.to_string())
-                        .build()
-                        .expect("Failed to build tag"),
-                )
-                .build()
-                .expect("Failed to build tagging"),
-        )
-        .send()
+        .s3_service
+        .set_object_tagging(&image_key, query.is_published)
         .await
     {
-        Ok(_) => (StatusCode::OK, "Image published status updated").into_response(),
-        Err(_) => (StatusCode::NOT_FOUND, "Image not found").into_response(),
+        Ok(_) => Ok(Json(serde_json::json!({
+            "message": "Image published status updated"
+        }))),
+        Err(S3Error::NotFound) => Err(AppError::NotFound("Image not found")),
+        Err(e) => Err(AppError::internal(
+            "Failed to update image published status",
+            e,
+        )),
     }
 }
 
 pub async fn delete_image_handler(
     State(state): State<AppState>,
     Path(filename): Path<String>,
-) -> impl IntoResponse {
+) -> Result<Json<serde_json::Value>, AppError> {
     let image_key = format!("images/{}", filename);
 
     match state.s3_service.delete_object(&image_key).await {
-        Ok(_) => (StatusCode::OK, "Image deleted successfully").into_response(),
-        Err(_) => (StatusCode::NOT_FOUND, "Image not found").into_response(),
+        Ok(_) => Ok(Json(serde_json::json!({
+            "message": "Image deleted successfully"
+        }))),
+        Err(S3Error::NotFound) => Err(AppError::NotFound("Image not found")),
+        Err(e) => Err(AppError::internal("Failed to delete image", e)),
     }
 }

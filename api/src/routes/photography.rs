@@ -1,57 +1,38 @@
-use axum::{extract::State, http::StatusCode, response::Json};
+use axum::{extract::State, response::Json};
 use serde_json::{json, Value};
 
+use crate::error::AppError;
 use crate::models::PhotographyPost;
 use crate::services::s3::S3Error;
 use crate::AppState;
 
-pub async fn get_photography_handler(State(state): State<AppState>) -> (StatusCode, Json<Value>) {
-    match state.s3_service.get_object("photography.json").await {
-        Ok(data) => match serde_json::from_slice::<Vec<PhotographyPost>>(&data) {
-            Ok(posts) => (StatusCode::OK, Json(json!(posts))),
-            // A parse failure must NOT become an empty list: the admin UI
-            // would render an empty editor and a save would wipe the data.
-            Err(e) => {
-                eprintln!("Error parsing photography.json: {}", e);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(json!({"error": "Stored photography data is invalid"})),
-                )
-            }
-        },
+pub async fn get_photography_handler(
+    State(state): State<AppState>,
+) -> Result<Json<Value>, AppError> {
+    let posts: Vec<PhotographyPost> = match state.s3_service.get_object("photography.json").await {
+        // A parse failure must NOT become an empty list: the admin UI would
+        // render an empty editor and a save would wipe the data.
+        Ok(data) => serde_json::from_slice(&data)
+            .map_err(|e| AppError::internal("Stored photography data is invalid", e))?,
         // The object not existing yet is a legitimate empty list (new site).
-        Err(S3Error::NotFound) => (StatusCode::OK, Json(json!([]))),
-        Err(e) => {
-            eprintln!("Error fetching photography: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Failed to fetch photography"})),
-            )
-        }
-    }
+        Err(S3Error::NotFound) => Vec::new(),
+        Err(e) => return Err(AppError::internal("Failed to fetch photography", e)),
+    };
+    Ok(Json(json!(posts)))
 }
 
 pub async fn update_photography_handler(
     State(state): State<AppState>,
     Json(posts): Json<Vec<PhotographyPost>>,
-) -> (StatusCode, Json<Value>) {
-    let posts_str = serde_json::to_string(&posts).unwrap();
+) -> Result<Json<Value>, AppError> {
+    let posts_str = serde_json::to_string(&posts)
+        .map_err(|e| AppError::internal("Failed to serialize photography posts", e))?;
 
-    match state
+    state
         .s3_service
-        .put_object("photography.json", posts_str.as_bytes().to_vec(), true)
+        .put_object("photography.json", posts_str.into_bytes(), true)
         .await
-    {
-        Ok(_) => (
-            StatusCode::OK,
-            Json(json!({"message": "Photography posts updated"})),
-        ),
-        Err(e) => {
-            eprintln!("Error updating photography: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Failed to update photography posts"})),
-            )
-        }
-    }
+        .map_err(|e| AppError::internal("Failed to update photography posts", e))?;
+
+    Ok(Json(json!({"message": "Photography posts updated"})))
 }
