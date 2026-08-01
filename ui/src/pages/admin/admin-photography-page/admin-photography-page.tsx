@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import { useEffect, useState } from "react";
 import "../admin.css";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAdminToken } from "../../../hooks/useAdminToken";
 import { Confirmation, Loading, Notify } from "../admin";
 import DataList from "../../../components/dataList/dataList";
 import { v4 as uuidv4 } from "uuid";
@@ -26,7 +26,7 @@ export function AdminPhotographyPage({
   setConfirmation,
   notify,
 }: AdminPhotographyPageProps) {
-  const { getAccessTokenSilently } = useAuth0();
+  const getAccessTokenSilently = useAdminToken();
   const [postList, setPostList] = useState<Array<PhotographyPost>>([]);
   const [openPost, setOpenPost] = useState<PhotographyPost | null>(null);
   const [imageFiles, setImageFiles] = useState<Array<File | null>>([]);

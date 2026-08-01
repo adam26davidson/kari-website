@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import "./adminHaikuPage.css";
 import "../admin.css";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAdminToken } from "../../../hooks/useAdminToken";
 import { Confirmation, Loading, Notify } from "../admin";
 import DataList from "../../../components/dataList/dataList";
 import { v4 as uuidv4 } from "uuid";
@@ -25,7 +25,7 @@ function AdminHaikuPage({
   setConfirmation,
   notify,
 }: AdminHaikuPageProps) {
-  const { getAccessTokenSilently } = useAuth0();
+  const getAccessTokenSilently = useAdminToken();
   const [haikuList, setHaikuList] = useState<Array<Haiku>>([]);
   const [openHaiku, setOpenHaiku] = useState<Haiku | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);

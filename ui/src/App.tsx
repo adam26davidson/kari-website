@@ -10,6 +10,7 @@ import { MobileMenu } from "./components/mobileMenu/mobileMenu";
 import { useState } from "react";
 import { OtherWorksPage } from "./pages/other-works/other-works-page";
 import { PhotographyPage } from "./pages/photography-page/photography-page";
+import { ErrorBoundary } from "./components/error-boundary/error-boundary";
 
 function App() {
   const [showingMobileMobileMenu, setShowingMobileMenu] = useState(false);
@@ -26,14 +27,16 @@ function App() {
             <MobileMenu setShowingMobileMenu={setShowingMobileMenu} />
           )}
           {!showingMobileMobileMenu && (
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="haiku" element={<HaikuPage />} />
-              <Route path="haiga" element={<HaigaPage />} />
-              <Route path="other-works" element={<OtherWorksPage />} />
-              <Route path="admin" element={<Admin />} />
-              <Route path="photography" element={<PhotographyPage />} />
-            </Routes>
+            <ErrorBoundary>
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="haiku" element={<HaikuPage />} />
+                <Route path="haiga" element={<HaigaPage />} />
+                <Route path="other-works" element={<OtherWorksPage />} />
+                <Route path="admin" element={<Admin />} />
+                <Route path="photography" element={<PhotographyPage />} />
+              </Routes>
+            </ErrorBoundary>
           )}
         </div>
       </div>

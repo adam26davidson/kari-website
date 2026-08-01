@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import "./admin-other-works-page.css";
 import "../admin.css";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAdminToken } from "../../../hooks/useAdminToken";
 import { Confirmation, Loading, Notify } from "../admin";
 import DataList from "../../../components/dataList/dataList";
 import { v4 as uuidv4 } from "uuid";
@@ -35,7 +35,7 @@ export function AdminOtherWorksPage({
   setConfirmation,
   notify,
 }: AdminOtherWorksPageProps) {
-  const { getAccessTokenSilently } = useAuth0();
+  const getAccessTokenSilently = useAdminToken();
   const [postList, setPostList] = useState<Array<BlogPost>>([]);
   const [openPost, setOpenPost] = useState<BlogPost | null>(null);
   const [openPostContent, setOpenPostContent] = useState<string | null>(null);
