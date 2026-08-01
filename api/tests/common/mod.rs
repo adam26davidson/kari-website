@@ -10,10 +10,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region};
 use aws_sdk_s3::Client;
 use jsonwebtoken::{encode, jwk::JwkSet, Algorithm, EncodingKey, Header};
+use kari_website_api::middleware::auth::JwksCache;
+use kari_website_api::routes::health::HealthCache;
 use kari_website_api::services::s3::S3Service;
 use kari_website_api::AppState;
 use serde::Serialize;
-use tokio::sync::RwLock;
 
 /// A throwaway RSA-2048 keypair generated only for tests. The public half is
 /// exposed through [`build_jwks`] and the private half signs tokens in
@@ -143,12 +144,18 @@ pub fn dummy_s3_client() -> Client {
     Client::from_conf(conf)
 }
 
-/// Build a real [`AppState`] with the given JWKS and a dummy S3 client.
+/// Build a real [`AppState`] with the given JWKS and a dummy S3 client. The
+/// JWKS refresh URL is unroutable (like the S3 endpoint) so the unknown-kid
+/// refresh path fails fast and locally instead of calling the real Auth0.
 pub fn test_state(jwks: JwkSet) -> AppState {
     let client = dummy_s3_client();
     let s3_service = Arc::new(S3Service::new(client, "test-bucket".to_string()));
     AppState {
-        jwks: Arc::new(RwLock::new(jwks)),
+        jwks: Arc::new(JwksCache::new(
+            jwks,
+            "http://127.0.0.1:1/jwks.json".to_string(),
+        )),
         s3_service,
+        health: Arc::new(HealthCache::default()),
     }
 }

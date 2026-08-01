@@ -1,8 +1,10 @@
 #!/bin/bash
 # Confirm the API is actually serving before marking the deploy successful.
+# /health probes S3 read+write, so a deploy with broken credentials fails
+# validation instead of going live.
 set -e
 for i in $(seq 1 15); do
-  code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/haiku || true)
+  code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/health || true)
   if [ "$code" = "200" ]; then
     echo "API healthy (HTTP 200) after ${i} attempt(s)"
     exit 0

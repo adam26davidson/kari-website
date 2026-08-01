@@ -19,7 +19,7 @@ impl AppError {
     /// Build an `Internal` error, logging the underlying cause. The client
     /// sees only `message`; the detail goes to the server log.
     pub fn internal(message: &'static str, err: impl std::fmt::Display) -> Self {
-        eprintln!("{}: {}", message, err);
+        tracing::error!("{}: {}", message, err);
         AppError::Internal(message)
     }
 }
