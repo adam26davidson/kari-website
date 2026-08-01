@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import "./adminHaikuPage.css";
 import "../admin.css";
 import { useAuth0 } from "@auth0/auth0-react";
-import { Confirmation, Loading } from "../admin";
+import { Confirmation, Loading, Notify } from "../admin";
 import DataList from "../../../components/dataList/dataList";
 import { v4 as uuidv4 } from "uuid";
 import { Haiku } from "../../../Models";
@@ -16,9 +16,14 @@ import { HaikuEditor } from "./components/haiku-editor/haiku-editor";
 interface AdminHaikuPageProps {
   setLoading: (loading: Loading) => void;
   setConfirmation: (confirmation: Confirmation) => void;
+  notify: Notify;
 }
 
-function AdminHaikuPage({ setLoading, setConfirmation }: AdminHaikuPageProps) {
+function AdminHaikuPage({
+  setLoading,
+  setConfirmation,
+  notify,
+}: AdminHaikuPageProps) {
   const { getAccessTokenSilently } = useAuth0();
   const [haikuList, setHaikuList] = useState<Array<Haiku>>([]);
   const [openHaiku, setOpenHaiku] = useState<Haiku | null>(null);
@@ -33,17 +38,29 @@ function AdminHaikuPage({ setLoading, setConfirmation }: AdminHaikuPageProps) {
     load();
   }, []);
 
-  const saveHaikuList = async (newHaikuList: Array<Haiku>) => {
+  const saveHaikuList = async (
+    newHaikuList: Array<Haiku>,
+    successMessage: string,
+  ): Promise<boolean> => {
     setLoading({ isLoading: true, message: "Updating haiku..." });
-    await HaikuService.updateList(newHaikuList, getAccessTokenSilently);
-    setHaikuList(newHaikuList);
-    setLoading({ isLoading: false, message: "" });
+    try {
+      await HaikuService.updateList(newHaikuList, getAccessTokenSilently);
+      setHaikuList(newHaikuList);
+      notify(successMessage);
+      return true;
+    } catch (error) {
+      console.error(error);
+      notify("Failed to save — your change was not saved", "error");
+      return false;
+    } finally {
+      setLoading({ isLoading: false, message: "" });
+    }
   };
 
   const deleteHaiku = (idx: number) => async () => {
     const newList = haikuList.slice();
     newList.splice(idx, 1);
-    await saveHaikuList(newList);
+    await saveHaikuList(newList, "Haiku deleted");
   };
 
   // List display functions ---------------------------------------------------
@@ -63,8 +80,9 @@ function AdminHaikuPage({ setLoading, setConfirmation }: AdminHaikuPageProps) {
   const createNewHaiku = async () => {
     const newHaiku: Haiku = { lines: [], publisher: "", id: uuidv4() };
     const newHaikuList = [...haikuList, { ...newHaiku }];
-    await saveHaikuList(newHaikuList);
-    setOpenHaiku(newHaiku);
+    if (await saveHaikuList(newHaikuList, "New haiku created")) {
+      setOpenHaiku(newHaiku);
+    }
   };
 
   const onDelete = (idx: number) => () => {
@@ -80,7 +98,7 @@ function AdminHaikuPage({ setLoading, setConfirmation }: AdminHaikuPageProps) {
 
   const onMove = (idx: number, direction: "up" | "down") => async () => {
     const newHaikuList = moveItemByOne(haikuList, idx, direction);
-    await saveHaikuList(newHaikuList);
+    await saveHaikuList(newHaikuList, "Order updated");
   };
 
   const onEdit = (idx: number) => () => {
@@ -99,7 +117,7 @@ function AdminHaikuPage({ setLoading, setConfirmation }: AdminHaikuPageProps) {
       return;
     }
     newHaikuList[idx] = { ...openHaiku };
-    await saveHaikuList(newHaikuList);
+    await saveHaikuList(newHaikuList, "Haiku saved");
   };
 
   const openHaikuIsValid = () => {

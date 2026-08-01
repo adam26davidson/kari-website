@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import "../admin.css";
 import { useAuth0 } from "@auth0/auth0-react";
-import { Confirmation, Loading } from "../admin";
+import { Confirmation, Loading, Notify } from "../admin";
 import DataList from "../../../components/dataList/dataList";
 import { v4 as uuidv4 } from "uuid";
 import { PhotographyPost } from "../../../Models";
@@ -17,11 +17,13 @@ import { copyPhotographyPost } from "../../../utils/misc-utils";
 interface AdminPhotographyPageProps {
   setLoading: (loading: Loading) => void;
   setConfirmation: (confirmation: Confirmation) => void;
+  notify: Notify;
 }
 
 export function AdminPhotographyPage({
   setLoading,
   setConfirmation,
+  notify,
 }: AdminPhotographyPageProps) {
   const { getAccessTokenSilently } = useAuth0();
   const [postList, setPostList] = useState<Array<PhotographyPost>>([]);
@@ -40,11 +42,23 @@ export function AdminPhotographyPage({
     load();
   }, []);
 
-  const savePostList = async (newPostList: Array<PhotographyPost>) => {
+  const savePostList = async (
+    newPostList: Array<PhotographyPost>,
+    successMessage: string,
+  ): Promise<boolean> => {
     setLoading({ isLoading: true, message: "Updating photography posts..." });
-    await PhotographyService.updateList(newPostList, getAccessTokenSilently);
-    setPostList(newPostList);
-    setLoading({ isLoading: false, message: "" });
+    try {
+      await PhotographyService.updateList(newPostList, getAccessTokenSilently);
+      setPostList(newPostList);
+      notify(successMessage);
+      return true;
+    } catch (error) {
+      console.error(error);
+      notify("Failed to save — your change was not saved", "error");
+      return false;
+    } finally {
+      setLoading({ isLoading: false, message: "" });
+    }
   };
 
   const deletePost = (idx: number) => async () => {
@@ -58,17 +72,17 @@ export function AdminPhotographyPage({
       message: "Deleting post images...",
     });
 
-    // delete images
-    postToDelete.images.forEach(async (image) => {
-      await ImageService.delete(image.image, getAccessTokenSilently);
-    });
-
-    setLoading({ isLoading: true, message: "Deleting other works item..." });
+    // delete images; a missing image should not block deleting the post
+    for (const image of postToDelete.images) {
+      await ImageService.delete(image.image, getAccessTokenSilently).catch(
+        console.error,
+      );
+    }
 
     // delete the post from the list
     const newList = postList.slice();
     newList.splice(idx, 1);
-    await savePostList(newList);
+    await savePostList(newList, "Photography post deleted");
   };
 
   // List display functions ---------------------------------------------------
@@ -102,11 +116,10 @@ export function AdminPhotographyPage({
     });
 
     const newPostList = [...postList, copyPhotographyPost(newPost)];
-    await savePostList(newPostList);
-
-    setLoading({ isLoading: false, message: "" });
-    setImageFiles([]);
-    setOpenPost(newPost);
+    if (await savePostList(newPostList, "New photography post created")) {
+      setImageFiles([]);
+      setOpenPost(newPost);
+    }
   };
 
   const onDelete = (idx: number) => () => {
@@ -122,7 +135,7 @@ export function AdminPhotographyPage({
 
   const onMove = (idx: number, direction: "up" | "down") => async () => {
     const newPostList = moveItemByOne(postList, idx, direction);
-    await savePostList(newPostList);
+    await savePostList(newPostList, "Order updated");
   };
 
   const onEdit = (idx: number) => async () => {
@@ -144,63 +157,65 @@ export function AdminPhotographyPage({
 
     const originalPost = copyPhotographyPost(newPostList[idx]);
 
-    // find all images
-
-    // delete images that are in the original but not in the new
-    setLoading({
-      isLoading: true,
-      message: "Deleting images...",
-    });
-    for (let i = 0; i < originalPost.images.length; i++) {
-      const originalImage = originalPost.images[i].image;
-      const newImage = Array.from(openPost.images).find((img) => {
-        return img.image === originalImage;
+    try {
+      // delete images that are in the original but not in the new
+      setLoading({
+        isLoading: true,
+        message: "Deleting images...",
       });
-      if (!newImage) {
-        // image is in original but not in new
-        await ImageService.delete(originalImage, getAccessTokenSilently);
-      }
-    }
-
-    //upload images in new that are not in original
-    setLoading({
-      isLoading: true,
-      message: "Uploading images...",
-    });
-    for (let i = 0; i < openPost.images.length; i++) {
-      const newImage = openPost.images[i];
-      const originalImage = Array.from(originalPost.images).find((img) => {
-        return img.image === newImage.image;
-      });
-      if (!originalImage) {
-        //image was not in original and must be added
-        const imageFile = imageFiles[i];
-        if (imageFile) {
-          const fileName = await ImageService.upload(
-            imageFile,
-            true,
+      for (let i = 0; i < originalPost.images.length; i++) {
+        const originalImage = originalPost.images[i].image;
+        const newImage = Array.from(openPost.images).find((img) => {
+          return img.image === originalImage;
+        });
+        if (!newImage) {
+          // image is in original but not in new; a missing image should not
+          // block saving the post
+          await ImageService.delete(
+            originalImage,
             getAccessTokenSilently,
-          );
-          if (!fileName) {
-            console.error("Failed to upload image");
-            return;
-          }
-          newImage.image = fileName;
+          ).catch(console.error);
         }
       }
+
+      //upload images in new that are not in original
+      setLoading({
+        isLoading: true,
+        message: "Uploading images...",
+      });
+      for (let i = 0; i < openPost.images.length; i++) {
+        const newImage = openPost.images[i];
+        const originalImage = Array.from(originalPost.images).find((img) => {
+          return img.image === newImage.image;
+        });
+        if (!originalImage) {
+          //image was not in original and must be added
+          const imageFile = imageFiles[i];
+          if (imageFile) {
+            const fileName = await ImageService.upload(
+              imageFile,
+              true,
+              getAccessTokenSilently,
+            );
+            if (!fileName) {
+              throw new Error("Failed to upload image");
+            }
+            newImage.image = fileName;
+          }
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      notify("Failed to save photography post images", "error");
+      setLoading({ isLoading: false, message: "" });
+      return;
     }
 
     // save the post list
-    setLoading({
-      isLoading: true,
-      message: "Saving Phot...",
-    });
-
     newPostList[idx] = copyPhotographyPost(openPost);
-    await savePostList(newPostList);
-
-    setLoading({ isLoading: false, message: "" });
-    setOpenPost(null);
+    if (await savePostList(newPostList, "Photography post saved")) {
+      setOpenPost(null);
+    }
   };
 
   const closeOpenPost = () => {

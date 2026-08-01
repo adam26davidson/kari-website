@@ -1,5 +1,5 @@
 use axum::extract::Path;
-use axum::{extract::State, response::Json};
+use axum::{extract::State, http::StatusCode, response::Json};
 use serde_json::{json, Value};
 
 use crate::models::{BlogPost, BlogPostUpdate};
@@ -24,7 +24,7 @@ pub async fn list_blog_posts_handler(State(state): State<AppState>) -> Json<Valu
 pub async fn update_blog_posts_handler(
     State(state): State<AppState>,
     Json(blog_posts): Json<Vec<BlogPost>>,
-) -> Json<Value> {
+) -> (StatusCode, Json<Value>) {
     let blog_posts_str = serde_json::to_string(&blog_posts).unwrap();
 
     match state
@@ -32,10 +32,16 @@ pub async fn update_blog_posts_handler(
         .put_object("blog-posts.json", blog_posts_str.as_bytes().to_vec(), true)
         .await
     {
-        Ok(_) => Json(json!({"message": "Blog posts updated"})),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(json!({"message": "Blog posts updated"})),
+        ),
         Err(e) => {
             eprintln!("Error updating blog posts: {}", e);
-            Json(json!({"error": "Failed to update blog posts"}))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to update blog posts"})),
+            )
         }
     }
 }
@@ -44,7 +50,7 @@ pub async fn update_blog_posts_handler(
 pub async fn update_blog_post_content(
     State(state): State<AppState>,
     Json(blog_post_data): Json<BlogPostUpdate>,
-) -> Json<Value> {
+) -> (StatusCode, Json<Value>) {
     let content = blog_post_data.content.clone();
     let id = blog_post_data.id.clone();
     let key = format!("blog/{}.html", id);
@@ -57,10 +63,16 @@ pub async fn update_blog_post_content(
         )
         .await
     {
-        Ok(_) => Json(json!({"message": "Blog post content updated"})),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(json!({"message": "Blog post content updated"})),
+        ),
         Err(e) => {
             eprintln!("Error updating blog post content: {}", e);
-            Json(json!({"error": "Failed to update blog post content"}))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to update blog post content"})),
+            )
         }
     }
 }
@@ -85,13 +97,19 @@ pub async fn get_blog_post_content(
 pub async fn delete_blog_post_content(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Json<Value> {
+) -> (StatusCode, Json<Value>) {
     let key = format!("blog/{}.html", id);
     match state.s3_service.delete_object(&key).await {
-        Ok(_) => Json(json!({"message": "Blog post deleted"})),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(json!({"message": "Blog post deleted"})),
+        ),
         Err(e) => {
             eprintln!("Error deleting blog post: {}", e);
-            Json(json!({"error": "Failed to delete blog post"}))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to delete blog post"})),
+            )
         }
     }
 }

@@ -1,4 +1,4 @@
-use axum::{extract::State, response::Json};
+use axum::{extract::State, http::StatusCode, response::Json};
 use serde_json::{json, Value};
 
 use crate::models::HomePageData;
@@ -26,7 +26,7 @@ pub async fn get_home_page_handler(State(state): State<AppState>) -> Json<Value>
 pub async fn update_home_page_handler(
     State(state): State<AppState>,
     Json(home_page_data): Json<HomePageData>,
-) -> Json<Value> {
+) -> (StatusCode, Json<Value>) {
     let home_page_data_str = serde_json::to_string(&home_page_data).unwrap();
 
     match state
@@ -38,10 +38,16 @@ pub async fn update_home_page_handler(
         )
         .await
     {
-        Ok(_) => Json(json!({"message": "Home page data updated"})),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(json!({"message": "Home page data updated"})),
+        ),
         Err(e) => {
             eprintln!("Error updating home page data: {}", e);
-            Json(json!({"error": "Failed to update home page data"}))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to update home page data"})),
+            )
         }
     }
 }

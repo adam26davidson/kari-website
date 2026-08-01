@@ -1,4 +1,4 @@
-use axum::{extract::State, response::Json};
+use axum::{extract::State, http::StatusCode, response::Json};
 use serde_json::{json, Value};
 
 use crate::models::Haiku;
@@ -21,7 +21,7 @@ pub async fn get_haiku_handler(State(state): State<AppState>) -> Json<Value> {
 pub async fn update_haiku_handler(
     State(state): State<AppState>,
     Json(haiku): Json<Vec<Haiku>>,
-) -> Json<Value> {
+) -> (StatusCode, Json<Value>) {
     let haiku_str = serde_json::to_string(&haiku).unwrap();
 
     match state
@@ -29,10 +29,16 @@ pub async fn update_haiku_handler(
         .put_object("haiku.json", haiku_str.as_bytes().to_vec(), true)
         .await
     {
-        Ok(_) => Json(json!({"message": "Haiku list updated"})),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(json!({"message": "Haiku list updated"})),
+        ),
         Err(e) => {
             eprintln!("Error updating haiku: {}", e);
-            Json(json!({"error": "Failed to update haiku"}))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to update haiku"})),
+            )
         }
     }
 }

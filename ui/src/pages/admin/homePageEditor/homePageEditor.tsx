@@ -5,22 +5,22 @@ import { useAuth0 } from "@auth0/auth0-react";
 import { HomePageData } from "../../../Models";
 import { PhotoPicker } from "../../../components/photo-picker/photo-picker";
 import { ImageService } from "../../../services/images";
-import { Confirmation } from "../admin";
+import { Notify } from "../admin";
 import { AdminButton } from "../../../components/admin-button/admin-button";
 
 const API_URL = import.meta.env.VITE_API_URL;
 const HOME_PAGE_DATA_ENDPOINT = `${API_URL}/home-page`;
 
 export interface HomePageEditorProps {
-  setConfirmation: (confirmation: Confirmation) => void;
   setLoading: (loading: { isLoading: boolean; message: string }) => void;
   isLoading: boolean;
+  notify: Notify;
 }
 
 export function HomePageEditor({
-  setConfirmation,
   setLoading,
   isLoading,
+  notify,
 }: HomePageEditorProps) {
   const [homePageData, setHomePageData] = useState<HomePageData>({
     photo: "",
@@ -54,44 +54,52 @@ export function HomePageEditor({
       isLoading: true,
       message: "Updating home page data...",
     });
-    const newHomePageData = { ...homePageData };
-    if (imageFile) {
-      // delete the old image if it exists
-      if (homePageData.photo) {
-        await ImageService.delete(homePageData.photo, getAccessTokenSilently);
+    try {
+      const newHomePageData = { ...homePageData };
+      if (imageFile) {
+        // delete the old image if it exists; a missing image should not
+        // block saving
+        if (homePageData.photo) {
+          await ImageService.delete(
+            homePageData.photo,
+            getAccessTokenSilently,
+          ).catch(console.error);
+        }
+
+        // upload the new image
+        const newFileName = await ImageService.upload(
+          imageFile,
+          true,
+          getAccessTokenSilently,
+        );
+        if (!newFileName) {
+          throw new Error("Failed to upload image");
+        }
+        newHomePageData.photo = newFileName;
+        setHomePageData(newHomePageData);
       }
 
-      // upload the new image
-      const newFileName = await ImageService.upload(
-        imageFile,
-        true,
-        getAccessTokenSilently,
-      );
-      if (!newFileName) {
-        console.error("Failed to upload image");
-        return;
+      const token = await getAccessTokenSilently();
+      const response = await fetch(HOME_PAGE_DATA_ENDPOINT, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(newHomePageData),
+      });
+      if (!response.ok) {
+        throw new Error(
+          `Failed to save home page data (HTTP ${response.status})`,
+        );
       }
-      newHomePageData.photo = newFileName;
-      setHomePageData(newHomePageData);
+      notify("Home page saved");
+    } catch (error) {
+      console.error(error);
+      notify("Failed to save — your change was not saved", "error");
+    } finally {
+      setLoading({ isLoading: false, message: "" });
     }
-
-    const token = await getAccessTokenSilently();
-    const response = await fetch(HOME_PAGE_DATA_ENDPOINT, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(newHomePageData),
-    });
-    const responseBody = await response.json();
-    console.log(responseBody);
-    setLoading({ isLoading: false, message: "" });
-    setConfirmation({
-      show: true,
-      message: "Home page data has been saved",
-      options: [{ label: "Ok", callback: () => {} }],
-    });
   };
 
   return (

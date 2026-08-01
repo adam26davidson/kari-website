@@ -41,7 +41,7 @@ export class PhotographyService {
   static async updateList(
     postList: Array<PhotographyPost>,
     getAccessTokenSilently: () => Promise<string>,
-  ): Promise<Array<PhotographyPost>> {
+  ): Promise<void> {
     const token = await getAccessTokenSilently();
     const response = await fetch(API_URL, {
       method: "PUT",
@@ -53,11 +53,9 @@ export class PhotographyService {
     });
     if (!response.ok) {
       console.error("Failed to update Photography Post list", response.status);
-      console.error("error", response);
-      return [];
+      throw new Error(
+        `Failed to update photography post list (HTTP ${response.status})`,
+      );
     }
-    const responseBody = await response.json();
-    console.log("Saved Photography Post List:", responseBody);
-    return responseBody;
   }
 }

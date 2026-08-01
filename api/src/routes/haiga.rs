@@ -1,4 +1,4 @@
-use axum::{extract::State, response::Json};
+use axum::{extract::State, http::StatusCode, response::Json};
 use serde_json::{json, Value};
 
 use crate::models::Haiga;
@@ -21,7 +21,7 @@ pub async fn get_haiga_handler(State(state): State<AppState>) -> Json<Value> {
 pub async fn update_haiga_handler(
     State(state): State<AppState>,
     Json(haiga): Json<Vec<Haiga>>,
-) -> Json<Value> {
+) -> (StatusCode, Json<Value>) {
     let haiga_str = serde_json::to_string(&haiga).unwrap();
 
     match state
@@ -29,10 +29,16 @@ pub async fn update_haiga_handler(
         .put_object("haiga.json", haiga_str.as_bytes().to_vec(), true)
         .await
     {
-        Ok(_) => Json(json!({"message": "Haiga list updated"})),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(json!({"message": "Haiga list updated"})),
+        ),
         Err(e) => {
             eprintln!("Error updating haiga: {}", e);
-            Json(json!({"error": "Failed to update haiga"}))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to update haiga"})),
+            )
         }
     }
 }

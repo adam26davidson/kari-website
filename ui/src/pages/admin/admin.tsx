@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./admin.css";
 import AdminHaikuPage from "./adminHaikuPage/adminHaikuPage";
 import { useAuth0 } from "@auth0/auth0-react";
@@ -21,6 +21,13 @@ export interface Confirmation {
   options: Array<{ label: string; callback: () => void }>;
 }
 
+export interface Notification {
+  message: string;
+  type: "success" | "error";
+}
+
+export type Notify = (message: string, type?: "success" | "error") => void;
+
 function Admin() {
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
@@ -33,6 +40,16 @@ function Admin() {
     show: false,
     options: [],
   });
+  const [notification, setNotification] = useState<Notification | null>(null);
+
+  useEffect(() => {
+    if (!notification) return;
+    const timer = setTimeout(() => setNotification(null), 3000);
+    return () => clearTimeout(timer);
+  }, [notification]);
+
+  const notify: Notify = (message, type = "success") =>
+    setNotification({ message, type });
 
   return (
     <>
@@ -80,35 +97,44 @@ function Admin() {
               {loading.isLoading && (
                 <div className="admin-loading">{loading.message}</div>
               )}
+              {notification && (
+                <div className={`admin-toast admin-toast-${notification.type}`}>
+                  {notification.message}
+                </div>
+              )}
               {currentPage === "home" && (
                 <HomePageEditor
-                  setConfirmation={setConfirmation}
                   setLoading={setLoading}
                   isLoading={loading.isLoading}
+                  notify={notify}
                 />
               )}
               {currentPage === "haiku" && (
                 <AdminHaikuPage
                   setLoading={setLoading}
                   setConfirmation={setConfirmation}
+                  notify={notify}
                 />
               )}
               {currentPage === "haiga" && (
                 <AdminHaigaPage
                   setLoading={setLoading}
                   setConfirmation={setConfirmation}
+                  notify={notify}
                 />
               )}
               {currentPage === "other-works" && (
                 <AdminOtherWorksPage
                   setLoading={setLoading}
                   setConfirmation={setConfirmation}
+                  notify={notify}
                 />
               )}
               {currentPage === "photography" && (
                 <AdminPhotographyPage
                   setLoading={setLoading}
                   setConfirmation={setConfirmation}
+                  notify={notify}
                 />
               )}
             </div>

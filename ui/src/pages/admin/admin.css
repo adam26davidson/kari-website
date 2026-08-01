@@ -105,6 +105,40 @@
   background-color: rgba(0, 0, 0, 0.5);
 }
 
+.admin-toast {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1002;
+  padding: 12px 24px;
+  border-radius: 6px;
+  color: white;
+  font-size: 16px;
+  font-family: "Roboto", sans-serif;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  animation: admin-toast-in 0.2s ease-out;
+}
+
+.admin-toast-success {
+  background-color: #3e6b2f;
+}
+
+.admin-toast-error {
+  background-color: #a33327;
+}
+
+@keyframes admin-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
 .admin-confirmation-options {
   display: flex;
   flex-direction: row;

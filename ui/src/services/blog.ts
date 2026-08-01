@@ -41,7 +41,7 @@ export class BlogService {
   static async updateList(
     blogList: Array<BlogPost>,
     getAccessTokenSilently: () => Promise<string>,
-  ): Promise<Array<BlogPost>> {
+  ): Promise<void> {
     const token = await getAccessTokenSilently();
     const response = await fetch(API_BLOG_URL, {
       method: "PUT",
@@ -53,12 +53,8 @@ export class BlogService {
     });
     if (!response.ok) {
       console.error("Failed to update blog list", response.status);
-      console.error("error", response);
-      return [];
+      throw new Error(`Failed to update blog list (HTTP ${response.status})`);
     }
-    const responseBody = await response.json();
-    console.log("Saved Blog List:", responseBody);
-    return responseBody;
   }
 
   static async getContent(
@@ -111,11 +107,10 @@ export class BlogService {
     });
     if (!response.ok) {
       console.error("Failed to update blog content", response.status);
-      console.error("error", response);
-      return;
+      throw new Error(
+        `Failed to update blog content (HTTP ${response.status})`,
+      );
     }
-    const responseBody: { content: string } = await response.json();
-    console.log("Saved Blog Content:", responseBody);
   }
 
   static async deleteContent(
@@ -131,8 +126,9 @@ export class BlogService {
     });
     if (!response.ok) {
       console.error("Failed to delete blog content", response.status);
-      console.error("error", response);
-      return;
+      throw new Error(
+        `Failed to delete blog content (HTTP ${response.status})`,
+      );
     }
   }
 }
