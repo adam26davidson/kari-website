@@ -7,6 +7,7 @@ import { PhotoPicker } from "../../../components/photo-picker/photo-picker";
 import { ImageService } from "../../../services/images";
 import { Notify } from "../admin";
 import { AdminButton } from "../../../components/admin-button/admin-button";
+import { LoadError } from "../../../components/load-error/load-error";
 
 const API_URL = import.meta.env.VITE_API_URL;
 const HOME_PAGE_DATA_ENDPOINT = `${API_URL}/home-page`;
@@ -28,26 +29,42 @@ export function HomePageEditor({
   });
   const { getAccessTokenSilently } = useAuth0();
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
-  useEffect(() => {
-    const fetchHomePageData = async () => {
-      setLoading({
-        isLoading: true,
-        message: "Loading home page data...",
-      });
+  const fetchHomePageData = async () => {
+    setLoading({
+      isLoading: true,
+      message: "Loading home page data...",
+    });
+    setLoadFailed(false);
+    try {
       const token = await getAccessTokenSilently();
       const response = await fetch(HOME_PAGE_DATA_ENDPOINT, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch home page data (HTTP ${response.status})`,
+        );
+      }
       const data: HomePageData = await response.json();
-      console.log(data);
       setHomePageData(data);
+    } catch (error) {
+      // Never show an empty editor after a failed load — saving it would
+      // overwrite the real data.
+      console.error(error);
+      setLoadFailed(true);
+    } finally {
       setLoading({ isLoading: false, message: "" });
-    };
+    }
+  };
+
+  useEffect(() => {
     fetchHomePageData();
-  }, [getAccessTokenSilently, setLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const saveData = async () => {
     setLoading({
@@ -101,6 +118,15 @@ export function HomePageEditor({
       setLoading({ isLoading: false, message: "" });
     }
   };
+
+  if (loadFailed) {
+    return (
+      <LoadError
+        message="Failed to load home page data."
+        onRetry={fetchHomePageData}
+      />
+    );
+  }
 
   return (
     !isLoading && (

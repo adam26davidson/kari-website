@@ -3,20 +3,31 @@ use axum::{extract::State, http::StatusCode, response::Json};
 use serde_json::{json, Value};
 
 use crate::models::{BlogPost, BlogPostUpdate};
+use crate::services::s3::S3Error;
 use crate::AppState;
 
-pub async fn list_blog_posts_handler(State(state): State<AppState>) -> Json<Value> {
+pub async fn list_blog_posts_handler(State(state): State<AppState>) -> (StatusCode, Json<Value>) {
     match state.s3_service.get_object("blog-posts.json").await {
-        Ok(data) => {
-            let blog_posts_str = String::from_utf8(data).unwrap_or_default();
-            println!("Blog posts data: {}", blog_posts_str);
-            let blog_posts: Vec<BlogPost> =
-                serde_json::from_str(&blog_posts_str).unwrap_or_default();
-            Json(json!(blog_posts))
-        }
+        Ok(data) => match serde_json::from_slice::<Vec<BlogPost>>(&data) {
+            Ok(blog_posts) => (StatusCode::OK, Json(json!(blog_posts))),
+            // A parse failure must NOT become an empty list: the admin UI
+            // would render an empty editor and a save would wipe the data.
+            Err(e) => {
+                eprintln!("Error parsing blog-posts.json: {}", e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": "Stored blog post data is invalid"})),
+                )
+            }
+        },
+        // The object not existing yet is a legitimate empty list (new site).
+        Err(S3Error::NotFound) => (StatusCode::OK, Json(json!([]))),
         Err(e) => {
             eprintln!("Error fetching blog posts: {}", e);
-            Json(json!([]))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to fetch blog posts"})),
+            )
         }
     }
 }
@@ -80,16 +91,31 @@ pub async fn update_blog_post_content(
 pub async fn get_blog_post_content(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Json<Value> {
+) -> (StatusCode, Json<Value>) {
     let key = format!("blog/{}.html", id);
     match state.s3_service.get_object(&key).await {
-        Ok(data) => {
-            let content = String::from_utf8(data).unwrap_or_default();
-            Json(json!({"content": content}))
-        }
+        Ok(data) => match String::from_utf8(data) {
+            Ok(content) => (StatusCode::OK, Json(json!({"content": content}))),
+            Err(e) => {
+                eprintln!("Error decoding blog post content {}: {}", key, e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": "Stored blog post content is invalid"})),
+                )
+            }
+        },
+        // Distinguish missing content (the caller may tolerate it, e.g. when
+        // deleting a post) from a failed fetch (which must abort the caller).
+        Err(S3Error::NotFound) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Blog post content not found"})),
+        ),
         Err(e) => {
             eprintln!("Error fetching blog post content: {}", e);
-            Json(json!({"error": "Failed to fetch blog post content"}))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to fetch blog post content"})),
+            )
         }
     }
 }

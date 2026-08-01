@@ -1,4 +1,5 @@
 import { Haiga } from "../Models";
+import { HttpError } from "./http-error";
 
 const API_HAIGA_URL = import.meta.env.VITE_API_URL + "/haiga";
 const S3_HAIGA_URL = import.meta.env.VITE_S3_URL + "/haiga.json";
@@ -15,11 +16,12 @@ export class HaigaService {
     });
     if (!response.ok) {
       console.error("Failed to fetch haiga from API", response.status);
-      console.error("error", response);
-      return [];
+      throw new HttpError(
+        `Failed to fetch haiga list (HTTP ${response.status})`,
+        response.status,
+      );
     }
     const data: Array<Haiga> = await response.json();
-    console.log("Fetched Haiga List:", data);
     return data;
   }
 

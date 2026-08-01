@@ -18,6 +18,8 @@ import {
   changeImageUrlToS3,
   getImageFileName,
 } from "../../../utils/image-management-helpers";
+import { HttpError } from "../../../services/http-error";
+import { LoadError } from "../../../components/load-error/load-error";
 
 const S3_URL = import.meta.env.VITE_S3_URL;
 const API_URL = import.meta.env.VITE_API_URL;
@@ -44,13 +46,25 @@ export function AdminOtherWorksPage({
     Array<{ file: File; id: string } | null>
   >([]);
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading({ isLoading: true, message: "Loading other works..." });
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  const load = async () => {
+    setLoading({ isLoading: true, message: "Loading other works..." });
+    setLoadFailed(false);
+    try {
       const data = await BlogService.getListFromApi(getAccessTokenSilently);
       setPostList(data);
+    } catch (error) {
+      // Never show an empty editable list after a failed load — saving it
+      // would overwrite the real data.
+      console.error(error);
+      setLoadFailed(true);
+    } finally {
       setLoading({ isLoading: false, message: "" });
-    };
+    }
+  };
+
+  useEffect(() => {
     load();
   }, []);
 
@@ -89,11 +103,19 @@ export function AdminOtherWorksPage({
     });
 
     try {
-      // first get the content of the post
-      const content = await BlogService.getContent(
-        postToDelete.id,
-        getAccessTokenSilently,
-      );
+      // first get the content of the post; content that was never created
+      // (404) is fine to delete, any other fetch failure aborts the delete
+      let content = "";
+      try {
+        content = await BlogService.getContent(
+          postToDelete.id,
+          getAccessTokenSilently,
+        );
+      } catch (error) {
+        if (!(error instanceof HttpError) || error.status !== 404) {
+          throw error;
+        }
+      }
 
       // then parse the content to find all images and delete them
       const htmlDoc = new DOMParser().parseFromString(content, "text/html");
@@ -196,14 +218,22 @@ export function AdminOtherWorksPage({
   const onEdit = (idx: number) => async () => {
     setLoading({ isLoading: true, message: "Loading content..." });
     const openItem = { ...postList[idx] };
-    const content = await BlogService.getContent(
-      openItem.id,
-      getAccessTokenSilently,
-    );
-    setOriginalOpenPostContent(content);
-    setOpenPostContent(content);
-    setLoading({ isLoading: false, message: "" });
-    setOpenPost(openItem);
+    try {
+      const content = await BlogService.getContent(
+        openItem.id,
+        getAccessTokenSilently,
+      );
+      setOriginalOpenPostContent(content);
+      setOpenPostContent(content);
+      setOpenPost(openItem);
+    } catch (error) {
+      // Never open the editor with missing content — saving it would
+      // overwrite the real content.
+      console.error(error);
+      notify("Failed to load content", "error");
+    } finally {
+      setLoading({ isLoading: false, message: "" });
+    }
   };
 
   // Editor functions ---------------------------------------------------------
@@ -361,6 +391,10 @@ export function AdminOtherWorksPage({
     if (!openPost) return false;
     return openPost.title.length > 0;
   };
+
+  if (loadFailed) {
+    return <LoadError message="Failed to load other works." onRetry={load} />;
+  }
 
   return openPost ? (
     <BlogPostEditor

@@ -10,7 +10,7 @@ interface HaikuZenViewerProps {
 export default function HaikuZenViewer(props: HaikuZenViewerProps) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [showLines, setShowLines] = useState(
-    props.haikuList[0].map(() => false)
+    props.haikuList[0].map(() => false),
   );
   const [showNextButton, setShowNextButton] = useState(false);
   const [fadingOut, setFadingOut] = useState(false);
@@ -35,15 +35,15 @@ export default function HaikuZenViewer(props: HaikuZenViewerProps) {
             newShowLines[index] = true;
             return newShowLines;
           }),
-        index * 2000
-      )
+        index * 2000,
+      ),
     );
 
     timers.push(
       setTimeout(
         () => setShowNextButton(true),
-        props.haikuList[currentIdx].length * 2000
-      )
+        props.haikuList[currentIdx].length * 2000,
+      ),
     );
 
     return () => timers.forEach((timer) => clearTimeout(timer));

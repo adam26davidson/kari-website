@@ -54,10 +54,11 @@ describe("HaikuService.getListFromApi", () => {
     });
   });
 
-  it("returns an empty array when the API responds with an error", async () => {
+  it("throws when the API responds with an error so the admin UI can block editing", async () => {
     mockFetchOnce({ ok: false, status: 500, json: async () => ({}) });
-    const result = await HaikuService.getListFromApi(getToken);
-    expect(result).toEqual([]);
+    await expect(HaikuService.getListFromApi(getToken)).rejects.toThrow(
+      "Failed to fetch haiku list (HTTP 500)",
+    );
   });
 });
 

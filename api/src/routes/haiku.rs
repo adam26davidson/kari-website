@@ -2,18 +2,31 @@ use axum::{extract::State, http::StatusCode, response::Json};
 use serde_json::{json, Value};
 
 use crate::models::Haiku;
+use crate::services::s3::S3Error;
 use crate::AppState;
 
-pub async fn get_haiku_handler(State(state): State<AppState>) -> Json<Value> {
+pub async fn get_haiku_handler(State(state): State<AppState>) -> (StatusCode, Json<Value>) {
     match state.s3_service.get_object("haiku.json").await {
-        Ok(data) => {
-            let haiku_str = String::from_utf8(data).unwrap_or_default();
-            let haiku: Vec<Haiku> = serde_json::from_str(&haiku_str).unwrap_or_default();
-            Json(json!(haiku))
-        }
+        Ok(data) => match serde_json::from_slice::<Vec<Haiku>>(&data) {
+            Ok(haiku) => (StatusCode::OK, Json(json!(haiku))),
+            // A parse failure must NOT become an empty list: the admin UI
+            // would render an empty editor and a save would wipe the data.
+            Err(e) => {
+                eprintln!("Error parsing haiku.json: {}", e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": "Stored haiku data is invalid"})),
+                )
+            }
+        },
+        // The object not existing yet is a legitimate empty list (new site).
+        Err(S3Error::NotFound) => (StatusCode::OK, Json(json!([]))),
         Err(e) => {
             eprintln!("Error fetching haiku: {}", e);
-            Json(json!([]))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to fetch haiku"})),
+            )
         }
     }
 }

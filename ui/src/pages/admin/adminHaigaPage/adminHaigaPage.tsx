@@ -12,6 +12,7 @@ import { HaigaEditor } from "./components/haiga-editor/haiga-editor";
 import { moveItemByOne } from "../../../utils/data-list-helpers";
 import DataListItem from "../../../components/dataListItem/dataListItem";
 import { HaigaContent } from "../../../components/haigaContent/haigaContent";
+import { LoadError } from "../../../components/load-error/load-error";
 
 interface HaigaEditorProps {
   setLoading: (loading: Loading) => void;
@@ -28,14 +29,25 @@ function AdminHaigaPage({
   const [haigaList, setHaigaList] = useState<Array<Haiga>>([]);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [openHaiga, setOpenHaiga] = useState<Haiga | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading({ isLoading: true, message: "Loading haiga..." });
+  const load = async () => {
+    setLoading({ isLoading: true, message: "Loading haiga..." });
+    setLoadFailed(false);
+    try {
       const data = await HaigaService.getListFromApi(getAccessTokenSilently);
       setHaigaList(data);
+    } catch (error) {
+      // Never show an empty editable list after a failed load — saving it
+      // would overwrite the real data.
+      console.error(error);
+      setLoadFailed(true);
+    } finally {
       setLoading({ isLoading: false, message: "" });
-    };
+    }
+  };
+
+  useEffect(() => {
     load();
   }, []);
 
@@ -195,6 +207,10 @@ function AdminHaigaPage({
 
     return openHaiga.lines.length > 0 && openHaiga.lines[0].length > 0;
   };
+
+  if (loadFailed) {
+    return <LoadError message="Failed to load haiga." onRetry={load} />;
+  }
 
   return openHaiga ? (
     <HaigaEditor

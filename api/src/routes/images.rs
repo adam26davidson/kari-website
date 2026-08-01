@@ -53,10 +53,18 @@ pub async fn upload_image_handler(
         .unwrap_or_else(|| "upload_file".to_string());
     let key = format!("images/{}", file_name);
 
-    // Read entire stream into a Vec<u8>
+    // Read entire stream into a Vec<u8>. A mid-stream error must fail the
+    // upload — breaking out of the loop would store a truncated image.
     let mut data = Vec::new();
-    while let Ok(Some(chunk)) = field.chunk().await {
-        data.extend_from_slice(&chunk);
+    loop {
+        match field.chunk().await {
+            Ok(Some(chunk)) => data.extend_from_slice(&chunk),
+            Ok(None) => break,
+            Err(e) => {
+                eprintln!("Error reading upload stream: {}", e);
+                return (StatusCode::BAD_REQUEST, "Failed to read uploaded file").into_response();
+            }
+        }
     }
 
     // Upload to S3
