@@ -2,19 +2,26 @@
 // `AppState`, the router, and the middleware are defined once and tests cover
 // exactly what ships (rather than a second, separately-compiled copy).
 use aws_sdk_s3::Client;
-use kari_website_api::middleware::auth::fetch_jwks;
+use kari_website_api::middleware::auth::{fetch_jwks, JwksCache, AUTH0_JWKS_URL};
 use kari_website_api::routes::create_router;
+use kari_website_api::routes::health::HealthCache;
 use kari_website_api::services::s3::S3Service;
 use kari_website_api::AppState;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tower_http::cors::CorsLayer;
 
 #[tokio::main]
 async fn main() {
     // Load environment variables
     dotenv::dotenv().ok();
+
+    // Structured request/error logging (RUST_LOG overrides the default)
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
+        )
+        .init();
 
     // Initialize AWS SDK
     let sdk_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
@@ -24,15 +31,18 @@ async fn main() {
     let bucket_name = std::env::var("BUCKET_NAME").expect("BUCKET_NAME not set");
 
     // Create S3 service
-    let s3_service = Arc::new(S3Service::new(s3_client.clone(), bucket_name.clone()));
+    let s3_service = Arc::new(S3Service::new(s3_client, bucket_name));
 
     // Fetch JWKS and store in shared state
-    let jwks = fetch_jwks().await.expect("Failed to fetch JWKS");
+    let jwks = fetch_jwks(AUTH0_JWKS_URL)
+        .await
+        .expect("Failed to fetch JWKS");
 
     // Create application state
     let state = AppState {
-        jwks: Arc::new(RwLock::new(jwks)),
+        jwks: Arc::new(JwksCache::new(jwks, AUTH0_JWKS_URL.to_string())),
         s3_service,
+        health: Arc::new(HealthCache::default()),
     };
 
     // Create router with routes
@@ -46,7 +56,7 @@ async fn main() {
 
     // Start the server
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    println!("Listening on {}", addr);
+    tracing::info!("Listening on {}", addr);
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }

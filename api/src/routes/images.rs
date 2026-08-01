@@ -42,7 +42,7 @@ pub async fn upload_image_handler(
         Ok(Some(f)) => f,
         Ok(None) => return Err(AppError::BadRequest("No file found")),
         Err(e) => {
-            eprintln!("Error reading multipart field: {}", e);
+            tracing::error!("Error reading multipart field: {}", e);
             return Err(AppError::BadRequest("Invalid multipart"));
         }
     };
@@ -62,7 +62,7 @@ pub async fn upload_image_handler(
             Ok(Some(chunk)) => data.extend_from_slice(&chunk),
             Ok(None) => break,
             Err(e) => {
-                eprintln!("Error reading upload stream: {}", e);
+                tracing::error!("Error reading upload stream: {}", e);
                 return Err(AppError::BadRequest("Failed to read uploaded file"));
             }
         }
@@ -74,7 +74,7 @@ pub async fn upload_image_handler(
         .await
         .map_err(|e| AppError::internal("Failed to upload image", e))?;
 
-    println!("File uploaded successfully: {}", file_name);
+    tracing::info!("File uploaded successfully: {}", file_name);
     Ok(Json(serde_json::json!({
         "message": "File uploaded successfully"
     })))

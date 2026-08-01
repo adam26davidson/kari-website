@@ -1,6 +1,7 @@
 pub mod blog;
 pub mod haiga;
 pub mod haiku;
+pub mod health;
 pub mod home;
 pub mod images;
 pub mod photography;
@@ -12,6 +13,8 @@ use axum::{
     Router,
 };
 use tower_http::limit::RequestBodyLimitLayer;
+use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
+use tracing::Level;
 
 use crate::AppState;
 
@@ -49,5 +52,13 @@ pub fn create_router(state: AppState) -> Router {
     Router::new()
         .merge(secure_routes)
         .merge(public_routes)
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+        )
+        // Registered after the trace layer on purpose: Route 53 checkers hit
+        // /health ~once a second, which would drown the request log.
+        .route("/health", get(health::health_handler))
         .with_state(state)
 }
