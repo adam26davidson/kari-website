@@ -12,6 +12,7 @@ import { HaikuService } from "../../../services/haiku";
 import DataListItem from "../../../components/dataListItem/dataListItem";
 import { moveItemByOne } from "../../../utils/data-list-helpers";
 import { HaikuEditor } from "./components/haiku-editor/haiku-editor";
+import { LoadError } from "../../../components/load-error/load-error";
 
 interface AdminHaikuPageProps {
   setLoading: (loading: Loading) => void;
@@ -27,14 +28,25 @@ function AdminHaikuPage({
   const { getAccessTokenSilently } = useAuth0();
   const [haikuList, setHaikuList] = useState<Array<Haiku>>([]);
   const [openHaiku, setOpenHaiku] = useState<Haiku | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading({ isLoading: true, message: "Loading haiku..." });
+  const load = async () => {
+    setLoading({ isLoading: true, message: "Loading haiku..." });
+    setLoadFailed(false);
+    try {
       const data = await HaikuService.getListFromApi(getAccessTokenSilently);
       setHaikuList(data);
+    } catch (error) {
+      // Never show an empty editable list after a failed load — saving it
+      // would overwrite the real data.
+      console.error(error);
+      setLoadFailed(true);
+    } finally {
       setLoading({ isLoading: false, message: "" });
-    };
+    }
+  };
+
+  useEffect(() => {
     load();
   }, []);
 
@@ -124,6 +136,10 @@ function AdminHaikuPage({
     if (!openHaiku) return false;
     return openHaiku.lines.length > 0 && openHaiku.lines[0].length > 0;
   };
+
+  if (loadFailed) {
+    return <LoadError message="Failed to load haiku." onRetry={load} />;
+  }
 
   return openHaiku ? (
     <HaikuEditor

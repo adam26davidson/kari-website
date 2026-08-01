@@ -1,4 +1,5 @@
 import { Haiku } from "../Models";
+import { HttpError } from "./http-error";
 
 const API_HAIKU_URL = import.meta.env.VITE_API_URL + "/haiku";
 const S3_HAIKU_URL = import.meta.env.VITE_S3_URL + "/haiku.json";
@@ -15,11 +16,12 @@ export class HaikuService {
     });
     if (!response.ok) {
       console.error("Failed to fetch haiku from API", response.status);
-      console.error("error", response);
-      return [];
+      throw new HttpError(
+        `Failed to fetch haiku list (HTTP ${response.status})`,
+        response.status,
+      );
     }
     const data: Array<Haiku> = await response.json();
-    console.log("Fetched Haiku List:", data);
     return data;
   }
 

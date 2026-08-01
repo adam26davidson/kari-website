@@ -1,4 +1,5 @@
 import { PhotographyPost } from "../Models";
+import { HttpError } from "./http-error";
 
 const API_URL = import.meta.env.VITE_API_URL + "/photography";
 const S3_URL = import.meta.env.VITE_S3_URL + "/photography.json";
@@ -18,11 +19,12 @@ export class PhotographyService {
         "Failed to fetch photography post from API",
         response.status,
       );
-      console.error("error", response);
-      return [];
+      throw new HttpError(
+        `Failed to fetch photography post list (HTTP ${response.status})`,
+        response.status,
+      );
     }
     const data: Array<PhotographyPost> = await response.json();
-    console.log("Fetched Photography Posts:", data);
     return data;
   }
 

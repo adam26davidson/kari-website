@@ -13,6 +13,7 @@ import { PhotographyService } from "../../../services/photography";
 import { PhotographyPostEditor } from "./components/photography-post-editor/photography-post-editor";
 import { PhotographyPostSummary } from "./components/photography-post-summary/photography-post-summary";
 import { copyPhotographyPost } from "../../../utils/misc-utils";
+import { LoadError } from "../../../components/load-error/load-error";
 
 interface AdminPhotographyPageProps {
   setLoading: (loading: Loading) => void;
@@ -29,16 +30,27 @@ export function AdminPhotographyPage({
   const [postList, setPostList] = useState<Array<PhotographyPost>>([]);
   const [openPost, setOpenPost] = useState<PhotographyPost | null>(null);
   const [imageFiles, setImageFiles] = useState<Array<File | null>>([]);
+  const [loadFailed, setLoadFailed] = useState(false);
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading({ isLoading: true, message: "Loading photography posts..." });
+  const load = async () => {
+    setLoading({ isLoading: true, message: "Loading photography posts..." });
+    setLoadFailed(false);
+    try {
       const data = await PhotographyService.getListFromApi(
         getAccessTokenSilently,
       );
       setPostList(data);
+    } catch (error) {
+      // Never show an empty editable list after a failed load — saving it
+      // would overwrite the real data.
+      console.error(error);
+      setLoadFailed(true);
+    } finally {
       setLoading({ isLoading: false, message: "" });
-    };
+    }
+  };
+
+  useEffect(() => {
     load();
   }, []);
 
@@ -227,6 +239,12 @@ export function AdminPhotographyPage({
     if (!openPost) return false;
     return openPost.title.length > 0;
   };
+
+  if (loadFailed) {
+    return (
+      <LoadError message="Failed to load photography posts." onRetry={load} />
+    );
+  }
 
   return openPost ? (
     <PhotographyPostEditor

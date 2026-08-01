@@ -2,18 +2,31 @@ use axum::{extract::State, http::StatusCode, response::Json};
 use serde_json::{json, Value};
 
 use crate::models::PhotographyPost;
+use crate::services::s3::S3Error;
 use crate::AppState;
 
-pub async fn get_photography_handler(State(state): State<AppState>) -> Json<Value> {
+pub async fn get_photography_handler(State(state): State<AppState>) -> (StatusCode, Json<Value>) {
     match state.s3_service.get_object("photography.json").await {
-        Ok(data) => {
-            let data_str = String::from_utf8(data).unwrap_or_default();
-            let posts: Vec<PhotographyPost> = serde_json::from_str(&data_str).unwrap_or_default();
-            Json(json!(posts))
-        }
+        Ok(data) => match serde_json::from_slice::<Vec<PhotographyPost>>(&data) {
+            Ok(posts) => (StatusCode::OK, Json(json!(posts))),
+            // A parse failure must NOT become an empty list: the admin UI
+            // would render an empty editor and a save would wipe the data.
+            Err(e) => {
+                eprintln!("Error parsing photography.json: {}", e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": "Stored photography data is invalid"})),
+                )
+            }
+        },
+        // The object not existing yet is a legitimate empty list (new site).
+        Err(S3Error::NotFound) => (StatusCode::OK, Json(json!([]))),
         Err(e) => {
             eprintln!("Error fetching photography: {}", e);
-            Json(json!({"error": "Failed to fetch photography"}))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "Failed to fetch photography"})),
+            )
         }
     }
 }

@@ -1,5 +1,6 @@
 import { BlogPost, BlogPostContentUpdate } from "../Models";
 import DOMPurify from "dompurify";
+import { HttpError } from "./http-error";
 
 const API_BLOG_URL = import.meta.env.VITE_API_URL + "/blog";
 const API_BLOG_CONTENT_URL = import.meta.env.VITE_API_URL + "/blog-content";
@@ -18,11 +19,12 @@ export class BlogService {
     });
     if (!response.ok) {
       console.error("Failed to fetch blog from API", response.status);
-      console.error("error", response);
-      return [];
+      throw new HttpError(
+        `Failed to fetch blog list (HTTP ${response.status})`,
+        response.status,
+      );
     }
     const data: Array<BlogPost> = await response.json();
-    console.log("Fetched Blog List:", data);
     return data;
   }
 
@@ -69,11 +71,12 @@ export class BlogService {
     });
     if (!response.ok) {
       console.error("Failed to fetch blog content from API", response.status);
-      console.error("error", response);
-      return "";
+      throw new HttpError(
+        `Failed to fetch blog content (HTTP ${response.status})`,
+        response.status,
+      );
     }
     const data: { content: string } = await response.json();
-    console.log("Fetched Blog Content:", data);
     return data["content"];
   }
 
