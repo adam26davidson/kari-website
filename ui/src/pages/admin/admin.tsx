@@ -78,24 +78,28 @@ function Admin() {
             <div className="admin-content">
               {confirmation.show && (
                 <div className="admin-confirmation">
-                  {confirmation.message}
-                  <div className="admin-confirmation-options">
-                    {confirmation.options.map((option, idx) => (
-                      <AdminButton
-                        key={idx}
-                        onClick={() => {
-                          option.callback();
-                          setConfirmation({ ...confirmation, show: false });
-                        }}
-                      >
-                        {option.label}
-                      </AdminButton>
-                    ))}
+                  <div className="admin-confirmation-dialog">
+                    {confirmation.message}
+                    <div className="admin-confirmation-options">
+                      {confirmation.options.map((option, idx) => (
+                        <AdminButton
+                          key={idx}
+                          onClick={() => {
+                            option.callback();
+                            setConfirmation({ ...confirmation, show: false });
+                          }}
+                        >
+                          {option.label}
+                        </AdminButton>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
               {loading.isLoading && (
-                <div className="admin-loading">{loading.message}</div>
+                <div className="admin-loading">
+                  <div className="admin-loading-message">{loading.message}</div>
+                </div>
               )}
               {notification && (
                 <div className={`admin-toast admin-toast-${notification.type}`}>
