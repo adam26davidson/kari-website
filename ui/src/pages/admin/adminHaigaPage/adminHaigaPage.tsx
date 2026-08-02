@@ -227,6 +227,7 @@ function AdminHaigaPage({
       {haigaList.map((haiga, idx) => (
         <DataListItem
           isAdmin={true}
+          compact={true}
           isLast={idx === haigaList.length - 1}
           isFirst={idx === 0}
           onEdit={onEdit(idx)}
@@ -234,7 +235,7 @@ function AdminHaigaPage({
           onMoveUp={onMove(idx, "up")}
           onMoveDown={onMove(idx, "down")}
         >
-          <HaigaContent haiga={haiga} />
+          <HaigaContent haiga={haiga} compact={true} />
         </DataListItem>
       ))}
     </DataList>

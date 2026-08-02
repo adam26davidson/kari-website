@@ -16,6 +16,7 @@ interface DataListItemProps {
   onDelete?: () => void;
   onEdit?: () => void;
   hideEdit?: boolean;
+  compact?: boolean;
 }
 
 const DataListItem = ({
@@ -28,9 +29,13 @@ const DataListItem = ({
   onDelete,
   onEdit,
   hideEdit,
+  compact,
 }: DataListItemProps) => {
+  const adminClass = compact
+    ? "admin-data-list-item compact"
+    : "admin-data-list-item";
   return (
-    <div className={isAdmin ? "admin-data-list-item" : "data-list-item"}>
+    <div className={isAdmin ? adminClass : "data-list-item"}>
       <div className="data-list-item-content">{children}</div>
       {isAdmin && (
         <div className="data-list-item-controls">
