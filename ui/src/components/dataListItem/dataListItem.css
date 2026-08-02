@@ -35,3 +35,15 @@
   align-items: center;
   justify-content: center;
 }
+
+/* Compact variant: tighter spacing, controls in a row so the
+   item height is set by the content rather than the button stack */
+.admin-data-list-item.compact {
+  padding: 8px 14px;
+  margin: 4px 8px;
+  width: calc(100% - 44px);
+}
+
+.admin-data-list-item.compact .data-list-item-controls {
+  flex-direction: row;
+}

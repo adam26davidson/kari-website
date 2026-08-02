@@ -154,6 +154,7 @@ function AdminHaikuPage({
       {haikuList.map((haiku, idx) => (
         <DataListItem
           isAdmin={true}
+          compact={true}
           isLast={idx === haikuList.length - 1}
           isFirst={idx === 0}
           onEdit={onEdit(idx)}
@@ -161,7 +162,7 @@ function AdminHaikuPage({
           onMoveUp={onMove(idx, "up")}
           onMoveDown={onMove(idx, "down")}
         >
-          <HaikuContent haiku={haiku} />
+          <HaikuContent haiku={haiku} compact={true} />
         </DataListItem>
       ))}
     </DataList>
