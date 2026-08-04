@@ -23,7 +23,16 @@ async function warmUpApi(request: APIRequestContext) {
         timeout: 30_000,
       });
       if (response.ok()) return;
-      lastError = `HTTP ${response.status()}`;
+      // Include a snippet of the body: Render serves informative HTML for
+      // platform-level failures (e.g. "Service Suspended"), which is the
+      // difference between "cold start" and "someone must resume the
+      // service in the Render dashboard".
+      const body = (await response.text())
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 200);
+      lastError = `HTTP ${response.status()}: ${body}`;
     } catch (error) {
       lastError = String(error);
     }
