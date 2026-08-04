@@ -600,6 +600,15 @@ async fn delete_image_removes_object() {
 }
 
 #[tokio::test]
+async fn delete_image_is_idempotent_for_missing_object() {
+    // S3 deletes never report NotFound, so a missing image still deletes OK.
+    let (_store, app) = setup();
+    let (status, body) = send(app, delete_auth("/images/never-existed.png")).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!({"message": "Image deleted successfully"}));
+}
+
+#[tokio::test]
 async fn delete_image_store_outage_is_500() {
     let (store, app) = setup();
     store.set_failing(true);

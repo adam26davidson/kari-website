@@ -14,7 +14,10 @@ export class ImageService {
     }
     const token = await getAccessTokenSilently();
 
-    const fileName = `${uuidv4()}.${file.name.split(".").pop()}`;
+    const extension = file.name.includes(".")
+      ? `.${file.name.split(".").pop()}`
+      : "";
+    const fileName = `${uuidv4()}${extension}`;
 
     // Rename the file to the unique name
     file = new File([file], fileName, { type: file.type });
@@ -78,9 +81,7 @@ export class ImageService {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ isPublished }),
       },
     );
     if (!response.ok) {

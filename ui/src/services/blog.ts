@@ -31,7 +31,7 @@ export class BlogService {
   static async getPublicListFromS3() {
     const response = await fetch(S3_BLOG_LIST_URL);
     if (!response.ok) {
-      console.error("Failed to fetch blog from API", response.status);
+      console.error("Failed to fetch blog from S3", response.status);
       console.error("error", response);
       return [];
     }

@@ -58,6 +58,19 @@ describe("ImageService.upload", () => {
     expect(uploaded.size).toBe("PNGDATA".length);
   });
 
+  it("uploads a file with no extension as just the uuid", async () => {
+    const fetchMock = mockFetchOnce({ ok: true, text: async () => "ok" });
+    const file = new File(["RAW"], "photo", { type: "image/png" });
+
+    const result = await ImageService.upload(file, true, getToken);
+
+    expect(result).toBe("fixed-uuid");
+    const uploaded = (fetchMock.mock.calls[0][1].body as FormData).get(
+      "file",
+    ) as File;
+    expect(uploaded.name).toBe("fixed-uuid");
+  });
+
   it("passes isPublished=false through to the query string", async () => {
     const fetchMock = mockFetchOnce({ ok: true, text: async () => "ok" });
     const file = new File(["JPG"], "draft.jpg", { type: "image/jpeg" });
@@ -102,20 +115,17 @@ describe("ImageService.delete", () => {
 });
 
 describe("ImageService.setPublished", () => {
-  it("PUTs the publish flag to the set-published endpoint", async () => {
+  it("PUTs the publish flag via the query param only, with no body", async () => {
     const fetchMock = mockFetchOnce({ ok: true, json: async () => ({}) });
 
     await ImageService.setPublished("fixed-uuid.png", true, getToken);
 
+    // The API reads isPublished from the query param; a JSON body is dead weight.
     expect(fetchMock).toHaveBeenCalledWith(
       `${API_IMAGES_URL}/fixed-uuid.png/set-published?isPublished=true`,
       {
         method: "PUT",
-        headers: {
-          Authorization: "Bearer test-token",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ isPublished: true }),
+        headers: { Authorization: "Bearer test-token" },
       },
     );
   });

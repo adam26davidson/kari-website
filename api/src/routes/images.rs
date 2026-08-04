@@ -109,11 +109,11 @@ pub async fn delete_image_handler(
 ) -> Result<Json<serde_json::Value>, AppError> {
     let image_key = format!("images/{}", filename);
 
+    // S3 deletes are idempotent and never report NotFound.
     match state.s3_service.delete_object(&image_key).await {
         Ok(_) => Ok(Json(serde_json::json!({
             "message": "Image deleted successfully"
         }))),
-        Err(S3Error::NotFound) => Err(AppError::NotFound("Image not found")),
         Err(e) => Err(AppError::internal("Failed to delete image", e)),
     }
 }
