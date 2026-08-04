@@ -36,6 +36,9 @@ auto-merge once these checks pass.
   re-adds `in progress` on PR open and removes it when the PR merges or is
   closed without merging. Merging also auto-closes the issue (native GitHub
   behavior) — no manual label cleanup needed once a PR exists.
+- Caveat: GitHub only creates closing references for PRs based on `main`, so
+  for a stacked PR keep the label manual until the PR retargets to `main`
+  (retargeting fires the workflow, which takes over from there).
 
 ## Code Style Guidelines
 - TypeScript: Use strict typing with interfaces (see Models.ts)

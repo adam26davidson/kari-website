@@ -44,13 +44,24 @@ up labels by hand.
 - A `/claim` comment trigger for labeling before a PR exists.
 - Fork PRs (repo has none; same-repo PRs only).
 
+## Default-branch caveat (found during verification)
+
+GitHub only creates `closingIssuesReferences` for PRs whose base is the
+default branch — confirmed live: PR #28 (base `main`, "Closes #27") links
+#27; PR #30 (base = stacked feature branch, "Closes #29") links nothing.
+The workflow therefore no-ops on stacked PRs, which is *consistent*: native
+auto-close would not fire for them either. It self-heals — when the base PR
+merges, GitHub retargets the stacked PR to `main`, which fires this
+workflow's `edited` trigger and the label is added then. Until that point
+the label stays manual (documented in CLAUDE.md).
+
 ## Verification
 
 GitHub Actions workflows are not unit-testable by the repo's suites; this is
-config, verified by live exercise: the PR introducing the workflow itself
-says `Closes #29`, so PR-open must auto-add the label to #29 (observable
-immediately via `gh issue view 29`), and merge/close must remove it and (on
-merge) close #29.
+config, verified by live exercise with a throwaway PR based on `main`
+(carrying only the workflow file) that says `Closes #<throwaway issue>`:
+PR-open must auto-add the label, close-without-merge must remove it. The
+stacked PR #30 additionally verifies the retarget path when #28 merges.
 
 ## Branch/PR structure
 
