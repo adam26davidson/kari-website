@@ -24,6 +24,10 @@ CI (`.github/workflows/ci.yml`) runs all of the above on every pull request,
 and a `coverage` job posts a whole-codebase coverage comment on each PR
 (per-file breakdown in the job summary). Coverage is measured over ALL
 source files, not a curated subset — don't narrow the scope.
+Coverage thresholds are a ratchet: floors pinned just below current numbers
+(UI: `coverage.thresholds` in `ui/vitest.config.ts`; API: `--fail-under-lines`
+in the coverage CI job). When coverage rises meaningfully, bump the floors in
+the same PR — never lower them to make a PR pass.
 Dependency updates are managed by Renovate (`renovate.json`); non-major updates
 auto-merge once these checks pass.
 
