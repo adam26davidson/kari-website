@@ -17,7 +17,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - UI: `npm run test:e2e` - Playwright e2e tests (builds the test-mode bundle,
   previews it, and runs smoke + visitor journeys against the test S3 bucket;
   admin journeys additionally run when `E2E_AUTH0_USERNAME` /
-  `E2E_AUTH0_PASSWORD` are set, as they are in CI)
+  `E2E_AUTH0_PASSWORD` are set, as they are in CI). The API must be running
+  on localhost:3000: locally `aws sso login`, then `cargo run` in `api/`
+  (its `.env` already targets the test bucket); CI builds and starts it
+  itself using the OIDC-assumed `kari-website-e2e` role
 - API: `cargo test` - Run Rust integration tests
 - API: `cargo llvm-cov --summary-only` - Coverage report (needs cargo-llvm-cov)
 - API: `cargo clippy --all-targets -- -D warnings` - Lint (CI enforces no warnings)

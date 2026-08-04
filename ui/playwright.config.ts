@@ -34,9 +34,8 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? [["github"], ["html"]] : "list",
-  // Content assertions ride out test-environment latency (Render cold starts
-  // are absorbed by a warm-up in the auth setup, but individual requests can
-  // still be slow).
+  // Generous timeouts: content assertions wait on real S3 reads and API
+  // round trips against the shared test bucket.
   timeout: 60_000,
   expect: { timeout: 15_000 },
   use: {
@@ -49,7 +48,7 @@ export default defineConfig({
       ? [
           {
             // Logs in through Auth0 once and saves storageState for the
-            // admin project. Also warms up the (cold-startable) test API.
+            // admin project; first checks the local API is up and healthy.
             name: "setup",
             testMatch: /auth\.setup\.ts/,
             timeout: 300_000,

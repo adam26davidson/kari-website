@@ -9,6 +9,8 @@ const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
 /**
  * The test-environment backend URLs, read from ui/.env.test — the same file
  * `npm run build:test` bakes into the bundle, so specs and app always agree.
+ * Real environment variables win over the file, mirroring Vite's own
+ * precedence (useful locally, e.g. to point at an API on another port).
  */
 function readTestEnv(): Record<string, string> {
   const raw = fs.readFileSync(path.join(E2E_DIR, "..", ".env.test"), "utf-8");
@@ -21,8 +23,8 @@ function readTestEnv(): Record<string, string> {
 }
 
 const testEnv = readTestEnv();
-export const TEST_API_URL = testEnv.VITE_API_URL;
-export const TEST_S3_URL = testEnv.VITE_S3_URL;
+export const TEST_API_URL = process.env.VITE_API_URL ?? testEnv.VITE_API_URL;
+export const TEST_S3_URL = process.env.VITE_S3_URL ?? testEnv.VITE_S3_URL;
 
 /**
  * A unique marker for content created by a test, so parallel or retried runs

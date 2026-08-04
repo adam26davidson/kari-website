@@ -11,24 +11,21 @@ import { TEST_API_URL } from "./helpers";
 // setup + admin projects otherwise.
 
 /**
- * The test API runs on Render's free tier and cold-starts in up to ~60s.
- * Poll /health until it answers so admin journeys see a warm backend.
+ * The API runs on localhost (the CI job starts it before Playwright; for
+ * local runs you start it yourself). Fail fast with a clear message if it
+ * isn't up — /health also probes S3 read/write, so this catches missing or
+ * expired AWS credentials too.
  */
-async function warmUpApi(request: APIRequestContext) {
-  const deadline = Date.now() + 180_000;
+async function checkApiIsUp(request: APIRequestContext) {
+  const deadline = Date.now() + 30_000;
   let lastError = "no response";
   while (Date.now() < deadline) {
     try {
       const response = await request.get(`${TEST_API_URL}/health`, {
-        timeout: 30_000,
+        timeout: 10_000,
       });
       if (response.ok()) return;
-      // Include a snippet of the body: Render serves informative HTML for
-      // platform-level failures (e.g. "Service Suspended"), which is the
-      // difference between "cold start" and "someone must resume the
-      // service in the Render dashboard".
       const body = (await response.text())
-        .replace(/<[^>]+>/g, " ")
         .replace(/\s+/g, " ")
         .trim()
         .slice(0, 200);
@@ -36,9 +33,13 @@ async function warmUpApi(request: APIRequestContext) {
     } catch (error) {
       lastError = String(error);
     }
-    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
   }
-  throw new Error(`Test API never became healthy: ${lastError}`);
+  throw new Error(
+    `API at ${TEST_API_URL} is not healthy (${lastError}). ` +
+      "For local runs, start the API first: `aws sso login`, then " +
+      "`cargo run` in api/ (its .env already targets the test bucket).",
+  );
 }
 
 setup("authenticate as admin", async ({ page, request }) => {
@@ -48,7 +49,7 @@ setup("authenticate as admin", async ({ page, request }) => {
     throw new Error("E2E_AUTH0_USERNAME / E2E_AUTH0_PASSWORD must be set");
   }
 
-  await warmUpApi(request);
+  await checkApiIsUp(request);
 
   await page.goto("/admin");
   await page.locator(".admin-button", { hasText: "Log In" }).click();

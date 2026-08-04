@@ -46,6 +46,9 @@ jobs:
   frontend-e2e:
     name: Frontend (Playwright e2e)
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write # assume the e2e AWS role via OIDC
+      contents: read
     defaults:
       run:
         working-directory: ui
@@ -59,8 +62,41 @@ jobs:
           cache: npm
           cache-dependency-path: ui/package-lock.json
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: api
+
+      # The e2e suite runs the real API on localhost:3000 against the test
+      # bucket (the Render-hosted test API is decommissioned, see #45). The
+      # e2e role is scoped to object read/write on test.karidavidson.com.
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::336231940806:role/kari-website-e2e
+          aws-region: us-east-2
+
+      - name: Build API
+        working-directory: api
+        run: cargo build
+
+      - name: Start API
+        working-directory: api
+        run: |
+          BUCKET_NAME=test.karidavidson.com PORT=3000 nohup cargo run > api.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000/health > /dev/null; then
+              echo "API is healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API never became healthy" >&2
+          cat api.log >&2
+          exit 1
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -72,6 +108,11 @@ jobs:
           # without them only the visitor/smoke suites run.
           E2E_AUTH0_USERNAME: ${{ secrets.E2E_AUTH0_USERNAME }}
           E2E_AUTH0_PASSWORD: ${{ secrets.E2E_AUTH0_PASSWORD }}
+
+      - name: Show API log
+        if: ${{ !cancelled() }}
+        working-directory: api
+        run: cat api.log || true
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
