@@ -27,6 +27,15 @@ export default defineConfig({
       // Whole-app scope: every file under src/ counts, tested or not, so the
       // number reflects reality rather than a curated subset.
       include: ["src/**"],
+      // Ratchet floors: pinned just below current whole-app coverage so CI
+      // fails on regressions. When coverage rises meaningfully, bump these
+      // in the same PR (see CLAUDE.md). Floors, not targets — keep a small
+      // margin below actuals to absorb V8 line-accounting drift.
+      thresholds: {
+        lines: 23,
+        functions: 66,
+        branches: 77,
+      },
     },
   },
 });
