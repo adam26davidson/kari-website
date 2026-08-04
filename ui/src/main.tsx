@@ -14,6 +14,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         redirect_uri: window.location.origin + "/admin",
         audience: "https://api.karidavidson.com/",
       }}
+      // Test builds persist tokens to localStorage so Playwright can capture
+      // an authenticated storageState once and reuse it across e2e tests.
+      // Production keeps the default in-memory cache.
+      cacheLocation={
+        import.meta.env.MODE === "test" ? "localstorage" : undefined
+      }
     >
       <BrowserRouter>
         <App />

@@ -44,7 +44,7 @@ jobs:
         run: npm run build
 
   frontend-e2e:
-    name: Frontend (Playwright smoke)
+    name: Frontend (Playwright e2e)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -65,8 +65,13 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Run smoke tests
+      - name: Run e2e tests
         run: npm run test:e2e
+        env:
+          # Test-tenant Auth0 credentials enable the admin journey specs;
+          # without them only the visitor/smoke suites run.
+          E2E_AUTH0_USERNAME: ${{ secrets.E2E_AUTH0_USERNAME }}
+          E2E_AUTH0_PASSWORD: ${{ secrets.E2E_AUTH0_PASSWORD }}
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}

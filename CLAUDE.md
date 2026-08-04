@@ -14,7 +14,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - UI: `npm run test` - Vitest in watch mode
 - UI: `npm run test:run` - Vitest once (used in CI)
 - UI: `npm run test:coverage` - Vitest with coverage
-- UI: `npm run test:e2e` - Playwright smoke tests (builds + previews the app)
+- UI: `npm run test:e2e` - Playwright e2e tests (builds the test-mode bundle,
+  previews it, and runs smoke + visitor journeys against the test S3 bucket;
+  admin journeys additionally run when `E2E_AUTH0_USERNAME` /
+  `E2E_AUTH0_PASSWORD` are set, as they are in CI)
 - API: `cargo test` - Run Rust integration tests
 - API: `cargo llvm-cov --summary-only` - Coverage report (needs cargo-llvm-cov)
 - API: `cargo clippy --all-targets -- -D warnings` - Lint (CI enforces no warnings)

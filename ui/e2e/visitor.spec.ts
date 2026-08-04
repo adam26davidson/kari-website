@@ -1,0 +1,69 @@
+import { test, expect } from "@playwright/test";
+import { TEST_S3_URL } from "./helpers";
+
+// Visitor journeys: the public pages render real seeded content from the
+// test S3 bucket (kept in sync with production via
+// scripts/sync_s3_prod_to_test.sh). Assertions are deliberately loose —
+// "at least one item renders" — never tied to exact synced text.
+//
+// Note: the public list of blog posts is the "Other works" page; the
+// blog-list component is not currently routed in App.tsx.
+
+test("home page renders the photo and a non-empty blurb", async ({ page }) => {
+  await page.goto("/");
+  const photo = page.locator(`img[src^="${TEST_S3_URL}/images/"]`);
+  await expect(photo).toBeVisible();
+  // The photo actually loaded (not a broken image).
+  await expect
+    .poll(
+      () =>
+        photo.evaluate((img: HTMLImageElement) => img.naturalWidth),
+      { timeout: 15_000 },
+    )
+    .toBeGreaterThan(0);
+  // The blurb is the last fade-in block next to the photo.
+  const blurb = page.locator(".fade-in").last();
+  await expect(blurb).toBeVisible();
+  expect((await blurb.innerText()).trim().length).toBeGreaterThan(0);
+});
+
+test("haiku page renders at least one seeded haiku", async ({ page }) => {
+  await page.goto("/haiku");
+  const lines = page.locator(".haiku-list-line");
+  await expect(lines.first()).toBeVisible();
+  expect((await lines.first().innerText()).trim().length).toBeGreaterThan(0);
+});
+
+test("haiga page renders at least one seeded haiga image", async ({
+  page,
+}) => {
+  await page.goto("/haiga");
+  const image = page.locator(".haiga-list-item-image").first();
+  await expect(image).toBeVisible();
+  await expect
+    .poll(
+      () =>
+        image.evaluate((img: HTMLImageElement) => img.naturalWidth),
+      { timeout: 30_000 },
+    )
+    .toBeGreaterThan(0);
+});
+
+test("other works (blog) page renders at least one published post", async ({
+  page,
+}) => {
+  await page.goto("/other-works");
+  const post = page.locator(".other-works-item").first();
+  await expect(post).toBeVisible();
+  const title = post.locator("h1");
+  await expect(title).toBeVisible();
+  expect((await title.innerText()).trim().length).toBeGreaterThan(0);
+});
+
+test("photography page renders at least one seeded post", async ({ page }) => {
+  await page.goto("/photography");
+  const header = page.locator(".photography-post-header").first();
+  await expect(header).toBeVisible();
+  expect((await header.innerText()).trim().length).toBeGreaterThan(0);
+  await expect(page.locator(".photography-post-image").first()).toBeVisible();
+});
