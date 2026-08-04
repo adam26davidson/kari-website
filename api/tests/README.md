@@ -40,8 +40,12 @@ cargo clippy --all-targets -- -D warnings
   verifies the secure/public split and the auth layer wiring.
 - `model_tests.rs` — serde (de)serialization of the `models` types, guarding the
   `isPublished` camelCase wire contract shared with the frontend.
-- `s3_service_tests.rs` — unit tests for the real `S3Error` type/formatting, plus
-  an `#[ignore]`d end-to-end test against a live bucket.
+- `s3_service_tests.rs` — unit tests for the real `S3Error` type/formatting;
+  mock-client tests (via `aws-smithy-mocks`) driving the real `S3Service` SDK
+  calls (`get_object`, `put_object`, `set_object_tagging`, `delete_object`) and
+  the `From<SdkError>` mapping (404 → `NotFound`, other service errors →
+  `OperationFailed` with the underlying cause preserved); plus an `#[ignore]`d
+  end-to-end test against a live bucket.
 
 ## Principles
 
@@ -55,13 +59,8 @@ is generated solely for tests and is not a real credential.
 cargo llvm-cov --summary-only   # or --html for a browsable report
 ```
 
-Handlers, router, and error type sit at ~92–100% line coverage. The gaps are
-structural: `main.rs` (bootstrap wiring), the real AWS SDK calls in
-`services/s3.rs` (exercised only by the `#[ignore]`d live-bucket test), and
-practically unreachable error arms (e.g. `serde_json::to_string` failing on
-plain structs).
-
-## Future Work
-
-- Mock the AWS SDK with `aws-smithy-mocks` to cover the `S3Service` SDK calls
-  and the `From<SdkError>` 404 → `NotFound` mapping without hitting real AWS.
+Handlers, router, and error type sit at ~92–100% line coverage;
+`services/s3.rs` at ~85% via the `aws-smithy-mocks` client. The remaining gaps
+are structural: `main.rs` (bootstrap wiring) and practically unreachable error
+arms (e.g. `serde_json::to_string` failing on plain structs, or the S3 tag
+builders rejecting always-present keys).
