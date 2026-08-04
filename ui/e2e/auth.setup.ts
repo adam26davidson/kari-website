@@ -87,19 +87,24 @@ setup("authenticate as admin", async ({ page, request }) => {
     // login failure. Surface Auth0's own error message when there is one —
     // "Wrong email or password" here means the E2E_AUTH0_* secrets don't
     // match a user in the tenant, which no code change can fix.
-    const errorPrompt = page.locator('[id*="error"], [class*="error"]');
     if (!(await consentAccept.first().isVisible().catch(() => false))) {
-      const details = (await errorPrompt.first().textContent().catch(() => ""))
-        ?.trim()
-        .slice(0, 200);
+      const bodyText = await page
+        .locator("body")
+        .innerText()
+        .catch(() => "");
+      const details = bodyText
+        .replace(/\s+/g, " ")
+        .match(
+          /wrong email or password|your account has been blocked|too many attempts|verify your email|something went wrong/i,
+        )?.[0];
       throw new Error(
         `Auth0 login did not return to the app. ${
           details
             ? `Auth0 reports: "${details}" — check the E2E_AUTH0_USERNAME / ` +
               "E2E_AUTH0_PASSWORD secrets against the test user in the " +
               "Username-Password-Authentication connection."
-            : `Stuck on ${page.url()} with no consent screen or visible ` +
-              "error; inspect the trace."
+            : `Stuck on ${page.url()} with no consent screen or known ` +
+              "error message; inspect the trace."
         }`,
       );
     }
