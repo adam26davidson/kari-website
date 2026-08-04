@@ -27,6 +27,12 @@ source files, not a curated subset — don't narrow the scope.
 Dependency updates are managed by Renovate (`renovate.json`); non-major updates
 auto-merge once these checks pass.
 
+## Working on GitHub Issues
+- Before starting work on an issue, add the `in progress` label and leave a
+  comment naming your branch, so parallel sessions don't pick up the same
+  issue. Skip issues already labeled `in progress`.
+- Remove the label when the work is merged or abandoned.
+
 ## Code Style Guidelines
 - TypeScript: Use strict typing with interfaces (see Models.ts)
 - React components: Use functional components with typed props

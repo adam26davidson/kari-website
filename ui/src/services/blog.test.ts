@@ -88,6 +88,17 @@ describe("BlogService.getPublicListFromS3", () => {
     mockFetchOnce({ ok: false, status: 404, json: async () => ({}) });
     expect(await BlogService.getPublicListFromS3()).toEqual([]);
   });
+
+  it("logs the S3 fetch as the failure source, not the API", async () => {
+    mockFetchOnce({ ok: false, status: 404, json: async () => ({}) });
+
+    await BlogService.getPublicListFromS3();
+
+    expect(console.error).toHaveBeenCalledWith(
+      "Failed to fetch blog from S3",
+      404,
+    );
+  });
 });
 
 describe("BlogService.updateList", () => {
