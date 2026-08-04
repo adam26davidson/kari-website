@@ -1,0 +1,70 @@
+name: Issue lifecycle
+
+# Keeps the "in progress" label on issues in sync with the PRs that close
+# them (companion to the convention in CLAUDE.md): while a PR saying
+# "Closes #N" is open, issue N carries the label; when the PR merges or is
+# closed without merging, the label is removed. Merging also auto-closes the
+# issue — that part is native GitHub behavior, not this workflow.
+on:
+  pull_request:
+    types: [opened, reopened, edited, closed]
+
+permissions:
+  issues: write
+  pull-requests: read
+
+jobs:
+  sync-label:
+    name: Sync "in progress" label on linked issues
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const label = "in progress";
+            // The issues GitHub itself will close on merge — same source of
+            // truth as the native behavior, no body parsing.
+            const { repository } = await github.graphql(
+              `query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    closingIssuesReferences(first: 20) {
+                      nodes { number }
+                    }
+                  }
+                }
+              }`,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                number: context.payload.pull_request.number,
+              },
+            );
+            const issues = repository.pullRequest.closingIssuesReferences.nodes;
+            if (issues.length === 0) {
+              core.info("No linked issues; nothing to do.");
+              return;
+            }
+            const closing = context.payload.action === "closed";
+            for (const { number } of issues) {
+              if (closing) {
+                core.info(`Removing "${label}" from #${number}`);
+                await github.rest.issues
+                  .removeLabel({
+                    ...context.repo,
+                    issue_number: number,
+                    name: label,
+                  })
+                  .catch((e) => {
+                    // Label already absent — removal is idempotent.
+                    if (e.status !== 404) throw e;
+                  });
+              } else {
+                core.info(`Adding "${label}" to #${number}`);
+                await github.rest.issues.addLabels({
+                  ...context.repo,
+                  issue_number: number,
+                  labels: [label],
+                });
+              }
+            }
