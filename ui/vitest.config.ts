@@ -22,10 +22,11 @@ export default defineConfig({
     },
     coverage: {
       provider: "v8",
-      reporter: ["text", "html"],
-      // Coverage is opt-in via `npm run test:coverage`; start with the pure
-      // logic modules that are worth tracking and expand over time.
-      include: ["src/utils/**", "src/services/**"],
+      // json-summary feeds the CI coverage comment on PRs.
+      reporter: ["text", "html", "json-summary"],
+      // Whole-app scope: every file under src/ counts, tested or not, so the
+      // number reflects reality rather than a curated subset.
+      include: ["src/**"],
     },
   },
 });

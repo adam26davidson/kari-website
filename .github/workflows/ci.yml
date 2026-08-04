@@ -76,6 +76,87 @@ jobs:
           path: ui/playwright-report/
           retention-days: 7
 
+  coverage:
+    name: Coverage report
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: api
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Frontend coverage
+        working-directory: ui
+        run: |
+          set -o pipefail
+          npm ci
+          npm run test:coverage | tee coverage-report.txt
+
+      - name: API coverage
+        working-directory: api
+        run: |
+          set -o pipefail
+          cargo llvm-cov --json --summary-only --output-path coverage.json
+          cargo llvm-cov report | tee coverage-report.txt
+
+      - name: Build coverage comment
+        run: |
+          ui_lines=$(jq -r '.total.lines.pct' ui/coverage/coverage-summary.json)
+          ui_funcs=$(jq -r '.total.functions.pct' ui/coverage/coverage-summary.json)
+          api_lines=$(jq -r '(.data[0].totals.lines.percent * 10 | round) / 10' api/coverage.json)
+          api_funcs=$(jq -r '(.data[0].totals.functions.percent * 10 | round) / 10' api/coverage.json)
+          {
+            echo "## Test coverage"
+            echo ""
+            echo "| Area | Lines | Functions |"
+            echo "| --- | --- | --- |"
+            echo "| Frontend (\`ui/src\`) | ${ui_lines}% | ${ui_funcs}% |"
+            echo "| API (Rust) | ${api_lines}% | ${api_funcs}% |"
+            echo ""
+            echo "Per-file breakdown in the [job summary](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+          } > coverage-comment.md
+          {
+            cat coverage-comment.md
+            echo ""
+            echo "<details><summary>Frontend per-file</summary>"
+            echo ""
+            echo '```'
+            sed -n '/Coverage report from/,$p' ui/coverage-report.txt
+            echo '```'
+            echo "</details>"
+            echo ""
+            echo "<details><summary>API per-file</summary>"
+            echo ""
+            echo '```'
+            cat api/coverage-report.txt
+            echo '```'
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          path: coverage-comment.md
+
   api:
     name: API (fmt, clippy, tests)
     runs-on: ubuntu-latest
