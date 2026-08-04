@@ -1,7 +1,10 @@
+use async_trait::async_trait;
 use aws_sdk_s3::error::SdkError;
 use aws_sdk_s3::{primitives::ByteStream, Client};
 use std::error::Error;
 use std::fmt;
+
+use crate::services::object_store::ObjectStore;
 
 #[derive(Debug)]
 pub enum S3Error {
@@ -47,8 +50,11 @@ impl S3Service {
             bucket_name,
         }
     }
+}
 
-    pub async fn get_object(&self, key: &str) -> Result<Vec<u8>, S3Error> {
+#[async_trait]
+impl ObjectStore for S3Service {
+    async fn get_object(&self, key: &str) -> Result<Vec<u8>, S3Error> {
         let response = self
             .client
             .get_object()
@@ -64,7 +70,7 @@ impl S3Service {
         Ok(data.to_vec())
     }
 
-    pub async fn put_object(&self, key: &str, data: Vec<u8>, public: bool) -> Result<(), S3Error> {
+    async fn put_object(&self, key: &str, data: Vec<u8>, public: bool) -> Result<(), S3Error> {
         // set tag public=
         self.client
             .put_object()
@@ -78,7 +84,7 @@ impl S3Service {
         Ok(())
     }
 
-    pub async fn set_object_tagging(&self, key: &str, public: bool) -> Result<(), S3Error> {
+    async fn set_object_tagging(&self, key: &str, public: bool) -> Result<(), S3Error> {
         self.client
             .put_object_tagging()
             .bucket(&self.bucket_name)
@@ -105,7 +111,7 @@ impl S3Service {
         Ok(())
     }
 
-    pub async fn delete_object(&self, key: &str) -> Result<(), S3Error> {
+    async fn delete_object(&self, key: &str) -> Result<(), S3Error> {
         self.client
             .delete_object()
             .bucket(&self.bucket_name)

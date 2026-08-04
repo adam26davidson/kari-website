@@ -5,6 +5,7 @@ use aws_sdk_s3::Client;
 use kari_website_api::middleware::auth::{fetch_jwks, JwksCache, AUTH0_JWKS_URL};
 use kari_website_api::routes::create_router;
 use kari_website_api::routes::health::HealthCache;
+use kari_website_api::services::object_store::ObjectStore;
 use kari_website_api::services::s3::S3Service;
 use kari_website_api::AppState;
 use std::net::SocketAddr;
@@ -31,7 +32,7 @@ async fn main() {
     let bucket_name = std::env::var("BUCKET_NAME").expect("BUCKET_NAME not set");
 
     // Create S3 service
-    let s3_service = Arc::new(S3Service::new(s3_client, bucket_name));
+    let s3_service: Arc<dyn ObjectStore> = Arc::new(S3Service::new(s3_client, bucket_name));
 
     // Fetch JWKS and store in shared state
     let jwks = fetch_jwks(AUTH0_JWKS_URL)

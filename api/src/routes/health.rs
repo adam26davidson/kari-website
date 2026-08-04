@@ -14,7 +14,8 @@ use axum::{extract::State, http::StatusCode, response::Json};
 use serde_json::{json, Value};
 use tokio::sync::Mutex;
 
-use crate::services::s3::{S3Error, S3Service};
+use crate::services::object_store::ObjectStore;
+use crate::services::s3::S3Error;
 use crate::AppState;
 
 const PROBE_TTL: Duration = Duration::from_secs(60);
@@ -25,7 +26,7 @@ pub struct HealthCache {
 }
 
 impl HealthCache {
-    async fn check(&self, s3: &S3Service) -> Result<(), String> {
+    async fn check(&self, s3: &dyn ObjectStore) -> Result<(), String> {
         let mut last = self.last.lock().await;
         if let Some((at, result)) = &*last {
             if at.elapsed() < PROBE_TTL {
@@ -38,7 +39,7 @@ impl HealthCache {
     }
 }
 
-async fn probe(s3: &S3Service) -> Result<(), String> {
+async fn probe(s3: &dyn ObjectStore) -> Result<(), String> {
     // Read probe: a missing object is fine (fresh bucket); permission or
     // connectivity failures are not.
     match s3.get_object("haiku.json").await {
@@ -61,7 +62,7 @@ async fn probe(s3: &S3Service) -> Result<(), String> {
 }
 
 pub async fn health_handler(State(state): State<AppState>) -> (StatusCode, Json<Value>) {
-    match state.health.check(&state.s3_service).await {
+    match state.health.check(state.s3_service.as_ref()).await {
         Ok(()) => (StatusCode::OK, Json(json!({"status": "ok"}))),
         Err(e) => {
             tracing::error!("Health check failed: {e}");
