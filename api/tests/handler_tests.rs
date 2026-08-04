@@ -401,7 +401,7 @@ async fn blog_posts_round_trip_preserving_wire_format() {
 
 #[tokio::test]
 async fn list_blog_posts_corrupt_data_is_500_not_empty_list() {
-    let (_, app) = setup_with(InMemoryStore::default().with_object("blog-posts.json", "oops"));
+    let (_, app) = setup_with(InMemoryStore::default().with_object("blog-posts-all.json", "oops"));
     let (status, body) = send(app, get_auth("/blog")).await;
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
     assert_eq!(body, json!({"error": "Stored blog post data is invalid"}));
@@ -429,14 +429,19 @@ async fn list_blog_posts_returns_drafts_after_split_write() {
 }
 
 #[tokio::test]
-async fn list_blog_posts_falls_back_to_legacy_object() {
-    // Pre-migration state: only the old single public object exists.
+async fn list_blog_posts_ignores_public_object_when_private_missing() {
+    // A missing private object must NOT fall back to the filtered public
+    // list (the pre-#33 migration bridge): serving it would show the admin a
+    // draft-less list, and the next save would persist it, wiping drafts.
+    let public_only = json!([
+        {"id": "b1", "title": "Hello", "date": "2026-08-04", "isPublished": true}
+    ]);
     let (_, app) = setup_with(
-        InMemoryStore::default().with_object("blog-posts.json", mixed_blog_posts().to_string()),
+        InMemoryStore::default().with_object("blog-posts.json", public_only.to_string()),
     );
     assert_eq!(
         send(app, get_auth("/blog")).await,
-        (StatusCode::OK, mixed_blog_posts())
+        (StatusCode::OK, json!([]))
     );
 }
 

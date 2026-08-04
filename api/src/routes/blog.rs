@@ -15,16 +15,11 @@ pub async fn list_blog_posts_handler(
 ) -> Result<Json<Value>, AppError> {
     let data = match state.s3_service.get_object(BLOG_POSTS_ALL_KEY).await {
         Ok(data) => Some(data),
-        // Legacy single-object layout from before the public/private split:
-        // present until the first save after this change deploys.
-        Err(S3Error::NotFound) => {
-            match state.s3_service.get_object(BLOG_POSTS_PUBLIC_KEY).await {
-                Ok(data) => Some(data),
-                // Neither object existing is a legitimate empty list (new site).
-                Err(S3Error::NotFound) => None,
-                Err(e) => return Err(AppError::internal("Failed to fetch blog posts", e)),
-            }
-        }
+        // A missing private object is a legitimate empty list (new site).
+        // Deliberately NO fallback to the filtered public object: serving it
+        // here would hide drafts from the admin UI, and the next save would
+        // persist the draft-less list, permanently losing draft metadata.
+        Err(S3Error::NotFound) => None,
         Err(e) => return Err(AppError::internal("Failed to fetch blog posts", e)),
     };
 
