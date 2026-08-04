@@ -16,6 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - UI: `npm run test:coverage` - Vitest with coverage
 - UI: `npm run test:e2e` - Playwright smoke tests (builds + previews the app)
 - API: `cargo test` - Run Rust integration tests
+- API: `cargo llvm-cov --summary-only` - Coverage report (needs cargo-llvm-cov)
 - API: `cargo clippy --all-targets -- -D warnings` - Lint (CI enforces no warnings)
 - API: `cargo fmt --check` - Formatting check
 

@@ -6,6 +6,7 @@
 //! `aws-smithy-mocks` crate and is a good future addition (see tests/README.md).
 
 use aws_sdk_s3::Client;
+use kari_website_api::services::object_store::ObjectStore;
 use kari_website_api::services::s3::{S3Error, S3Service};
 
 #[test]

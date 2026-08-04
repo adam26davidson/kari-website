@@ -4,6 +4,8 @@
 //! binaries, so this module can be pulled into each integration test crate with
 //! `mod common;` without producing duplicate `#[test]` runs.
 
+pub mod store;
+
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -12,6 +14,7 @@ use aws_sdk_s3::Client;
 use jsonwebtoken::{encode, jwk::JwkSet, Algorithm, EncodingKey, Header};
 use kari_website_api::middleware::auth::JwksCache;
 use kari_website_api::routes::health::HealthCache;
+use kari_website_api::services::object_store::ObjectStore;
 use kari_website_api::services::s3::S3Service;
 use kari_website_api::AppState;
 use serde::Serialize;
@@ -128,6 +131,9 @@ pub fn signed_token(opts: TokenOptions) -> String {
 /// operation; tests that do reach a handler (e.g. a valid token hitting a
 /// secure route) fail the S3 call instantly and locally instead of sending
 /// signed requests to real AWS, so the suite stays hermetic and fast offline.
+// Not every test binary that includes `common` uses these state builders
+// (handler_tests builds its state from `store` instead), so allow dead_code.
+#[allow(dead_code)]
 pub fn dummy_s3_client() -> Client {
     let conf = aws_sdk_s3::config::Builder::new()
         .behavior_version(BehaviorVersion::latest())
@@ -147,9 +153,11 @@ pub fn dummy_s3_client() -> Client {
 /// Build a real [`AppState`] with the given JWKS and a dummy S3 client. The
 /// JWKS refresh URL is unroutable (like the S3 endpoint) so the unknown-kid
 /// refresh path fails fast and locally instead of calling the real Auth0.
+#[allow(dead_code)]
 pub fn test_state(jwks: JwkSet) -> AppState {
     let client = dummy_s3_client();
-    let s3_service = Arc::new(S3Service::new(client, "test-bucket".to_string()));
+    let s3_service: Arc<dyn ObjectStore> =
+        Arc::new(S3Service::new(client, "test-bucket".to_string()));
     AppState {
         jwks: Arc::new(JwksCache::new(
             jwks,

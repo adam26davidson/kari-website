@@ -1257,6 +1257,7 @@ dependencies = [
 name = "kari-website-api"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "aws-config",
  "aws-sdk-s3",
  "aws-sig-auth",
