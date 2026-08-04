@@ -31,7 +31,14 @@ auto-merge once these checks pass.
 - Before starting work on an issue, add the `in progress` label and leave a
   comment naming your branch, so parallel sessions don't pick up the same
   issue. Skip issues already labeled `in progress`.
-- Remove the label when the work is merged or abandoned.
+- Put `Closes #N` in the PR body. From PR-open onward the issue-lifecycle
+  workflow (`.github/workflows/issue-lifecycle.yml`) owns the label: it
+  re-adds `in progress` on PR open and removes it when the PR merges or is
+  closed without merging. Merging also auto-closes the issue (native GitHub
+  behavior) — no manual label cleanup needed once a PR exists.
+- Caveat: GitHub only creates closing references for PRs based on `main`, so
+  for a stacked PR keep the label manual until the PR retargets to `main`
+  (retargeting fires the workflow, which takes over from there).
 
 ## Code Style Guidelines
 - TypeScript: Use strict typing with interfaces (see Models.ts)
