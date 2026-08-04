@@ -343,6 +343,38 @@ fn sample_blog_posts() -> Value {
     json!([{"id": "b1", "title": "Hello", "date": "2026-08-04", "isPublished": true}])
 }
 
+fn mixed_blog_posts() -> Value {
+    json!([
+        {"id": "b1", "title": "Hello", "date": "2026-08-04", "isPublished": true},
+        {"id": "b2", "title": "Secret draft", "date": "2026-08-05", "isPublished": false}
+    ])
+}
+
+#[tokio::test]
+async fn update_blog_posts_splits_private_full_and_public_published_lists() {
+    let (store, app) = setup();
+    let (status, _) = send(app, put_json("/blog", mixed_blog_posts())).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Full list, drafts included, must be stored privately.
+    let all = store
+        .get("blog-posts-all.json")
+        .expect("private list stored");
+    assert!(!all.public);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&all.data).unwrap(),
+        mixed_blog_posts()
+    );
+
+    // The public object must contain ONLY published posts (this is the leak).
+    let public = store.get("blog-posts.json").expect("public list stored");
+    assert!(public.public);
+    assert_eq!(
+        serde_json::from_slice::<Value>(&public.data).unwrap(),
+        json!([{"id": "b1", "title": "Hello", "date": "2026-08-04", "isPublished": true}])
+    );
+}
+
 #[tokio::test]
 async fn list_blog_posts_returns_empty_list_when_absent() {
     let (_, app) = setup();
@@ -382,6 +414,30 @@ async fn list_blog_posts_store_outage_is_500() {
     let (status, body) = send(app, get_auth("/blog")).await;
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
     assert_eq!(body, json!({"error": "Failed to fetch blog posts"}));
+}
+
+#[tokio::test]
+async fn list_blog_posts_returns_drafts_after_split_write() {
+    let (_, app) = setup();
+    send(app.clone(), put_json("/blog", mixed_blog_posts())).await;
+    // The admin list must come from the private full list, drafts included —
+    // not the filtered public object.
+    assert_eq!(
+        send(app, get_auth("/blog")).await,
+        (StatusCode::OK, mixed_blog_posts())
+    );
+}
+
+#[tokio::test]
+async fn list_blog_posts_falls_back_to_legacy_object() {
+    // Pre-migration state: only the old single public object exists.
+    let (_, app) = setup_with(
+        InMemoryStore::default().with_object("blog-posts.json", mixed_blog_posts().to_string()),
+    );
+    assert_eq!(
+        send(app, get_auth("/blog")).await,
+        (StatusCode::OK, mixed_blog_posts())
+    );
 }
 
 #[tokio::test]

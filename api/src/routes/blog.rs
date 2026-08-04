@@ -7,17 +7,33 @@ use crate::models::{BlogPost, BlogPostUpdate};
 use crate::services::s3::S3Error;
 use crate::AppState;
 
+const BLOG_POSTS_PUBLIC_KEY: &str = "blog-posts.json";
+const BLOG_POSTS_ALL_KEY: &str = "blog-posts-all.json";
+
 pub async fn list_blog_posts_handler(
     State(state): State<AppState>,
 ) -> Result<Json<Value>, AppError> {
-    let blog_posts: Vec<BlogPost> = match state.s3_service.get_object("blog-posts.json").await {
+    let data = match state.s3_service.get_object(BLOG_POSTS_ALL_KEY).await {
+        Ok(data) => Some(data),
+        // Legacy single-object layout from before the public/private split:
+        // present until the first save after this change deploys.
+        Err(S3Error::NotFound) => {
+            match state.s3_service.get_object(BLOG_POSTS_PUBLIC_KEY).await {
+                Ok(data) => Some(data),
+                // Neither object existing is a legitimate empty list (new site).
+                Err(S3Error::NotFound) => None,
+                Err(e) => return Err(AppError::internal("Failed to fetch blog posts", e)),
+            }
+        }
+        Err(e) => return Err(AppError::internal("Failed to fetch blog posts", e)),
+    };
+
+    let blog_posts: Vec<BlogPost> = match data {
         // A parse failure must NOT become an empty list: the admin UI would
         // render an empty editor and a save would wipe the data.
-        Ok(data) => serde_json::from_slice(&data)
+        Some(data) => serde_json::from_slice(&data)
             .map_err(|e| AppError::internal("Stored blog post data is invalid", e))?,
-        // The object not existing yet is a legitimate empty list (new site).
-        Err(S3Error::NotFound) => Vec::new(),
-        Err(e) => return Err(AppError::internal("Failed to fetch blog posts", e)),
+        None => Vec::new(),
     };
     Ok(Json(json!(blog_posts)))
 }
@@ -26,14 +42,26 @@ pub async fn update_blog_posts_handler(
     State(state): State<AppState>,
     Json(blog_posts): Json<Vec<BlogPost>>,
 ) -> Result<Json<Value>, AppError> {
-    let blog_posts_str = serde_json::to_string(&blog_posts)
+    let all_posts_str = serde_json::to_string(&blog_posts)
         .map_err(|e| AppError::internal("Failed to serialize blog posts", e))?;
+
+    // Private-first: if the second write fails, nothing draft-related has
+    // been exposed; the admin retries and the public list catches up.
+    state
+        .s3_service
+        .put_object(BLOG_POSTS_ALL_KEY, all_posts_str.into_bytes(), false)
+        .await
+        .map_err(|e| AppError::internal("Failed to update blog posts", e))?;
+
+    let published: Vec<&BlogPost> = blog_posts.iter().filter(|p| p.is_published).collect();
+    let published_str = serde_json::to_string(&published)
+        .map_err(|e| AppError::internal("Failed to serialize public blog posts", e))?;
 
     state
         .s3_service
-        .put_object("blog-posts.json", blog_posts_str.into_bytes(), true)
+        .put_object(BLOG_POSTS_PUBLIC_KEY, published_str.into_bytes(), true)
         .await
-        .map_err(|e| AppError::internal("Failed to update blog posts", e))?;
+        .map_err(|e| AppError::internal("Failed to update public blog posts", e))?;
 
     Ok(Json(json!({"message": "Blog posts updated"})))
 }
