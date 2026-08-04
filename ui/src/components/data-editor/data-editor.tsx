@@ -17,12 +17,14 @@ export function DataEditor({
     <div className="data-editor">
       <div className="data-editor-content">
         <div className="data-editor-item-controls">
-          <div
+          <button
+            type="button"
             className={`admin-icon-button${disableSave ? " disabled" : ""}`}
+            disabled={disableSave}
             onClick={onSave}
           >
             <FontAwesomeIcon icon={faFloppyDisk} />
-          </div>
+          </button>
           <div className="admin-icon-button" onClick={onClose}>
             <FontAwesomeIcon icon={faClose} />
           </div>
