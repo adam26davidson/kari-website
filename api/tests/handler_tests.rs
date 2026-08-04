@@ -417,6 +417,30 @@ async fn list_blog_posts_store_outage_is_500() {
 }
 
 #[tokio::test]
+async fn list_blog_posts_returns_drafts_after_split_write() {
+    let (_, app) = setup();
+    send(app.clone(), put_json("/blog", mixed_blog_posts())).await;
+    // The admin list must come from the private full list, drafts included —
+    // not the filtered public object.
+    assert_eq!(
+        send(app, get_auth("/blog")).await,
+        (StatusCode::OK, mixed_blog_posts())
+    );
+}
+
+#[tokio::test]
+async fn list_blog_posts_falls_back_to_legacy_object() {
+    // Pre-migration state: only the old single public object exists.
+    let (_, app) = setup_with(
+        InMemoryStore::default().with_object("blog-posts.json", mixed_blog_posts().to_string()),
+    );
+    assert_eq!(
+        send(app, get_auth("/blog")).await,
+        (StatusCode::OK, mixed_blog_posts())
+    );
+}
+
+#[tokio::test]
 async fn update_blog_posts_store_outage_is_500() {
     let (store, app) = setup();
     store.set_failing(true);
