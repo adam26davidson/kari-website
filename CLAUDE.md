@@ -20,7 +20,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - API: `cargo clippy --all-targets -- -D warnings` - Lint (CI enforces no warnings)
 - API: `cargo fmt --check` - Formatting check
 
-CI (`.github/workflows/ci.yml`) runs all of the above on every pull request.
+CI (`.github/workflows/ci.yml`) runs all of the above on every pull request,
+and a `coverage` job posts a whole-codebase coverage comment on each PR
+(per-file breakdown in the job summary). Coverage is measured over ALL
+source files, not a curated subset — don't narrow the scope.
 Dependency updates are managed by Renovate (`renovate.json`); non-major updates
 auto-merge once these checks pass.
 
