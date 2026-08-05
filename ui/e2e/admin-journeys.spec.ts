@@ -50,7 +50,13 @@ async function expectToast(page: Page, text: string | RegExp) {
 }
 
 test.describe("haiku", () => {
-  const marker = uniqueMarker("haiku");
+  // A fresh marker per test AND per retry attempt: with a shared marker, a
+  // row left by an earlier test/attempt matches this attempt's locators and
+  // trips strict mode (seen once in CI as a flaky duplicate-row failure).
+  let marker: string;
+  test.beforeEach(() => {
+    marker = uniqueMarker("haiku");
+  });
 
   test.afterEach(async ({ page }) => {
     await deleteItemsMatching(page, "Haiku", marker);
@@ -153,7 +159,12 @@ test.describe("haiga", () => {
 });
 
 test.describe("blog (other works)", () => {
-  const marker = uniqueMarker("blog");
+  // Fresh per test and per retry attempt — both tests here create posts, so
+  // a shared marker would make one test's row match the other's locators.
+  let marker: string;
+  test.beforeEach(() => {
+    marker = uniqueMarker("blog");
+  });
 
   test.afterEach(async ({ page }) => {
     await deleteItemsMatching(page, "Other works", marker);
@@ -267,7 +278,10 @@ test.describe("blog (other works)", () => {
 });
 
 test.describe("photography", () => {
-  const marker = uniqueMarker("photo");
+  let marker: string;
+  test.beforeEach(() => {
+    marker = uniqueMarker("photo");
+  });
 
   test.afterEach(async ({ page }) => {
     await deleteItemsMatching(page, "Photography", marker);
