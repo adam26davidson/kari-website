@@ -1,5 +1,6 @@
 import "./other-works-item.css";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { BlogService } from "../../../../services/blog";
 import { BlogPost as BlogPostData } from "../../../../Models";
 
@@ -28,7 +29,11 @@ export function OtherWorksItem({ id }: { id: string }) {
     <>
       {!isLoading && (
         <div className="other-works-item">
-          <h1>{post?.title}</h1>
+          <h1>
+            <Link className="other-works-item-title-link" to={`/blog/${id}`}>
+              {post?.title}
+            </Link>
+          </h1>
           <div className="other-works-date">
             {new Date(post?.date || "").toLocaleDateString()}
           </div>

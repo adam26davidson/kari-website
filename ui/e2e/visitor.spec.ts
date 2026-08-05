@@ -5,8 +5,8 @@ import { TEST_S3_URL } from "./helpers";
 // the local S3 by e2e/seed.mjs. Assertions are deliberately loose — "at
 // least one item renders" — so seeds can evolve without breaking specs.
 //
-// Note: the public list of blog posts is the "Other works" page; the
-// blog-list component is not currently routed in App.tsx.
+// Note: the public list of blog posts is the "Other works" page; each
+// post's title links to its own page at /blog/:id.
 
 test("home page renders the photo and a non-empty blurb", async ({ page }) => {
   await page.goto("/");
@@ -57,6 +57,22 @@ test("other works (blog) page renders at least one published post", async ({
   const title = post.locator("h1");
   await expect(title).toBeVisible();
   expect((await title.innerText()).trim().length).toBeGreaterThan(0);
+});
+
+test("clicking a post on the other works page opens its /blog/:id page", async ({
+  page,
+}) => {
+  await page.goto("/other-works");
+  const title = page.locator(".other-works-item h1 a").first();
+  await expect(title).toBeVisible();
+  const titleText = (await title.innerText()).trim();
+  await title.click();
+  await expect(page).toHaveURL(/\/blog\/.+/);
+  const post = page.locator(".other-works-item").first();
+  await expect(post.locator("h1")).toHaveText(titleText);
+  const content = post.locator(".other-works-item-content");
+  await expect(content).toBeVisible();
+  expect((await content.innerText()).trim().length).toBeGreaterThan(0);
 });
 
 test("photography page renders at least one seeded post", async ({ page }) => {
