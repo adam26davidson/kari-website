@@ -44,8 +44,10 @@ jobs:
         run: npm run build
 
   frontend-e2e:
-    name: Frontend (Playwright smoke)
+    name: Frontend (Playwright e2e)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: ui
@@ -62,11 +64,72 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: api
+
+      # The e2e stack is fully local and hermetic: a throwaway MinIO stands
+      # in for S3 (seeded with fixture content by ui/e2e/seed.mjs), and the
+      # real API runs on localhost:3000 against it. No AWS account or shared
+      # bucket is involved, so runs can't be broken by drifting bucket data.
+      - name: Start local S3 (MinIO)
+        run: |
+          docker run -d --rm --name kari-e2e-s3 -p 9000:9000 \
+            -e MINIO_ROOT_USER=kari-e2e \
+            -e MINIO_ROOT_PASSWORD=kari-e2e-secret \
+            minio/minio server /data
+
+      # Create + seed the bucket before the API starts: its /health probes
+      # S3 read/write, so the bucket must exist first. (npm run test:e2e
+      # re-seeds, which is idempotent.)
+      - name: Seed local S3
+        run: node e2e/seed.mjs
+
+      - name: Build API
+        working-directory: api
+        run: cargo build
+
+      - name: Start API
+        working-directory: api
+        env:
+          BUCKET_NAME: kari-e2e
+          AWS_ENDPOINT_URL: http://localhost:9000
+          AWS_REGION: us-east-1
+          # Local MinIO credentials (match the docker run above) — not secrets.
+          AWS_ACCESS_KEY_ID: kari-e2e
+          AWS_SECRET_ACCESS_KEY: kari-e2e-secret
+        run: |
+          PORT=3000 nohup cargo run > api.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000/health > /dev/null; then
+              echo "API is healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API never became healthy" >&2
+          cat api.log >&2
+          exit 1
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Run smoke tests
+      - name: Run e2e tests
         run: npm run test:e2e
+        env:
+          # Test-tenant Auth0 credentials enable the admin journey specs;
+          # without them only the visitor/smoke suites run.
+          E2E_AUTH0_USERNAME: ${{ secrets.E2E_AUTH0_USERNAME }}
+          E2E_AUTH0_PASSWORD: ${{ secrets.E2E_AUTH0_PASSWORD }}
+
+      - name: Show API log
+        if: ${{ !cancelled() }}
+        working-directory: api
+        run: cat api.log || true
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}

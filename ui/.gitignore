@@ -28,3 +28,7 @@ playwright/.cache
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright e2e artifacts
+e2e/.auth
+e2e/fixtures

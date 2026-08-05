@@ -14,7 +14,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - UI: `npm run test` - Vitest in watch mode
 - UI: `npm run test:run` - Vitest once (used in CI)
 - UI: `npm run test:coverage` - Vitest with coverage
-- UI: `npm run test:e2e` - Playwright smoke tests (builds + previews the app)
+- UI: `npm run test:e2e` - Playwright e2e tests (seeds a local S3, builds the
+  test-mode bundle, previews it, and runs smoke + visitor journeys; admin
+  journeys additionally run when `E2E_AUTH0_USERNAME` / `E2E_AUTH0_PASSWORD`
+  are set, as they are in CI). The stack is fully local and hermetic — no
+  AWS account or shared bucket. Two things must be running:
+  1. a throwaway MinIO standing in for S3:
+     `docker run -d --rm --name kari-e2e-s3 -p 9000:9000 -e MINIO_ROOT_USER=kari-e2e -e MINIO_ROOT_PASSWORD=kari-e2e-secret minio/minio server /data`
+  2. the API on localhost:3000: `cargo run` in `api/` (its `.env` already
+     targets the local MinIO; run `node e2e/seed.mjs` in `ui/` first so the
+     bucket exists for the API's health probe)
+  CI starts both itself; `ui/e2e/seed.mjs` (re-run on every `test:e2e`)
+  seeds deterministic fixture content, so results never depend on what
+  happens to be in a real bucket
 - API: `cargo test` - Run Rust integration tests
 - API: `cargo llvm-cov --summary-only` - Coverage report (needs cargo-llvm-cov)
 - API: `cargo clippy --all-targets -- -D warnings` - Lint (CI enforces no warnings)

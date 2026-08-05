@@ -24,9 +24,16 @@ async fn main() {
         )
         .init();
 
-    // Initialize AWS SDK
+    // Initialize AWS SDK. aws-config picks up AWS_ENDPOINT_URL from the
+    // environment, which the e2e stack uses to point at a local MinIO; a
+    // custom endpoint also needs path-style addressing, since
+    // virtual-host-style would resolve "<bucket>.localhost".
     let sdk_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
-    let s3_client = Client::new(&sdk_config);
+    let mut s3_config = aws_sdk_s3::config::Builder::from(&sdk_config);
+    if std::env::var("AWS_ENDPOINT_URL").is_ok() {
+        s3_config = s3_config.force_path_style(true);
+    }
+    let s3_client = Client::from_conf(s3_config.build());
 
     // Get bucket name from environment
     let bucket_name = std::env::var("BUCKET_NAME").expect("BUCKET_NAME not set");
