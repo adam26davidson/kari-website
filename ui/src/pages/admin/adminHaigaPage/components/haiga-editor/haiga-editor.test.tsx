@@ -6,7 +6,7 @@ import { Haiga } from "../../../../../Models";
 
 const haiga: Haiga = {
   id: "g1",
-  lines: [],
+  lines: ["line one", "line two", "line three"],
   image: "",
   publisher: "kari",
 };
@@ -44,6 +44,23 @@ function iconButton(container: HTMLElement, icon: string): HTMLElement {
 }
 
 describe("HaigaEditor", () => {
+  it("shows the haiga lines joined into the textarea", () => {
+    renderEditor();
+    const textArea = screen.getByPlaceholderText(/line 1/);
+    expect(textArea).toHaveValue("line one\nline two\nline three");
+  });
+
+  it("splits textarea edits back into lines", () => {
+    const { setHaiga } = renderEditor();
+    fireEvent.change(screen.getByPlaceholderText(/line 1/), {
+      target: { value: "a\nb\nc" },
+    });
+    expect(setHaiga).toHaveBeenCalledWith({
+      ...haiga,
+      lines: ["a", "b", "c"],
+    });
+  });
+
   it("updates the publisher while keeping the rest of the haiga", () => {
     const { setHaiga } = renderEditor();
     fireEvent.change(screen.getByPlaceholderText("Publisher"), {

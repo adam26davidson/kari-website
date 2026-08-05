@@ -32,6 +32,16 @@ export function HaigaEditor({
           fileName={haiga.image}
           setImageFile={setImageFile}
         />
+        <textarea
+          value={haiga.lines.join("\n")}
+          placeholder={"line 1\nline 2\nline 3"}
+          onChange={(e) =>
+            setHaiga({
+              ...haiga,
+              lines: e.target.value.split("\n"),
+            })
+          }
+        />
         <input
           type="text"
           placeholder="Publisher"
