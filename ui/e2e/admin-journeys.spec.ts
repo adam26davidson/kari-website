@@ -164,7 +164,7 @@ test.describe("blog (other works)", () => {
   }) => {
     await openAdminSection(page, "Other works");
     await createNewItem(page);
-    await page.getByPlaceholder("Title").fill(marker);
+    await page.getByPlaceholder("Title", { exact: true }).fill(marker);
     // Leave "Published" unchecked: this is a draft.
     await expect(
       page.locator(".blog-post-editor-status-checkbox"),
@@ -182,8 +182,10 @@ test.describe("blog (other works)", () => {
     );
     await page.goto("/other-works");
     await blogJson;
-    // Seeded published posts render, our draft does not.
-    await expect(page.locator(".other-works-item").first()).toBeVisible();
+    // The list rendered (the test bucket may have no published posts, so
+    // assert the container rather than another post's item); our draft is
+    // not in it.
+    await expect(page.locator(".data-list")).toBeVisible();
     await expect(page.getByText(marker)).toHaveCount(0);
 
     // Cleanup happens in afterEach.
@@ -196,7 +198,7 @@ test.describe("blog (other works)", () => {
 
     // Create a draft with rich-text content and an embedded image.
     await createNewItem(page);
-    await page.getByPlaceholder("Title").fill(marker);
+    await page.getByPlaceholder("Title", { exact: true }).fill(marker);
     const prose = page.locator(".tiptap-container .ProseMirror");
     await prose.click();
     await page.keyboard.type(`Body ${marker} content`);
@@ -259,7 +261,7 @@ test.describe("blog (other works)", () => {
     );
     await page.goto("/other-works");
     await blogJson;
-    await expect(page.locator(".other-works-item").first()).toBeVisible();
+    await expect(page.locator(".data-list")).toBeVisible();
     await expect(page.getByText(marker)).toHaveCount(0);
   });
 });
@@ -278,7 +280,7 @@ test.describe("photography", () => {
 
     // Create
     await createNewItem(page);
-    await page.getByPlaceholder("Title").fill(marker);
+    await page.getByPlaceholder("Title", { exact: true }).fill(marker);
     await page.getByPlaceholder("Subtitle").fill("e2e subtitle");
     await page.getByPlaceholder("Optional blurb").fill("e2e blurb");
 
