@@ -1,10 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { TEST_S3_URL } from "./helpers";
 
-// Visitor journeys: the public pages render real seeded content from the
-// test S3 bucket (kept in sync with production via
-// scripts/sync_s3_prod_to_test.sh). Assertions are deliberately loose —
-// "at least one item renders" — never tied to exact synced text.
+// Visitor journeys: the public pages render the fixture content seeded into
+// the local S3 by e2e/seed.mjs. Assertions are deliberately loose — "at
+// least one item renders" — so seeds can evolve without breaking specs.
 //
 // Note: the public list of blog posts is the "Other works" page; the
 // blog-list component is not currently routed in App.tsx.

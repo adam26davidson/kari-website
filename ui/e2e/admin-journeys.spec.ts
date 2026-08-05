@@ -12,8 +12,8 @@ import {
   waitForIdle,
 } from "./helpers";
 
-// Admin journeys: real create/edit/delete flows against the shared test
-// environment (the API on localhost:3000 backed by the test S3 bucket),
+// Admin journeys: real create/edit/delete flows against the local e2e stack
+// (the API on localhost:3000 backed by the seeded local MinIO),
 // authenticated via the storageState captured in auth.setup.ts.
 //
 // These tests mutate shared state, so:

@@ -13,8 +13,8 @@ import { TEST_API_URL } from "./helpers";
 /**
  * The API runs on localhost (the CI job starts it before Playwright; for
  * local runs you start it yourself). Fail fast with a clear message if it
- * isn't up — /health also probes S3 read/write, so this catches missing or
- * expired AWS credentials too.
+ * isn't up — /health also probes S3 read/write, so this catches a missing
+ * or unseeded local MinIO too.
  */
 async function checkApiIsUp(request: APIRequestContext) {
   const deadline = Date.now() + 30_000;
@@ -37,8 +37,8 @@ async function checkApiIsUp(request: APIRequestContext) {
   }
   throw new Error(
     `API at ${TEST_API_URL} is not healthy (${lastError}). ` +
-      "For local runs, start the API first: `aws sso login`, then " +
-      "`cargo run` in api/ (its .env already targets the test bucket).",
+      "For local runs, start the local MinIO (see ui/e2e/seed.mjs) and " +
+      "then `cargo run` in api/ (its .env already targets it).",
   );
 }
 
