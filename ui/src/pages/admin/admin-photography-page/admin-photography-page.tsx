@@ -79,22 +79,25 @@ export function AdminPhotographyPage({
       console.error("Post not found");
       return;
     }
+
+    // Save the shortened list first — if this fails the post stays
+    // fully intact and referenced.
+    const newList = postList.slice();
+    newList.splice(idx, 1);
+    if (!(await savePostList(newList, "Photography post deleted"))) return;
+
+    // The saved list no longer references these images; a failed delete
+    // just leaves an orphan for later cleanup.
     setLoading({
       isLoading: true,
       message: "Deleting post images...",
     });
-
-    // delete images; a missing image should not block deleting the post
     for (const image of postToDelete.images) {
       await ImageService.delete(image.image, getAccessTokenSilently).catch(
         console.error,
       );
     }
-
-    // delete the post from the list
-    const newList = postList.slice();
-    newList.splice(idx, 1);
-    await savePostList(newList, "Photography post deleted");
+    setLoading({ isLoading: false, message: "" });
   };
 
   // List display functions ---------------------------------------------------
@@ -169,52 +172,37 @@ export function AdminPhotographyPage({
 
     const originalPost = copyPhotographyPost(newPostList[idx]);
 
+    // Upload images in the new post that are not in the original,
+    // building fresh image objects instead of mutating the open post's
+    // React state in place. Nothing is deleted yet — images removed from
+    // the post are only deleted after the list save has succeeded, so a
+    // failure at any step leaves the published post intact.
+    const editedPost = copyPhotographyPost(openPost);
     try {
-      // delete images that are in the original but not in the new
-      setLoading({
-        isLoading: true,
-        message: "Deleting images...",
-      });
-      for (let i = 0; i < originalPost.images.length; i++) {
-        const originalImage = originalPost.images[i].image;
-        const newImage = Array.from(openPost.images).find((img) => {
-          return img.image === originalImage;
-        });
-        if (!newImage) {
-          // image is in original but not in new; a missing image should not
-          // block saving the post
-          await ImageService.delete(
-            originalImage,
-            getAccessTokenSilently,
-          ).catch(console.error);
-        }
-      }
-
-      //upload images in new that are not in original
       setLoading({
         isLoading: true,
         message: "Uploading images...",
       });
+      editedPost.images = [];
       for (let i = 0; i < openPost.images.length; i++) {
-        const newImage = openPost.images[i];
-        const originalImage = Array.from(originalPost.images).find((img) => {
+        const newImage = { ...openPost.images[i] };
+        const isInOriginal = originalPost.images.some((img) => {
           return img.image === newImage.image;
         });
-        if (!originalImage) {
-          //image was not in original and must be added
-          const imageFile = imageFiles[i];
-          if (imageFile) {
-            const fileName = await ImageService.upload(
-              imageFile,
-              true,
-              getAccessTokenSilently,
-            );
-            if (!fileName) {
-              throw new Error("Failed to upload image");
-            }
-            newImage.image = fileName;
+        const imageFile = imageFiles[i];
+        if (!isInOriginal && imageFile) {
+          // image was not in original and must be added
+          const fileName = await ImageService.upload(
+            imageFile,
+            true,
+            getAccessTokenSilently,
+          );
+          if (!fileName) {
+            throw new Error("Failed to upload image");
           }
+          newImage.image = fileName;
         }
+        editedPost.images.push(newImage);
       }
     } catch (error) {
       console.error(error);
@@ -224,10 +212,28 @@ export function AdminPhotographyPage({
     }
 
     // save the post list
-    newPostList[idx] = copyPhotographyPost(openPost);
-    if (await savePostList(newPostList, "Photography post saved")) {
-      setOpenPost(null);
+    newPostList[idx] = editedPost;
+    if (!(await savePostList(newPostList, "Photography post saved"))) return;
+    setOpenPost(null);
+
+    // The saved list no longer references images that were removed from
+    // the post; a failed delete just leaves an orphan for later cleanup.
+    setLoading({
+      isLoading: true,
+      message: "Deleting images...",
+    });
+    for (const originalImage of originalPost.images) {
+      const stillReferenced = editedPost.images.some((img) => {
+        return img.image === originalImage.image;
+      });
+      if (originalImage.image && !stillReferenced) {
+        await ImageService.delete(
+          originalImage.image,
+          getAccessTokenSilently,
+        ).catch(console.error);
+      }
     }
+    setLoading({ isLoading: false, message: "" });
   };
 
   const closeOpenPost = () => {
