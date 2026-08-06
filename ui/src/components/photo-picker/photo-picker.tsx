@@ -1,6 +1,6 @@
 import { faArrowPointer } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { useId } from "react";
+import { useEffect, useId, useState } from "react";
 import "./photo-picker.css";
 import { AdminButton } from "../admin-button/admin-button";
 
@@ -16,6 +16,21 @@ export function PhotoPicker({
   setImageFile: (file: File | null) => void;
 }) {
   const inputId = useId();
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!imageFile) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(imageFile);
+    setPreviewUrl(url);
+    return () => {
+      // Optional call: jsdom (used by some page-level tests) implements
+      // neither createObjectURL nor revokeObjectURL; browsers have both.
+      URL.revokeObjectURL?.(url);
+    };
+  }, [imageFile]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -35,15 +50,11 @@ export function PhotoPicker({
         onChange={handleFileSelect}
         hidden
       />
-      {(imageFile || fileName !== "") && (
+      {(previewUrl || fileName !== "") && (
         <div className="photo-picker-selection">
           {/* <span>{imageFile ? imageFile.name : "Uploaded image"}</span> */}
           <img
-            src={
-              imageFile
-                ? URL.createObjectURL(imageFile)
-                : `${API_IMAGE_URL}/${fileName}`
-            }
+            src={previewUrl ?? `${API_IMAGE_URL}/${fileName}`}
             alt="Selected"
             className="photo-picker-image"
           />
