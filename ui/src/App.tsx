@@ -1,17 +1,45 @@
 import Header from "./components/header/header";
 import "./App.css";
 import { Navigate, Route, Routes } from "react-router-dom";
-import Home from "./pages/homePage/homePage";
-import { HaikuPage } from "./pages/haikuPage/haikuPage";
-import { HaigaPage } from "./pages/haigaPage/haigaPage";
-import Admin from "./pages/admin/admin";
 import { useIsMobile } from "./hooks/isMobile";
 import { MobileMenu } from "./components/mobileMenu/mobileMenu";
-import { useState } from "react";
-import { OtherWorksPage } from "./pages/other-works/other-works-page";
-import { BlogPostPage } from "./pages/blog-post/blog-post-page";
-import { PhotographyPage } from "./pages/photography-page/photography-page";
+import { lazy, Suspense, useState } from "react";
 import { ErrorBoundary } from "./components/error-boundary/error-boundary";
+
+// Route-level code splitting: each page loads as its own chunk, so
+// visitors never download the admin section (and its tiptap editor
+// stack) unless they navigate to /admin.
+const Home = lazy(() => import("./pages/homePage/homePage"));
+const HaikuPage = lazy(() =>
+  import("./pages/haikuPage/haikuPage").then((m) => ({
+    default: m.HaikuPage,
+  })),
+);
+const HaigaPage = lazy(() =>
+  import("./pages/haigaPage/haigaPage").then((m) => ({
+    default: m.HaigaPage,
+  })),
+);
+const OtherWorksPage = lazy(() =>
+  import("./pages/other-works/other-works-page").then((m) => ({
+    default: m.OtherWorksPage,
+  })),
+);
+const BlogPostPage = lazy(() =>
+  import("./pages/blog-post/blog-post-page").then((m) => ({
+    default: m.BlogPostPage,
+  })),
+);
+const PhotographyPage = lazy(() =>
+  import("./pages/photography-page/photography-page").then((m) => ({
+    default: m.PhotographyPage,
+  })),
+);
+const Admin = lazy(() => import("./pages/admin/admin"));
+
+function RouteFallback() {
+  return <div className="route-loading">Loading...</div>;
+}
 
 function App() {
   const [showingMobileMobileMenu, setShowingMobileMenu] = useState(false);
@@ -29,19 +57,21 @@ function App() {
           )}
           {!showingMobileMobileMenu && (
             <ErrorBoundary>
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="haiku" element={<HaikuPage />} />
-                <Route path="haiga" element={<HaigaPage />} />
-                <Route path="other-works" element={<OtherWorksPage />} />
-                <Route
-                  path="blog"
-                  element={<Navigate to="/other-works" replace />}
-                />
-                <Route path="blog/:id" element={<BlogPostPage />} />
-                <Route path="admin" element={<Admin />} />
-                <Route path="photography" element={<PhotographyPage />} />
-              </Routes>
+              <Suspense fallback={<RouteFallback />}>
+                <Routes>
+                  <Route path="/" element={<Home />} />
+                  <Route path="haiku" element={<HaikuPage />} />
+                  <Route path="haiga" element={<HaigaPage />} />
+                  <Route path="other-works" element={<OtherWorksPage />} />
+                  <Route
+                    path="blog"
+                    element={<Navigate to="/other-works" replace />}
+                  />
+                  <Route path="blog/:id" element={<BlogPostPage />} />
+                  <Route path="admin" element={<Admin />} />
+                  <Route path="photography" element={<PhotographyPage />} />
+                </Routes>
+              </Suspense>
             </ErrorBoundary>
           )}
         </div>
