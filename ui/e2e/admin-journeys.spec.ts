@@ -288,9 +288,13 @@ test.describe("blog (other works)", () => {
     });
     await expect(adminListItem(page, marker)).toContainText("Published");
 
-    // Public page shows the post, its edited content, and the image now
-    // published to S3.
+    // Public list shows the post's summary; its /blog/:id permalink shows
+    // the edited content and the image now published to S3.
     await page.goto("/other-works");
+    const summary = page.locator(".blog-post-summary", { hasText: marker });
+    await expect(summary).toBeVisible();
+    await summary.locator("a.title-link").click();
+    await expect(page).toHaveURL(/\/blog\/.+/);
     const publicPost = page.locator(".other-works-item", { hasText: marker });
     await expect(publicPost.locator("h1", { hasText: marker })).toBeVisible();
     await expect(publicPost).toContainText("EDITED");
