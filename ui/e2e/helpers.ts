@@ -79,16 +79,40 @@ export type AdminSection =
   | "Photography"
   | "Other works";
 
+/** The API endpoint each admin section fetches its list from on mount. */
+const SECTION_LIST_ENDPOINT: Record<AdminSection, string> = {
+  Home: "/home-page",
+  Haiku: "/haiku",
+  Haiga: "/haiga",
+  Photography: "/photography",
+  "Other works": "/blog",
+};
+
 /**
  * Open /admin (already authenticated via storageState) and switch to the
  * given section, waiting for its list to finish loading.
  */
 export async function openAdminSection(page: Page, section: AdminSection) {
+  // The "Loading..." overlay only appears after the section component's
+  // mount effect runs, so waitForIdle alone can pass before loading has
+  // even started — leaving the list at its initial empty state and letting
+  // cleanup miss rows that exist but haven't rendered yet. The section's
+  // list fetch is a positive signal that the load actually happened: once
+  // its response arrives, the overlay is up and is hidden in the same
+  // React commit that populates the list. Registered before goto so a
+  // fast response is never missed (Home fetches on initial mount).
+  const listLoaded = page.waitForResponse(
+    (r) =>
+      r.url() === TEST_API_URL + SECTION_LIST_ENDPOINT[section] &&
+      r.request().method() === "GET",
+    { timeout: 60_000 },
+  );
   await page.goto("/admin");
   const menuItem = page.locator(".admin-menu-item", { hasText: section });
   // First load after login can wait on Auth0 checkSession + the test API.
   await expect(menuItem).toBeVisible({ timeout: 60_000 });
   await menuItem.click();
+  await listLoaded;
   await waitForIdle(page);
 }
 
