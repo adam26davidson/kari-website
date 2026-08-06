@@ -24,6 +24,39 @@ describe("Home", () => {
     vi.restoreAllMocks();
   });
 
+  it("shows the loading state on first paint, with no content or image", () => {
+    // Fetch never settles, freezing the component in its initial state.
+    vi.mocked(fetch).mockReturnValueOnce(new Promise(() => {}));
+
+    render(<Home />);
+    expect(screen.getByText("Loading...")).toBeInTheDocument();
+    expect(document.querySelector("img")).not.toBeInTheDocument();
+  });
+
+  it("never renders an image with an empty filename", async () => {
+    mockFetchOnceWith({
+      ok: true,
+      json: async () => ({ photo: "", blurb: "No photo yet" }),
+    });
+
+    render(<Home />);
+    expect(await screen.findByText("No photo yet")).toBeInTheDocument();
+    expect(document.querySelector("img")).not.toBeInTheDocument();
+  });
+
+  it("renders the photo from the images path after a successful fetch", async () => {
+    mockFetchOnceWith({
+      ok: true,
+      json: async () => homePageData,
+    });
+
+    render(<Home />);
+    await screen.findByText("Welcome to the site");
+    const img = document.querySelector("img");
+    expect(img).toBeInTheDocument();
+    expect(img?.src).toMatch(/\/images\/kari\.jpg$/);
+  });
+
   it("renders the blurb after a successful fetch", async () => {
     mockFetchOnceWith({
       ok: true,
