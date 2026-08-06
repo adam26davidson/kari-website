@@ -1,35 +1,40 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useIsMobile } from "../../hooks/isMobile";
 import "./homePage.css";
 import { HomePageData } from "../../Models";
+import { LoadError } from "../../components/load-error/load-error";
 
 const S3_URL = import.meta.env.VITE_S3_URL;
 
 function Home() {
   const isMobile = useIsMobile();
   const [isLoading, setIsLoading] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [homePageData, setHomePageData] = useState<HomePageData>({
     photo: "",
     blurb: "",
   });
 
-  useEffect(() => {
-    // get haiku from s3
-    const fetchData = async () => {
-      setIsLoading(true);
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    setLoadFailed(false);
+    try {
       const response = await fetch(`${S3_URL}/home-page.json`);
       if (!response.ok) {
-        console.error("Failed to fetch home page data", response.status);
-        console.error("error", response);
-        return;
+        throw new Error(`Failed to fetch home page data: ${response.status}`);
       }
-      const data = await response.json();
-      console.log(data);
-      setHomePageData(data);
+      setHomePageData(await response.json());
+    } catch (error) {
+      console.error(error);
+      setLoadFailed(true);
+    } finally {
       setIsLoading(false);
-    };
-    fetchData();
+    }
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   return (
     <div
@@ -44,7 +49,10 @@ function Home() {
       }}
     >
       {isLoading && <div>Loading...</div>}
-      {!isLoading && (
+      {!isLoading && loadFailed && (
+        <LoadError message="Failed to load home page." onRetry={load} />
+      )}
+      {!isLoading && !loadFailed && (
         <div
           style={{
             backgroundColor: "rgba(226, 226, 226, 0.8)",
