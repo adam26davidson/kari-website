@@ -170,20 +170,17 @@ function AdminHaigaPage({
 
   const saveOpenHaiga = async () => {
     if (!openHaiga) return;
-    let fileName = openHaiga.image;
+    const previousFileName = openHaiga.image;
+    let fileName = previousFileName;
     if (imageFile) {
       try {
-        // delete the old image if it exists
-        if (openHaiga.image) {
-          await deleteImage(openHaiga.image);
-        }
-
-        // upload the new image
+        // Upload the replacement first — the old image is only deleted
+        // after the whole save has succeeded, so a failure at any step
+        // leaves the published haiga intact.
         const newFileName = await uploadImage(imageFile);
         if (!newFileName) {
           throw new Error("Failed to upload image");
         }
-        openHaiga.image = newFileName;
         fileName = newFileName;
       } catch (error) {
         console.error(error);
@@ -199,7 +196,15 @@ function AdminHaigaPage({
       return;
     }
     newDataList[idx] = editedHaiga;
-    await saveHaigaList(newDataList, "Haiga saved");
+    if (await saveHaigaList(newDataList, "Haiga saved")) {
+      setOpenHaiga(editedHaiga);
+      setImageFile(null);
+      // The save succeeded, so nothing references the old image anymore;
+      // a failed delete just leaves an orphan for later cleanup.
+      if (previousFileName && previousFileName !== fileName) {
+        await deleteImage(previousFileName).catch(console.error);
+      }
+    }
   };
 
   const openHaigaIsValid = () => {

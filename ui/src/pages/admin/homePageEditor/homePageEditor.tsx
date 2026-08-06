@@ -73,17 +73,11 @@ export function HomePageEditor({
     });
     try {
       const newHomePageData = { ...homePageData };
+      const previousPhoto = homePageData.photo;
       if (imageFile) {
-        // delete the old image if it exists; a missing image should not
-        // block saving
-        if (homePageData.photo) {
-          await ImageService.delete(
-            homePageData.photo,
-            getAccessTokenSilently,
-          ).catch(console.error);
-        }
-
-        // upload the new image
+        // Upload the replacement first — the old photo is only deleted
+        // after the JSON save has succeeded, so a failure at any step
+        // leaves the published home page intact.
         const newFileName = await ImageService.upload(
           imageFile,
           true,
@@ -93,7 +87,6 @@ export function HomePageEditor({
           throw new Error("Failed to upload image");
         }
         newHomePageData.photo = newFileName;
-        setHomePageData(newHomePageData);
       }
 
       const token = await getAccessTokenSilently();
@@ -108,6 +101,15 @@ export function HomePageEditor({
       if (!response.ok) {
         throw new Error(
           `Failed to save home page data (HTTP ${response.status})`,
+        );
+      }
+      setHomePageData(newHomePageData);
+      setImageFile(null);
+      // The save succeeded, so nothing references the old photo anymore;
+      // a failed delete just leaves an orphan for later cleanup.
+      if (previousPhoto && previousPhoto !== newHomePageData.photo) {
+        await ImageService.delete(previousPhoto, getAccessTokenSilently).catch(
+          console.error,
         );
       }
       notify("Home page saved");
