@@ -52,9 +52,9 @@ test("other works (blog) page renders at least one published post", async ({
   page,
 }) => {
   await page.goto("/other-works");
-  const post = page.locator(".other-works-item").first();
+  const post = page.locator(".blog-post-summary").first();
   await expect(post).toBeVisible();
-  const title = post.locator("h1");
+  const title = post.locator("a.title-link");
   await expect(title).toBeVisible();
   expect((await title.innerText()).trim().length).toBeGreaterThan(0);
 });
@@ -63,7 +63,7 @@ test("clicking a post on the other works page opens its /blog/:id page", async (
   page,
 }) => {
   await page.goto("/other-works");
-  const title = page.locator(".other-works-item h1 a").first();
+  const title = page.locator(".blog-post-summary a.title-link").first();
   await expect(title).toBeVisible();
   const titleText = (await title.innerText()).trim();
   await title.click();

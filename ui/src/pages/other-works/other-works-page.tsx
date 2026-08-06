@@ -4,14 +4,16 @@ import DataList from "../../components/dataList/dataList";
 import DataListItem from "../../components/dataListItem/dataListItem";
 import { ContentPage } from "../../components/content-page/content-page";
 import { BlogService } from "../../services/blog";
-import { OtherWorksItem } from "./components/other-works-item/other-works-item";
+import { BlogPostSummary } from "../../components/blog-post-summary/blog-post-summary";
 
+// Public list of blog posts. Renders one summary per published post, each
+// linking to its /blog/:id permalink; full post content is only fetched on
+// that detail page, so this page does a single list fetch total.
 export function OtherWorksPage() {
   const [posts, setPosts] = useState<Array<BlogPost>>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    // get haiku from s3
     const getOtherWorks = async () => {
       setIsLoading(true);
       const newPosts = await BlogService.getPublicListFromS3();
@@ -31,7 +33,12 @@ export function OtherWorksPage() {
             isLast={idx === posts.length - 1}
             isFirst={idx === 0}
           >
-            <OtherWorksItem id={post.id} />
+            <BlogPostSummary
+              post={post}
+              showPublished={false}
+              isAdmin={false}
+              onClick={() => {}}
+            />
           </DataListItem>
         ))}
       </DataList>

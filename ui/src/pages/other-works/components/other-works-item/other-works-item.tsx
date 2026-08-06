@@ -10,14 +10,11 @@ export function OtherWorksItem({ id }: { id: string }) {
   const [post, setPost] = useState<BlogPostData>();
 
   useEffect(() => {
-    // get haiku from s3
     const getOtherWorksItem = async () => {
       setIsLoading(true);
       const newContent = await BlogService.getSanitizedContentFromS3(id || "");
       const postList = await BlogService.getPublicListFromS3();
-      console.log(postList);
       const newPost = postList.find((p) => p.id === id);
-      console.log(newPost);
       setPost(newPost);
       setPostContent(newContent);
       setIsLoading(false);
