@@ -3,6 +3,7 @@ import {
   adminListItem,
   confirmDialog,
   deleteItemsMatching,
+  expectGoneFromPublicPage,
   iconButton,
   openAdminSection,
   pngFixturePath,
@@ -102,13 +103,12 @@ test.describe("haiku", () => {
     await expect(adminListItem(page, marker)).toHaveCount(0);
 
     // Gone from the public page too
-    const haikuJson = page.waitForResponse((r) =>
-      r.url().includes("haiku.json"),
-    );
-    await page.goto("/haiku");
-    await haikuJson;
-    await expect(page.locator(".haiku-list-line").first()).toBeVisible();
-    await expect(page.getByText(marker)).toHaveCount(0);
+    await expectGoneFromPublicPage(page, {
+      path: "/haiku",
+      json: "haiku.json",
+      marker,
+      readySelector: ".haiku-list-line",
+    });
   });
 });
 
@@ -187,13 +187,12 @@ test.describe("haiga", () => {
     await expect(adminListItem(page, marker)).toHaveCount(0);
 
     // Gone from the public page too
-    const haigaJson = page.waitForResponse((r) =>
-      r.url().includes("haiga.json"),
-    );
-    await page.goto("/haiga");
-    await haigaJson;
-    await expect(page.locator(".haiga-list-item-image").first()).toBeVisible();
-    await expect(page.getByText(marker)).toHaveCount(0);
+    await expectGoneFromPublicPage(page, {
+      path: "/haiga",
+      json: "haiga.json",
+      marker,
+      readySelector: ".haiga-list-item-image",
+    });
   });
 });
 
@@ -306,13 +305,12 @@ test.describe("blog (other works)", () => {
     await expect(adminListItem(page, marker)).toHaveCount(0);
 
     // Gone from the public list.
-    const blogJson = page.waitForResponse((r) =>
-      r.url().includes("blog-posts.json"),
-    );
-    await page.goto("/other-works");
-    await blogJson;
-    await expect(page.locator(".data-list")).toBeVisible();
-    await expect(page.getByText(marker)).toHaveCount(0);
+    await expectGoneFromPublicPage(page, {
+      path: "/other-works",
+      json: "blog-posts.json",
+      marker,
+      readySelector: ".data-list",
+    });
   });
 });
 
@@ -399,11 +397,10 @@ test.describe("photography", () => {
     await expect(adminListItem(page, marker)).toHaveCount(0);
 
     // Gone from the public page.
-    const photographyJson = page.waitForResponse((r) =>
-      r.url().includes("photography"),
-    );
-    await page.goto("/photography");
-    await photographyJson;
-    await expect(page.getByText(marker)).toHaveCount(0);
+    await expectGoneFromPublicPage(page, {
+      path: "/photography",
+      json: "photography",
+      marker,
+    });
   });
 });
