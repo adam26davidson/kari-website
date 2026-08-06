@@ -20,18 +20,18 @@ describe("DataList", () => {
   });
 
   it("shows an add button in admin mode that fires onNewItem", async () => {
-    const { container, onNewItem } = renderList(true);
+    const { onNewItem } = renderList(true);
 
-    const addButton = container.querySelector(".admin-icon-button");
-    expect(addButton).toBeInTheDocument();
-
-    await userEvent.click(addButton as HTMLElement);
+    const addButton = screen.getByRole("button", { name: "Add item" });
+    await userEvent.click(addButton);
     expect(onNewItem).toHaveBeenCalledOnce();
   });
 
   it("hides the add button outside admin mode", () => {
-    const { container } = renderList(false);
-    expect(container.querySelector(".admin-icon-button")).toBeNull();
+    renderList(false);
+    expect(
+      screen.queryByRole("button", { name: "Add item" }),
+    ).not.toBeInTheDocument();
   });
 
   it("separates items in the public view but not after the last", () => {

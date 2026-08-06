@@ -1,20 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import DataListItem from "./dataListItem";
-
-function iconButton(container: HTMLElement, icon: string): HTMLElement {
-  const svg = container.querySelector(`svg[data-icon="${icon}"]`);
-  const button = svg?.closest(".admin-icon-button");
-  if (!(button instanceof HTMLElement)) {
-    throw new Error(`no icon button for "${icon}"`);
-  }
-  return button;
-}
-
-function hasIcon(container: HTMLElement, icon: string): boolean {
-  return container.querySelector(`svg[data-icon="${icon}"]`) !== null;
-}
 
 describe("DataListItem", () => {
   it("renders children without admin controls in the public view", () => {
@@ -32,7 +19,7 @@ describe("DataListItem", () => {
     const onMoveDown = vi.fn();
     const onDelete = vi.fn();
     const onEdit = vi.fn();
-    const { container } = render(
+    render(
       <DataListItem
         isAdmin={true}
         isFirst={false}
@@ -46,10 +33,10 @@ describe("DataListItem", () => {
       </DataListItem>,
     );
 
-    await userEvent.click(iconButton(container, "arrow-up"));
-    await userEvent.click(iconButton(container, "arrow-down"));
-    await userEvent.click(iconButton(container, "trash"));
-    await userEvent.click(iconButton(container, "pencil"));
+    await userEvent.click(screen.getByRole("button", { name: "Move up" }));
+    await userEvent.click(screen.getByRole("button", { name: "Move down" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: "Edit" }));
 
     expect(onMoveUp).toHaveBeenCalledOnce();
     expect(onMoveDown).toHaveBeenCalledOnce();
@@ -57,26 +44,54 @@ describe("DataListItem", () => {
     expect(onEdit).toHaveBeenCalledOnce();
   });
 
-  it("hides move-up on the first item and move-down on the last", () => {
-    const { container: first } = render(
-      <DataListItem isAdmin={true} isFirst={true} isLast={false} />,
+  it("supports keyboard activation of the admin controls", async () => {
+    const onDelete = vi.fn();
+    render(
+      <DataListItem
+        isAdmin={true}
+        isFirst={true}
+        isLast={true}
+        onDelete={onDelete}
+      />,
     );
-    expect(hasIcon(first, "arrow-up")).toBe(false);
-    expect(hasIcon(first, "arrow-down")).toBe(true);
 
-    const { container: last } = render(
-      <DataListItem isAdmin={true} isFirst={false} isLast={true} />,
+    const deleteButton = screen.getByRole("button", { name: "Delete" });
+    await userEvent.tab();
+    expect(deleteButton).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    expect(onDelete).toHaveBeenCalledOnce();
+  });
+
+  it("hides move-up on the first item and move-down on the last", () => {
+    const first = within(
+      render(<DataListItem isAdmin={true} isFirst={true} isLast={false} />)
+        .container,
     );
-    expect(hasIcon(last, "arrow-up")).toBe(true);
-    expect(hasIcon(last, "arrow-down")).toBe(false);
+    expect(
+      first.queryByRole("button", { name: "Move up" }),
+    ).not.toBeInTheDocument();
+    expect(
+      first.getByRole("button", { name: "Move down" }),
+    ).toBeInTheDocument();
+
+    const last = within(
+      render(<DataListItem isAdmin={true} isFirst={false} isLast={true} />)
+        .container,
+    );
+    expect(last.getByRole("button", { name: "Move up" })).toBeInTheDocument();
+    expect(
+      last.queryByRole("button", { name: "Move down" }),
+    ).not.toBeInTheDocument();
   });
 
   it("hides the edit button when hideEdit is set", () => {
-    const { container } = render(
+    render(
       <DataListItem isAdmin={true} isFirst={true} isLast={true} hideEdit />,
     );
-    expect(hasIcon(container, "pencil")).toBe(false);
-    expect(hasIcon(container, "trash")).toBe(true);
+    expect(
+      screen.queryByRole("button", { name: "Edit" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
 
   it("applies the compact admin style when requested", () => {

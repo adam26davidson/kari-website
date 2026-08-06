@@ -52,7 +52,7 @@ export function pngFixturePath(): string {
 }
 
 // --- Admin UI helpers -------------------------------------------------------
-// The admin controls are icon-only divs (FontAwesome renders
+// The admin controls are icon-only buttons (FontAwesome renders
 // <svg data-icon="...">), so selectors go through the icon name.
 
 export function iconButton(scope: Page | Locator, icon: string): Locator {

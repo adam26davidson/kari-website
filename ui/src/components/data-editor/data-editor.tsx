@@ -21,13 +21,19 @@ export function DataEditor({
             type="button"
             className={`admin-icon-button${disableSave ? " disabled" : ""}`}
             disabled={disableSave}
+            aria-label="Save"
             onClick={onSave}
           >
             <FontAwesomeIcon icon={faFloppyDisk} />
           </button>
-          <div className="admin-icon-button" onClick={onClose}>
+          <button
+            type="button"
+            className="admin-icon-button"
+            aria-label="Close"
+            onClick={onClose}
+          >
             <FontAwesomeIcon icon={faClose} />
-          </div>
+          </button>
         </div>
         <div className="data-list-item-inputs">{children}</div>
       </div>
