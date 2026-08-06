@@ -7,6 +7,14 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
+    // Browser code: keep Node globals (process, Buffer, ...) out of the
+    // program even though @types/node is installed for configs/e2e, so
+    // accidental Node API usage in app code fails the build instead of
+    // crashing in the browser. Vite's client types still load via the ///
+    // reference in vite-env.d.ts. Test files are excluded below (checked by
+    // tsconfig.test.json instead) because importing vitest would pull Node
+    // types back in transitively.
+    "types": [],
 
     /* Bundler mode */
     "moduleResolution": "bundler",
@@ -23,5 +31,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test"]
 }
