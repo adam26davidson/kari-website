@@ -103,6 +103,39 @@ export function adminListItem(page: Page, marker: string): Locator {
 }
 
 /**
+ * Assert that `marker` no longer appears on a public page after an admin
+ * delete. The public pages read JSON published to the local S3, and right
+ * after a delete the browser can still serve the previous JSON (heuristic
+ * caching / propagation lag, seen as flaky "Expected: 0, Received: 1"
+ * failures in CI) — so reload until the marker is gone rather than
+ * asserting a single snapshot.
+ */
+export async function expectGoneFromPublicPage(
+  page: Page,
+  opts: {
+    /** Public route to load, e.g. "/haiku". */
+    path: string;
+    /** Substring of the published JSON URL to await, e.g. "haiku.json". */
+    json: string;
+    marker: string;
+    /** Optional selector that must render before the marker check. */
+    readySelector?: string;
+  },
+) {
+  await expect(async () => {
+    const json = page.waitForResponse((r) => r.url().includes(opts.json));
+    await page.goto(opts.path);
+    await json;
+    if (opts.readySelector) {
+      await expect(page.locator(opts.readySelector).first()).toBeVisible();
+    }
+    await expect(page.getByText(opts.marker)).toHaveCount(0, {
+      timeout: 2_000,
+    });
+  }).toPass({ timeout: 90_000, intervals: [1_000, 2_000, 5_000] });
+}
+
+/**
  * Delete every admin list row containing `marker` in `section`. Used by
  * afterEach cleanup so failed tests still leave the shared test bucket the
  * way they found it.
