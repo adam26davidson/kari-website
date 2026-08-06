@@ -37,6 +37,12 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # The e2e specs and playwright.config.ts are outside the build's
+      # tsconfigs (Playwright transpiles without checking), so type-check
+      # them explicitly.
+      - name: Typecheck e2e
+        run: npm run typecheck:e2e
+
       - name: Unit tests
         run: npm run test:run
 
