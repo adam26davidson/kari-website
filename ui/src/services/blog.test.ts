@@ -84,15 +84,17 @@ describe("BlogService.getPublicListFromS3", () => {
     expect(fetchMock).toHaveBeenCalledWith(S3_BLOG_LIST_URL);
   });
 
-  it("returns an empty array on a non-ok response", async () => {
+  it("throws on a non-ok response so pages can show an error state", async () => {
     mockFetchOnce({ ok: false, status: 404, json: async () => ({}) });
-    expect(await BlogService.getPublicListFromS3()).toEqual([]);
+    await expect(BlogService.getPublicListFromS3()).rejects.toThrow(
+      "Failed to fetch blog list (HTTP 404)",
+    );
   });
 
   it("logs the S3 fetch as the failure source, not the API", async () => {
     mockFetchOnce({ ok: false, status: 404, json: async () => ({}) });
 
-    await BlogService.getPublicListFromS3();
+    await expect(BlogService.getPublicListFromS3()).rejects.toThrow();
 
     expect(console.error).toHaveBeenCalledWith(
       "Failed to fetch blog from S3",
