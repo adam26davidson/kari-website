@@ -8,11 +8,11 @@ import "./index.css";
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <Auth0Provider
-      domain="dev-ivkddn8ec0pdwd5a.us.auth0.com"
-      clientId="gEuLXgSWSpVoqjJSv5gs5qb2a83Tz0JM"
+      domain={import.meta.env.VITE_AUTH0_DOMAIN}
+      clientId={import.meta.env.VITE_AUTH0_CLIENT_ID}
       authorizationParams={{
         redirect_uri: window.location.origin + "/admin",
-        audience: "https://api.karidavidson.com/",
+        audience: import.meta.env.VITE_AUTH0_AUDIENCE,
       }}
       // Test builds persist tokens to localStorage so Playwright can capture
       // an authenticated storageState once and reuse it across e2e tests.
