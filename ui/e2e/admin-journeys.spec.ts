@@ -11,6 +11,11 @@ import {
   uniqueMarker,
   waitForIdle,
 } from "./helpers";
+import {
+  HomePageSnapshot,
+  restoreHomePage,
+  snapshotHomePage,
+} from "./home-page-state";
 
 // Admin journeys: real create/edit/delete flows against the local e2e stack
 // (the API on localhost:3000 backed by the seeded local MinIO),
@@ -402,5 +407,67 @@ test.describe("photography", () => {
       json: "photography",
       marker,
     });
+  });
+});
+
+test.describe("home page", () => {
+  // The home page is a single shared document (home-page.json + one photo),
+  // not an append-only list, and saving a replacement photo deletes the old
+  // image object — so nothing done through the UI can undo a run. Instead
+  // the S3-visible state is snapshotted before each attempt and restored in
+  // afterEach (see e2e/home-page-state.ts), which runs even when the test
+  // fails midway and does not depend on the page still being alive.
+  let marker: string;
+  let snapshot: HomePageSnapshot | undefined;
+
+  test.beforeEach(async () => {
+    marker = uniqueMarker("home");
+    snapshot = await snapshotHomePage();
+  });
+
+  test.afterEach(async () => {
+    if (!snapshot) return;
+    await restoreHomePage(snapshot);
+    snapshot = undefined;
+  });
+
+  test("edit the blurb and photo, verify on the public home page, and restore", async ({
+    page,
+  }) => {
+    await openAdminSection(page, "Home");
+
+    // The editor loads the current data through the admin API; wait for the
+    // existing blurb so the save below can't race the initial fetch (saving
+    // an empty editor would overwrite the real data).
+    const blurb = page.locator(".home-page-editor textarea");
+    await expect(blurb).toBeVisible({ timeout: 60_000 });
+    await expect(blurb).not.toHaveValue("");
+
+    // Edit the blurb and pick a replacement photo.
+    await blurb.fill(`${marker} home blurb`);
+    await page
+      .locator('.photo-picker input[type="file"]')
+      .setInputFiles(pngFixturePath());
+    // The picked file previews in the photo picker.
+    await expect(page.locator(".photo-picker-image")).toBeVisible();
+
+    await page.locator(".admin-button", { hasText: "Save" }).click();
+    await expectToast(page, "Home page saved");
+    await waitForIdle(page, 120_000);
+
+    // Public home page shows the new blurb and the newly uploaded photo.
+    await page.goto("/");
+    await expect(page.getByText(`${marker} home blurb`)).toBeVisible();
+    const photo = page.locator(`img[src^="${TEST_S3_URL}/images/"]`);
+    await expect(photo).toBeVisible();
+    const src = await photo.getAttribute("src");
+    // Saving uploads under a freshly minted filename — the public page must
+    // now reference it, not the snapshot's photo.
+    expect(src).not.toBe(`${TEST_S3_URL}/images/${snapshot!.photo}`);
+    expect((await page.request.get(src!)).status()).toBe(200);
+
+    // afterEach restores the snapshot (blurb, photo reference, and the
+    // original image object) and verifies the restore — including when any
+    // assertion above failed.
   });
 });
