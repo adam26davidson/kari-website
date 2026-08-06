@@ -1,7 +1,6 @@
 import { test, expect, Page } from "@playwright/test";
 import {
   adminListItem,
-  adminListItems,
   confirmDialog,
   deleteItemsMatching,
   iconButton,
@@ -114,47 +113,87 @@ test.describe("haiku", () => {
 });
 
 test.describe("haiga", () => {
-  // A new haiga has no identifying text (the editor has no input for the
-  // haiku lines, see below), so cleanup works by list count: anything this
-  // test added beyond the initial count is removed from the end of the list
-  // (new items are appended).
-  test("create and delete a haiga", async ({ page }) => {
+  // A haiga's haiku lines live inside the artwork, so the editor has no
+  // text input for them — the marker goes in the Publisher field, which the
+  // admin list and the public page both render, making rows identifiable
+  // and cleanable by marker.
+  let marker: string;
+  test.beforeEach(() => {
+    marker = uniqueMarker("haiga");
+  });
+
+  test.afterEach(async ({ page }) => {
+    await deleteItemsMatching(page, "Haiga", marker);
+  });
+
+  test("create, edit, verify on public page, and delete a haiga", async ({
+    page,
+  }) => {
     await openAdminSection(page, "Haiga");
-    const items = adminListItems(page);
-    const initialCount = await items.count();
 
-    try {
-      // Create (persists an empty haiga to the list, then opens the editor)
-      await createNewItem(page);
-      await expect(page.getByText("Select Image")).toBeVisible();
+    // Create (persists an empty haiga to the list, then opens the editor).
+    // Saving is disabled until an image is picked — the image is the
+    // content of a haiga.
+    await createNewItem(page);
+    await expect(iconButton(editorControls(page), "floppy-disk")).toHaveClass(
+      /disabled/,
+    );
+    await page.getByPlaceholder("Publisher").fill(marker);
+    await page
+      .locator('.data-editor input[type="file"]')
+      .setInputFiles(pngFixturePath());
+    // The chosen image shows up in the photo picker as a preview.
+    await expect(page.locator(".photo-picker-image")).toBeVisible();
+    await saveEditor(page);
+    await expectToast(page, "Haiga saved");
+    await closeEditor(page);
+    const row = adminListItem(page, marker);
+    await expect(row).toBeVisible();
 
-      // KNOWN LIMITATION: the haiga editor has no input for the haiga's
-      // lines, but validation requires a non-empty first line — so for a
-      // freshly created haiga the save control is permanently disabled and
-      // an edit-and-save journey cannot be exercised through the UI.
-      // Asserted here so a future fix of the editor flags this test.
-      await expect(
-        iconButton(editorControls(page), "floppy-disk"),
-      ).toHaveClass(/disabled/);
+    // Edit: the publisher and the uploaded image persisted (the image is
+    // served through the API on the admin side).
+    await iconButton(row, "pencil").click();
+    const publisher = page.getByPlaceholder("Publisher");
+    await expect(publisher).toHaveValue(marker);
+    await expect(
+      page.locator('.photo-picker-image[src*="/images/"]'),
+    ).toBeVisible();
+    await publisher.fill(`${marker} edited`);
+    await saveEditor(page);
+    await expectToast(page, "Haiga saved");
+    await closeEditor(page);
+    await expect(adminListItem(page, marker)).toContainText(
+      `${marker} edited`,
+    );
 
-      await closeEditor(page);
-      await expect(items).toHaveCount(initialCount + 1);
+    // Verify on the public page: the haiga renders its S3-published image,
+    // with no haiku lines displayed as text (they live in the image).
+    await page.goto("/haiga");
+    const publicItem = page.locator(".haiga-list-item-content", {
+      hasText: marker,
+    });
+    await expect(publicItem).toBeVisible();
+    const publicImage = publicItem.locator(".haiga-list-item-image");
+    await expect(publicImage).toBeVisible();
+    const imageSrc = await publicImage.getAttribute("src");
+    expect(imageSrc).toContain(`${TEST_S3_URL}/images/`);
+    expect((await page.request.get(imageSrc!)).status()).toBe(200);
 
-      // Delete the item we just appended
-      await iconButton(items.last(), "trash").click();
-      await confirmDialog(page, "Yes");
-      await waitForIdle(page, 120_000);
-      await expect(items).toHaveCount(initialCount);
-    } finally {
-      // Cleanup for mid-test failures: drop any items beyond the initial
-      // count (bounded so a broken delete can't loop forever).
-      await openAdminSection(page, "Haiga");
-      for (let i = 0; i < 5 && (await items.count()) > initialCount; i++) {
-        await iconButton(items.last(), "trash").click();
-        await confirmDialog(page, "Yes");
-        await waitForIdle(page, 120_000);
-      }
-    }
+    // Delete (also removes the uploaded image)
+    await openAdminSection(page, "Haiga");
+    await iconButton(adminListItem(page, marker), "trash").click();
+    await confirmDialog(page, "Yes");
+    await waitForIdle(page, 120_000);
+    await expect(adminListItem(page, marker)).toHaveCount(0);
+
+    // Gone from the public page too
+    const haigaJson = page.waitForResponse((r) =>
+      r.url().includes("haiga.json"),
+    );
+    await page.goto("/haiga");
+    await haigaJson;
+    await expect(page.locator(".haiga-list-item-image").first()).toBeVisible();
+    await expect(page.getByText(marker)).toHaveCount(0);
   });
 });
 

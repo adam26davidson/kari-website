@@ -205,7 +205,10 @@ function AdminHaigaPage({
   const openHaigaIsValid = () => {
     if (!openHaiga) return false;
 
-    return openHaiga.lines.length > 0 && openHaiga.lines[0].length > 0;
+    // The artwork is the content — the haiku lines live inside the image
+    // itself, so an image (already saved or freshly picked) is all that's
+    // required.
+    return openHaiga.image.length > 0 || imageFile !== null;
   };
 
   if (loadFailed) {
