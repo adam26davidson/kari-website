@@ -58,3 +58,15 @@ pub struct IsPublishedQuery {
     #[serde(rename = "isPublished")]
     pub is_published: bool,
 }
+
+/// Query for `POST /images/gc`. Dry-run unless the caller explicitly passes
+/// `?dry_run=false` — a GC sweep must never delete by accident.
+#[derive(Deserialize)]
+pub struct GcQuery {
+    #[serde(default = "default_dry_run")]
+    pub dry_run: bool,
+}
+
+fn default_dry_run() -> bool {
+    true
+}

@@ -8,14 +8,17 @@
 
 use aws_sdk_s3::operation::delete_object::DeleteObjectOutput;
 use aws_sdk_s3::operation::get_object::GetObjectOutput;
+use aws_sdk_s3::operation::list_objects_v2::ListObjectsV2Output;
 use aws_sdk_s3::operation::put_object::PutObjectOutput;
 use aws_sdk_s3::operation::put_object_tagging::PutObjectTaggingOutput;
 use aws_sdk_s3::primitives::ByteStream;
+use aws_sdk_s3::types::Object;
 use aws_sdk_s3::Client;
-use aws_smithy_mocks::{mock, mock_client};
+use aws_smithy_mocks::{mock, mock_client, RuleMode};
 use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use aws_smithy_runtime_api::http::StatusCode;
 use aws_smithy_types::body::SdkBody;
+use aws_smithy_types::DateTime;
 use kari_website_api::services::object_store::ObjectStore;
 use kari_website_api::services::s3::{S3Error, S3Service};
 
@@ -235,6 +238,101 @@ async fn delete_object_maps_service_error_to_operation_failed() {
 
     let err = service
         .delete_object("k")
+        .await
+        .expect_err("403 should be an error");
+
+    match err {
+        S3Error::OperationFailed(detail) => {
+            assert!(detail.contains("AccessDenied"), "got: {detail}");
+        }
+        other => panic!("expected OperationFailed, got: {other:?}"),
+    }
+}
+
+// --- list_objects -----------------------------------------------------------
+
+#[tokio::test]
+async fn list_objects_returns_keys_and_last_modified() {
+    let rule = mock!(Client::list_objects_v2)
+        .match_requests(|req| req.bucket() == Some(BUCKET) && req.prefix() == Some("images/"))
+        .then_output(|| {
+            ListObjectsV2Output::builder()
+                .contents(
+                    Object::builder()
+                        .key("images/a.jpg")
+                        .last_modified(DateTime::from_secs(1_700_000_000))
+                        .build(),
+                )
+                .contents(Object::builder().key("images/b.png").build())
+                .build()
+        });
+    let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
+
+    let objects = service
+        .list_objects("images/")
+        .await
+        .expect("list should succeed");
+
+    assert_eq!(rule.num_calls(), 1);
+    let keys: Vec<&str> = objects.iter().map(|o| o.key.as_str()).collect();
+    assert_eq!(keys, vec!["images/a.jpg", "images/b.png"]);
+    assert!(
+        objects[0].last_modified.is_some(),
+        "reported timestamp should survive the conversion"
+    );
+    assert!(
+        objects[1].last_modified.is_none(),
+        "missing timestamp should surface as None, not a fake value"
+    );
+}
+
+#[tokio::test]
+async fn list_objects_follows_pagination_to_the_end() {
+    // A truncated listing that stopped after one page would make every
+    // object on later pages look orphaned to the GC sweep, so the paginated
+    // path is the one that matters.
+    let first_page = mock!(Client::list_objects_v2)
+        .match_requests(|req| req.continuation_token().is_none())
+        .then_output(|| {
+            ListObjectsV2Output::builder()
+                .contents(Object::builder().key("images/page1.jpg").build())
+                .is_truncated(true)
+                .next_continuation_token("page-2")
+                .build()
+        });
+    let second_page = mock!(Client::list_objects_v2)
+        .match_requests(|req| req.continuation_token() == Some("page-2"))
+        .then_output(|| {
+            ListObjectsV2Output::builder()
+                .contents(Object::builder().key("images/page2.jpg").build())
+                .build()
+        });
+    let client = mock_client!(
+        aws_sdk_s3,
+        RuleMode::Sequential,
+        [&first_page, &second_page]
+    );
+    let service = S3Service::new(client, BUCKET.to_string());
+
+    let objects = service
+        .list_objects("images/")
+        .await
+        .expect("list should succeed");
+
+    assert_eq!(first_page.num_calls(), 1);
+    assert_eq!(second_page.num_calls(), 1);
+    let keys: Vec<&str> = objects.iter().map(|o| o.key.as_str()).collect();
+    assert_eq!(keys, vec!["images/page1.jpg", "images/page2.jpg"]);
+}
+
+#[tokio::test]
+async fn list_objects_maps_service_error_to_operation_failed() {
+    let rule = mock!(Client::list_objects_v2)
+        .then_http_response(|| s3_error_response(403, "AccessDenied", "Access Denied"));
+    let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
+
+    let err = service
+        .list_objects("images/")
         .await
         .expect_err("403 should be an error");
 

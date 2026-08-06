@@ -5,8 +5,20 @@
 //! implementation. `S3Service` is the only production implementation.
 
 use async_trait::async_trait;
+use std::time::SystemTime;
 
 use crate::services::s3::S3Error;
+
+/// Metadata for one listed object, as returned by [`ObjectStore::list_objects`].
+#[derive(Clone, Debug)]
+pub struct ObjectMeta {
+    pub key: String,
+    /// When the object was last written. `None` when the backend did not
+    /// report a timestamp — consumers that use this for safety decisions
+    /// (e.g. the image GC's in-flight-upload margin) must treat `None`
+    /// conservatively.
+    pub last_modified: Option<SystemTime>,
+}
 
 #[async_trait]
 pub trait ObjectStore: Send + Sync {
@@ -22,4 +34,8 @@ pub trait ObjectStore: Send + Sync {
 
     /// Delete an object. Like S3, deleting a missing key is not an error.
     async fn delete_object(&self, key: &str) -> Result<(), S3Error>;
+
+    /// List ALL objects under `prefix` (following pagination to the end).
+    /// An empty result is a legitimate empty prefix, not an error.
+    async fn list_objects(&self, prefix: &str) -> Result<Vec<ObjectMeta>, S3Error>;
 }
