@@ -15,7 +15,7 @@ import { defineConfig, devices } from "@playwright/test";
 // captured storageState. They only run when E2E_AUTH0_USERNAME and
 // E2E_AUTH0_PASSWORD are set (they are in CI); without credentials the
 // visitor/smoke suites still run and the admin projects are skipped.
-const PORT = 4173;
+export const PORT = 4173;
 
 export const ADMIN_STORAGE_STATE = "e2e/.auth/admin.json";
 

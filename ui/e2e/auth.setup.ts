@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { test as setup, expect, APIRequestContext } from "@playwright/test";
-import { ADMIN_STORAGE_STATE } from "../playwright.config";
+import { ADMIN_STORAGE_STATE, PORT } from "../playwright.config";
 import { TEST_API_URL } from "./helpers";
 
 // Logs into the app once through the real Auth0 Universal Login and saves the
@@ -9,6 +9,11 @@ import { TEST_API_URL } from "./helpers";
 // builds) for the admin project to reuse. This file only runs when
 // E2E_AUTH0_USERNAME / E2E_AUTH0_PASSWORD are present — the config drops the
 // setup + admin projects otherwise.
+
+// The URL Auth0 redirects back to after login — derived from the same PORT
+// constant that playwright.config.ts uses for baseURL and the web server, so
+// changing the port there can't silently break this check.
+const ADMIN_RETURN_URL = new RegExp(`localhost:${PORT}/admin`);
 
 /**
  * The API runs on localhost (the CI job starts it before Playwright; for
@@ -81,7 +86,7 @@ setup("authenticate as admin", async ({ page, request }) => {
     'button[name="action"][value="accept"], button:has-text("Accept")',
   );
   try {
-    await page.waitForURL(/localhost:4173\/admin/, { timeout: 20_000 });
+    await page.waitForURL(ADMIN_RETURN_URL, { timeout: 20_000 });
   } catch {
     // Not back at the app: either a consent screen (fine, accept it) or a
     // login failure. Surface Auth0's own error message when there is one —
@@ -109,7 +114,7 @@ setup("authenticate as admin", async ({ page, request }) => {
       );
     }
     await consentAccept.first().click();
-    await page.waitForURL(/localhost:4173\/admin/, { timeout: 60_000 });
+    await page.waitForURL(ADMIN_RETURN_URL, { timeout: 60_000 });
   }
 
   // The admin menu only renders once Auth0 reports isAuthenticated, and by
