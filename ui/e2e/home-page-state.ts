@@ -1,9 +1,5 @@
-import {
-  DeleteObjectCommand,
-  PutObjectCommand,
-  S3Client,
-} from "@aws-sdk/client-s3";
-import { TEST_S3_URL } from "./helpers";
+import { DeleteObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3_BUCKET, TEST_S3_URL, createS3Client } from "./config.mjs";
 
 // Snapshot/restore for the home page. Unlike every other admin section, the
 // home page is a single shared document (home-page.json) plus one referenced
@@ -12,27 +8,14 @@ import { TEST_S3_URL } from "./helpers";
 // destroys the seeded state with no way to undo through the UI.
 //
 // These helpers capture the S3-visible state before the journey and put it
-// back afterwards, talking to the e2e object store directly with the same
-// endpoint/bucket/credential conventions as e2e/seed.mjs. Restore is
-// deliberately browser-independent so it still works when a test dies midway
-// (failed assertion, timeout, crashed page), and it verifies its own writes
-// so a broken restore fails the run loudly instead of silently leaking state.
+// back afterwards, talking to the e2e object store directly through the
+// shared endpoint/bucket/credential conventions in e2e/config.mjs (the same
+// ones e2e/seed.mjs uses). Restore is deliberately browser-independent so it
+// still works when a test dies midway (failed assertion, timeout, crashed
+// page), and it verifies its own writes so a broken restore fails the run
+// loudly instead of silently leaking state.
 
-const s3Url = new URL(TEST_S3_URL);
-const S3_ENDPOINT = s3Url.origin;
-const S3_BUCKET = s3Url.pathname.replace(/^\//, "");
-
-// Local-only credentials for the throwaway MinIO instance — not secrets.
-// Env overrides mirror e2e/seed.mjs so both always target the same store.
-const client = new S3Client({
-  endpoint: S3_ENDPOINT,
-  region: "us-east-1",
-  forcePathStyle: true,
-  credentials: {
-    accessKeyId: process.env.E2E_S3_ACCESS_KEY ?? "kari-e2e",
-    secretAccessKey: process.env.E2E_S3_SECRET_KEY ?? "kari-e2e-secret",
-  },
-});
+const client = createS3Client();
 
 export interface HomePageSnapshot {
   /** Raw text of home-page.json, restored verbatim. */
