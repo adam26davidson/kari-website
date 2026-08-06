@@ -12,20 +12,19 @@ export function HaigaContent({
   compact?: boolean;
 }) {
   const isMobile = useIsMobile();
+  // The haiku lines are part of the artwork itself, so they are never
+  // rendered as text — the lines field only feeds the image alt when an
+  // older haiga happens to have it filled in.
+  const altText = haiga.lines.join(", ") || "haiga";
   if (compact) {
     return (
       <div className="haiga-list-item-content-compact">
         <img
           src={`${S3_URL}/images/${haiga.image}`}
-          alt={haiga.lines.join(", ")}
+          alt={altText}
           className="haiga-list-item-thumbnail"
         />
         <div className="haiga-list-item-compact-text">
-          {haiga.lines.map((line, li) => (
-            <div key={li} className="haiga-list-line-compact">
-              {line}
-            </div>
-          ))}
           <div className="haiga-list-publisher-compact">{haiga.publisher}</div>
         </div>
       </div>
@@ -49,7 +48,7 @@ export function HaigaContent({
         >
           <img
             src={`${S3_URL}/images/${haiga.image}`}
-            alt={haiga.lines.join(", ")}
+            alt={altText}
             className="haiga-list-item-image"
           />
         </div>
