@@ -122,17 +122,27 @@ export async function expectGoneFromPublicPage(
     readySelector?: string;
   },
 ) {
-  await expect(async () => {
-    const json = page.waitForResponse((r) => r.url().includes(opts.json));
-    await page.goto(opts.path);
-    await json;
-    if (opts.readySelector) {
-      await expect(page.locator(opts.readySelector).first()).toBeVisible();
-    }
-    await expect(page.getByText(opts.marker)).toHaveCount(0, {
-      timeout: 2_000,
-    });
-  }).toPass({ timeout: 90_000, intervals: [1_000, 2_000, 5_000] });
+  // Bypass the browser HTTP cache while polling: MinIO's Last-Modified has
+  // one-second granularity, so when a delete rewrites the JSON within the
+  // same second as the previous write, revalidation returns 304 forever and
+  // reloads alone keep re-serving the stale cached body. Registering a
+  // route disables the cache for the matched request.
+  await page.route(`**/${opts.json}*`, (route) => route.continue());
+  try {
+    await expect(async () => {
+      const json = page.waitForResponse((r) => r.url().includes(opts.json));
+      await page.goto(opts.path);
+      await json;
+      if (opts.readySelector) {
+        await expect(page.locator(opts.readySelector).first()).toBeVisible();
+      }
+      await expect(page.getByText(opts.marker)).toHaveCount(0, {
+        timeout: 2_000,
+      });
+    }).toPass({ timeout: 90_000, intervals: [1_000, 2_000, 5_000] });
+  } finally {
+    await page.unroute(`**/${opts.json}*`);
+  }
 }
 
 /**
