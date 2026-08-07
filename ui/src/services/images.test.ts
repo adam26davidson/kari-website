@@ -39,13 +39,20 @@ describe("ImageService.upload", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("POSTs the file under a unique name preserving the extension", async () => {
-    const fetchMock = mockFetchOnce({ ok: true, text: async () => "ok" });
+  it("POSTs the file and returns the server-stored name", async () => {
+    const fetchMock = mockFetchOnce({
+      ok: true,
+      json: async () => ({
+        message: "File uploaded successfully",
+        fileName: "server-uuid.png",
+      }),
+    });
     const file = new File(["PNGDATA"], "photo.png", { type: "image/png" });
 
     const result = await ImageService.upload(file, true, getToken);
 
-    expect(result).toBe("fixed-uuid.png");
+    // The name the API stored the image under wins over the sent name.
+    expect(result).toBe("server-uuid.png");
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${API_IMAGES_URL}?isPublished=true`);
@@ -58,21 +65,41 @@ describe("ImageService.upload", () => {
     expect(uploaded.size).toBe("PNGDATA".length);
   });
 
-  it("uploads a file with no extension as just the uuid", async () => {
-    const fetchMock = mockFetchOnce({ ok: true, text: async () => "ok" });
+  it("sends a file with no extension as just the uuid", async () => {
+    const fetchMock = mockFetchOnce({
+      ok: true,
+      json: async () => ({ fileName: "server-uuid" }),
+    });
     const file = new File(["RAW"], "photo", { type: "image/png" });
 
     const result = await ImageService.upload(file, true, getToken);
 
-    expect(result).toBe("fixed-uuid");
+    expect(result).toBe("server-uuid");
     const uploaded = (fetchMock.mock.calls[0][1].body as FormData).get(
       "file",
     ) as File;
     expect(uploaded.name).toBe("fixed-uuid");
   });
 
+  it("falls back to the sent name when the API returns no fileName", async () => {
+    // An older API stores the sent name verbatim and only returns a
+    // message, so the sent (already unique) name is the stored one.
+    mockFetchOnce({
+      ok: true,
+      json: async () => ({ message: "File uploaded successfully" }),
+    });
+    const file = new File(["PNGDATA"], "photo.png", { type: "image/png" });
+
+    expect(await ImageService.upload(file, true, getToken)).toBe(
+      "fixed-uuid.png",
+    );
+  });
+
   it("passes isPublished=false through to the query string", async () => {
-    const fetchMock = mockFetchOnce({ ok: true, text: async () => "ok" });
+    const fetchMock = mockFetchOnce({
+      ok: true,
+      json: async () => ({ fileName: "server-uuid.jpg" }),
+    });
     const file = new File(["JPG"], "draft.jpg", { type: "image/jpeg" });
 
     await ImageService.upload(file, false, getToken);

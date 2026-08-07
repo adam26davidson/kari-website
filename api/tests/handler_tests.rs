@@ -558,34 +558,110 @@ async fn get_image_store_outage_is_500() {
     assert_eq!(body, json!({"error": "Failed to fetch image"}));
 }
 
+/// Pull the server-generated file name out of an upload response and check
+/// its shape: a fresh UUID plus the expected (sanitized) extension. Returns
+/// the name so tests can look the object up in the store.
+fn uploaded_file_name(body: &Value, expected_extension: &str) -> String {
+    let name = body["fileName"].as_str().expect("fileName in response");
+    let stem = name
+        .strip_suffix(expected_extension)
+        .unwrap_or_else(|| panic!("{name:?} should end with {expected_extension:?}"));
+    uuid::Uuid::parse_str(stem).unwrap_or_else(|_| panic!("{stem:?} should be a UUID"));
+    name.to_string()
+}
+
 #[tokio::test]
-async fn upload_image_stores_file_with_publish_flag() {
+async fn upload_image_stores_file_under_returned_unique_name() {
     let (store, app) = setup();
     let req = multipart_upload("/images?isPublished=true", Some("photo.png"), b"PNGDATA");
     let (status, body) = send(app, req).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(body, json!({"message": "File uploaded successfully"}));
-    let stored = store.get("images/photo.png").expect("stored");
+    assert_eq!(body["message"], "File uploaded successfully");
+    // The key is NOT the client's filename — it's the returned unique name.
+    assert!(!store.contains("images/photo.png"));
+    let file_name = uploaded_file_name(&body, ".png");
+    let stored = store.get(&format!("images/{file_name}")).expect("stored");
     assert_eq!(stored.data, b"PNGDATA");
     assert!(stored.public);
+}
+
+#[tokio::test]
+async fn uploads_with_identical_client_filenames_never_collide() {
+    let (store, app) = setup();
+    let req = multipart_upload("/images?isPublished=true", Some("photo.png"), b"FIRST");
+    let (_, body_a) = send(app.clone(), req).await;
+    let req = multipart_upload("/images?isPublished=true", Some("photo.png"), b"SECOND");
+    let (_, body_b) = send(app, req).await;
+    let name_a = uploaded_file_name(&body_a, ".png");
+    let name_b = uploaded_file_name(&body_b, ".png");
+    assert_ne!(name_a, name_b);
+    // Both objects exist with their own data — nothing was overwritten.
+    assert_eq!(
+        store.get(&format!("images/{name_a}")).unwrap().data,
+        b"FIRST"
+    );
+    assert_eq!(
+        store.get(&format!("images/{name_b}")).unwrap().data,
+        b"SECOND"
+    );
 }
 
 #[tokio::test]
 async fn upload_unpublished_image_is_tagged_private() {
     let (store, app) = setup();
     let req = multipart_upload("/images?isPublished=false", Some("draft.jpg"), b"JPG");
-    let (status, _) = send(app, req).await;
+    let (status, body) = send(app, req).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(!store.get("images/draft.jpg").expect("stored").public);
+    let file_name = uploaded_file_name(&body, ".jpg");
+    assert!(!store.get(&format!("images/{file_name}")).unwrap().public);
 }
 
 #[tokio::test]
-async fn upload_without_filename_uses_default_key() {
+async fn upload_preserves_extension_lowercased() {
+    let (store, app) = setup();
+    let req = multipart_upload("/images?isPublished=true", Some("photo.PNG"), b"PNG");
+    let (_, body) = send(app, req).await;
+    let file_name = uploaded_file_name(&body, ".png");
+    assert!(store.contains(&format!("images/{file_name}")));
+}
+
+#[tokio::test]
+async fn upload_keeps_only_the_last_extension_of_a_dotted_name() {
+    let (_, app) = setup();
+    let req = multipart_upload("/images?isPublished=true", Some("archive.tar.gz"), b"GZ");
+    let (_, body) = send(app, req).await;
+    uploaded_file_name(&body, ".gz");
+}
+
+#[tokio::test]
+async fn upload_without_filename_gets_uuid_key_with_no_extension() {
     let (store, app) = setup();
     let req = multipart_upload("/images?isPublished=false", None, b"data");
-    let (status, _) = send(app, req).await;
+    let (status, body) = send(app, req).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(store.contains("images/upload_file"));
+    let file_name = uploaded_file_name(&body, "");
+    assert!(store.contains(&format!("images/{file_name}")));
+}
+
+#[tokio::test]
+async fn upload_drops_unusable_extensions() {
+    // None of these client names carries a safe extension: no dot, dotfile,
+    // trailing dot, non-alphanumeric characters (path traversal, markup),
+    // or an overlong suffix. All must produce a bare-UUID key.
+    for client_name in [
+        "noextension",
+        ".png",
+        "photo.",
+        "../../etc/passwd",
+        "photo.<script>",
+        "photo.averyveryverylongextension",
+    ] {
+        let (_, app) = setup();
+        let req = multipart_upload("/images?isPublished=true", Some(client_name), b"x");
+        let (status, body) = send(app, req).await;
+        assert_eq!(status, StatusCode::OK, "client name {client_name:?}");
+        uploaded_file_name(&body, "");
+    }
 }
 
 #[tokio::test]

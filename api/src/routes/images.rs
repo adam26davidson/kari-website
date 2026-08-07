@@ -4,6 +4,7 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use std::time::{Duration, SystemTime};
+use uuid::Uuid;
 
 use crate::error::AppError;
 use crate::services::image_gc::collect_referenced_images;
@@ -18,6 +19,41 @@ use crate::{
 /// yet written the manifest that references it, so a fresh object can look
 /// orphaned while it is actually about to be referenced.
 const GC_SAFETY_MARGIN: Duration = Duration::from_secs(60 * 60);
+
+/// Longest client-supplied extension preserved on a generated object name.
+/// Real image extensions are short (".jpeg", ".webp"); anything longer is
+/// junk and is dropped rather than stored.
+const MAX_EXTENSION_LEN: usize = 16;
+
+/// Server-generated object name for an upload: a fresh UUID plus the
+/// sanitized extension of the client's filename. The UUID makes distinct
+/// uploads collision-proof regardless of what the client names its files
+/// (issue #113); the extension is kept so `GET /images/:filename` can guess
+/// the content type. `<uuid>.<ext>` matches the naming the UI already used,
+/// so new keys are indistinguishable from existing ones.
+fn unique_image_name(original: Option<&str>) -> String {
+    let extension = original.map(sanitized_extension).unwrap_or_default();
+    format!("{}{}", Uuid::new_v4(), extension)
+}
+
+/// The client filename's extension (lowercased, with leading dot), or empty
+/// when there is no usable one. Only short, purely alphanumeric extensions
+/// on a non-empty stem qualify — everything else (no dot, dotfiles like
+/// ".png", trailing dots, path or control characters, overlong suffixes) is
+/// dropped so no unvetted client bytes ever reach the S3 key.
+fn sanitized_extension(file_name: &str) -> String {
+    match file_name.rsplit_once('.') {
+        Some((stem, ext))
+            if !stem.is_empty()
+                && !ext.is_empty()
+                && ext.len() <= MAX_EXTENSION_LEN
+                && ext.chars().all(|c| c.is_ascii_alphanumeric()) =>
+        {
+            format!(".{}", ext.to_ascii_lowercase())
+        }
+        _ => String::new(),
+    }
+}
 
 pub async fn get_image_handler(
     State(state): State<AppState>,
@@ -58,11 +94,12 @@ pub async fn upload_image_handler(
         }
     };
 
-    // Get original filename
-    let file_name = field
-        .file_name()
-        .map(|n| n.to_string())
-        .unwrap_or_else(|| "upload_file".to_string());
+    // Never store under the client's filename: two uploads named "photo.jpg"
+    // would silently overwrite each other, and deleting one post's image
+    // could break another post that referenced the same key (#113). Generate
+    // a unique name server-side and return it so the client references it.
+    let original_name = field.file_name().map(|n| n.to_string());
+    let file_name = unique_image_name(original_name.as_deref());
     let key = format!("images/{}", file_name);
 
     // Read entire stream into a Vec<u8>. A mid-stream error must fail the
@@ -85,9 +122,14 @@ pub async fn upload_image_handler(
         .await
         .map_err(|e| AppError::internal("Failed to upload image", e))?;
 
-    tracing::info!("File uploaded successfully: {}", file_name);
+    tracing::info!(
+        "File uploaded successfully: {} (client name: {:?})",
+        file_name,
+        original_name
+    );
     Ok(Json(serde_json::json!({
-        "message": "File uploaded successfully"
+        "message": "File uploaded successfully",
+        "fileName": file_name,
     })))
 }
 
