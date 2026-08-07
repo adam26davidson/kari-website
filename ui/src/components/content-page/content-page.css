@@ -7,3 +7,18 @@
   height: 100%;
   overflow-y: auto;
 }
+
+/* The "Loading..." indicator pages show while content is fetched — styled
+   as a card matching .load-error so it reads against the photo background.
+   Also used outside ContentPage (OtherWorksItem, Home). */
+.loading {
+  margin: 80px auto 0;
+  padding: 16px 32px;
+  border-radius: 8px;
+  background-color: #f2efe9;
+  color: #181818;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  font-family: "Roboto", sans-serif;
+  font-size: 16px;
+  text-align: center;
+}

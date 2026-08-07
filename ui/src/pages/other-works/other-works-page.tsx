@@ -37,7 +37,7 @@ export function OtherWorksPage() {
       {loadFailed ? (
         <LoadError message="Failed to load posts." onRetry={load} />
       ) : (
-        <DataList isAdmin={false} onNewItem={() => {}}>
+        <DataList isAdmin={false}>
           {posts.map((post, idx) => (
             <DataListItem
               key={post.id}

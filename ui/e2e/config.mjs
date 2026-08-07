@@ -46,6 +46,14 @@ const s3Url = new URL(TEST_S3_URL);
 export const S3_ENDPOINT = s3Url.origin;
 export const S3_BUCKET = s3Url.pathname.replace(/^\//, "");
 
+/**
+ * A tiny valid 1x1 PNG (base64); enough for <img> naturalWidth checks.
+ * Decode with Buffer.from(TINY_PNG_BASE64, "base64").
+ */
+export const TINY_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNi" +
+  "+M9QDwADgQF/e5IkGQAAAABJRU5ErkJggg==";
+
 /** How to start the throwaway MinIO instance the suite expects. */
 export const MINIO_START_COMMAND =
   "  docker run -d --rm --name kari-e2e-s3 -p 9000:9000 \\\n" +

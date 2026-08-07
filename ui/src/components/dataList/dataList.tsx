@@ -9,7 +9,8 @@ import { Fragment } from "react/jsx-runtime";
 interface DataListProps {
   children?: React.ReactNode[];
   isAdmin: boolean;
-  onNewItem: () => void;
+  /** Add-item handler; only meaningful (and only rendered) when isAdmin. */
+  onNewItem?: () => void;
 }
 
 function DataList({ children, isAdmin, onNewItem }: DataListProps) {

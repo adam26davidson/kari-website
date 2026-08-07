@@ -16,6 +16,7 @@ export function PhotographyPostContent({ post }: { post: PhotographyPost }) {
           <div key={idx} className="photography-post-image-container">
             <img
               src={S3_URL + "/images/" + image.image}
+              alt={image.blurb}
               className="photography-post-image"
             />
             {image.blurb !== "" && (

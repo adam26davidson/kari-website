@@ -1,20 +1,23 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, MockInstance } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PhotoPicker } from "./photo-picker";
 
-// jsdom does not implement object URLs, so provide mocks that hand out a
-// distinct URL per call, letting the tests assert create/revoke pairing.
+// Spy on the setup.ts object-URL polyfills, handing out a distinct URL per
+// call so the tests can assert create/revoke pairing. restoreAllMocks in the
+// global afterEach undoes the spies, so fresh ones are made each test.
 let urlCounter = 0;
-const createObjectURL = vi.fn(() => `blob:mock-${++urlCounter}`);
-const revokeObjectURL = vi.fn();
+let createObjectURL: MockInstance;
+let revokeObjectURL: MockInstance;
 
 beforeEach(() => {
   urlCounter = 0;
-  window.URL.createObjectURL = createObjectURL;
-  window.URL.revokeObjectURL = revokeObjectURL;
-  createObjectURL.mockClear();
-  revokeObjectURL.mockClear();
+  createObjectURL = vi
+    .spyOn(window.URL, "createObjectURL")
+    .mockImplementation(() => `blob:mock-${++urlCounter}`);
+  revokeObjectURL = vi
+    .spyOn(window.URL, "revokeObjectURL")
+    .mockImplementation(() => {});
 });
 
 const makeFile = (name: string) =>

@@ -34,7 +34,7 @@ export function PhotographyPage() {
       {loadFailed ? (
         <LoadError message="Failed to load photography." onRetry={load} />
       ) : (
-        <DataList isAdmin={false} onNewItem={() => {}}>
+        <DataList isAdmin={false}>
           {postList.map((post, idx) => (
             <DataListItem
               key={post.id}
