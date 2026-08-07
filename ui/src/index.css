@@ -71,3 +71,52 @@ textarea {
   height: 100px;
   resize: none;
 }
+
+/* Shared styles used across several components. These used to live in
+   component CSS files and worked everywhere only because Vite bundles all
+   CSS globally; they belong here where the sharing is explicit. */
+
+/* The "Loading..." indicator pages show while content is fetched — styled
+   as a card matching .load-error so it reads against the photo background.
+   Used by ContentPage, OtherWorksItem, and Home. */
+.loading {
+  margin: 80px auto 0;
+  padding: 16px 32px;
+  border-radius: 8px;
+  background-color: #f2efe9;
+  color: #181818;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  font-family: "Roboto", sans-serif;
+  font-size: 16px;
+  text-align: center;
+}
+
+/* Fade-and-rise entrance used by the home page card's children and the
+   public data list. The delay is opted into per element with an explicit
+   .fade-in-delay-N class so reordering siblings can't silently change an
+   element's timing (the delays used to be keyed by :nth-child position). */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  opacity: 0;
+  animation: fadeIn 0.8s ease-out forwards;
+}
+
+.fade-in-delay-1 {
+  animation-delay: 0.2s;
+}
+.fade-in-delay-2 {
+  animation-delay: 0.6s;
+}
+.fade-in-delay-3 {
+  animation-delay: 1s;
+}

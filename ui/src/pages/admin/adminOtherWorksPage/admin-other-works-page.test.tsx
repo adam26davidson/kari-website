@@ -28,20 +28,42 @@ vi.mock("../../../hooks/useAdminToken", () => ({
 }));
 
 // The rich-text editor pulls in the whole tiptap stack; stub it with a
-// plain textarea so the tests exercise only the page's own logic.
+// plain textarea so the tests exercise only the page's own logic. The
+// "attach pending file" button mirrors what the real editor's image
+// button does: hand the picked file to onAddImage under a fresh id and
+// insert an img whose title carries that id (the base64 src is what the
+// real editor shows before upload).
 vi.mock("../../../components/tiptap/tiptap", () => ({
   Tiptap: ({
     content,
     setContent,
+    onAddImage,
   }: {
     content: string;
     setContent: (content: string | null) => void;
+    onAddImage: (file: File, id: string) => void;
   }) => (
-    <textarea
-      placeholder="post content"
-      value={content}
-      onChange={(e) => setContent(e.target.value)}
-    />
+    <>
+      <textarea
+        placeholder="post content"
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+      />
+      <button
+        type="button"
+        onClick={() => {
+          onAddImage(
+            new File(["img"], "fresh.png", { type: "image/png" }),
+            "pending-1",
+          );
+          setContent(
+            `${content}<img src="data:image/png;base64,AAAA" title="pending-1">`,
+          );
+        }}
+      >
+        attach pending file
+      </button>
+    </>
   ),
 }));
 
@@ -118,7 +140,12 @@ describe("AdminOtherWorksPage image removal on save", () => {
     );
     // The still-referenced image must never be deleted on a failed save.
     expect(ImageService.delete).not.toHaveBeenCalled();
-    expect(BlogService.updateContent).not.toHaveBeenCalled();
+    // Content-first ordering: the content had already been written when
+    // the list save failed.
+    expect(BlogService.updateContent).toHaveBeenCalledOnce();
+    expect(
+      vi.mocked(BlogService.updateContent).mock.invocationCallOrder[0],
+    ).toBeLessThan(vi.mocked(BlogService.updateList).mock.invocationCallOrder[0]);
   });
 
   it("keeps the image when saving the content fails", async () => {
@@ -154,15 +181,60 @@ describe("AdminOtherWorksPage image removal on save", () => {
       ),
     );
     expect(ImageService.delete).toHaveBeenCalledOnce();
-    // List save -> content save -> image delete, strictly in that order.
+    // Content save -> list save -> image delete, strictly in that order.
     const listOrder =
       vi.mocked(BlogService.updateList).mock.invocationCallOrder[0];
     const contentOrder =
       vi.mocked(BlogService.updateContent).mock.invocationCallOrder[0];
     const deleteOrder =
       vi.mocked(ImageService.delete).mock.invocationCallOrder[0];
-    expect(listOrder).toBeLessThan(contentOrder);
-    expect(contentOrder).toBeLessThan(deleteOrder);
+    expect(contentOrder).toBeLessThan(listOrder);
+    expect(listOrder).toBeLessThan(deleteOrder);
+  });
+});
+
+describe("AdminOtherWorksPage pending image files", () => {
+  it("keeps a pending file attached to its image through a content reorder", async () => {
+    vi.mocked(ImageService.upload).mockResolvedValue("fresh-uploaded.png");
+    const { container, notify } = await renderPage();
+    fireEvent.click(iconButton(container, "pencil"));
+    const textarea = await screen.findByPlaceholderText("post content");
+
+    // Attach a not-yet-uploaded image (its img lands last in the
+    // content)...
+    fireEvent.click(screen.getByText("attach pending file"));
+    // ...then reorder it to the front, ahead of the stored image.
+    fireEvent.change(textarea, {
+      target: {
+        value:
+          '<img src="data:image/png;base64,AAAA" title="pending-1">' +
+          savedContent,
+      },
+    });
+
+    fireEvent.click(iconButton(container, "floppy-disk"));
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("Other works item saved"),
+    );
+
+    // The pending file traveled with its img (keyed by the id on the img
+    // title, not by position): exactly one upload, of the freshly picked
+    // file, and the saved content has the uploaded name in the moved-to
+    // position with the stored image untouched after it.
+    expect(ImageService.upload).toHaveBeenCalledOnce();
+    const [uploadedFile, uploadedAsPublished] = vi.mocked(ImageService.upload)
+      .mock.calls[0];
+    expect(uploadedFile?.name).toBe("fresh.png");
+    expect(uploadedAsPublished).toBe(false);
+    expect(BlogService.updateContent).toHaveBeenCalledWith(
+      "b1",
+      '<img src="https://api.test.local/images/fresh-uploaded.png" title="pending-1">' +
+        savedContent,
+      false,
+      expect.any(Function),
+    );
+    // Nothing was removed from the content, so nothing is deleted.
+    expect(ImageService.delete).not.toHaveBeenCalled();
   });
 });
 
@@ -539,6 +611,30 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
           expect.any(Function),
         ],
       ]);
+      expect(ImageService.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("saving without a publish flip", () => {
+    it("writes content first, so a content failure leaves the list untouched", async () => {
+      vi.mocked(BlogService.updateContent).mockRejectedValue(
+        new Error("PUT failed"),
+      );
+      const { container, notify } = await openEditorAndRemoveImage();
+
+      fireEvent.click(iconButton(container, "floppy-disk"));
+
+      await waitFor(() =>
+        expect(notify).toHaveBeenCalledWith(
+          "Failed to save other works item",
+          "error",
+        ),
+      );
+      // Content goes first on a no-flip save: the failed PUT must not
+      // leave new metadata (title/date) pointing at old content, so the
+      // list is never written and nothing else is touched.
+      expect(BlogService.updateList).not.toHaveBeenCalled();
+      expect(ImageService.setPublished).not.toHaveBeenCalled();
       expect(ImageService.delete).not.toHaveBeenCalled();
     });
   });

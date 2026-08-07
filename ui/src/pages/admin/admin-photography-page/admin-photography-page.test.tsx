@@ -74,9 +74,10 @@ beforeEach(() => {
   vi.mocked(PhotographyService.updateList).mockResolvedValue(undefined);
   vi.mocked(ImageService.upload).mockResolvedValue("new.png");
   vi.mocked(ImageService.delete).mockResolvedValue(undefined);
-  // jsdom does not implement object URLs; PhotoPicker needs one for the
-  // preview of the freshly picked file.
-  window.URL.createObjectURL = vi.fn(() => "blob:preview");
+  // The central polyfill in test/setup.ts provides createObjectURL; spy on
+  // it (auto-restored between tests) so PhotoPicker gets a stable preview
+  // URL for the freshly picked file.
+  vi.spyOn(window.URL, "createObjectURL").mockReturnValue("blob:preview");
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
