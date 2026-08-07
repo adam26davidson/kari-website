@@ -12,9 +12,9 @@ export function TitleLink({
 }) {
   if (onClick) {
     return (
-      <div className="title-link" onClick={onClick}>
+      <button type="button" className="title-link" onClick={onClick}>
         {children}
-      </div>
+      </button>
     );
   } else if (href && href.startsWith("/")) {
     return (
@@ -24,7 +24,12 @@ export function TitleLink({
     );
   } else {
     return (
-      <a className="title-link" href={href}>
+      <a
+        className="title-link"
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
         {children}
       </a>
     );
