@@ -360,8 +360,10 @@ export function AdminOtherWorksPage({
         }
       }
 
-      // convert the new HTML back to a string
-      const newHtmlString = newHtmlDoc.documentElement.outerHTML;
+      // convert the new HTML back to a string; serialize only the body
+      // fragment so saved content isn't wrapped in
+      // <html><head></head><body>…</body></html> (#80)
+      const newHtmlString = newHtmlDoc.body.innerHTML;
 
       setLoading({
         isLoading: true,

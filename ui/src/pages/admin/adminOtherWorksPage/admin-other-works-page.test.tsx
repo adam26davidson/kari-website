@@ -166,6 +166,74 @@ describe("AdminOtherWorksPage image removal on save", () => {
   });
 });
 
+describe("AdminOtherWorksPage content serialization on save", () => {
+  // Renders the page and opens the only post in the editor without
+  // touching its content — the state right before an unchanged re-save.
+  async function openEditor() {
+    const { container, notify } = await renderPage();
+    fireEvent.click(iconButton(container, "pencil"));
+    await screen.findByPlaceholderText("post content");
+    return { container, notify };
+  }
+
+  it("saves the body fragment without html/head/body wrappers", async () => {
+    const { container, notify } = await openEditorAndRemoveImage();
+
+    fireEvent.click(iconButton(container, "floppy-disk"));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("Other works item saved"),
+    );
+    // Exactly the fragment the editor holds — no document wrappers.
+    expect(BlogService.updateContent).toHaveBeenCalledWith(
+      "b1",
+      "<p>hello</p>",
+      false,
+      expect.any(Function),
+    );
+  });
+
+  it("re-saves already-clean content byte-for-byte (round-trip no-op)", async () => {
+    const { container, notify } = await openEditor();
+
+    fireEvent.click(iconButton(container, "floppy-disk"));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("Other works item saved"),
+    );
+    expect(BlogService.updateContent).toHaveBeenCalledWith(
+      "b1",
+      savedContent,
+      false,
+      expect.any(Function),
+    );
+    // Nothing changed, so no image is deleted either.
+    expect(ImageService.delete).not.toHaveBeenCalled();
+  });
+
+  it("strips wrappers from legacy content stored as a full document", async () => {
+    vi.mocked(BlogService.getContent).mockResolvedValue(
+      `<html><head></head><body>${savedContent}</body></html>`,
+    );
+    const { container, notify } = await openEditor();
+
+    fireEvent.click(iconButton(container, "floppy-disk"));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("Other works item saved"),
+    );
+    // Re-saving a post persisted before this fix converges to the clean
+    // fragment instead of accumulating wrappers.
+    expect(BlogService.updateContent).toHaveBeenCalledWith(
+      "b1",
+      savedContent,
+      false,
+      expect.any(Function),
+    );
+    expect(ImageService.delete).not.toHaveBeenCalled();
+  });
+});
+
 describe("AdminOtherWorksPage deletion", () => {
   // Renders the page, clicks the delete control of the only post, and
   // confirms the deletion dialog.
