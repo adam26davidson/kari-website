@@ -49,7 +49,6 @@ export function OtherWorksPage() {
                 post={post}
                 showPublished={false}
                 isAdmin={false}
-                onClick={() => {}}
               />
             </DataListItem>
           ))}
