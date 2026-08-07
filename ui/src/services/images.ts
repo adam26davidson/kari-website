@@ -24,6 +24,11 @@ export class ImageService {
     }
     const token = await getAccessTokenSilently();
 
+    // The API generates the stored name (uuid + extension) and returns it;
+    // that returned name is authoritative. The client-side uuid rename is
+    // kept only as a deploy-skew fallback: an older API stores the sent
+    // name verbatim and returns no fileName, so the name sent must already
+    // be unique.
     const extension = file.name.includes(".")
       ? `.${file.name.split(".").pop()}`
       : "";
@@ -54,7 +59,12 @@ export class ImageService {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      return fileName;
+      // Use the name the server stored the image under, falling back to
+      // the sent name for older API versions that don't return one.
+      const data = (await response.json().catch(() => null)) as {
+        fileName?: string;
+      } | null;
+      return data?.fileName ?? fileName;
     } catch (error) {
       console.error("Failed to upload image", error);
       throw error;
