@@ -11,13 +11,13 @@ export function BlogPostSummary({
   post: BlogPost;
   showPublished: boolean;
   isAdmin: boolean;
-  onClick: (post: BlogPost) => void;
+  onClick?: (post: BlogPost) => void;
 }) {
   return (
     <div className="blog-post-summary">
       <TitleLink
         href={!isAdmin ? `/blog/${post.id}` : undefined}
-        onClick={isAdmin ? () => onClick(post) : undefined}
+        onClick={isAdmin && onClick ? () => onClick(post) : undefined}
       >
         {post.title}
       </TitleLink>
