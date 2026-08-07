@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Locator, Page } from "@playwright/test";
+import type { Frame, Locator, Page, Request } from "@playwright/test";
 import { expect } from "@playwright/test";
 import { TEST_API_URL } from "./config.mjs";
 
@@ -78,27 +78,66 @@ const SECTION_LIST_ENDPOINT: Record<AdminSection, string> = {
  * given section, waiting for its list to finish loading.
  */
 export async function openAdminSection(page: Page, section: AdminSection) {
+  const listUrl = TEST_API_URL + SECTION_LIST_ENDPOINT[section];
   // The "Loading..." overlay only appears after the section component's
   // mount effect runs, so waitForIdle alone can pass before loading has
   // even started — leaving the list at its initial empty state and letting
   // cleanup miss rows that exist but haven't rendered yet. The section's
   // list fetch is a positive signal that the load actually happened: once
   // its response arrives, the overlay is up and is hidden in the same
-  // React commit that populates the list. Registered before goto so a
-  // fast response is never missed (Home fetches on initial mount).
+  // React commit that populates the list.
+  //
+  // The wait is scoped to requests issued by the post-goto document while
+  // still being registered before goto, reconciling two concerns:
+  // - registering before goto means a fast response is never missed (Home
+  //   fetches on initial mount, potentially before an after-goto waiter
+  //   could be installed);
+  // - a matching GET already in flight from previous page state cannot
+  //   satisfy the wait: its "request" event fired before these listeners
+  //   existed, so it never enters postNavRequests, and any late request
+  //   from the old document is excluded by the `navigated` flag — the main
+  //   frame's navigation commit ("framenavigated") strictly precedes any
+  //   fetch made by the new document.
+  let navigated = false;
+  const postNavRequests = new Set<Request>();
+  const onFrameNavigated = (frame: Frame) => {
+    if (frame === page.mainFrame()) navigated = true;
+  };
+  const onRequest = (request: Request) => {
+    if (navigated && request.method() === "GET" && request.url() === listUrl) {
+      postNavRequests.add(request);
+    }
+  };
+  page.on("framenavigated", onFrameNavigated);
+  page.on("request", onRequest);
   const listLoaded = page.waitForResponse(
-    (r) =>
-      r.url() === TEST_API_URL + SECTION_LIST_ENDPOINT[section] &&
-      r.request().method() === "GET",
+    (r) => postNavRequests.has(r.request()),
     { timeout: 60_000 },
   );
-  await page.goto("/admin");
-  const menuItem = page.locator(".admin-menu-item", { hasText: section });
-  // First load after login can wait on Auth0 checkSession + the test API.
-  await expect(menuItem).toBeVisible({ timeout: 60_000 });
-  await menuItem.click();
-  await listLoaded;
-  await waitForIdle(page);
+  try {
+    await page.goto("/admin");
+    const menuItem = page.locator(".admin-menu-item", { hasText: section });
+    // First load after login can wait on Auth0 checkSession + the test API.
+    await expect(menuItem).toBeVisible({ timeout: 60_000 });
+    await menuItem.click();
+    const response = await listLoaded;
+    // Fail loudly when the list load fails: on a non-2xx the section
+    // renders LoadError with zero rows, which deleteItemsMatching would
+    // otherwise mistake for "nothing to delete" and pass silently.
+    if (!response.ok()) {
+      throw new Error(
+        `Admin "${section}" list failed to load: ` +
+          `GET ${listUrl} returned ${response.status()}`,
+      );
+    }
+    await waitForIdle(page);
+    // A load can still fail after a 2xx (e.g. a body read/parse error), in
+    // which case the section renders LoadError instead of the list.
+    await expect(page.locator(".load-error")).toHaveCount(0);
+  } finally {
+    page.off("framenavigated", onFrameNavigated);
+    page.off("request", onRequest);
+  }
 }
 
 /** The admin list rows (each content item) on the current admin section. */
@@ -141,7 +180,16 @@ export async function expectGoneFromPublicPage(
     await expect(async () => {
       const json = page.waitForResponse((r) => r.url().includes(opts.json));
       await page.goto(opts.path);
-      await json;
+      const jsonResponse = await json;
+      // A failed JSON fetch renders the fetch-error state with zero
+      // markers on the page, which would make the marker check below pass
+      // vacuously — fail this attempt instead (toPass retries, so a
+      // transient blip can still recover) so a persistent failure is
+      // reported as a load failure, not as "marker gone".
+      expect(
+        jsonResponse.ok(),
+        `GET ${jsonResponse.url()} returned ${jsonResponse.status()}`,
+      ).toBe(true);
       if (opts.readySelector) {
         await expect(page.locator(opts.readySelector).first()).toBeVisible();
       }
