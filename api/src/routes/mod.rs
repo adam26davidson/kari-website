@@ -26,6 +26,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/photography", get(photography::get_photography_handler))
         .route("/home-page", put(home::update_home_page_handler))
         .route("/images", post(images::upload_image_handler))
+        .route("/images/gc", post(images::gc_images_handler))
         .route("/images/:filename", delete(images::delete_image_handler))
         .route(
             "/images/:filename/set-published",

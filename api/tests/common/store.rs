@@ -7,24 +7,28 @@
 //! but only the handler tests use it — hence the file-level dead_code allow.
 #![allow(dead_code)]
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime};
 
 use async_trait::async_trait;
 use jsonwebtoken::jwk::JwkSet;
 use kari_website_api::middleware::auth::JwksCache;
 use kari_website_api::routes::health::HealthCache;
-use kari_website_api::services::object_store::ObjectStore;
+use kari_website_api::services::object_store::{ObjectMeta, ObjectStore};
 use kari_website_api::services::s3::S3Error;
 use kari_website_api::AppState;
 
 /// One stored object: its bytes plus the `public` tag recorded by
-/// `put_object` / `set_object_tagging`, so tests can assert publish semantics.
+/// `put_object` / `set_object_tagging`, so tests can assert publish
+/// semantics, and its last-modified time so GC tests can exercise the
+/// in-flight-upload safety margin.
 #[derive(Clone)]
 pub struct StoredObject {
     pub data: Vec<u8>,
     pub public: bool,
+    pub last_modified: Option<SystemTime>,
 }
 
 #[derive(Default)]
@@ -32,16 +36,48 @@ pub struct InMemoryStore {
     objects: Mutex<HashMap<String, StoredObject>>,
     fail: AtomicBool,
     fail_puts: AtomicBool,
+    fail_gets_for: Mutex<HashSet<String>>,
 }
 
 impl InMemoryStore {
-    /// Seed an object (tagged public) before the app runs; chainable.
+    /// Seed an object (tagged public) before the app runs; chainable. Seeded
+    /// objects are backdated a day so pre-existing content is outside the GC
+    /// sweep's recent-upload safety margin, like real long-lived objects.
     pub fn with_object(self, key: &str, data: impl Into<Vec<u8>>) -> Self {
+        self.with_object_modified_at(
+            key,
+            data,
+            SystemTime::now() - Duration::from_secs(24 * 60 * 60),
+        )
+    }
+
+    /// Seed an object whose backend reports NO last-modified time, so tests
+    /// can pin down the GC sweep's conservative handling of unknown ages.
+    pub fn with_object_untimestamped(self, key: &str, data: impl Into<Vec<u8>>) -> Self {
         self.objects.lock().unwrap().insert(
             key.to_string(),
             StoredObject {
                 data: data.into(),
                 public: true,
+                last_modified: None,
+            },
+        );
+        self
+    }
+
+    /// Seed an object with an explicit last-modified time; chainable.
+    pub fn with_object_modified_at(
+        self,
+        key: &str,
+        data: impl Into<Vec<u8>>,
+        last_modified: SystemTime,
+    ) -> Self {
+        self.objects.lock().unwrap().insert(
+            key.to_string(),
+            StoredObject {
+                data: data.into(),
+                public: true,
+                last_modified: Some(last_modified),
             },
         );
         self
@@ -57,6 +93,13 @@ impl InMemoryStore {
     /// the health endpoint's write probe exists to catch.
     pub fn set_failing_puts(&self, failing: bool) {
         self.fail_puts.store(failing, Ordering::SeqCst);
+    }
+
+    /// Make `get_object` fail with `OperationFailed` for one specific key,
+    /// leaving everything else working — simulates a single unreadable
+    /// manifest, which must abort a GC sweep.
+    pub fn set_failing_get_for(&self, key: &str) {
+        self.fail_gets_for.lock().unwrap().insert(key.to_string());
     }
 
     pub fn get(&self, key: &str) -> Option<StoredObject> {
@@ -80,6 +123,11 @@ impl InMemoryStore {
 impl ObjectStore for InMemoryStore {
     async fn get_object(&self, key: &str) -> Result<Vec<u8>, S3Error> {
         self.check_fail()?;
+        if self.fail_gets_for.lock().unwrap().contains(key) {
+            return Err(S3Error::OperationFailed(format!(
+                "injected get failure for {key}"
+            )));
+        }
         self.objects
             .lock()
             .unwrap()
@@ -95,10 +143,14 @@ impl ObjectStore for InMemoryStore {
                 "injected write failure".to_string(),
             ));
         }
-        self.objects
-            .lock()
-            .unwrap()
-            .insert(key.to_string(), StoredObject { data, public });
+        self.objects.lock().unwrap().insert(
+            key.to_string(),
+            StoredObject {
+                data,
+                public,
+                last_modified: Some(SystemTime::now()),
+            },
+        );
         Ok(())
     }
 
@@ -117,6 +169,23 @@ impl ObjectStore for InMemoryStore {
         self.check_fail()?;
         self.objects.lock().unwrap().remove(key);
         Ok(())
+    }
+
+    async fn list_objects(&self, prefix: &str) -> Result<Vec<ObjectMeta>, S3Error> {
+        self.check_fail()?;
+        let mut listed: Vec<ObjectMeta> = self
+            .objects
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(key, _)| key.starts_with(prefix))
+            .map(|(key, object)| ObjectMeta {
+                key: key.clone(),
+                last_modified: object.last_modified,
+            })
+            .collect();
+        listed.sort_by(|a, b| a.key.cmp(&b.key));
+        Ok(listed)
     }
 }
 
