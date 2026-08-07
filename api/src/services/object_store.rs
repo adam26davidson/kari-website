@@ -26,6 +26,12 @@ pub trait ObjectStore: Send + Sync {
 
     /// Store an object. `public` becomes the `public=` tag that controls
     /// whether the bucket policy exposes the object for anonymous reads.
+    ///
+    /// `S3Service` additionally stores `Cache-Control: no-cache` metadata on
+    /// document keys (`.json` / `.html`), which are republished in place
+    /// under stable keys, so browsers revalidate them on every use instead
+    /// of trusting second-granularity `Last-Modified` freshness (#90).
+    /// Image keys get no `Cache-Control` and keep long-lived caching.
     async fn put_object(&self, key: &str, data: Vec<u8>, public: bool) -> Result<(), S3Error>;
 
     /// Replace the `public=` tag on an existing object; `NotFound` if the

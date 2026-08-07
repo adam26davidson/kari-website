@@ -44,6 +44,32 @@ pub struct S3Service {
     bucket_name: String,
 }
 
+/// `Cache-Control` metadata to store on a newly written object, by key.
+///
+/// Published documents — the JSON manifests (`haiga.json`, `haiku.json`,
+/// `photography.json`, `home-page.json`, `blog-posts.json`) and blog content
+/// (`blog/<id>.html`) — are rewritten in place under stable keys and fetched
+/// directly from S3 by the public pages. S3's `Last-Modified` has one-second
+/// granularity, so when a save rewrites a document within the same second as
+/// the previous write, `If-Modified-Since` revalidation answers `304 Not
+/// Modified` forever and browsers keep serving the stale body (#90).
+/// Storing `Cache-Control: no-cache` makes S3 serve that header, forcing the
+/// browser to revalidate every use — and revalidation carries `If-None-Match`,
+/// which takes precedence over `If-Modified-Since` (RFC 9110 §13.1.3). S3
+/// ETags are content-based (MD5 for single-part puts), so any content change
+/// misses the validator regardless of wall-clock timing; an identical body
+/// yields a harmless 304 for identical content.
+///
+/// Everything else — most importantly images under `images/` — keeps the
+/// default (no header) so long-lived browser caching is unchanged.
+fn cache_control_for(key: &str) -> Option<&'static str> {
+    if key.ends_with(".json") || key.ends_with(".html") {
+        Some("no-cache")
+    } else {
+        None
+    }
+}
+
 impl S3Service {
     pub fn new(client: Client, bucket_name: String) -> Self {
         Self {
@@ -78,6 +104,7 @@ impl ObjectStore for S3Service {
             .bucket(&self.bucket_name)
             .key(key)
             .body(ByteStream::from(data))
+            .set_cache_control(cache_control_for(key).map(String::from))
             .set_tagging(Some(format!("public={}", public)))
             .send()
             .await?;
