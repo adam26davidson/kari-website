@@ -17,9 +17,14 @@ function DataList({ children, isAdmin, onNewItem }: DataListProps) {
       <div className="data-list-container">
         <div className={isAdmin ? "admin-data-list" : "data-list fade-in"}>
           {isAdmin && (
-            <div className="admin-icon-button" onClick={onNewItem}>
+            <button
+              type="button"
+              className="admin-icon-button"
+              aria-label="Add item"
+              onClick={onNewItem}
+            >
               <FontAwesomeIcon icon={faPlus} />
-            </div>
+            </button>
           )}
           {children?.map((child: React.ReactNode, idx: number) => (
             <Fragment key={idx}>
