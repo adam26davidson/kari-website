@@ -8,6 +8,14 @@ function Boom(): never {
   throw new Error("boom");
 }
 
+// Mimics a lazy route whose chunk 404s after a redeploy (Chrome copy).
+function ChunkBoom(): never {
+  throw new TypeError(
+    "Failed to fetch dynamically imported module: " +
+      "https://example.test/assets/HaikuPage-a1b2c3.js",
+  );
+}
+
 beforeEach(() => {
   // React and componentDidCatch both log the thrown error; keep output clean.
   vi.spyOn(console, "error").mockImplementation(() => {});
@@ -46,6 +54,41 @@ describe("ErrorBoundary", () => {
     expect(
       screen.getByRole("button", { name: "Reload" }),
     ).toBeInTheDocument();
+  });
+
+  it("shows redeploy-specific copy for chunk-load errors", () => {
+    render(
+      <ErrorBoundary>
+        <ChunkBoom />
+      </ErrorBoundary>,
+    );
+    expect(
+      screen.getByText(
+        "A new version of the site may have been deployed — " +
+          "reload to get the latest.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Something went wrong displaying this page."),
+    ).not.toBeInTheDocument();
+    // Recovery path is the same: the existing Reload button.
+    expect(
+      screen.getByRole("button", { name: "Reload" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the generic copy for ordinary render errors", () => {
+    render(
+      <ErrorBoundary>
+        <Boom />
+      </ErrorBoundary>,
+    );
+    expect(
+      screen.getByText("Something went wrong displaying this page."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/A new version of the site/),
+    ).not.toBeInTheDocument();
   });
 
   it("logs the render error for diagnostics", () => {
