@@ -153,6 +153,61 @@ async fn put_object_tags_private_uploads_as_not_public() {
     assert_eq!(rule.num_calls(), 1);
 }
 
+// Published documents are rewritten in place under stable keys, and S3's
+// `Last-Modified` only has one-second granularity — without `Cache-Control:
+// no-cache` a same-second rewrite leaves browsers serving stale content on
+// `If-Modified-Since` revalidation forever (#90). Documents must carry the
+// header; images must NOT, so their long-lived caching stays unchanged.
+
+#[tokio::test]
+async fn put_object_sets_no_cache_on_json_documents() {
+    let rule = mock!(Client::put_object)
+        .match_requests(|req| {
+            req.key() == Some("haiga.json") && req.cache_control() == Some("no-cache")
+        })
+        .then_output(|| PutObjectOutput::builder().build());
+    let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
+
+    service
+        .put_object("haiga.json", b"[]".to_vec(), true)
+        .await
+        .expect("put should succeed");
+
+    assert_eq!(rule.num_calls(), 1);
+}
+
+#[tokio::test]
+async fn put_object_sets_no_cache_on_blog_html_content() {
+    let rule = mock!(Client::put_object)
+        .match_requests(|req| {
+            req.key() == Some("blog/post-1.html") && req.cache_control() == Some("no-cache")
+        })
+        .then_output(|| PutObjectOutput::builder().build());
+    let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
+
+    service
+        .put_object("blog/post-1.html", b"<p>hi</p>".to_vec(), true)
+        .await
+        .expect("put should succeed");
+
+    assert_eq!(rule.num_calls(), 1);
+}
+
+#[tokio::test]
+async fn put_object_leaves_cache_control_unset_on_images() {
+    let rule = mock!(Client::put_object)
+        .match_requests(|req| req.key() == Some("images/dog.jpg") && req.cache_control().is_none())
+        .then_output(|| PutObjectOutput::builder().build());
+    let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
+
+    service
+        .put_object("images/dog.jpg", b"jpeg bytes".to_vec(), true)
+        .await
+        .expect("put should succeed");
+
+    assert_eq!(rule.num_calls(), 1);
+}
+
 #[tokio::test]
 async fn put_object_maps_service_error_to_operation_failed() {
     let rule = mock!(Client::put_object)
