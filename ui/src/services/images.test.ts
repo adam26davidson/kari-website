@@ -139,3 +139,62 @@ describe("ImageService.setPublished", () => {
     );
   });
 });
+
+describe("ImageService.gc", () => {
+  const report = {
+    dry_run: true,
+    referenced: ["images/kept.png"],
+    orphaned: ["images/orphan.png"],
+    skipped_recent: [],
+    deleted: [],
+  };
+
+  it("POSTs a dry run with auth and returns the report", async () => {
+    const fetchMock = mockFetchOnce({ ok: true, json: async () => report });
+
+    const result = await ImageService.gc(true, getToken);
+
+    expect(result).toEqual(report);
+    expect(fetchMock).toHaveBeenCalledWith(`${API_IMAGES_URL}/gc?dry_run=true`, {
+      method: "POST",
+      headers: { Authorization: "Bearer test-token" },
+    });
+  });
+
+  it("passes dry_run=false through for the real sweep", async () => {
+    const fetchMock = mockFetchOnce({
+      ok: true,
+      json: async () => ({ ...report, dry_run: false }),
+    });
+
+    await ImageService.gc(false, getToken);
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      `${API_IMAGES_URL}/gc?dry_run=false`,
+    );
+  });
+
+  it("throws an HttpError including the server's error text on failure", async () => {
+    mockFetchOnce({
+      ok: false,
+      status: 500,
+      text: async () => "Image GC aborted before any delete",
+    });
+    await expect(ImageService.gc(true, getToken)).rejects.toThrow(
+      "Image cleanup failed (HTTP 500): Image GC aborted before any delete",
+    );
+  });
+
+  it("still throws a status-only message when the error body is unreadable", async () => {
+    mockFetchOnce({
+      ok: false,
+      status: 502,
+      text: async () => {
+        throw new Error("body stream lost");
+      },
+    });
+    await expect(ImageService.gc(true, getToken)).rejects.toThrow(
+      "Image cleanup failed (HTTP 502)",
+    );
+  });
+});
