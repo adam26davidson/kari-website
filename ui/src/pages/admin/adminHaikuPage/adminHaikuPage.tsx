@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 import { useEffect, useState } from "react";
 import "./adminHaikuPage.css";
 import "../admin.css";
@@ -48,6 +47,7 @@ function AdminHaikuPage({
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const saveHaikuList = async (
@@ -153,6 +153,7 @@ function AdminHaikuPage({
     <DataList isAdmin={true} onNewItem={onNewItem}>
       {haikuList.map((haiku, idx) => (
         <DataListItem
+          key={haiku.id}
           isAdmin={true}
           compact={true}
           isLast={idx === haikuList.length - 1}

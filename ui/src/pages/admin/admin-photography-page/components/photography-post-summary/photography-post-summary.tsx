@@ -17,6 +17,7 @@ export function PhotographyPostSummary({
       <div className="photography-post-summary-images">
         {post.images.map((img) => (
           <img
+            key={img.image}
             className="photography-post-summary-image"
             src={`${API_IMAGE_URL}/${img.image}`}
           />

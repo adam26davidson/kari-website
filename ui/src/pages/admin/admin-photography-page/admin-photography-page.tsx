@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 import { useEffect, useState } from "react";
 import "../admin.css";
 import { useAdminToken } from "../../../hooks/useAdminToken";
@@ -52,6 +51,7 @@ export function AdminPhotographyPage({
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const savePostList = async (
@@ -266,6 +266,7 @@ export function AdminPhotographyPage({
     <DataList isAdmin={true} onNewItem={onNewItem}>
       {postList.map((post, idx) => (
         <DataListItem
+          key={post.id}
           isAdmin={true}
           isLast={idx === postList.length - 1}
           isFirst={idx === 0}
