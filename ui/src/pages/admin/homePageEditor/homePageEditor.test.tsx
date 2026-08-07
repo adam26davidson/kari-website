@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HomePageEditor } from "./homePageEditor";
 import { ImageService } from "../../../services/images";
+import { HomePageService } from "../../../services/home-page";
 
 vi.mock("../../../services/images", () => ({
   ImageService: {
@@ -10,17 +12,16 @@ vi.mock("../../../services/images", () => ({
   },
 }));
 
+vi.mock("../../../services/home-page", () => ({
+  HomePageService: {
+    getFromApi: vi.fn(),
+    update: vi.fn(),
+  },
+}));
+
 vi.mock("../../../hooks/useAdminToken", () => ({
   useAdminToken: () => async () => "token",
 }));
-
-const fetchMock = vi.fn();
-
-function putCalls() {
-  return fetchMock.mock.calls.filter(
-    ([, init]) => (init as RequestInit | undefined)?.method === "PUT",
-  );
-}
 
 // Renders the editor and picks a replacement photo — the state right
 // before the user hits save.
@@ -39,31 +40,58 @@ async function renderAndPickImage() {
   return { notify };
 }
 
-describe("HomePageEditor photo replacement", () => {
-  let putResponse: { ok: boolean; status: number };
+beforeEach(() => {
+  vi.mocked(HomePageService.getFromApi).mockResolvedValue({
+    photo: "old.png",
+    blurb: "hello",
+  });
+  vi.mocked(HomePageService.update).mockResolvedValue(undefined);
+  vi.mocked(ImageService.upload).mockResolvedValue("new.png");
+  vi.mocked(ImageService.delete).mockResolvedValue(undefined);
+  // jsdom does not implement object URLs; PhotoPicker needs one for the
+  // preview of the freshly picked file.
+  window.URL.createObjectURL = vi.fn(() => "blob:preview");
+  vi.spyOn(console, "error").mockImplementation(() => {});
+});
 
-  beforeEach(() => {
-    putResponse = { ok: true, status: 200 };
-    fetchMock.mockImplementation(async (_url, init?: RequestInit) => {
-      if (init?.method === "PUT") {
-        return putResponse;
-      }
-      return {
-        ok: true,
-        json: async () => ({ photo: "old.png", blurb: "hello" }),
-      };
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    vi.mocked(ImageService.upload).mockResolvedValue("new.png");
-    vi.mocked(ImageService.delete).mockResolvedValue(undefined);
-    // jsdom does not implement object URLs; PhotoPicker needs one for the
-    // preview of the freshly picked file.
-    window.URL.createObjectURL = vi.fn(() => "blob:preview");
-    vi.spyOn(console, "error").mockImplementation(() => {});
+describe("HomePageEditor initial load", () => {
+  it("shows a load error instead of an empty editor when the load fails", async () => {
+    vi.mocked(HomePageService.getFromApi).mockRejectedValueOnce(
+      new Error("network down"),
+    );
+
+    render(
+      <HomePageEditor setLoading={vi.fn()} isLoading={false} notify={vi.fn()} />,
+    );
+
+    expect(
+      await screen.findByText("Failed to load home page data."),
+    ).toBeInTheDocument();
+    // Never show an empty editor after a failed load — saving it would
+    // overwrite the real data.
+    expect(screen.queryByPlaceholderText("Blurb")).not.toBeInTheDocument();
   });
 
+  it("retries the load and recovers when Retry is clicked", async () => {
+    vi.mocked(HomePageService.getFromApi).mockRejectedValueOnce(
+      new Error("network down"),
+    );
+
+    render(
+      <HomePageEditor setLoading={vi.fn()} isLoading={false} notify={vi.fn()} />,
+    );
+    await userEvent.click(await screen.findByText("Retry"));
+
+    expect(await screen.findByDisplayValue("hello")).toBeInTheDocument();
+    expect(HomePageService.getFromApi).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("HomePageEditor photo replacement", () => {
   it("keeps the old photo when saving the JSON fails", async () => {
-    putResponse = { ok: false, status: 500 };
+    vi.mocked(HomePageService.update).mockRejectedValueOnce(
+      new Error("Failed to save home page data (HTTP 500)"),
+    );
     const { notify } = await renderAndPickImage();
 
     fireEvent.click(screen.getByText("Save"));
@@ -76,13 +104,12 @@ describe("HomePageEditor photo replacement", () => {
     );
     // The still-referenced photo must never be deleted on a failed save.
     expect(ImageService.delete).not.toHaveBeenCalled();
-    // The upload happened first and the attempted JSON referenced it.
+    // The upload happened first and the attempted save referenced it.
     expect(ImageService.upload).toHaveBeenCalledOnce();
-    const [[, init]] = putCalls();
-    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
-      photo: "new.png",
-      blurb: "hello",
-    });
+    expect(HomePageService.update).toHaveBeenCalledWith(
+      { photo: "new.png", blurb: "hello" },
+      expect.any(Function),
+    );
   });
 
   it("keeps the old photo and skips the JSON save when the upload fails", async () => {
@@ -100,7 +127,7 @@ describe("HomePageEditor photo replacement", () => {
       ),
     );
     expect(ImageService.delete).not.toHaveBeenCalled();
-    expect(putCalls()).toHaveLength(0);
+    expect(HomePageService.update).not.toHaveBeenCalled();
   });
 
   it("deletes the old photo only after the save succeeds", async () => {
@@ -116,16 +143,14 @@ describe("HomePageEditor photo replacement", () => {
       ),
     );
     expect(ImageService.delete).toHaveBeenCalledOnce();
-    // upload -> PUT -> delete, strictly in that order.
+    // upload -> save -> delete, strictly in that order.
     const uploadOrder =
       vi.mocked(ImageService.upload).mock.invocationCallOrder[0];
-    const putIndex = fetchMock.mock.calls.findIndex(
-      ([, init]) => (init as RequestInit | undefined)?.method === "PUT",
-    );
-    const putOrder = fetchMock.mock.invocationCallOrder[putIndex];
+    const saveOrder =
+      vi.mocked(HomePageService.update).mock.invocationCallOrder[0];
     const deleteOrder =
       vi.mocked(ImageService.delete).mock.invocationCallOrder[0];
-    expect(uploadOrder).toBeLessThan(putOrder);
-    expect(putOrder).toBeLessThan(deleteOrder);
+    expect(uploadOrder).toBeLessThan(saveOrder);
+    expect(saveOrder).toBeLessThan(deleteOrder);
   });
 });

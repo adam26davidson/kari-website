@@ -5,12 +5,10 @@ import { useAdminToken } from "../../../hooks/useAdminToken";
 import { HomePageData } from "../../../Models";
 import { PhotoPicker } from "../../../components/photo-picker/photo-picker";
 import { ImageService } from "../../../services/images";
+import { HomePageService } from "../../../services/home-page";
 import { Notify } from "../admin";
 import { AdminButton } from "../../../components/admin-button/admin-button";
 import { LoadError } from "../../../components/load-error/load-error";
-
-const API_URL = import.meta.env.VITE_API_URL;
-const HOME_PAGE_DATA_ENDPOINT = `${API_URL}/home-page`;
 
 export interface HomePageEditorProps {
   setLoading: (loading: { isLoading: boolean; message: string }) => void;
@@ -38,18 +36,7 @@ export function HomePageEditor({
     });
     setLoadFailed(false);
     try {
-      const token = await getAccessTokenSilently();
-      const response = await fetch(HOME_PAGE_DATA_ENDPOINT, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (!response.ok) {
-        throw new Error(
-          `Failed to fetch home page data (HTTP ${response.status})`,
-        );
-      }
-      const data: HomePageData = await response.json();
+      const data = await HomePageService.getFromApi(getAccessTokenSilently);
       setHomePageData(data);
     } catch (error) {
       // Never show an empty editor after a failed load — saving it would
@@ -89,20 +76,7 @@ export function HomePageEditor({
         newHomePageData.photo = newFileName;
       }
 
-      const token = await getAccessTokenSilently();
-      const response = await fetch(HOME_PAGE_DATA_ENDPOINT, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(newHomePageData),
-      });
-      if (!response.ok) {
-        throw new Error(
-          `Failed to save home page data (HTTP ${response.status})`,
-        );
-      }
+      await HomePageService.update(newHomePageData, getAccessTokenSilently);
       setHomePageData(newHomePageData);
       setImageFile(null);
       // The save succeeded, so nothing references the old photo anymore;
