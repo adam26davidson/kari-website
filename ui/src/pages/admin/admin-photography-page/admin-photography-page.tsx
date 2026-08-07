@@ -10,6 +10,10 @@ import { moveItemByOne } from "../../../utils/data-list-helpers";
 import { ImageService } from "../../../services/images";
 import { PhotographyService } from "../../../services/photography";
 import { PhotographyPostEditor } from "./components/photography-post-editor/photography-post-editor";
+import {
+  EditorImage,
+  newEditorImage,
+} from "./components/photography-post-editor/editor-image";
 import { PhotographyPostSummary } from "./components/photography-post-summary/photography-post-summary";
 import { copyPhotographyPost } from "../../../utils/misc-utils";
 import { LoadError } from "../../../components/load-error/load-error";
@@ -28,7 +32,11 @@ export function AdminPhotographyPage({
   const getAccessTokenSilently = useAdminToken();
   const [postList, setPostList] = useState<Array<PhotographyPost>>([]);
   const [openPost, setOpenPost] = useState<PhotographyPost | null>(null);
-  const [imageFiles, setImageFiles] = useState<Array<File | null>>([]);
+  // While a post is open in the editor, its images (plus any pending files)
+  // live here as id-keyed entries — the single source of truth for the image
+  // list. openPost.images is only the as-opened snapshot; saveOpenPost
+  // rebuilds the saved images from these entries.
+  const [editorImages, setEditorImages] = useState<Array<EditorImage>>([]);
   const [loadFailed, setLoadFailed] = useState(false);
 
   const load = async () => {
@@ -132,7 +140,7 @@ export function AdminPhotographyPage({
 
     const newPostList = [...postList, copyPhotographyPost(newPost)];
     if (await savePostList(newPostList, "New photography post created")) {
-      setImageFiles([]);
+      setEditorImages([]);
       setOpenPost(newPost);
     }
   };
@@ -155,7 +163,9 @@ export function AdminPhotographyPage({
 
   const onEdit = (idx: number) => async () => {
     const openItem = copyPhotographyPost(postList[idx]);
-    setImageFiles(openItem.images.map(() => null));
+    setEditorImages(
+      openItem.images.map((image) => newEditorImage(image.image, image.blurb)),
+    );
     setOpenPost(openItem);
   };
 
@@ -184,16 +194,15 @@ export function AdminPhotographyPage({
         message: "Uploading images...",
       });
       editedPost.images = [];
-      for (let i = 0; i < openPost.images.length; i++) {
-        const newImage = { ...openPost.images[i] };
+      for (const entry of editorImages) {
+        const newImage = { image: entry.image, blurb: entry.blurb };
         const isInOriginal = originalPost.images.some((img) => {
           return img.image === newImage.image;
         });
-        const imageFile = imageFiles[i];
-        if (!isInOriginal && imageFile) {
+        if (!isInOriginal && entry.file) {
           // image was not in original and must be added
           const fileName = await ImageService.upload(
-            imageFile,
+            entry.file,
             true,
             getAccessTokenSilently,
           );
@@ -215,6 +224,7 @@ export function AdminPhotographyPage({
     newPostList[idx] = editedPost;
     if (!(await savePostList(newPostList, "Photography post saved"))) return;
     setOpenPost(null);
+    setEditorImages([]);
 
     // The saved list no longer references images that were removed from
     // the post; a failed delete just leaves an orphan for later cleanup.
@@ -238,7 +248,7 @@ export function AdminPhotographyPage({
 
   const closeOpenPost = () => {
     setOpenPost(null);
-    setImageFiles([]);
+    setEditorImages([]);
   };
 
   const openPostIsValid = () => {
@@ -259,8 +269,8 @@ export function AdminPhotographyPage({
       validate={openPostIsValid}
       onSave={saveOpenPost}
       onClose={closeOpenPost}
-      imageFiles={imageFiles}
-      setImageFiles={setImageFiles}
+      images={editorImages}
+      setImages={setEditorImages}
     />
   ) : (
     <DataList isAdmin={true} onNewItem={onNewItem}>

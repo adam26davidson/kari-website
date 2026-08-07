@@ -149,16 +149,71 @@ describe("AdminPhotographyPage image replacement", () => {
       ),
     );
     expect(ImageService.delete).toHaveBeenCalledOnce();
-    const uploadOrder =
-      vi.mocked(ImageService.upload).mock.invocationCallOrder[0];
-    const saveOrder =
-      vi.mocked(PhotographyService.updateList).mock.invocationCallOrder[0];
-    const deleteOrder =
-      vi.mocked(ImageService.delete).mock.invocationCallOrder[0];
+    const uploadOrder = vi.mocked(ImageService.upload).mock
+      .invocationCallOrder[0];
+    const saveOrder = vi.mocked(PhotographyService.updateList).mock
+      .invocationCallOrder[0];
+    const deleteOrder = vi.mocked(ImageService.delete).mock
+      .invocationCallOrder[0];
     expect(uploadOrder).toBeLessThan(saveOrder);
     expect(saveOrder).toBeLessThan(deleteOrder);
     // The published list entry itself was replaced, never mutated in place.
     expect(savedPost.images).toEqual([{ image: "old.png", blurb: "a photo" }]);
+  });
+});
+
+describe("AdminPhotographyPage reordering in the editor", () => {
+  it("keeps a pending file with its image through a reorder and save", async () => {
+    savedPost.images = [
+      { image: "old1.png", blurb: "first" },
+      { image: "old2.png", blurb: "second" },
+    ];
+    vi.mocked(PhotographyService.getListFromApi).mockResolvedValue([savedPost]);
+    const { container, notify } = await renderPage();
+    fireEvent.click(iconButton(container, "pencil"));
+
+    // Replace the first image with a not-yet-uploaded file...
+    const input = container.querySelector('input[type="file"]');
+    fireEvent.change(input as HTMLInputElement, {
+      target: {
+        files: [new File(["img"], "next.png", { type: "image/png" })],
+      },
+    });
+    // ...then move that item down. The first list item has no move-up
+    // control, so the first arrow-down on the page is item 0's.
+    fireEvent.click(iconButton(container, "arrow-down"));
+
+    fireEvent.click(iconButton(container, "floppy-disk"));
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("Photography post saved"),
+    );
+
+    // The pending file traveled with its entry: exactly one upload, and the
+    // saved list has the untouched image first and the fresh upload (with
+    // its blurb) second.
+    expect(ImageService.upload).toHaveBeenCalledOnce();
+    const [savedList] = vi.mocked(PhotographyService.updateList).mock
+      .calls[0] as [Array<PhotographyPost>, () => Promise<string>];
+    expect(savedList[0].images).toEqual([
+      { image: "old2.png", blurb: "second" },
+      { image: "new.png", blurb: "first" },
+    ]);
+    // Only the replaced image is deleted, and only after the list save.
+    await waitFor(() =>
+      expect(ImageService.delete).toHaveBeenCalledWith(
+        "old1.png",
+        expect.any(Function),
+      ),
+    );
+    expect(ImageService.delete).toHaveBeenCalledOnce();
+    const uploadOrder = vi.mocked(ImageService.upload).mock
+      .invocationCallOrder[0];
+    const saveOrder = vi.mocked(PhotographyService.updateList).mock
+      .invocationCallOrder[0];
+    const deleteOrder = vi.mocked(ImageService.delete).mock
+      .invocationCallOrder[0];
+    expect(uploadOrder).toBeLessThan(saveOrder);
+    expect(saveOrder).toBeLessThan(deleteOrder);
   });
 });
 

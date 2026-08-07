@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { PhotographyPostEditor } from "./photography-post-editor";
+import { EditorImage, newEditorImage } from "./editor-image";
 import { PhotographyPost } from "../../../../../Models";
 
 function makePost(): PhotographyPost {
@@ -10,20 +12,26 @@ function makePost(): PhotographyPost {
   post.title = "Trip";
   post.subtitle = "Coast";
   post.blurb = "Some photos";
-  post.images = [
-    { image: "a.jpg", blurb: "first" },
-    { image: "b.jpg", blurb: "second" },
-    { image: "c.jpg", blurb: "third" },
-  ];
   return post;
+}
+
+// Editor image entries with fixed ids so tests can assert identity travel.
+function makeImages(): Array<EditorImage> {
+  return [
+    { id: "img-a", image: "a.jpg", blurb: "first", file: null },
+    { id: "img-b", image: "b.jpg", blurb: "second", file: null },
+    { id: "img-c", image: "c.jpg", blurb: "third", file: null },
+  ];
 }
 
 function renderEditor(overrides?: {
   validate?: (post: PhotographyPost) => boolean;
+  images?: Array<EditorImage>;
 }) {
   const post = makePost();
+  const images = overrides?.images ?? makeImages();
   const setPost = vi.fn();
-  const setImageFiles = vi.fn();
+  const setImages = vi.fn();
   const onSave = vi.fn();
   const onClose = vi.fn();
   const validate = overrides?.validate ?? (() => true);
@@ -34,142 +42,232 @@ function renderEditor(overrides?: {
       validate={validate}
       onSave={onSave}
       onClose={onClose}
-      imageFiles={[null, null, null]}
-      setImageFiles={setImageFiles}
+      images={images}
+      setImages={setImages}
     />,
   );
-  return { ...utils, post, setPost, setImageFiles, onSave, onClose };
-}
-
-function iconButton(scope: Element, icon: string): HTMLElement {
-  const button = scope
-    .querySelector(`svg[data-icon="${icon}"]`)
-    ?.closest(".admin-icon-button");
-  if (!(button instanceof HTMLElement)) {
-    throw new Error(`no icon button for "${icon}"`);
-  }
-  return button;
-}
-
-function listItems(container: HTMLElement): NodeListOf<Element> {
-  return container.querySelectorAll(".admin-data-list-item");
+  return { ...utils, post, images, setPost, setImages, onSave, onClose };
 }
 
 beforeEach(() => {
-  // the image-file handler logs its bookkeeping; keep test output clean
-  vi.spyOn(console, "log").mockImplementation(() => {});
+  // jsdom does not implement object URLs; PhotoPicker needs one for the
+  // preview of entries that carry a pending file.
+  window.URL.createObjectURL = vi.fn(() => "blob:preview");
 });
 
+// The per-image blurb textareas, in list order.
+function imageBlurbs(): Array<HTMLElement> {
+  return screen.getAllByRole("textbox", { name: "image blurb or caption" });
+}
+
 describe("PhotographyPostEditor", () => {
-  it("updates the title without touching other fields", () => {
-    const { setPost } = renderEditor();
-    fireEvent.change(screen.getByPlaceholderText("Title"), {
+  it("updates the title without touching the images", () => {
+    const { setPost, setImages } = renderEditor();
+    fireEvent.change(screen.getByRole("textbox", { name: "Title" }), {
       target: { value: "New Trip" },
     });
     const updated = setPost.mock.calls[0][0] as PhotographyPost;
     expect(updated.title).toBe("New Trip");
     expect(updated.subtitle).toBe("Coast");
-    expect(updated.images).toEqual(makePost().images);
+    expect(setImages).not.toHaveBeenCalled();
   });
 
   it("updates the subtitle and blurb", () => {
     const { setPost } = renderEditor();
-    fireEvent.change(screen.getByPlaceholderText("Subtitle"), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Subtitle" }), {
       target: { value: "Inland" },
     });
-    fireEvent.change(screen.getByPlaceholderText("Optional blurb"), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Optional blurb" }), {
       target: { value: "New blurb" },
     });
     expect(setPost.mock.calls[0][0].subtitle).toBe("Inland");
     expect(setPost.mock.calls[1][0].blurb).toBe("New blurb");
   });
 
-  it("adds an empty image entry and file slot on new item", async () => {
-    const { container, setPost, setImageFiles } = renderEditor();
+  it("appends an empty entry with a fresh id on new item", async () => {
+    const { setImages } = renderEditor();
 
-    await userEvent.click(iconButton(container, "plus"));
+    await userEvent.click(screen.getByRole("button", { name: "Add item" }));
 
-    const updated = setPost.mock.calls[0][0] as PhotographyPost;
-    expect(updated.images).toHaveLength(4);
-    expect(updated.images[3]).toEqual({ image: "", blurb: "" });
-    expect(setImageFiles).toHaveBeenCalledWith([null, null, null, null]);
+    const updated = setImages.mock.calls[0][0] as Array<EditorImage>;
+    expect(updated).toHaveLength(4);
+    expect(updated.slice(0, 3)).toEqual(makeImages());
+    expect(updated[3]).toEqual({
+      id: expect.any(String),
+      image: "",
+      blurb: "",
+      file: null,
+    });
+    expect(makeImages().map((e) => e.id)).not.toContain(updated[3].id);
   });
 
-  it("deletes an image and its file slot together", async () => {
-    const { container, setPost, setImageFiles } = renderEditor();
+  it("deletes an image entry, file and all", async () => {
+    const images = makeImages();
+    images[1].file = new File(["img"], "pending.png", { type: "image/png" });
+    const { setImages, setPost } = renderEditor({ images });
 
-    await userEvent.click(iconButton(listItems(container)[1], "trash"));
+    await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[1]);
 
-    const updated = setPost.mock.calls[0][0] as PhotographyPost;
-    expect(updated.images.map((i) => i.image)).toEqual(["a.jpg", "c.jpg"]);
-    expect(setImageFiles).toHaveBeenCalledWith([null, null]);
+    const updated = setImages.mock.calls[0][0] as Array<EditorImage>;
+    expect(updated.map((e) => e.id)).toEqual(["img-a", "img-c"]);
+    expect(setPost).not.toHaveBeenCalled();
   });
 
-  it("moves an image down one position", async () => {
-    const { container, setPost } = renderEditor();
+  it("moves an entry down one position, keeping its pending file", async () => {
+    const images = makeImages();
+    const pending = new File(["img"], "pending.png", { type: "image/png" });
+    images[0].file = pending;
+    const { setImages } = renderEditor({ images });
 
-    await userEvent.click(iconButton(listItems(container)[0], "arrow-down"));
+    // The first item has no "Move up", so the first "Move down" is item 0's.
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Move down" })[0],
+    );
 
-    const updated = setPost.mock.calls[0][0] as PhotographyPost;
-    expect(updated.images.map((i) => i.image)).toEqual([
-      "b.jpg",
-      "a.jpg",
-      "c.jpg",
-    ]);
+    const updated = setImages.mock.calls[0][0] as Array<EditorImage>;
+    expect(updated.map((e) => e.id)).toEqual(["img-b", "img-a", "img-c"]);
+    expect(updated[1].file).toBe(pending);
   });
 
-  it("moves an image up one position", async () => {
-    const { container, setPost } = renderEditor();
+  it("moves an entry up one position", async () => {
+    const { setImages } = renderEditor();
 
-    await userEvent.click(iconButton(listItems(container)[2], "arrow-up"));
+    // "Move up" buttons belong to items 1 and 2; take the last item's.
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Move up" })[1],
+    );
 
-    const updated = setPost.mock.calls[0][0] as PhotographyPost;
-    expect(updated.images.map((i) => i.image)).toEqual([
-      "a.jpg",
-      "c.jpg",
-      "b.jpg",
-    ]);
+    const updated = setImages.mock.calls[0][0] as Array<EditorImage>;
+    expect(updated.map((e) => e.id)).toEqual(["img-a", "img-c", "img-b"]);
   });
 
   it("edits a single image's blurb", () => {
-    const { setPost } = renderEditor();
+    const { setImages } = renderEditor();
 
-    const blurbs = screen.getAllByPlaceholderText("image blurb or caption");
-    fireEvent.change(blurbs[1], { target: { value: "updated caption" } });
+    fireEvent.change(imageBlurbs()[1], {
+      target: { value: "updated caption" },
+    });
 
-    const updated = setPost.mock.calls[0][0] as PhotographyPost;
-    expect(updated.images[1].blurb).toBe("updated caption");
-    expect(updated.images[0].blurb).toBe("first");
+    const updated = setImages.mock.calls[0][0] as Array<EditorImage>;
+    expect(updated[1]).toEqual({
+      id: "img-b",
+      image: "b.jpg",
+      blurb: "updated caption",
+      file: null,
+    });
+    expect(updated[0].blurb).toBe("first");
+    expect(updated[2].blurb).toBe("third");
   });
 
-  it("stores a chosen file and clears the stored image name", () => {
-    const { container, setPost, setImageFiles } = renderEditor();
+  it("stores a chosen file on its entry and clears the stored name", () => {
+    const { setImages } = renderEditor();
     const file = new File(["img"], "new.png", { type: "image/png" });
 
-    const inputs = container.querySelectorAll('input[type="file"]');
-    fireEvent.change(inputs[0], { target: { files: [file] } });
+    fireEvent.change(screen.getAllByLabelText("Select Image")[0], {
+      target: { files: [file] },
+    });
 
-    expect(setImageFiles).toHaveBeenCalledWith([file, null, null]);
-    const updated = setPost.mock.calls[0][0] as PhotographyPost;
-    expect(updated.images[0].image).toBe("");
+    const updated = setImages.mock.calls[0][0] as Array<EditorImage>;
+    expect(updated[0]).toEqual({
+      id: "img-a",
+      image: "",
+      blurb: "first",
+      file,
+    });
+    expect(updated.slice(1)).toEqual(makeImages().slice(1));
+  });
+
+  it("clears only the pending file when the selection is emptied", () => {
+    const images = makeImages();
+    images[0].file = new File(["img"], "pending.png", { type: "image/png" });
+    const { setImages } = renderEditor({ images });
+
+    fireEvent.change(screen.getAllByLabelText("Select Different Image")[0], {
+      target: { files: [] },
+    });
+
+    const updated = setImages.mock.calls[0][0] as Array<EditorImage>;
+    expect(updated[0]).toEqual({
+      id: "img-a",
+      image: "a.jpg",
+      blurb: "first",
+      file: null,
+    });
   });
 
   it("saves and closes through the editor controls", async () => {
-    const { container, onSave, onClose } = renderEditor();
-    const controls = container.querySelector(".data-editor-item-controls");
+    const { onSave, onClose } = renderEditor();
 
-    await userEvent.click(iconButton(controls as Element, "floppy-disk"));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onSave).toHaveBeenCalledOnce();
 
-    await userEvent.click(iconButton(controls as Element, "xmark"));
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(onClose).toHaveBeenCalledOnce();
   });
 
   it("disables the save button when validation fails", () => {
-    const { container } = renderEditor({ validate: () => false });
-    const controls = container.querySelector(".data-editor-item-controls");
-    expect(iconButton(controls as Element, "floppy-disk")).toHaveClass(
-      "disabled",
-    );
+    renderEditor({ validate: () => false });
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  describe("with live state", () => {
+    // A minimal stateful host so reorders round-trip through real state,
+    // like in the page component.
+    function StatefulEditor() {
+      const [post, setPost] = useState(makePost);
+      const [images, setImages] = useState(makeImages);
+      return (
+        <PhotographyPostEditor
+          post={post}
+          setPost={setPost}
+          validate={() => true}
+          onSave={() => {}}
+          onClose={() => {}}
+          images={images}
+          setImages={setImages}
+        />
+      );
+    }
+
+    it("keeps a typed blurb and its DOM node with the item when moved", async () => {
+      render(<StatefulEditor />);
+
+      const firstBlurb = imageBlurbs()[0];
+      fireEvent.change(firstBlurb, { target: { value: "typed caption" } });
+
+      await userEvent.click(
+        screen.getAllByRole("button", { name: "Move down" })[0],
+      );
+
+      const blurbs = imageBlurbs();
+      expect(blurbs.map((b) => (b as HTMLTextAreaElement).value)).toEqual([
+        "second",
+        "typed caption",
+        "third",
+      ]);
+      // Stable ids move the item's DOM node instead of rewriting values in
+      // place — the same textarea element now sits in the second slot.
+      expect(blurbs[1]).toBe(firstBlurb);
+    });
+  });
+});
+
+describe("newEditorImage", () => {
+  it("builds a file-less entry with a unique id", () => {
+    const a = newEditorImage("x.jpg", "caption");
+    const b = newEditorImage();
+    expect(a).toEqual({
+      id: expect.any(String),
+      image: "x.jpg",
+      blurb: "caption",
+      file: null,
+    });
+    expect(b).toEqual({
+      id: expect.any(String),
+      image: "",
+      blurb: "",
+      file: null,
+    });
+    expect(a.id).not.toBe(b.id);
   });
 });

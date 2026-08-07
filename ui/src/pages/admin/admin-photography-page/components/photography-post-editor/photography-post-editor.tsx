@@ -5,6 +5,7 @@ import DataListItem from "../../../../../components/dataListItem/dataListItem";
 import { PhotoPicker } from "../../../../../components/photo-picker/photo-picker";
 import { moveItemByOne } from "../../../../../utils/data-list-helpers";
 import { copyPhotographyPost } from "../../../../../utils/misc-utils";
+import { EditorImage, newEditorImage } from "./editor-image";
 import "./photography-post-editor.css";
 
 export function PhotographyPostEditor({
@@ -13,16 +14,16 @@ export function PhotographyPostEditor({
   validate,
   onSave,
   onClose,
-  imageFiles,
-  setImageFiles,
+  images,
+  setImages,
 }: {
   post: PhotographyPost;
   setPost: (post: PhotographyPost) => void;
   validate: (post: PhotographyPost) => boolean;
   onSave: () => void;
   onClose: () => void;
-  imageFiles: Array<File | null>;
-  setImageFiles: (files: Array<File | null>) => void;
+  images: Array<EditorImage>;
+  setImages: (images: Array<EditorImage>) => void;
 }) {
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newPost = copyPhotographyPost(post);
@@ -43,52 +44,37 @@ export function PhotographyPostEditor({
   };
 
   const onNewImage = () => {
-    const newPost = copyPhotographyPost(post);
-    const newImageFiles = imageFiles.slice();
-
-    newPost.images.push({ image: "", blurb: "" });
-    newImageFiles.push(null);
-
-    setPost(newPost);
-    setImageFiles(newImageFiles);
+    setImages([...images, newEditorImage()]);
   };
 
-  const onDelete = (idx: number) => () => {
-    const newFileList = imageFiles.slice();
-    const newPost = copyPhotographyPost(post);
-
-    newFileList.splice(idx, 1);
-    newPost.images.splice(idx, 1);
-
-    setImageFiles(newFileList);
-    setPost(newPost);
+  const onDelete = (id: string) => () => {
+    setImages(images.filter((entry) => entry.id !== id));
   };
 
-  const onMove = (idx: number, direction: "up" | "down") => async () => {
-    const newPost = copyPhotographyPost(post);
-    newPost.images = moveItemByOne(newPost.images, idx, direction);
-    setPost(newPost);
+  const onMove = (idx: number, direction: "up" | "down") => () => {
+    setImages(moveItemByOne(images, idx, direction));
   };
 
   const handleImageBlurbChange =
-    (idx: number) => (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const newPost = copyPhotographyPost(post);
-      newPost.images[idx].blurb = e.target.value;
-      setPost(newPost);
+    (id: string) => (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      setImages(
+        images.map((entry) =>
+          entry.id === id ? { ...entry, blurb: e.target.value } : entry,
+        ),
+      );
     };
 
-  const setImageFile = (idx: number) => (file: File | null) => {
-    //if there was a file that is being replaced delete it
-    const newFileList = imageFiles.slice();
-    const newPost = copyPhotographyPost(post);
-    if (file !== null) {
-      newFileList[idx] = file;
-      newPost.images[idx].image = "";
-    } else {
-      newFileList[idx] = null;
-    }
-    setPost(newPost);
-    setImageFiles(newFileList);
+  const setImageFile = (id: string) => (file: File | null) => {
+    setImages(
+      images.map((entry) => {
+        if (entry.id !== id) return entry;
+        // A newly picked file replaces whatever was stored; clearing the
+        // stored name marks the entry as pending upload.
+        return file !== null
+          ? { ...entry, file, image: "" }
+          : { ...entry, file: null };
+      }),
+    );
   };
 
   return (
@@ -97,44 +83,48 @@ export function PhotographyPostEditor({
         <input
           type="text"
           placeholder="Title"
+          aria-label="Title"
           value={post.title}
           onChange={handleTitleChange}
         />
         <input
           type="text"
           placeholder="Subtitle"
+          aria-label="Subtitle"
           value={post.subtitle}
           onChange={handleSubtitleChange}
         />
         <textarea
           value={post.blurb}
           placeholder={"Optional blurb"}
+          aria-label="Optional blurb"
           onChange={handleBlurbChange}
         />
       </div>
       <div className="photography-post-editor-images">
         <DataList isAdmin={true} onNewItem={onNewImage}>
-          {post.images.map((image, idx) => (
+          {images.map((entry, idx) => (
             <DataListItem
-              key={idx}
+              key={entry.id}
               isAdmin={true}
-              isLast={idx === post.images.length - 1}
+              isLast={idx === images.length - 1}
               isFirst={idx === 0}
-              onDelete={onDelete(idx)}
+              onDelete={onDelete(entry.id)}
               onMoveUp={onMove(idx, "up")}
               onMoveDown={onMove(idx, "down")}
               hideEdit
             >
               <div className="photography-post-editor-image-fields">
                 <PhotoPicker
-                  imageFile={imageFiles[idx]}
-                  fileName={image.image}
-                  setImageFile={setImageFile(idx)}
+                  imageFile={entry.file}
+                  fileName={entry.image}
+                  setImageFile={setImageFile(entry.id)}
                 />
                 <textarea
-                  value={image.blurb}
+                  value={entry.blurb}
                   placeholder={"image blurb or caption"}
-                  onChange={handleImageBlurbChange(idx)}
+                  aria-label="image blurb or caption"
+                  onChange={handleImageBlurbChange(entry.id)}
                 />
               </div>
             </DataListItem>
