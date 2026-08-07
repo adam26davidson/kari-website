@@ -41,7 +41,7 @@ function Home() {
       )}
       {!isLoading && !loadFailed && (
         <div className="home-page-card">
-          <div className="fade-in home-page-photo-container">
+          <div className="fade-in fade-in-delay-1 home-page-photo-container">
             {homePageData.photo && (
               <img
                 className="home-page-photo"
@@ -50,8 +50,10 @@ function Home() {
               />
             )}
           </div>
-          <div className="fade-in home-page-divider"></div>
-          <div className="fade-in home-page-blurb">{homePageData.blurb}</div>
+          <div className="fade-in fade-in-delay-2 home-page-divider"></div>
+          <div className="fade-in fade-in-delay-3 home-page-blurb">
+            {homePageData.blurb}
+          </div>
         </div>
       )}
     </div>

@@ -47,9 +47,17 @@ export function AdminOtherWorksPage({
   const [originalOpenPostContent, setOriginalOpenPostContent] = useState<
     string | null
   >(null);
-  const [imageFiles, setImageFiles] = useState<
-    Array<{ file: File; id: string } | null>
-  >([]);
+  // Freshly picked files awaiting upload, keyed by the stable client-side
+  // id the editor stamps on the img's title attribute at pick time. The
+  // images themselves live inside the Tiptap HTML content, so this
+  // id-keyed map — not a parallel index-aligned array — is what ties each
+  // pending file to its img node: moving an image around in the content
+  // moves its id with it, and the file follows (#134). Entries are only
+  // cleared once a save fully succeeds, so a failed save can be retried
+  // with every pending file still attached.
+  const [pendingImageFiles, setPendingImageFiles] = useState<Map<string, File>>(
+    new Map(),
+  );
 
   const [loadFailed, setLoadFailed] = useState(false);
 
@@ -203,7 +211,7 @@ export function AdminOtherWorksPage({
       setLoading({ isLoading: false, message: "" });
     }
     notify("New other works item created");
-    setImageFiles([]);
+    setPendingImageFiles(new Map());
     setOriginalOpenPostContent("");
     setOpenPostContent("");
     setOpenPost(newPost);
@@ -233,6 +241,7 @@ export function AdminOtherWorksPage({
         openItem.id,
         getAccessTokenSilently,
       );
+      setPendingImageFiles(new Map());
       setOriginalOpenPostContent(content);
       setOpenPostContent(content);
       setOpenPost(openItem);
@@ -248,9 +257,8 @@ export function AdminOtherWorksPage({
 
   // Editor functions ---------------------------------------------------------
 
-  const onAddImage = async (file: File, id: string) => {
-    const newImageFiles = [...imageFiles, { file, id }];
-    setImageFiles(newImageFiles);
+  const onAddImage = (file: File, id: string) => {
+    setPendingImageFiles((prev) => new Map(prev).set(id, file));
   };
 
   const saveOpenPost = async () => {
@@ -402,11 +410,16 @@ export function AdminOtherWorksPage({
           return img.src === newImage.src;
         });
         if (!originalImage) {
-          const imageId = newImage.title;
-          const imageFile = imageFiles.find((img) => img?.id === imageId);
-          if (imageFile) {
+          // The img's title carries the stable id its pending file is
+          // keyed by, so the file stays attached however the image has
+          // been moved around inside the content. The map is not
+          // touched here — on a later failure the whole save retries
+          // with every pending file still present (a re-upload just
+          // leaves an orphan for the GC sweep).
+          const pendingFile = pendingImageFiles.get(newImage.title);
+          if (pendingFile) {
             const fileName = await ImageService.upload(
-              imageFile.file,
+              pendingFile,
               openPost.isPublished,
               getAccessTokenSilently,
             );
@@ -414,11 +427,6 @@ export function AdminOtherWorksPage({
               throw new Error("Failed to upload image");
             }
             newImage.src = baseUrl + fileName;
-            // remove image from list
-            const updatedImageFiles = imageFiles.filter(
-              (img) => img?.id !== imageId,
-            );
-            setImageFiles(updatedImageFiles);
           }
         }
       }
@@ -430,11 +438,12 @@ export function AdminOtherWorksPage({
 
       // Publishing is committed by the list save, which therefore goes
       // LAST — the public list must never claim a post whose public
-      // content and images don't exist yet. Every other save flips the
-      // list first: for an unpublish that hides the post before any
-      // public object changes, and a failure aborts with everything else
-      // untouched (#112).
-      if (!publishing && !(await savePostList(newPostList))) return;
+      // content and images don't exist yet. Unpublishing flips the list
+      // FIRST, hiding the post before any public object changes, and a
+      // failure aborts with everything else untouched (#112). A no-flip
+      // save orders content before list too, so a content failure can't
+      // leave new metadata (title/date) over old content (#135).
+      if (unpublishing && !(await savePostList(newPostList))) return;
 
       if (publishing) {
         // Public images first: this is safe while the post is still a
@@ -550,6 +559,13 @@ export function AdminOtherWorksPage({
             }
             throw error;
           }
+        } else if (!(await savePostList(newPostList))) {
+          // No-flip: the content is already saved, so a failed list save
+          // leaves the old title/date over the new content — the reverse
+          // (new metadata over old content) would misrepresent what the
+          // post contains. Saving again retries both. (savePostList
+          // already showed its own error toast.)
+          return;
         }
       }
 
@@ -568,6 +584,7 @@ export function AdminOtherWorksPage({
       notify("Other works item saved");
       setOpenPost(null);
       setOpenPostContent(null);
+      setPendingImageFiles(new Map());
     } catch (error) {
       console.error(error);
       notify(
@@ -584,6 +601,7 @@ export function AdminOtherWorksPage({
   const closeOpenPost = () => {
     setOpenPost(null);
     setOpenPostContent(null);
+    setPendingImageFiles(new Map());
   };
 
   const openPostIsValid = () => {

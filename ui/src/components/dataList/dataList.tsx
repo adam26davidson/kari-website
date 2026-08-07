@@ -17,7 +17,14 @@ function DataList({ children, isAdmin, onNewItem }: DataListProps) {
   return (
     <>
       <div className="data-list-container">
-        <div className={isAdmin ? "admin-data-list" : "data-list fade-in"}>
+        {/* fade-in-delay-1 keeps the 0.2s delay the list previously got
+            from homePage.css's position-based .fade-in:nth-child(1) rule
+            (this div is the container's first child). */}
+        <div
+          className={
+            isAdmin ? "admin-data-list" : "data-list fade-in fade-in-delay-1"
+          }
+        >
           {isAdmin && (
             <button
               type="button"
