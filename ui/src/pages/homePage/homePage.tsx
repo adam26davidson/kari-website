@@ -3,6 +3,7 @@ import { useIsMobile } from "../../hooks/isMobile";
 import "./homePage.css";
 import { HomePageData } from "../../Models";
 import { LoadError } from "../../components/load-error/load-error";
+import { HomePageService } from "../../services/home-page";
 
 const S3_URL = import.meta.env.VITE_S3_URL;
 
@@ -19,11 +20,7 @@ function Home() {
     setIsLoading(true);
     setLoadFailed(false);
     try {
-      const response = await fetch(`${S3_URL}/home-page.json`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch home page data: ${response.status}`);
-      }
-      setHomePageData(await response.json());
+      setHomePageData(await HomePageService.getFromS3());
     } catch (error) {
       console.error(error);
       setLoadFailed(true);
