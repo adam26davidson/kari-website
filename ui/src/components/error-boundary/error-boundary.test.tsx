@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { ErrorBoundary } from "./error-boundary";
+import userEvent from "@testing-library/user-event";
+import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
+import { ErrorBoundary, RouteErrorBoundary } from "./error-boundary";
 
 function Boom(): never {
   throw new Error("boom");
@@ -57,5 +59,71 @@ describe("ErrorBoundary", () => {
       expect.any(Error),
       expect.anything(),
     );
+  });
+
+  it("clears the error and renders children again when resetKey changes", () => {
+    const { rerender } = render(
+      <ErrorBoundary resetKey="/broken">
+        <Boom />
+      </ErrorBoundary>,
+    );
+    expect(
+      screen.getByText("Something went wrong displaying this page."),
+    ).toBeInTheDocument();
+
+    rerender(
+      <ErrorBoundary resetKey="/healthy">
+        <p>back on track</p>
+      </ErrorBoundary>,
+    );
+    expect(screen.getByText("back on track")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Something went wrong displaying this page."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps showing the fallback while resetKey is unchanged", () => {
+    const { rerender } = render(
+      <ErrorBoundary resetKey="/broken">
+        <Boom />
+      </ErrorBoundary>,
+    );
+
+    rerender(
+      <ErrorBoundary resetKey="/broken">
+        <p>never shown</p>
+      </ErrorBoundary>,
+    );
+    expect(
+      screen.getByText("Something went wrong displaying this page."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("never shown")).not.toBeInTheDocument();
+  });
+});
+
+describe("RouteErrorBoundary", () => {
+  it("recovers when the visitor navigates to a different route", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/broken"]}>
+        <Link to="/haiku">Haiku</Link>
+        <RouteErrorBoundary>
+          <Routes>
+            <Route path="/broken" element={<Boom />} />
+            <Route path="/haiku" element={<p>haiku page</p>} />
+          </Routes>
+        </RouteErrorBoundary>
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByText("Something went wrong displaying this page."),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("link", { name: "Haiku" }));
+
+    expect(screen.getByText("haiku page")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Something went wrong displaying this page."),
+    ).not.toBeInTheDocument();
   });
 });
