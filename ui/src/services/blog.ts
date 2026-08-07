@@ -28,12 +28,16 @@ export class BlogService {
     return data;
   }
 
-  static async getPublicListFromS3() {
+  static async getPublicListFromS3(): Promise<Array<BlogPost>> {
     const response = await fetch(S3_BLOG_LIST_URL);
     if (!response.ok) {
+      // Throw instead of returning [] so an S3 outage is never mistaken
+      // for a legitimately empty page.
       console.error("Failed to fetch blog from S3", response.status);
-      console.error("error", response);
-      return [];
+      throw new HttpError(
+        `Failed to fetch blog list (HTTP ${response.status})`,
+        response.status,
+      );
     }
     let data: Array<BlogPost> = await response.json();
     data = data.filter((p) => p.isPublished);

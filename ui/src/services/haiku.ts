@@ -28,9 +28,13 @@ export class HaikuService {
   static async getListFromS3(): Promise<Array<Haiku>> {
     const response = await fetch(S3_HAIKU_URL);
     if (!response.ok) {
+      // Throw instead of returning [] so an S3 outage is never mistaken
+      // for a legitimately empty page.
       console.error("Failed to fetch haiku from S3", response.status);
-      console.error("error", response);
-      return [];
+      throw new HttpError(
+        `Failed to fetch haiku list (HTTP ${response.status})`,
+        response.status,
+      );
     }
     const data: Array<Haiku> = await response.json();
     console.log("Fetched Haiku List from S3:", data);

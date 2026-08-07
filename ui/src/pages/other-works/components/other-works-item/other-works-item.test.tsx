@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { OtherWorksItem } from "./other-works-item";
 import { BlogService } from "../../../../services/blog";
@@ -32,6 +33,8 @@ describe("OtherWorksItem", () => {
     vi.mocked(BlogService.getSanitizedContentFromS3).mockResolvedValue(
       "<p>Post body</p>",
     );
+    // The failure paths log via console.error; keep test output clean.
+    vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   it("renders the post title as a link to the post's page", async () => {
@@ -48,5 +51,30 @@ describe("OtherWorksItem", () => {
     expect(BlogService.getSanitizedContentFromS3).toHaveBeenCalledWith(
       "post-1",
     );
+  });
+
+  it("shows an error state when the list fetch fails", async () => {
+    vi.mocked(BlogService.getPublicListFromS3).mockRejectedValueOnce(
+      new Error("network down"),
+    );
+
+    renderItem();
+    expect(
+      await screen.findByText("Failed to load post."),
+    ).toBeInTheDocument();
+  });
+
+  it("retries the fetch and recovers when Retry is clicked", async () => {
+    vi.mocked(BlogService.getPublicListFromS3).mockRejectedValueOnce(
+      new Error("network down"),
+    );
+
+    renderItem();
+    await userEvent.click(await screen.findByText("Retry"));
+
+    expect(await screen.findByText("Post body")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Failed to load post."),
+    ).not.toBeInTheDocument();
   });
 });

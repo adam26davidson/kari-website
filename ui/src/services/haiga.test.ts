@@ -70,9 +70,11 @@ describe("HaigaService.getListFromS3", () => {
     expect(fetchMock).toHaveBeenCalledWith(S3_HAIGA_URL);
   });
 
-  it("returns an empty array on a non-ok response", async () => {
+  it("throws on a non-ok response so pages can show an error state", async () => {
     mockFetchOnce({ ok: false, status: 404, json: async () => ({}) });
-    expect(await HaigaService.getListFromS3()).toEqual([]);
+    await expect(HaigaService.getListFromS3()).rejects.toThrow(
+      "Failed to fetch haiga list (HTTP 404)",
+    );
   });
 });
 

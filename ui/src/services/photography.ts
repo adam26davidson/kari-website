@@ -31,9 +31,16 @@ export class PhotographyService {
   static async getListFromS3(): Promise<Array<PhotographyPost>> {
     const response = await fetch(S3_URL);
     if (!response.ok) {
-      console.error("Failed to fetch photography posts", response.status);
-      console.error("error", response);
-      return [];
+      // Throw instead of returning [] so an S3 outage is never mistaken
+      // for a legitimately empty page.
+      console.error(
+        "Failed to fetch photography posts from S3",
+        response.status,
+      );
+      throw new HttpError(
+        `Failed to fetch photography post list (HTTP ${response.status})`,
+        response.status,
+      );
     }
     const data: Array<PhotographyPost> = await response.json();
     console.log("Fetched Photography Posts from S3:", data);
