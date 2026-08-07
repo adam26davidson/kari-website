@@ -87,9 +87,13 @@ export class BlogService {
   static async getSanitizedContentFromS3(id: string) {
     const response = await fetch(`${S3_BLOG_CONTENT_URL}/${id}.html`);
     if (!response.ok) {
+      // Throw instead of returning "" so a failed content fetch is never
+      // mistaken for a legitimately empty post body.
       console.error("Failed to fetch blog content from S3", response.status);
-      console.error("error", response);
-      return "";
+      throw new HttpError(
+        `Failed to fetch blog content (HTTP ${response.status})`,
+        response.status,
+      );
     }
     const content: string = await response.text();
     const sanitizedContent = DOMPurify.sanitize(content);
