@@ -53,6 +53,53 @@ describe("OtherWorksItem", () => {
     );
   });
 
+  it("shows a loading indicator while the post is being fetched", async () => {
+    renderItem();
+    expect(screen.getByText("Loading...")).toBeInTheDocument();
+
+    expect(await screen.findByText("Post body")).toBeInTheDocument();
+    expect(screen.queryByText("Loading...")).not.toBeInTheDocument();
+  });
+
+  it("shows a not-found state for an unknown id, never Invalid Date", async () => {
+    renderItem("no-such-post");
+
+    expect(await screen.findByText("Post not found")).toBeInTheDocument();
+    expect(screen.queryByText(/invalid date/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Back to all posts" }),
+    ).toHaveAttribute("href", "/other-works");
+    // The content fetch is skipped entirely for unknown ids.
+    expect(BlogService.getSanitizedContentFromS3).not.toHaveBeenCalled();
+  });
+
+  it("shows an error state when the content fetch fails", async () => {
+    vi.mocked(BlogService.getSanitizedContentFromS3).mockRejectedValueOnce(
+      new Error("Failed to fetch blog content (HTTP 500)"),
+    );
+
+    renderItem();
+    expect(
+      await screen.findByText("Failed to load post."),
+    ).toBeInTheDocument();
+    // Never a silently empty body.
+    expect(screen.queryByText("A Published Post")).not.toBeInTheDocument();
+  });
+
+  it("recovers via Retry after a failed content fetch", async () => {
+    vi.mocked(BlogService.getSanitizedContentFromS3).mockRejectedValueOnce(
+      new Error("Failed to fetch blog content (HTTP 500)"),
+    );
+
+    renderItem();
+    await userEvent.click(await screen.findByText("Retry"));
+
+    expect(await screen.findByText("Post body")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Failed to load post."),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows an error state when the list fetch fails", async () => {
     vi.mocked(BlogService.getPublicListFromS3).mockRejectedValueOnce(
       new Error("network down"),

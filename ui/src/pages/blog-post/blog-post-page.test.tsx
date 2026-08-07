@@ -34,6 +34,8 @@ describe("BlogPostPage", () => {
     vi.mocked(BlogService.getSanitizedContentFromS3).mockResolvedValue(
       "<p>Post body</p>",
     );
+    // The failure paths log via console.error; keep test output clean.
+    vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   it("renders the post whose id is in the route", async () => {
@@ -43,5 +45,33 @@ describe("BlogPostPage", () => {
     expect(BlogService.getSanitizedContentFromS3).toHaveBeenCalledWith(
       "post-1",
     );
+  });
+
+  it("shows a loading indicator on first paint", async () => {
+    renderAt("/blog/post-1");
+    expect(screen.getByText("Loading...")).toBeInTheDocument();
+
+    expect(await screen.findByText("Post body")).toBeInTheDocument();
+    expect(screen.queryByText("Loading...")).not.toBeInTheDocument();
+  });
+
+  it("shows a not-found state for an unknown id, never Invalid Date", async () => {
+    renderAt("/blog/no-such-post");
+
+    expect(await screen.findByText("Post not found")).toBeInTheDocument();
+    expect(screen.queryByText(/invalid date/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the error state with retry when the content fetch fails", async () => {
+    vi.mocked(BlogService.getSanitizedContentFromS3).mockRejectedValueOnce(
+      new Error("Failed to fetch blog content (HTTP 500)"),
+    );
+
+    renderAt("/blog/post-1");
+
+    expect(
+      await screen.findByText("Failed to load post."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Retry")).toBeInTheDocument();
   });
 });

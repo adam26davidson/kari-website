@@ -165,9 +165,11 @@ describe("BlogService.getSanitizedContentFromS3", () => {
     expect(fetchMock).toHaveBeenCalledWith(`${S3_BLOG_CONTENT_URL}/b1.html`);
   });
 
-  it("returns an empty string on a non-ok response", async () => {
+  it("throws an HttpError with the status when the fetch fails", async () => {
     mockFetchOnce({ ok: false, status: 404, text: async () => "" });
-    expect(await BlogService.getSanitizedContentFromS3("missing")).toBe("");
+    await expect(
+      BlogService.getSanitizedContentFromS3("missing"),
+    ).rejects.toThrow("Failed to fetch blog content (HTTP 404)");
   });
 });
 
