@@ -71,17 +71,18 @@ function AdminHaigaPage({
   };
 
   const deleteHaiga = (idx: number) => async () => {
+    const imageToDelete = haigaList[idx].image;
     const newDataList = haigaList.slice();
     newDataList.splice(idx, 1);
-    if (haigaList[idx].image) {
-      try {
-        await deleteImage(haigaList[idx].image);
-      } catch (error) {
-        // Still remove the list entry even if the image is already gone.
-        console.error(error);
+    // Save the shortened list first — if this fails the haiga stays
+    // fully intact and referenced.
+    if (await saveHaigaList(newDataList, "Haiga deleted")) {
+      // The saved list no longer references the image; a failed delete
+      // just leaves an orphan for later cleanup.
+      if (imageToDelete) {
+        await deleteImage(imageToDelete).catch(console.error);
       }
     }
-    await saveHaigaList(newDataList, "Haiga deleted");
   };
 
   // List display functions ---------------------------------------------------
