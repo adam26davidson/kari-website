@@ -33,8 +33,8 @@ export default defineConfig({
       // margin below actuals to absorb V8 line-accounting drift.
       thresholds: {
         lines: 73,
-        functions: 77,
-        branches: 83,
+        functions: 82,
+        branches: 85,
       },
     },
   },

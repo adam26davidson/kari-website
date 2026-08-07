@@ -6,9 +6,16 @@ import AdminHaigaPage from "./adminHaigaPage/adminHaigaPage";
 import { HomePageEditor } from "./homePageEditor/homePageEditor";
 import { AdminOtherWorksPage } from "./adminOtherWorksPage/admin-other-works-page";
 import { AdminPhotographyPage } from "./admin-photography-page/admin-photography-page";
+import { AdminImageGcPage } from "./admin-image-gc-page/admin-image-gc-page";
 import { AdminButton } from "../../components/admin-button/admin-button";
 
-type Page = "home" | "haiku" | "haiga" | "other-works" | "photography";
+type Page =
+  | "home"
+  | "haiku"
+  | "haiga"
+  | "other-works"
+  | "photography"
+  | "image-cleanup";
 
 export interface Loading {
   isLoading: boolean;
@@ -60,7 +67,14 @@ function Admin() {
         {isAuthenticated && !isLoading && (
           <>
             <div className="admin-menu">
-              {["home", "haiku", "haiga", "photography", "other-works"].map(
+              {[
+                "home",
+                "haiku",
+                "haiga",
+                "photography",
+                "other-works",
+                "image-cleanup",
+              ].map(
                 (page) => (
                   <div
                     key={page}
@@ -136,6 +150,13 @@ function Admin() {
               )}
               {currentPage === "photography" && (
                 <AdminPhotographyPage
+                  setLoading={setLoading}
+                  setConfirmation={setConfirmation}
+                  notify={notify}
+                />
+              )}
+              {currentPage === "image-cleanup" && (
+                <AdminImageGcPage
                   setLoading={setLoading}
                   setConfirmation={setConfirmation}
                   notify={notify}

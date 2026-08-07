@@ -56,6 +56,26 @@ auto-merge once these checks pass.
   for a stacked PR keep the label manual until the PR retargets to `main`
   (retargeting fires the workflow, which takes over from there).
 
+## Parallel Sessions / Multiple Open PRs
+- If two issues need edits to the same files, work them in ONE branch/PR
+  (multiple `Closes #N` lines in the body) instead of in parallel — the label
+  convention above prevents duplicate pickup but not file collisions.
+- Before pushing UI changes, run `npm run test:coverage`, not just
+  `npm run test:run` — the CI coverage job enforces the ratchet floors and
+  plain test runs won't catch a floor breach. Adding conditional logic can
+  lower the branch percentage even when every test passes.
+- The coverage floors in `ui/vitest.config.ts` are the most conflict-prone
+  lines in the repo when several PRs are open. If two PRs both bump them,
+  whichever merges second must re-measure on the merged tree
+  (`npm run test:coverage`) and set floors just below the NEW actuals —
+  don't blindly keep either side of the conflict.
+- PRs are squash-merged; write PR titles that work as commit subjects.
+- CI retriggers: the GitHub App used by Claude sessions cannot call the
+  Actions re-run API (403). To re-run CI (e.g. after a GitHub outage), push
+  an empty commit to the PR branch. Before debugging a "failed" run, check
+  whether every job died in "Set up job" — that's GitHub infrastructure,
+  not the PR.
+
 ## Code Style Guidelines
 - TypeScript: Use strict typing with interfaces (see Models.ts)
 - React components: Use functional components with typed props

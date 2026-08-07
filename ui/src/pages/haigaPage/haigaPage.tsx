@@ -34,7 +34,7 @@ export function HaigaPage() {
       {loadFailed ? (
         <LoadError message="Failed to load haiga." onRetry={load} />
       ) : (
-        <DataList isAdmin={false} onNewItem={() => {}}>
+        <DataList isAdmin={false}>
           {haigaList.map((haiga, idx) => (
             <DataListItem
               key={haiga.id}

@@ -34,73 +34,24 @@ function Home() {
   }, [load]);
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: isMobile ? "flex-start" : "center",
-        height: "100%",
-        width: "100%",
-        overflowY: "auto",
-      }}
-    >
-      {isLoading && <div>Loading...</div>}
+    <div className={isMobile ? "home-page mobile" : "home-page"}>
+      {isLoading && <div className="loading">Loading...</div>}
       {!isLoading && loadFailed && (
         <LoadError message="Failed to load home page." onRetry={load} />
       )}
       {!isLoading && !loadFailed && (
-        <div
-          style={{
-            backgroundColor: "rgba(226, 226, 226, 0.8)",
-            backdropFilter: "blur(10px)",
-            display: "flex",
-            flexDirection: !isMobile ? "row" : "column",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "calc(80% - 16px)",
-            maxWidth: "800px",
-            padding: "30px",
-            margin: "8px",
-            borderRadius: "3px",
-          }}
-        >
-          <div
-            className="fade-in"
-            style={{
-              minWidth: isMobile ? "300px" : "400px",
-              padding: "20px",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
+        <div className="home-page-card">
+          <div className="fade-in home-page-photo-container">
             {homePageData.photo && (
               <img
-                style={{ maxHeight: "400px" }}
+                className="home-page-photo"
                 src={`${S3_URL}/images/${homePageData.photo}`}
+                alt="Kari Davidson"
               />
             )}
           </div>
-          <div
-            className="fade-in"
-            style={{
-              width: "0px",
-              borderLeft: "1px solid #bbb",
-              height: "90%",
-              margin: "0 30px",
-            }}
-          ></div>
-          <div
-            className="fade-in"
-            style={{
-              maxWidth: "500px",
-              padding: "20px",
-              color: "black",
-            }}
-          >
-            {homePageData.blurb}
-          </div>
+          <div className="fade-in home-page-divider"></div>
+          <div className="fade-in home-page-blurb">{homePageData.blurb}</div>
         </div>
       )}
     </div>

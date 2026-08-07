@@ -34,33 +34,57 @@ describe("TitleLink", () => {
     expect(screen.getByText("Post page")).toBeInTheDocument();
   });
 
-  it("renders an external href as a plain anchor", () => {
+  it("renders an external href as an anchor opening in a new tab", () => {
     render(<TitleLink href="https://example.com">External</TitleLink>);
-    const link = screen.getByText("External");
-    expect(link.tagName).toBe("A");
+    const link = screen.getByRole("link", { name: "External" });
     expect(link).toHaveAttribute("href", "https://example.com");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
     expect(link).toHaveClass("title-link");
   });
 
-  it("renders a clickable div and fires onClick when provided", async () => {
+  it("renders a button and fires onClick when provided", async () => {
     const onClick = vi.fn();
     render(<TitleLink onClick={onClick}>Click me</TitleLink>);
 
-    const el = screen.getByText("Click me");
-    expect(el.tagName).toBe("DIV");
+    const button = screen.getByRole("button", { name: "Click me" });
+    expect(button).toHaveClass("title-link");
+    expect(button).toHaveAttribute("type", "button");
 
-    await userEvent.click(el);
+    await userEvent.click(button);
     expect(onClick).toHaveBeenCalledOnce();
   });
 
-  it("prefers the onClick div branch over an href when both are given", () => {
+  it("activates the onClick variant with the Enter key", async () => {
+    const onClick = vi.fn();
+    render(<TitleLink onClick={onClick}>Keyboard me</TitleLink>);
+
+    await userEvent.tab();
+    expect(screen.getByRole("button", { name: "Keyboard me" })).toHaveFocus();
+
+    await userEvent.keyboard("{Enter}");
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it("activates the onClick variant with the Space key", async () => {
+    const onClick = vi.fn();
+    render(<TitleLink onClick={onClick}>Keyboard me</TitleLink>);
+
+    await userEvent.tab();
+    expect(screen.getByRole("button", { name: "Keyboard me" })).toHaveFocus();
+
+    await userEvent.keyboard(" ");
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it("prefers the onClick button branch over an href when both are given", () => {
     render(
       <TitleLink href="/ignored" onClick={() => {}}>
         Both
       </TitleLink>,
     );
-    const el = screen.getByText("Both");
-    expect(el.tagName).toBe("DIV");
-    expect(el).not.toHaveAttribute("href");
+    const button = screen.getByRole("button", { name: "Both" });
+    expect(button).not.toHaveAttribute("href");
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 });

@@ -29,16 +29,6 @@ function renderEditor(overrides?: {
   return { ...utils, setHaiku, onSave, onClose };
 }
 
-function iconButton(container: HTMLElement, icon: string): HTMLElement {
-  const button = container
-    .querySelector(`svg[data-icon="${icon}"]`)
-    ?.closest(".admin-icon-button");
-  if (!(button instanceof HTMLElement)) {
-    throw new Error(`no icon button for "${icon}"`);
-  }
-  return button;
-}
-
 describe("HaikuEditor", () => {
   it("shows the haiku lines joined into the textarea", () => {
     renderEditor();
@@ -66,17 +56,19 @@ describe("HaikuEditor", () => {
   });
 
   it("saves and closes through the editor controls", async () => {
-    const { container, onSave, onClose } = renderEditor();
+    const { onSave, onClose } = renderEditor();
 
-    await userEvent.click(iconButton(container, "floppy-disk"));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onSave).toHaveBeenCalledOnce();
 
-    await userEvent.click(iconButton(container, "xmark"));
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(onClose).toHaveBeenCalledOnce();
   });
 
   it("disables the save button when validation fails", () => {
-    const { container } = renderEditor({ validate: () => false });
-    expect(iconButton(container, "floppy-disk")).toHaveClass("disabled");
+    renderEditor({ validate: () => false });
+    expect(screen.getByRole("button", { name: "Save" })).toHaveClass(
+      "disabled",
+    );
   });
 });

@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, fireEvent, render, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import AdminHaigaPage from "./adminHaigaPage";
 import { Haiga } from "../../../Models";
 import { HaigaService } from "../../../services/haiga";
@@ -23,16 +29,6 @@ vi.mock("../../../hooks/useAdminToken", () => ({
   useAdminToken: () => async () => "token",
 }));
 
-function iconButton(container: HTMLElement, icon: string): HTMLElement {
-  const button = container
-    .querySelector(`svg[data-icon="${icon}"]`)
-    ?.closest(".admin-icon-button");
-  if (!(button instanceof HTMLElement)) {
-    throw new Error(`no icon button for "${icon}"`);
-  }
-  return button;
-}
-
 // The saved haiga as it exists in the published list before the edit.
 let savedHaiga: Haiga;
 
@@ -47,15 +43,14 @@ async function openEditorAndPickImage() {
       notify={notify}
     />,
   );
-  await waitFor(() => iconButton(container, "pencil"));
-  fireEvent.click(iconButton(container, "pencil"));
+  fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
   const input = container.querySelector('input[type="file"]');
   fireEvent.change(input as HTMLInputElement, {
     target: {
       files: [new File(["img"], "next.png", { type: "image/png" })],
     },
   });
-  return { container, notify };
+  return { notify };
 }
 
 describe("AdminHaigaPage image replacement", () => {
@@ -70,9 +65,9 @@ describe("AdminHaigaPage image replacement", () => {
     vi.mocked(HaigaService.updateList).mockResolvedValue(undefined);
     vi.mocked(ImageService.upload).mockResolvedValue("new.png");
     vi.mocked(ImageService.delete).mockResolvedValue(undefined);
-    // jsdom does not implement object URLs; PhotoPicker needs one for the
-    // preview of the freshly picked file.
-    window.URL.createObjectURL = vi.fn(() => "blob:preview");
+    // PhotoPicker needs an object URL for the preview of the freshly picked
+    // file; spy on the setup.ts polyfill so restoreAllMocks undoes this.
+    vi.spyOn(window.URL, "createObjectURL").mockReturnValue("blob:preview");
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -80,9 +75,9 @@ describe("AdminHaigaPage image replacement", () => {
     vi.mocked(HaigaService.updateList).mockRejectedValue(
       new Error("PUT failed"),
     );
-    const { container, notify } = await openEditorAndPickImage();
+    const { notify } = await openEditorAndPickImage();
 
-    fireEvent.click(iconButton(container, "floppy-disk"));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
@@ -107,9 +102,9 @@ describe("AdminHaigaPage image replacement", () => {
     vi.mocked(ImageService.upload).mockRejectedValue(
       new Error("upload failed"),
     );
-    const { container, notify } = await openEditorAndPickImage();
+    const { notify } = await openEditorAndPickImage();
 
-    fireEvent.click(iconButton(container, "floppy-disk"));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
@@ -123,9 +118,9 @@ describe("AdminHaigaPage image replacement", () => {
   });
 
   it("deletes the old image only after the save succeeds", async () => {
-    const { container, notify } = await openEditorAndPickImage();
+    const { notify } = await openEditorAndPickImage();
 
-    fireEvent.click(iconButton(container, "floppy-disk"));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(notify).toHaveBeenCalledWith("Haiga saved"));
     // Saved list references the new upload.
@@ -173,15 +168,14 @@ describe("AdminHaigaPage deletion", () => {
   async function confirmDelete() {
     const notify = vi.fn();
     const setConfirmation = vi.fn();
-    const { container } = render(
+    render(
       <AdminHaigaPage
         setLoading={vi.fn()}
         setConfirmation={setConfirmation}
         notify={notify}
       />,
     );
-    await waitFor(() => iconButton(container, "trash"));
-    fireEvent.click(iconButton(container, "trash"));
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
     const confirmation = setConfirmation.mock.calls.at(-1)?.[0] as {
       options: Array<{ label: string; callback: () => void }>;
     };

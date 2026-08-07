@@ -10,15 +10,25 @@ body {
 
 body::before {
   content: "";
-  position: absolute;
+  position: fixed; /* Stay put while the page scrolls */
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   background-image: url("assets/petals_on_ground.webp");
+  background-size: cover; /* Scale to fill any viewport, no tiling seam */
+  background-position: center;
+  background-repeat: no-repeat;
   opacity: 0.7; /* Adjust this value to control the transparency */
   z-index: -1; /* Ensure the pseudo-element is behind the content */
   pointer-events: none; /* Allows interaction with underlying elements */
+}
+
+/* Smaller variant (~51 kB vs ~146 kB) for narrow viewports */
+@media (max-width: 960px) {
+  body::before {
+    background-image: url("assets/petals_on_ground_960.webp");
+  }
 }
 
 .whole-page {

@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Frame, Locator, Page, Request } from "@playwright/test";
 import { expect } from "@playwright/test";
-import { TEST_API_URL } from "./config.mjs";
+import { TEST_API_URL, TINY_PNG_BASE64 } from "./config.mjs";
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
 
@@ -28,10 +28,7 @@ export function pngFixturePath(): string {
   const filePath = path.join(fixturesDir, "tiny.png");
   if (!fs.existsSync(filePath)) {
     fs.mkdirSync(fixturesDir, { recursive: true });
-    const base64 =
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNi" +
-      "+M9QDwADgQF/e5IkGQAAAABJRU5ErkJggg==";
-    fs.writeFileSync(filePath, Buffer.from(base64, "base64"));
+    fs.writeFileSync(filePath, Buffer.from(TINY_PNG_BASE64, "base64"));
   }
   return filePath;
 }

@@ -1,6 +1,16 @@
 import { v4 as uuidv4 } from "uuid";
+import { HttpError } from "./http-error";
 
 const API_IMAGES_URL = import.meta.env.VITE_API_URL + "/images";
+
+/** Response of `POST /images/gc` — keys are full S3 keys (`images/...`). */
+export interface GcReport {
+  dry_run: boolean;
+  referenced: Array<string>;
+  orphaned: Array<string>;
+  skipped_recent: Array<string>;
+  deleted: Array<string>;
+}
 
 export class ImageService {
   static async upload(
@@ -92,5 +102,36 @@ export class ImageService {
         `Failed to set image published status: ${fileName}. Error: ${errorText}`,
       );
     }
+  }
+
+  /**
+   * Runs the orphaned-image sweep. With `dryRun` true nothing is deleted —
+   * the report only shows what a real run would do. The API aborts with a
+   * 500 before deleting anything if any content manifest cannot be read.
+   */
+  static async gc(
+    dryRun: boolean,
+    getAccessTokenSilently: () => Promise<string>,
+  ): Promise<GcReport> {
+    const token = await getAccessTokenSilently();
+    const response = await fetch(`${API_IMAGES_URL}/gc?dry_run=${dryRun}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!response.ok) {
+      // Surface the server's reason (e.g. "aborted before any delete") —
+      // a swallowed GC failure would look like a clean, empty report.
+      const errorText = await response.text().catch(() => "");
+      console.error("Image GC request failed", response.status, errorText);
+      throw new HttpError(
+        `Image cleanup failed (HTTP ${response.status})` +
+          (errorText ? `: ${errorText}` : ""),
+        response.status,
+      );
+    }
+    const report: GcReport = await response.json();
+    return report;
   }
 }
