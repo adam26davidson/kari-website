@@ -81,15 +81,12 @@ export function PhotographyPostEditor({
     //if there was a file that is being replaced delete it
     const newFileList = imageFiles.slice();
     const newPost = copyPhotographyPost(post);
-    console.log(idx);
     if (file !== null) {
       newFileList[idx] = file;
       newPost.images[idx].image = "";
     } else {
       newFileList[idx] = null;
     }
-    console.log(newFileList);
-    console.log(newPost.images);
     setPost(newPost);
     setImageFiles(newFileList);
   };

@@ -37,7 +37,6 @@ export class HaigaService {
       );
     }
     const data: Array<Haiga> = await response.json();
-    console.log("Fetched Haiga List from S3:", data);
     return data;
   }
 
