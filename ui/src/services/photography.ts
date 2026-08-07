@@ -43,7 +43,6 @@ export class PhotographyService {
       );
     }
     const data: Array<PhotographyPost> = await response.json();
-    console.log("Fetched Photography Posts from S3:", data);
     return data;
   }
 

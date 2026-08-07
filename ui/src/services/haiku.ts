@@ -37,7 +37,6 @@ export class HaikuService {
       );
     }
     const data: Array<Haiku> = await response.json();
-    console.log("Fetched Haiku List from S3:", data);
     return data;
   }
 

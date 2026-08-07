@@ -44,7 +44,6 @@ export class ImageService {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      console.log("Upload successful", await response.text());
       return fileName;
     } catch (error) {
       console.error("Failed to upload image", error);
