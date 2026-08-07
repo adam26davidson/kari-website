@@ -3,6 +3,7 @@ import "../dataListItem/dataListItem.css";
 import "../../pages/admin/admin.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus } from "@fortawesome/free-solid-svg-icons";
+import { isValidElement } from "react";
 import { Fragment } from "react/jsx-runtime";
 
 interface DataListProps {
@@ -27,7 +28,12 @@ function DataList({ children, isAdmin, onNewItem }: DataListProps) {
             </button>
           )}
           {children?.map((child: React.ReactNode, idx: number) => (
-            <Fragment key={idx}>
+            // Reconcile by the child's own key (a stable id supplied by the
+            // caller) so reordering or deleting items doesn't remount or
+            // mismatch state; fall back to the index for unkeyed children.
+            <Fragment
+              key={isValidElement(child) && child.key != null ? child.key : idx}
+            >
               {child}
               {idx !== children.length - 1 && !isAdmin && (
                 <div className="data-list-item-separator" />

@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 import { useEffect, useState } from "react";
 import "./adminHaigaPage.css";
 import { Confirmation, Loading, Notify } from "../admin";
@@ -49,6 +48,7 @@ function AdminHaigaPage({
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const saveHaigaList = async (
@@ -235,6 +235,7 @@ function AdminHaigaPage({
     <DataList isAdmin={true} onNewItem={onNewItem}>
       {haigaList.map((haiga, idx) => (
         <DataListItem
+          key={haiga.id}
           isAdmin={true}
           compact={true}
           isLast={idx === haigaList.length - 1}

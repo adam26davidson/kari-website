@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 import { useEffect, useState } from "react";
 import "./admin-other-works-page.css";
 import "../admin.css";
@@ -66,6 +65,7 @@ export function AdminOtherWorksPage({
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Toasts on error always; toasts success only when a message is given, so
@@ -427,6 +427,7 @@ export function AdminOtherWorksPage({
     <DataList isAdmin={true} onNewItem={onNewItem}>
       {postList.map((post, idx) => (
         <DataListItem
+          key={post.id}
           isAdmin={true}
           isLast={idx === postList.length - 1}
           isFirst={idx === 0}
