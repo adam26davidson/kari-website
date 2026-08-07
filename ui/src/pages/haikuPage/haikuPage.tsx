@@ -34,7 +34,7 @@ export function HaikuPage() {
       {loadFailed ? (
         <LoadError message="Failed to load haiku." onRetry={load} />
       ) : (
-        <DataList isAdmin={false} onNewItem={() => {}}>
+        <DataList isAdmin={false}>
           {haikuList.map((haiku, idx) => (
             <DataListItem
               key={haiku.id}

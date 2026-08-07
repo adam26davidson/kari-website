@@ -20,6 +20,7 @@ export function PhotographyPostSummary({
             key={img.image}
             className="photography-post-summary-image"
             src={`${API_IMAGE_URL}/${img.image}`}
+            alt={img.blurb}
           />
         ))}
       </div>

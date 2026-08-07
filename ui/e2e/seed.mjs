@@ -18,17 +18,13 @@ import {
   MINIO_START_COMMAND,
   S3_BUCKET,
   S3_ENDPOINT,
+  TINY_PNG_BASE64,
   createS3Client,
 } from "./config.mjs";
 
 const client = createS3Client();
 
-// A tiny valid 1x1 PNG; enough for <img> naturalWidth checks.
-const PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNi" +
-    "+M9QDwADgQF/e5IkGQAAAABJRU5ErkJggg==",
-  "base64",
-);
+const PNG = Buffer.from(TINY_PNG_BASE64, "base64");
 
 const SEED_BLOG_ID = "seed-blog-1";
 

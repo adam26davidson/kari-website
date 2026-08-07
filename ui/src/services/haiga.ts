@@ -55,7 +55,10 @@ export class HaigaService {
     });
     if (!response.ok) {
       console.error("Failed to update haiga list", response.status);
-      throw new Error(`Failed to update haiga list (HTTP ${response.status})`);
+      throw new HttpError(
+        `Failed to update haiga list (HTTP ${response.status})`,
+        response.status,
+      );
     }
   }
 }

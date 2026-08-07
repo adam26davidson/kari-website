@@ -26,9 +26,7 @@ export function PhotoPicker({
     const url = URL.createObjectURL(imageFile);
     setPreviewUrl(url);
     return () => {
-      // Optional call: jsdom (used by some page-level tests) implements
-      // neither createObjectURL nor revokeObjectURL; browsers have both.
-      URL.revokeObjectURL?.(url);
+      URL.revokeObjectURL(url);
     };
   }, [imageFile]);
 
@@ -52,7 +50,6 @@ export function PhotoPicker({
       />
       {(previewUrl || fileName !== "") && (
         <div className="photo-picker-selection">
-          {/* <span>{imageFile ? imageFile.name : "Uploaded image"}</span> */}
           <img
             src={previewUrl ?? `${API_IMAGE_URL}/${fileName}`}
             alt="Selected"

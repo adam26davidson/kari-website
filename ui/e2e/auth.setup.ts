@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { test as setup, expect, APIRequestContext } from "@playwright/test";
 import { ADMIN_STORAGE_STATE, PORT } from "../playwright.config";
+import { MINIO_START_COMMAND } from "./config.mjs";
 import { TEST_API_URL } from "./helpers";
 
 // Logs into the app once through the real Auth0 Universal Login and saves the
@@ -42,8 +43,10 @@ async function checkApiIsUp(request: APIRequestContext) {
   }
   throw new Error(
     `API at ${TEST_API_URL} is not healthy (${lastError}). ` +
-      "For local runs, start the local MinIO (see ui/e2e/seed.mjs) and " +
-      "then `cargo run` in api/ (its .env already targets it).",
+      "For local runs, start the local MinIO:\n" +
+      MINIO_START_COMMAND +
+      "\nseed it (`node e2e/seed.mjs`), and then `cargo run` in api/ " +
+      "(its .env already targets it).",
   );
 }
 
