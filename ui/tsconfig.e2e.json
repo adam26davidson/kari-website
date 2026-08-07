@@ -12,6 +12,12 @@
     "moduleDetection": "force",
     "noEmit": true,
 
+    /* The shared e2e config and the seed script are plain ESM .mjs (run
+       directly by node, outside any TS build) — check them here too, via
+       their JSDoc types */
+    "allowJs": true,
+    "checkJs": true,
+
     /* Node globals (fs, process, Buffer) used by helpers and fixtures */
     "types": ["node"],
 
@@ -21,5 +27,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["e2e/**/*.ts", "playwright.config.ts"]
+  "include": ["e2e/**/*.ts", "e2e/**/*.mjs", "playwright.config.ts"]
 }

@@ -99,54 +99,58 @@ export function AdminOtherWorksPage({
     }
     setLoading({
       isLoading: true,
-      message: "Deleting other works item images...",
+      message: "Deleting other works item...",
     });
 
+    // First get the content of the post so its images can be cleaned up
+    // once the delete has succeeded; content that was never created (404)
+    // is fine to delete, any other fetch failure aborts the delete.
+    let content = "";
     try {
-      // first get the content of the post; content that was never created
-      // (404) is fine to delete, any other fetch failure aborts the delete
-      let content = "";
-      try {
-        content = await BlogService.getContent(
-          postToDelete.id,
-          getAccessTokenSilently,
-        );
-      } catch (error) {
-        if (!(error instanceof HttpError) || error.status !== 404) {
-          throw error;
-        }
-      }
-
-      // then parse the content to find all images and delete them
-      const htmlDoc = new DOMParser().parseFromString(content, "text/html");
-      const images = htmlDoc.querySelectorAll("img");
-      for (let i = 0; i < images.length; i++) {
-        const image = images[i];
-        const fileName = getImageFileName(image.src);
-        if (!fileName) {
-          console.error(`File name not found for image: ${image.src}`);
-          continue;
-        }
-        // a missing image should not block deleting the item
-        await ImageService.delete(fileName, getAccessTokenSilently).catch(
-          console.error,
-        );
-      }
-
-      setLoading({ isLoading: true, message: "Deleting other works item..." });
-      // delete the content
-      await BlogService.deleteContent(postToDelete.id, getAccessTokenSilently);
+      content = await BlogService.getContent(
+        postToDelete.id,
+        getAccessTokenSilently,
+      );
     } catch (error) {
-      console.error(error);
-      notify("Failed to delete other works item", "error");
-      setLoading({ isLoading: false, message: "" });
-      return;
+      if (!(error instanceof HttpError) || error.status !== 404) {
+        console.error(error);
+        notify("Failed to delete other works item", "error");
+        setLoading({ isLoading: false, message: "" });
+        return;
+      }
     }
 
-    // delete the post
+    // Save the shortened list first — if this fails the item stays fully
+    // intact and referenced.
     const newList = postList.slice();
     newList.splice(idx, 1);
-    await savePostList(newList, "Other works item deleted");
+    if (!(await savePostList(newList, "Other works item deleted"))) return;
+
+    // The saved list no longer references the item, so its content and
+    // images can go; a failed delete just leaves orphans for later
+    // cleanup.
+    setLoading({
+      isLoading: true,
+      message: "Deleting other works item images...",
+    });
+    const htmlDoc = new DOMParser().parseFromString(content, "text/html");
+    const images = htmlDoc.querySelectorAll("img");
+    for (let i = 0; i < images.length; i++) {
+      const image = images[i];
+      const fileName = getImageFileName(image.src);
+      if (!fileName) {
+        console.error(`File name not found for image: ${image.src}`);
+        continue;
+      }
+      await ImageService.delete(fileName, getAccessTokenSilently).catch(
+        console.error,
+      );
+    }
+    await BlogService.deleteContent(
+      postToDelete.id,
+      getAccessTokenSilently,
+    ).catch(console.error);
+    setLoading({ isLoading: false, message: "" });
   };
 
   // List display functions ---------------------------------------------------
@@ -272,11 +276,12 @@ export function AdminOtherWorksPage({
       const originalImages = originalHtmlDoc.querySelectorAll("img");
       const baseUrl = `${openPost.isPublished ? S3_URL : API_URL}/images/`;
 
-      // delete images that are in the original but not in the new
-      setLoading({
-        isLoading: true,
-        message: "Deleting images...",
-      });
+      // Images in the original content but not in the new become
+      // unreferenced once the save succeeds. Collect them now, before any
+      // src rewriting below — they are only deleted after the content
+      // save has succeeded, so a failure at any step leaves the published
+      // content intact.
+      const removedImageFileNames: Array<string> = [];
       for (let i = 0; i < originalImages.length; i++) {
         const originalImage = originalImages[i];
         const newImage = Array.from(newImages).find((img) => {
@@ -291,10 +296,7 @@ export function AdminOtherWorksPage({
             );
             continue;
           }
-          // a missing image should not block saving the item
-          await ImageService.delete(fileName, getAccessTokenSilently).catch(
-            console.error,
-          );
+          removedImageFileNames.push(fileName);
         }
       }
 
@@ -371,6 +373,19 @@ export function AdminOtherWorksPage({
         openPost.isPublished,
         getAccessTokenSilently,
       );
+
+      // The saved content no longer references the removed images; a
+      // failed delete just leaves an orphan for later cleanup.
+      setLoading({
+        isLoading: true,
+        message: "Deleting images...",
+      });
+      for (const fileName of removedImageFileNames) {
+        await ImageService.delete(fileName, getAccessTokenSilently).catch(
+          console.error,
+        );
+      }
+
       notify("Other works item saved");
       setOpenPost(null);
       setOpenPostContent(null);

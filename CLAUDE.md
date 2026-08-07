@@ -68,3 +68,7 @@ auto-merge once these checks pass.
 ## AWS Integration
 - Login: `aws sso login` before running API locally
 - S3 sync: `./scripts/sync_s3_prod_to_test.sh` to sync production S3 to test
+- Image GC: `POST /images/gc` (admin JWT) sweeps orphaned `images/` objects.
+  Dry-run by default; pass `?dry_run=false` to actually delete. Objects
+  modified within the last hour are always skipped (in-flight uploads), and
+  any manifest fetch/parse failure aborts the sweep before anything is deleted.

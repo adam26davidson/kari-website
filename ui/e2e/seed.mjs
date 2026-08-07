@@ -4,51 +4,24 @@
 // (or admin-journey mutations) left behind.
 //
 // Run directly (`node e2e/seed.mjs`) or via `npm run test:e2e`, which seeds
-// before launching Playwright. The gateway itself is started separately:
-//
-//   docker run -d --rm --name kari-e2e-s3 -p 9000:9000 \
-//     -e MINIO_ROOT_USER=kari-e2e -e MINIO_ROOT_PASSWORD=kari-e2e-secret \
-//     minio/minio server /data
-//
-// The endpoint and bucket are derived from VITE_S3_URL in ui/.env.test (the
-// same value the test bundle bakes in), so app, tests, and seeds always
-// agree on where the data lives.
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+// before launching Playwright. Importing this module has no side effects —
+// seeding only happens through the exported `seed()` call (or when the file
+// is the entry script). The gateway itself is started separately; the
+// endpoint/bucket/credential conventions live in e2e/config.mjs.
+import { pathToFileURL } from "node:url";
 import {
   CreateBucketCommand,
   PutBucketPolicyCommand,
   PutObjectCommand,
-  S3Client,
 } from "@aws-sdk/client-s3";
+import {
+  MINIO_START_COMMAND,
+  S3_BUCKET,
+  S3_ENDPOINT,
+  createS3Client,
+} from "./config.mjs";
 
-const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
-
-function readTestEnv() {
-  const raw = fs.readFileSync(path.join(E2E_DIR, "..", ".env.test"), "utf-8");
-  const env = {};
-  for (const line of raw.split("\n")) {
-    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (match) env[match[1]] = match[2];
-  }
-  return env;
-}
-
-const s3Url = new URL(process.env.VITE_S3_URL ?? readTestEnv().VITE_S3_URL);
-export const S3_ENDPOINT = s3Url.origin;
-export const S3_BUCKET = s3Url.pathname.replace(/^\//, "");
-
-// Local-only credentials for the throwaway MinIO instance — not secrets.
-const client = new S3Client({
-  endpoint: S3_ENDPOINT,
-  region: "us-east-1",
-  forcePathStyle: true,
-  credentials: {
-    accessKeyId: process.env.E2E_S3_ACCESS_KEY ?? "kari-e2e",
-    secretAccessKey: process.env.E2E_S3_SECRET_KEY ?? "kari-e2e-secret",
-  },
-});
+const client = createS3Client();
 
 // A tiny valid 1x1 PNG; enough for <img> naturalWidth checks.
 const PNG = Buffer.from(
@@ -147,17 +120,14 @@ async function createBucketWithRetry() {
       await client.send(new CreateBucketCommand({ Bucket: S3_BUCKET }));
       return;
     } catch (error) {
-      const name = error?.name ?? "";
+      const name = error instanceof Error ? error.name : "";
       if (name === "BucketAlreadyOwnedByYou" || name === "BucketAlreadyExists")
         return;
       if (Date.now() > deadline) {
         throw new Error(
-          `Local S3 at ${S3_ENDPOINT} is not reachable (${name || error}). ` +
-            "Start it with:\n" +
-            "  docker run -d --rm --name kari-e2e-s3 -p 9000:9000 \\\n" +
-            "    -e MINIO_ROOT_USER=kari-e2e " +
-            "-e MINIO_ROOT_PASSWORD=kari-e2e-secret \\\n" +
-            "    minio/minio server /data",
+          `Local S3 at ${S3_ENDPOINT} is not reachable ` +
+            `(${name || String(error)}). Start it with:\n` +
+            MINIO_START_COMMAND,
         );
       }
       await new Promise((resolve) => setTimeout(resolve, 1_000));
@@ -185,4 +155,10 @@ export async function seed() {
   );
 }
 
-await seed();
+// Seed only when run as a script (`node e2e/seed.mjs`), never on import.
+if (
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  await seed();
+}

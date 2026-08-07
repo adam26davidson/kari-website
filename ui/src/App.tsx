@@ -4,7 +4,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useIsMobile } from "./hooks/isMobile";
 import { MobileMenu } from "./components/mobileMenu/mobileMenu";
 import { lazy, Suspense, useState } from "react";
-import { ErrorBoundary } from "./components/error-boundary/error-boundary";
+import { RouteErrorBoundary } from "./components/error-boundary/error-boundary";
 
 // Route-level code splitting: each page loads as its own chunk, so
 // visitors never download the admin section (and its tiptap editor
@@ -56,7 +56,7 @@ function App() {
             <MobileMenu setShowingMobileMenu={setShowingMobileMenu} />
           )}
           {!showingMobileMobileMenu && (
-            <ErrorBoundary>
+            <RouteErrorBoundary>
               <Suspense fallback={<RouteFallback />}>
                 <Routes>
                   <Route path="/" element={<Home />} />
@@ -72,7 +72,7 @@ function App() {
                   <Route path="photography" element={<PhotographyPage />} />
                 </Routes>
               </Suspense>
-            </ErrorBoundary>
+            </RouteErrorBoundary>
           )}
         </div>
       </div>

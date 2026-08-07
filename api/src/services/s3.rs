@@ -3,8 +3,9 @@ use aws_sdk_s3::error::SdkError;
 use aws_sdk_s3::{primitives::ByteStream, Client};
 use std::error::Error;
 use std::fmt;
+use std::time::SystemTime;
 
-use crate::services::object_store::ObjectStore;
+use crate::services::object_store::{ObjectMeta, ObjectStore};
 
 #[derive(Debug)]
 pub enum S3Error {
@@ -120,5 +121,42 @@ impl ObjectStore for S3Service {
             .await?;
 
         Ok(())
+    }
+
+    async fn list_objects(&self, prefix: &str) -> Result<Vec<ObjectMeta>, S3Error> {
+        let mut objects = Vec::new();
+        let mut continuation_token: Option<String> = None;
+
+        // Follow pagination to the end: a truncated listing that silently
+        // stopped after one page would make every object on later pages look
+        // deletable to the GC sweep.
+        loop {
+            let response = self
+                .client
+                .list_objects_v2()
+                .bucket(&self.bucket_name)
+                .prefix(prefix)
+                .set_continuation_token(continuation_token.take())
+                .send()
+                .await?;
+
+            for object in response.contents() {
+                let Some(key) = object.key() else { continue };
+                let last_modified = object
+                    .last_modified()
+                    .and_then(|dt| SystemTime::try_from(*dt).ok());
+                objects.push(ObjectMeta {
+                    key: key.to_string(),
+                    last_modified,
+                });
+            }
+
+            match response.next_continuation_token() {
+                Some(token) => continuation_token = Some(token.to_string()),
+                None => break,
+            }
+        }
+
+        Ok(objects)
     }
 }

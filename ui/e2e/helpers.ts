@@ -3,28 +3,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
+import { TEST_API_URL } from "./config.mjs";
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
 
-/**
- * The test-environment backend URLs, read from ui/.env.test — the same file
- * `npm run build:test` bakes into the bundle, so specs and app always agree.
- * Real environment variables win over the file, mirroring Vite's own
- * precedence (useful locally, e.g. to point at an API on another port).
- */
-function readTestEnv(): Record<string, string> {
-  const raw = fs.readFileSync(path.join(E2E_DIR, "..", ".env.test"), "utf-8");
-  const env: Record<string, string> = {};
-  for (const line of raw.split("\n")) {
-    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-    if (match) env[match[1]] = match[2];
-  }
-  return env;
-}
-
-const testEnv = readTestEnv();
-export const TEST_API_URL = process.env.VITE_API_URL ?? testEnv.VITE_API_URL;
-export const TEST_S3_URL = process.env.VITE_S3_URL ?? testEnv.VITE_S3_URL;
+// The test-environment backend URLs. e2e/config.mjs owns the .env.test
+// parsing and precedence rules; re-exported here for the specs' convenience.
+export { TEST_API_URL, TEST_S3_URL } from "./config.mjs";
 
 /**
  * A unique marker for content created by a test, so parallel or retried runs
@@ -52,7 +37,7 @@ export function pngFixturePath(): string {
 }
 
 // --- Admin UI helpers -------------------------------------------------------
-// The admin controls are icon-only divs (FontAwesome renders
+// The admin controls are icon-only buttons (FontAwesome renders
 // <svg data-icon="...">), so selectors go through the icon name.
 
 export function iconButton(scope: Page | Locator, icon: string): Locator {

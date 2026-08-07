@@ -39,8 +39,7 @@
 }
 
 .photography-post-image {
-  //max-width: 100%;
-  width: content-fit;
+  max-width: 100%;
   border-radius: 3px;
 }
 .photography-post-image-caption {

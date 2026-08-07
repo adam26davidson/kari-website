@@ -40,22 +40,42 @@ const DataListItem = ({
       {isAdmin && (
         <div className="data-list-item-controls">
           {!isFirst && (
-            <div className="admin-icon-button" onClick={onMoveUp}>
+            <button
+              type="button"
+              className="admin-icon-button"
+              aria-label="Move up"
+              onClick={onMoveUp}
+            >
               <FontAwesomeIcon icon={faArrowUp} />
-            </div>
+            </button>
           )}
           {!isLast && (
-            <div className="admin-icon-button" onClick={onMoveDown}>
+            <button
+              type="button"
+              className="admin-icon-button"
+              aria-label="Move down"
+              onClick={onMoveDown}
+            >
               <FontAwesomeIcon icon={faArrowDown} />
-            </div>
+            </button>
           )}
-          <div className="admin-icon-button" onClick={onDelete}>
+          <button
+            type="button"
+            className="admin-icon-button"
+            aria-label="Delete"
+            onClick={onDelete}
+          >
             <FontAwesomeIcon icon={faTrash} />
-          </div>
+          </button>
           {!hideEdit && (
-            <div className="admin-icon-button" onClick={onEdit}>
+            <button
+              type="button"
+              className="admin-icon-button"
+              aria-label="Edit"
+              onClick={onEdit}
+            >
               <FontAwesomeIcon icon={faPencil} />
-            </div>
+            </button>
           )}
         </div>
       )}

@@ -18,16 +18,6 @@ function renderEditor(overrides?: { disableSave?: boolean }) {
   return { ...utils, onSave, onClose };
 }
 
-function iconButton(container: HTMLElement, icon: string): HTMLElement {
-  const button = container
-    .querySelector(`svg[data-icon="${icon}"]`)
-    ?.closest(".admin-icon-button");
-  if (!(button instanceof HTMLElement)) {
-    throw new Error(`no icon button for "${icon}"`);
-  }
-  return button;
-}
-
 describe("DataEditor", () => {
   it("renders its children", () => {
     renderEditor();
@@ -35,14 +25,14 @@ describe("DataEditor", () => {
   });
 
   it("calls onSave when the enabled save button is clicked", async () => {
-    const { container, onSave } = renderEditor({ disableSave: false });
-    await userEvent.click(iconButton(container, "floppy-disk"));
+    const { onSave } = renderEditor({ disableSave: false });
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onSave).toHaveBeenCalledOnce();
   });
 
   it("does not call onSave when the disabled save button is clicked", async () => {
-    const { container, onSave } = renderEditor({ disableSave: true });
-    const save = iconButton(container, "floppy-disk");
+    const { onSave } = renderEditor({ disableSave: true });
+    const save = screen.getByRole("button", { name: "Save" });
     expect(save).toHaveClass("disabled");
     expect(save).toBeDisabled();
     await userEvent.click(save);
@@ -50,8 +40,15 @@ describe("DataEditor", () => {
   });
 
   it("calls onClose when the close button is clicked", async () => {
-    const { container, onClose } = renderEditor();
-    await userEvent.click(iconButton(container, "xmark"));
+    const { onClose } = renderEditor();
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("activates the close button from the keyboard", async () => {
+    const { onClose } = renderEditor();
+    screen.getByRole("button", { name: "Close" }).focus();
+    await userEvent.keyboard("{Enter}");
     expect(onClose).toHaveBeenCalledOnce();
   });
 });

@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, fireEvent, render, waitFor } from "@testing-library/react";
-import AdminHaigaPage from "./adminHaigaPage";
-import { Haiga } from "../../../Models";
-import { HaigaService } from "../../../services/haiga";
+import { AdminPhotographyPage } from "./admin-photography-page";
+import { PhotographyPost } from "../../../Models";
+import { PhotographyService } from "../../../services/photography";
 import { ImageService } from "../../../services/images";
 
-vi.mock("../../../services/haiga", () => ({
-  HaigaService: {
+vi.mock("../../../services/photography", () => ({
+  PhotographyService: {
     getListFromApi: vi.fn(),
     updateList: vi.fn(),
   },
@@ -33,21 +33,28 @@ function iconButton(container: HTMLElement, icon: string): HTMLElement {
   return button;
 }
 
-// The saved haiga as it exists in the published list before the edit.
-let savedHaiga: Haiga;
+// The saved post as it exists in the published list before the edit.
+let savedPost: PhotographyPost;
 
-// Renders the page, opens the only haiga in the editor, and picks a
-// replacement image file — the state right before the user hits save.
-async function openEditorAndPickImage() {
+async function renderPage() {
   const notify = vi.fn();
+  const setConfirmation = vi.fn();
   const { container } = render(
-    <AdminHaigaPage
+    <AdminPhotographyPage
       setLoading={vi.fn()}
-      setConfirmation={vi.fn()}
+      setConfirmation={setConfirmation}
       notify={notify}
     />,
   );
   await waitFor(() => iconButton(container, "pencil"));
+  return { container, notify, setConfirmation };
+}
+
+// Renders the page, opens the only post in the editor, and picks a
+// replacement file for its image — the state right before the user hits
+// save.
+async function openEditorAndReplaceImage() {
+  const { container, notify } = await renderPage();
   fireEvent.click(iconButton(container, "pencil"));
   const input = container.querySelector('input[type="file"]');
   fireEvent.change(input as HTMLInputElement, {
@@ -58,29 +65,27 @@ async function openEditorAndPickImage() {
   return { container, notify };
 }
 
-describe("AdminHaigaPage image replacement", () => {
-  beforeEach(() => {
-    savedHaiga = {
-      id: "h1",
-      lines: [],
-      publisher: "kari",
-      image: "old.png",
-    };
-    vi.mocked(HaigaService.getListFromApi).mockResolvedValue([savedHaiga]);
-    vi.mocked(HaigaService.updateList).mockResolvedValue(undefined);
-    vi.mocked(ImageService.upload).mockResolvedValue("new.png");
-    vi.mocked(ImageService.delete).mockResolvedValue(undefined);
-    // jsdom does not implement object URLs; PhotoPicker needs one for the
-    // preview of the freshly picked file.
-    window.URL.createObjectURL = vi.fn(() => "blob:preview");
-    vi.spyOn(console, "error").mockImplementation(() => {});
-  });
+beforeEach(() => {
+  savedPost = new PhotographyPost();
+  savedPost.id = "p1";
+  savedPost.title = "A Post";
+  savedPost.images = [{ image: "old.png", blurb: "a photo" }];
+  vi.mocked(PhotographyService.getListFromApi).mockResolvedValue([savedPost]);
+  vi.mocked(PhotographyService.updateList).mockResolvedValue(undefined);
+  vi.mocked(ImageService.upload).mockResolvedValue("new.png");
+  vi.mocked(ImageService.delete).mockResolvedValue(undefined);
+  // jsdom does not implement object URLs; PhotoPicker needs one for the
+  // preview of the freshly picked file.
+  window.URL.createObjectURL = vi.fn(() => "blob:preview");
+  vi.spyOn(console, "error").mockImplementation(() => {});
+});
 
+describe("AdminPhotographyPage image replacement", () => {
   it("keeps the old image when saving the list fails", async () => {
-    vi.mocked(HaigaService.updateList).mockRejectedValue(
+    vi.mocked(PhotographyService.updateList).mockRejectedValue(
       new Error("PUT failed"),
     );
-    const { container, notify } = await openEditorAndPickImage();
+    const { container, notify } = await openEditorAndReplaceImage();
 
     fireEvent.click(iconButton(container, "floppy-disk"));
 
@@ -97,42 +102,45 @@ describe("AdminHaigaPage image replacement", () => {
     expect(
       vi.mocked(ImageService.upload).mock.invocationCallOrder[0],
     ).toBeLessThan(
-      vi.mocked(HaigaService.updateList).mock.invocationCallOrder[0],
+      vi.mocked(PhotographyService.updateList).mock.invocationCallOrder[0],
     );
     // The published list entry is untouched.
-    expect(savedHaiga.image).toBe("old.png");
+    expect(savedPost.images).toEqual([{ image: "old.png", blurb: "a photo" }]);
   });
 
   it("keeps the old image and skips the list save when the upload fails", async () => {
     vi.mocked(ImageService.upload).mockRejectedValue(
       new Error("upload failed"),
     );
-    const { container, notify } = await openEditorAndPickImage();
+    const { container, notify } = await openEditorAndReplaceImage();
 
     fireEvent.click(iconButton(container, "floppy-disk"));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
-        "Failed to save haiga image",
+        "Failed to save photography post images",
         "error",
       ),
     );
     expect(ImageService.delete).not.toHaveBeenCalled();
-    expect(HaigaService.updateList).not.toHaveBeenCalled();
-    expect(savedHaiga.image).toBe("old.png");
+    expect(PhotographyService.updateList).not.toHaveBeenCalled();
+    expect(savedPost.images).toEqual([{ image: "old.png", blurb: "a photo" }]);
   });
 
   it("deletes the old image only after the save succeeds", async () => {
-    const { container, notify } = await openEditorAndPickImage();
+    const { container, notify } = await openEditorAndReplaceImage();
 
     fireEvent.click(iconButton(container, "floppy-disk"));
 
-    await waitFor(() => expect(notify).toHaveBeenCalledWith("Haiga saved"));
-    // Saved list references the new upload.
-    expect(HaigaService.updateList).toHaveBeenCalledWith(
-      [{ ...savedHaiga, image: "new.png" }],
-      expect.any(Function),
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("Photography post saved"),
     );
+    // Saved list references the new upload and keeps the blurb.
+    const [savedList] = vi.mocked(PhotographyService.updateList).mock
+      .calls[0] as [Array<PhotographyPost>, () => Promise<string>];
+    expect(savedList[0].images).toEqual([
+      { image: "new.png", blurb: "a photo" },
+    ]);
     // Old image deleted exactly once, and only after upload + list save.
     await waitFor(() =>
       expect(ImageService.delete).toHaveBeenCalledWith(
@@ -144,43 +152,21 @@ describe("AdminHaigaPage image replacement", () => {
     const uploadOrder =
       vi.mocked(ImageService.upload).mock.invocationCallOrder[0];
     const saveOrder =
-      vi.mocked(HaigaService.updateList).mock.invocationCallOrder[0];
+      vi.mocked(PhotographyService.updateList).mock.invocationCallOrder[0];
     const deleteOrder =
       vi.mocked(ImageService.delete).mock.invocationCallOrder[0];
     expect(uploadOrder).toBeLessThan(saveOrder);
     expect(saveOrder).toBeLessThan(deleteOrder);
-    // The list entry itself was replaced, never mutated in place.
-    expect(savedHaiga.image).toBe("old.png");
+    // The published list entry itself was replaced, never mutated in place.
+    expect(savedPost.images).toEqual([{ image: "old.png", blurb: "a photo" }]);
   });
 });
 
-describe("AdminHaigaPage deletion", () => {
-  beforeEach(() => {
-    savedHaiga = {
-      id: "h1",
-      lines: [],
-      publisher: "kari",
-      image: "old.png",
-    };
-    vi.mocked(HaigaService.getListFromApi).mockResolvedValue([savedHaiga]);
-    vi.mocked(HaigaService.updateList).mockResolvedValue(undefined);
-    vi.mocked(ImageService.delete).mockResolvedValue(undefined);
-    vi.spyOn(console, "error").mockImplementation(() => {});
-  });
-
-  // Renders the page, clicks the delete control of the only haiga, and
+describe("AdminPhotographyPage deletion", () => {
+  // Renders the page, clicks the delete control of the only post, and
   // confirms the deletion dialog.
   async function confirmDelete() {
-    const notify = vi.fn();
-    const setConfirmation = vi.fn();
-    const { container } = render(
-      <AdminHaigaPage
-        setLoading={vi.fn()}
-        setConfirmation={setConfirmation}
-        notify={notify}
-      />,
-    );
-    await waitFor(() => iconButton(container, "trash"));
+    const { container, notify, setConfirmation } = await renderPage();
     fireEvent.click(iconButton(container, "trash"));
     const confirmation = setConfirmation.mock.calls.at(-1)?.[0] as {
       options: Array<{ label: string; callback: () => void }>;
@@ -192,8 +178,8 @@ describe("AdminHaigaPage deletion", () => {
     return { notify };
   }
 
-  it("keeps the image when saving the shortened list fails", async () => {
-    vi.mocked(HaigaService.updateList).mockRejectedValue(
+  it("keeps the images when saving the shortened list fails", async () => {
+    vi.mocked(PhotographyService.updateList).mockRejectedValue(
       new Error("PUT failed"),
     );
     const { notify } = await confirmDelete();
@@ -204,15 +190,17 @@ describe("AdminHaigaPage deletion", () => {
         "error",
       ),
     );
-    // The still-referenced image must never be deleted on a failed save.
+    // Still-referenced images must never be deleted on a failed save.
     expect(ImageService.delete).not.toHaveBeenCalled();
   });
 
-  it("deletes the image only after the shortened list is saved", async () => {
+  it("deletes the post images only after the shortened list is saved", async () => {
     const { notify } = await confirmDelete();
 
-    await waitFor(() => expect(notify).toHaveBeenCalledWith("Haiga deleted"));
-    expect(HaigaService.updateList).toHaveBeenCalledWith(
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("Photography post deleted"),
+    );
+    expect(PhotographyService.updateList).toHaveBeenCalledWith(
       [],
       expect.any(Function),
     );
@@ -225,7 +213,7 @@ describe("AdminHaigaPage deletion", () => {
     expect(ImageService.delete).toHaveBeenCalledOnce();
     // List save strictly before the image delete.
     expect(
-      vi.mocked(HaigaService.updateList).mock.invocationCallOrder[0],
+      vi.mocked(PhotographyService.updateList).mock.invocationCallOrder[0],
     ).toBeLessThan(vi.mocked(ImageService.delete).mock.invocationCallOrder[0]);
   });
 });

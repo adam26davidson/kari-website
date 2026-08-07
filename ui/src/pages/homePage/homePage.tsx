@@ -8,7 +8,7 @@ const S3_URL = import.meta.env.VITE_S3_URL;
 
 function Home() {
   const isMobile = useIsMobile();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [homePageData, setHomePageData] = useState<HomePageData>({
     photo: "",
@@ -78,10 +78,12 @@ function Home() {
               alignItems: "center",
             }}
           >
-            <img
-              style={{ maxHeight: "400px" }}
-              src={`${S3_URL}/images/${homePageData.photo}`}
-            />
+            {homePageData.photo && (
+              <img
+                style={{ maxHeight: "400px" }}
+                src={`${S3_URL}/images/${homePageData.photo}`}
+              />
+            )}
           </div>
           <div
             className="fade-in"
