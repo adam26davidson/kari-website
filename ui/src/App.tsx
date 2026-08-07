@@ -3,39 +3,42 @@ import "./App.css";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useIsMobile } from "./hooks/isMobile";
 import { MobileMenu } from "./components/mobileMenu/mobileMenu";
-import { lazy, Suspense, useState } from "react";
+import { Suspense, useState } from "react";
 import { RouteErrorBoundary } from "./components/error-boundary/error-boundary";
+import { lazyWithRetry } from "./components/error-boundary/lazy-with-retry";
 
 // Route-level code splitting: each page loads as its own chunk, so
 // visitors never download the admin section (and its tiptap editor
-// stack) unless they navigate to /admin.
-const Home = lazy(() => import("./pages/homePage/homePage"));
-const HaikuPage = lazy(() =>
+// stack) unless they navigate to /admin. lazyWithRetry retries a
+// failed chunk fetch and auto-reloads once after a redeploy replaces
+// the hashed chunk files (see lazy-with-retry.ts / issue #107).
+const Home = lazyWithRetry(() => import("./pages/homePage/homePage"));
+const HaikuPage = lazyWithRetry(() =>
   import("./pages/haikuPage/haikuPage").then((m) => ({
     default: m.HaikuPage,
   })),
 );
-const HaigaPage = lazy(() =>
+const HaigaPage = lazyWithRetry(() =>
   import("./pages/haigaPage/haigaPage").then((m) => ({
     default: m.HaigaPage,
   })),
 );
-const OtherWorksPage = lazy(() =>
+const OtherWorksPage = lazyWithRetry(() =>
   import("./pages/other-works/other-works-page").then((m) => ({
     default: m.OtherWorksPage,
   })),
 );
-const BlogPostPage = lazy(() =>
+const BlogPostPage = lazyWithRetry(() =>
   import("./pages/blog-post/blog-post-page").then((m) => ({
     default: m.BlogPostPage,
   })),
 );
-const PhotographyPage = lazy(() =>
+const PhotographyPage = lazyWithRetry(() =>
   import("./pages/photography-page/photography-page").then((m) => ({
     default: m.PhotographyPage,
   })),
 );
-const Admin = lazy(() => import("./pages/admin/admin"));
+const Admin = lazyWithRetry(() => import("./pages/admin/admin"));
 
 function RouteFallback() {
   return <div className="route-loading">Loading...</div>;

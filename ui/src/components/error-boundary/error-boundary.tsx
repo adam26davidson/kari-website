@@ -1,5 +1,6 @@
 import { Component, ErrorInfo, ReactNode } from "react";
 import { useLocation } from "react-router-dom";
+import { isChunkLoadError } from "./lazy-with-retry";
 import "./error-boundary.css";
 
 interface ErrorBoundaryProps {
@@ -15,6 +16,8 @@ interface ErrorBoundaryProps {
 
 interface ErrorBoundaryState {
   hasError: boolean;
+  /** The caught error, kept so the fallback can tailor its copy. */
+  error: unknown;
 }
 
 /**
@@ -25,10 +28,10 @@ export class ErrorBoundary extends Component<
   ErrorBoundaryProps,
   ErrorBoundaryState
 > {
-  state: ErrorBoundaryState = { hasError: false };
+  state: ErrorBoundaryState = { hasError: false, error: null };
 
-  static getDerivedStateFromError(): ErrorBoundaryState {
-    return { hasError: true };
+  static getDerivedStateFromError(error: unknown): ErrorBoundaryState {
+    return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
@@ -37,15 +40,23 @@ export class ErrorBoundary extends Component<
 
   componentDidUpdate(prevProps: ErrorBoundaryProps) {
     if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
-      this.setState({ hasError: false });
+      this.setState({ hasError: false, error: null });
     }
   }
 
   render() {
     if (this.state.hasError) {
+      // A failed lazy-chunk fetch usually means a redeploy replaced the
+      // hashed chunk files this tab's HTML still points at; say so
+      // instead of showing the generic message.
       return (
         <div className="error-boundary">
-          <p>Something went wrong displaying this page.</p>
+          <p>
+            {isChunkLoadError(this.state.error)
+              ? "A new version of the site may have been deployed — " +
+                "reload to get the latest."
+              : "Something went wrong displaying this page."}
+          </p>
           <button
             className="error-boundary-reload"
             onClick={() => window.location.reload()}
