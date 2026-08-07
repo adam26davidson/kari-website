@@ -234,6 +234,316 @@ describe("AdminOtherWorksPage content serialization on save", () => {
   });
 });
 
+describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
+  const apiImg = (name: string) => `https://api.test.local/images/${name}`;
+  const s3Img = (name: string) => `https://s3.test.local/images/${name}`;
+  const draftContent = `<img src="${apiImg("a.png")}"><img src="${apiImg(
+    "b.png",
+  )}">`;
+  const publishedContent = `<img src="${s3Img("a.png")}"><img src="${s3Img(
+    "b.png",
+  )}">`;
+
+  // Opens the only post in the editor and toggles its published checkbox
+  // — the state right before the user hits save on a publish/unpublish.
+  async function openEditorAndTogglePublished() {
+    const { container, notify } = await renderPage();
+    fireEvent.click(iconButton(container, "pencil"));
+    await screen.findByPlaceholderText("post content");
+    fireEvent.click(screen.getByRole("checkbox"));
+    return { container, notify };
+  }
+
+  function callsOf(fn: (...args: never[]) => unknown) {
+    return vi.mocked(fn).mock.calls;
+  }
+
+  describe("publishing a draft", () => {
+    beforeEach(() => {
+      savedPost.isPublished = false;
+      vi.mocked(BlogService.getContent).mockResolvedValue(draftContent);
+      vi.mocked(ImageService.setPublished).mockResolvedValue(undefined);
+    });
+
+    it("flips images public, then saves content, then the list", async () => {
+      const { container, notify } = await openEditorAndTogglePublished();
+
+      fireEvent.click(iconButton(container, "floppy-disk"));
+
+      await waitFor(() =>
+        expect(notify).toHaveBeenCalledWith("Other works item saved"),
+      );
+      expect(callsOf(ImageService.setPublished)).toEqual([
+        ["a.png", true, expect.any(Function)],
+        ["b.png", true, expect.any(Function)],
+      ]);
+      expect(BlogService.updateContent).toHaveBeenCalledWith(
+        "b1",
+        publishedContent,
+        true,
+        expect.any(Function),
+      );
+      expect(BlogService.updateList).toHaveBeenCalledWith(
+        [expect.objectContaining({ id: "b1", isPublished: true })],
+        expect.any(Function),
+      );
+      // Images public -> content public -> list flips to published; the
+      // list is the commit point and must come last.
+      const lastFlip =
+        vi.mocked(ImageService.setPublished).mock.invocationCallOrder[1];
+      const contentOrder =
+        vi.mocked(BlogService.updateContent).mock.invocationCallOrder[0];
+      const listOrder =
+        vi.mocked(BlogService.updateList).mock.invocationCallOrder[0];
+      expect(lastFlip).toBeLessThan(contentOrder);
+      expect(contentOrder).toBeLessThan(listOrder);
+    });
+
+    it("flips already-flipped images back when a flip fails mid-loop", async () => {
+      vi.mocked(ImageService.setPublished).mockImplementation(
+        async (fileName, isPublished) => {
+          if (fileName === "b.png" && isPublished) {
+            throw new Error("flip failed");
+          }
+        },
+      );
+      const { container, notify } = await openEditorAndTogglePublished();
+
+      fireEvent.click(iconButton(container, "floppy-disk"));
+
+      await waitFor(() =>
+        expect(notify).toHaveBeenCalledWith(
+          "Failed to save other works item",
+          "error",
+        ),
+      );
+      // a.png was flipped public, so it must be flipped back private; the
+      // draft content and list must never have been touched.
+      expect(callsOf(ImageService.setPublished)).toEqual([
+        ["a.png", true, expect.any(Function)],
+        ["b.png", true, expect.any(Function)],
+        ["a.png", false, expect.any(Function)],
+      ]);
+      expect(BlogService.updateContent).not.toHaveBeenCalled();
+      expect(BlogService.updateList).not.toHaveBeenCalled();
+    });
+
+    it("flips images back when the content save fails", async () => {
+      vi.mocked(BlogService.updateContent).mockRejectedValue(
+        new Error("PUT failed"),
+      );
+      const { container, notify } = await openEditorAndTogglePublished();
+
+      fireEvent.click(iconButton(container, "floppy-disk"));
+
+      await waitFor(() =>
+        expect(notify).toHaveBeenCalledWith(
+          "Failed to save other works item",
+          "error",
+        ),
+      );
+      // The failed PUT left the draft content object untouched; both
+      // images return to private and the list is never flipped.
+      expect(callsOf(ImageService.setPublished)).toEqual([
+        ["a.png", true, expect.any(Function)],
+        ["b.png", true, expect.any(Function)],
+        ["a.png", false, expect.any(Function)],
+        ["b.png", false, expect.any(Function)],
+      ]);
+      expect(BlogService.updateList).not.toHaveBeenCalled();
+    });
+
+    it("restores draft content and image visibility when the list save fails", async () => {
+      vi.mocked(BlogService.updateList).mockRejectedValue(
+        new Error("PUT failed"),
+      );
+      const { container, notify } = await openEditorAndTogglePublished();
+
+      fireEvent.click(iconButton(container, "floppy-disk"));
+
+      await waitFor(() =>
+        expect(notify).toHaveBeenCalledWith(
+          "Failed to save — your change was not saved",
+          "error",
+        ),
+      );
+      // The public list still says draft, so the published content that
+      // was written is rolled back to the original draft content and the
+      // images are flipped back to private. (The toast above fires before
+      // the rollback runs, so the rollback calls each get their own
+      // waitFor.)
+      await waitFor(() =>
+        expect(callsOf(BlogService.updateContent)).toEqual([
+          ["b1", publishedContent, true, expect.any(Function)],
+          ["b1", draftContent, false, expect.any(Function)],
+        ]),
+      );
+      await waitFor(() =>
+        expect(callsOf(ImageService.setPublished)).toEqual([
+          ["a.png", true, expect.any(Function)],
+          ["b.png", true, expect.any(Function)],
+          ["a.png", false, expect.any(Function)],
+          ["b.png", false, expect.any(Function)],
+        ]),
+      );
+    });
+
+    it("reports loudly when the rollback itself fails", async () => {
+      vi.mocked(BlogService.updateList).mockRejectedValue(
+        new Error("PUT failed"),
+      );
+      // First content PUT (publish) succeeds, rollback PUT fails.
+      vi.mocked(BlogService.updateContent)
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValue(new Error("rollback PUT failed"));
+      const { container, notify } = await openEditorAndTogglePublished();
+
+      fireEvent.click(iconButton(container, "floppy-disk"));
+
+      await waitFor(() =>
+        expect(notify).toHaveBeenCalledWith(
+          expect.stringContaining("rolling back was incomplete"),
+          "error",
+        ),
+      );
+    });
+  });
+
+  describe("unpublishing a published post", () => {
+    beforeEach(() => {
+      savedPost.isPublished = true;
+      vi.mocked(BlogService.getContent).mockResolvedValue(publishedContent);
+      vi.mocked(ImageService.setPublished).mockResolvedValue(undefined);
+    });
+
+    it("hides the post first, then saves content, then flips images", async () => {
+      const { container, notify } = await openEditorAndTogglePublished();
+
+      fireEvent.click(iconButton(container, "floppy-disk"));
+
+      await waitFor(() =>
+        expect(notify).toHaveBeenCalledWith("Other works item saved"),
+      );
+      expect(BlogService.updateList).toHaveBeenCalledWith(
+        [expect.objectContaining({ id: "b1", isPublished: false })],
+        expect.any(Function),
+      );
+      expect(BlogService.updateContent).toHaveBeenCalledWith(
+        "b1",
+        draftContent,
+        false,
+        expect.any(Function),
+      );
+      expect(callsOf(ImageService.setPublished)).toEqual([
+        ["a.png", false, expect.any(Function)],
+        ["b.png", false, expect.any(Function)],
+      ]);
+      // List (hides the post) -> content -> image flips: nothing public
+      // may ever reference a private object.
+      const listOrder =
+        vi.mocked(BlogService.updateList).mock.invocationCallOrder[0];
+      const contentOrder =
+        vi.mocked(BlogService.updateContent).mock.invocationCallOrder[0];
+      const firstFlip =
+        vi.mocked(ImageService.setPublished).mock.invocationCallOrder[0];
+      expect(listOrder).toBeLessThan(contentOrder);
+      expect(contentOrder).toBeLessThan(firstFlip);
+    });
+
+    it("changes nothing else when hiding the post fails", async () => {
+      vi.mocked(BlogService.updateList).mockRejectedValue(
+        new Error("PUT failed"),
+      );
+      const { container, notify } = await openEditorAndTogglePublished();
+
+      fireEvent.click(iconButton(container, "floppy-disk"));
+
+      await waitFor(() =>
+        expect(notify).toHaveBeenCalledWith(
+          "Failed to save — your change was not saved",
+          "error",
+        ),
+      );
+      expect(BlogService.updateContent).not.toHaveBeenCalled();
+      expect(ImageService.setPublished).not.toHaveBeenCalled();
+      expect(ImageService.delete).not.toHaveBeenCalled();
+    });
+
+    it("restores the published list when the content save fails", async () => {
+      vi.mocked(BlogService.updateContent).mockRejectedValue(
+        new Error("PUT failed"),
+      );
+      const { container, notify } = await openEditorAndTogglePublished();
+
+      fireEvent.click(iconButton(container, "floppy-disk"));
+
+      await waitFor(() =>
+        expect(notify).toHaveBeenCalledWith(
+          "Failed to save other works item",
+          "error",
+        ),
+      );
+      // The published content object is untouched (the PUT failed), so
+      // restoring the list restores the previous state exactly.
+      await waitFor(() =>
+        expect(callsOf(BlogService.updateList)).toEqual([
+          [
+            [expect.objectContaining({ id: "b1", isPublished: false })],
+            expect.any(Function),
+          ],
+          [
+            [expect.objectContaining({ id: "b1", isPublished: true })],
+            expect.any(Function),
+          ],
+        ]),
+      );
+      expect(ImageService.setPublished).not.toHaveBeenCalled();
+    });
+
+    it("rolls the whole unpublish back when a flip fails mid-loop", async () => {
+      vi.mocked(ImageService.setPublished).mockImplementation(
+        async (fileName, isPublished) => {
+          if (fileName === "b.png" && !isPublished) {
+            throw new Error("flip failed");
+          }
+        },
+      );
+      const { container, notify } = await openEditorAndTogglePublished();
+
+      fireEvent.click(iconButton(container, "floppy-disk"));
+
+      await waitFor(() =>
+        expect(notify).toHaveBeenCalledWith(
+          "Failed to save other works item",
+          "error",
+        ),
+      );
+      // a.png went private and comes back public...
+      expect(callsOf(ImageService.setPublished)).toEqual([
+        ["a.png", false, expect.any(Function)],
+        ["b.png", false, expect.any(Function)],
+        ["a.png", true, expect.any(Function)],
+      ]);
+      // ...then the published content and the published list are restored.
+      expect(callsOf(BlogService.updateContent)).toEqual([
+        ["b1", draftContent, false, expect.any(Function)],
+        ["b1", publishedContent, true, expect.any(Function)],
+      ]);
+      expect(callsOf(BlogService.updateList)).toEqual([
+        [
+          [expect.objectContaining({ id: "b1", isPublished: false })],
+          expect.any(Function),
+        ],
+        [
+          [expect.objectContaining({ id: "b1", isPublished: true })],
+          expect.any(Function),
+        ],
+      ]);
+      expect(ImageService.delete).not.toHaveBeenCalled();
+    });
+  });
+});
+
 describe("AdminOtherWorksPage deletion", () => {
   // Renders the page, clicks the delete control of the only post, and
   // confirms the deletion dialog.
