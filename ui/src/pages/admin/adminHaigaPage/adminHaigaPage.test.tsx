@@ -98,6 +98,23 @@ describe("AdminHaigaPage image replacement", () => {
     expect(savedHaiga.image).toBe("old.png");
   });
 
+  it("treats an empty upload result as a failed upload", async () => {
+    vi.mocked(ImageService.upload).mockResolvedValue("");
+    const { notify } = await openEditorAndPickImage();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith(
+        "Failed to save haiga image",
+        "error",
+      ),
+    );
+    expect(HaigaService.updateList).not.toHaveBeenCalled();
+    expect(ImageService.delete).not.toHaveBeenCalled();
+    expect(savedHaiga.image).toBe("old.png");
+  });
+
   it("keeps the old image and skips the list save when the upload fails", async () => {
     vi.mocked(ImageService.upload).mockRejectedValue(
       new Error("upload failed"),
@@ -221,5 +238,193 @@ describe("AdminHaigaPage deletion", () => {
     expect(
       vi.mocked(HaigaService.updateList).mock.invocationCallOrder[0],
     ).toBeLessThan(vi.mocked(ImageService.delete).mock.invocationCallOrder[0]);
+  });
+});
+
+describe("AdminHaigaPage creation", () => {
+  beforeEach(() => {
+    savedHaiga = {
+      id: "h1",
+      lines: [],
+      publisher: "kari",
+      image: "old.png",
+    };
+    vi.mocked(HaigaService.getListFromApi).mockResolvedValue([savedHaiga]);
+    vi.mocked(HaigaService.updateList).mockResolvedValue(undefined);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  // Renders the page and clicks the add-item control, returning the
+  // confirmation dialog handed to setConfirmation.
+  async function openCreateConfirmation() {
+    const notify = vi.fn();
+    const setConfirmation = vi.fn();
+    render(
+      <AdminHaigaPage
+        setLoading={vi.fn()}
+        setConfirmation={setConfirmation}
+        notify={notify}
+      />,
+    );
+    // Wait for the list to load so the saved list is deterministic.
+    await screen.findByRole("button", { name: "Edit" });
+    fireEvent.click(screen.getByRole("button", { name: "Add item" }));
+    const confirmation = setConfirmation.mock.calls.at(-1)?.[0] as {
+      options: Array<{ label: string; callback: () => void }>;
+    };
+    return { notify, confirmation };
+  }
+
+  it("creates an empty haiga and opens it in the editor on Yes", async () => {
+    const { notify, confirmation } = await openCreateConfirmation();
+    const yes = confirmation.options.find((o) => o.label === "Yes");
+    await act(async () => {
+      yes?.callback();
+    });
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("New haiga created"),
+    );
+    // The saved list is the existing haiga plus a fresh empty one.
+    const [savedList] = vi.mocked(HaigaService.updateList).mock.calls[0] as [
+      Array<Haiga>,
+      () => Promise<string>,
+    ];
+    expect(savedList).toHaveLength(2);
+    expect(savedList[0]).toEqual(savedHaiga);
+    expect(savedList[1]).toMatchObject({
+      lines: [],
+      publisher: "",
+      image: "",
+    });
+    expect(savedList[1].id).not.toBe("");
+    // The new haiga is open in the editor.
+    await screen.findByRole("button", { name: "Save" });
+  });
+
+  it("does nothing on No", async () => {
+    const { notify, confirmation } = await openCreateConfirmation();
+    const no = confirmation.options.find((o) => o.label === "No");
+    await act(async () => {
+      no?.callback();
+    });
+
+    expect(HaigaService.updateList).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+  });
+
+  it("stays on the list when saving the new haiga fails", async () => {
+    vi.mocked(HaigaService.updateList).mockRejectedValue(
+      new Error("PUT failed"),
+    );
+    const { notify, confirmation } = await openCreateConfirmation();
+    const yes = confirmation.options.find((o) => o.label === "Yes");
+    await act(async () => {
+      yes?.callback();
+    });
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith(
+        "Failed to save — your change was not saved",
+        "error",
+      ),
+    );
+    // The editor must not open for a haiga that was never persisted.
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+  });
+});
+
+describe("AdminHaigaPage list reordering", () => {
+  let secondHaiga: Haiga;
+
+  beforeEach(() => {
+    savedHaiga = {
+      id: "h1",
+      lines: [],
+      publisher: "kari",
+      image: "old.png",
+    };
+    secondHaiga = {
+      id: "h2",
+      lines: [],
+      publisher: "kari",
+      image: "second.png",
+    };
+    vi.mocked(HaigaService.getListFromApi).mockResolvedValue([
+      savedHaiga,
+      secondHaiga,
+    ]);
+    vi.mocked(HaigaService.updateList).mockResolvedValue(undefined);
+  });
+
+  async function renderList() {
+    const notify = vi.fn();
+    render(
+      <AdminHaigaPage
+        setLoading={vi.fn()}
+        setConfirmation={vi.fn()}
+        notify={notify}
+      />,
+    );
+    await screen.findAllByRole("button", { name: "Edit" });
+    return { notify };
+  }
+
+  it("saves the reordered list on move down", async () => {
+    const { notify } = await renderList();
+    // Only the first item has a move-down control.
+    fireEvent.click(screen.getByRole("button", { name: "Move down" }));
+
+    await waitFor(() => expect(notify).toHaveBeenCalledWith("Order updated"));
+    expect(HaigaService.updateList).toHaveBeenCalledWith(
+      [secondHaiga, savedHaiga],
+      expect.any(Function),
+    );
+  });
+
+  it("saves the reordered list on move up", async () => {
+    const { notify } = await renderList();
+    // Only the second item has a move-up control.
+    fireEvent.click(screen.getByRole("button", { name: "Move up" }));
+
+    await waitFor(() => expect(notify).toHaveBeenCalledWith("Order updated"));
+    expect(HaigaService.updateList).toHaveBeenCalledWith(
+      [secondHaiga, savedHaiga],
+      expect.any(Function),
+    );
+  });
+});
+
+describe("AdminHaigaPage load failure", () => {
+  beforeEach(() => {
+    savedHaiga = {
+      id: "h1",
+      lines: [],
+      publisher: "kari",
+      image: "old.png",
+    };
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  it("shows a retryable error instead of an empty editable list", async () => {
+    vi.mocked(HaigaService.getListFromApi)
+      .mockRejectedValueOnce(new Error("GET failed"))
+      .mockResolvedValue([savedHaiga]);
+    render(
+      <AdminHaigaPage
+        setLoading={vi.fn()}
+        setConfirmation={vi.fn()}
+        notify={vi.fn()}
+      />,
+    );
+
+    await screen.findByText("Failed to load haiga.");
+    // No editable list — saving one would overwrite the real data.
+    expect(screen.queryByRole("button", { name: "Add item" })).toBeNull();
+
+    // Retry reloads and shows the list.
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await screen.findByRole("button", { name: "Edit" });
   });
 });
