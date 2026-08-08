@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import "./mobileMenu.css";
 import { PAGES } from "../../constants";
 
@@ -7,6 +7,7 @@ export function MobileMenu({
 }: {
   setShowingMobileMenu: (showing: boolean) => void;
 }) {
+  const location = useLocation();
   return (
     <div className="mobile-menu">
       {PAGES.map((page) => (
@@ -14,9 +15,8 @@ export function MobileMenu({
           key={page.path}
           to={page.path}
           className={
-            "mobile-menu-item" + location.pathname === page.path
-              ? " active"
-              : ""
+            "mobile-menu-item" +
+            (location.pathname === page.path ? " active" : "")
           }
           onClick={() => setShowingMobileMenu(false)}
         >
