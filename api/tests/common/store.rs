@@ -37,6 +37,10 @@ pub struct InMemoryStore {
     fail: AtomicBool,
     fail_puts: AtomicBool,
     fail_gets_for: Mutex<HashSet<String>>,
+    /// `Some(n)`: the next `n` puts succeed, every later one fails.
+    fail_puts_after: Mutex<Option<usize>>,
+    /// `Some(n)`: the next `n` deletes succeed, every later one fails.
+    fail_deletes_after: Mutex<Option<usize>>,
 }
 
 impl InMemoryStore {
@@ -95,6 +99,19 @@ impl InMemoryStore {
         self.fail_puts.store(failing, Ordering::SeqCst);
     }
 
+    /// Let the next `count` puts succeed and fail every one after that —
+    /// simulates an outage starting between the two writes of a
+    /// private-then-public save.
+    pub fn set_failing_puts_after(&self, count: usize) {
+        *self.fail_puts_after.lock().unwrap() = Some(count);
+    }
+
+    /// Let the next `count` deletes succeed and fail every one after that —
+    /// simulates an outage starting partway through a GC sweep's deletes.
+    pub fn set_failing_deletes_after(&self, count: usize) {
+        *self.fail_deletes_after.lock().unwrap() = Some(count);
+    }
+
     /// Make `get_object` fail with `OperationFailed` for one specific key,
     /// leaving everything else working — simulates a single unreadable
     /// manifest, which must abort a GC sweep.
@@ -115,6 +132,21 @@ impl InMemoryStore {
             Err(S3Error::OperationFailed("injected failure".to_string()))
         } else {
             Ok(())
+        }
+    }
+
+    /// Consume one success from a fail-after-N budget: `Ok` while budget
+    /// remains (or no limit is set), `Err` once it is exhausted.
+    fn check_budget(budget: &Mutex<Option<usize>>, what: &str) -> Result<(), S3Error> {
+        match budget.lock().unwrap().as_mut() {
+            Some(0) => Err(S3Error::OperationFailed(format!(
+                "injected {what} failure after budget exhausted"
+            ))),
+            Some(remaining) => {
+                *remaining -= 1;
+                Ok(())
+            }
+            None => Ok(()),
         }
     }
 }
@@ -143,6 +175,7 @@ impl ObjectStore for InMemoryStore {
                 "injected write failure".to_string(),
             ));
         }
+        Self::check_budget(&self.fail_puts_after, "write")?;
         self.objects.lock().unwrap().insert(
             key.to_string(),
             StoredObject {
@@ -167,6 +200,7 @@ impl ObjectStore for InMemoryStore {
 
     async fn delete_object(&self, key: &str) -> Result<(), S3Error> {
         self.check_fail()?;
+        Self::check_budget(&self.fail_deletes_after, "delete")?;
         self.objects.lock().unwrap().remove(key);
         Ok(())
     }

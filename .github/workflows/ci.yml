@@ -185,7 +185,7 @@ jobs:
           set -o pipefail
           # --fail-under-lines is the coverage ratchet: pinned just below the
           # current number; bump it when coverage rises (see CLAUDE.md).
-          cargo llvm-cov --json --summary-only --fail-under-lines 86 --output-path coverage.json
+          cargo llvm-cov --json --summary-only --fail-under-lines 90 --output-path coverage.json
           cargo llvm-cov report | tee coverage-report.txt
 
       - name: Build coverage comment

@@ -18,6 +18,7 @@ use common::store::{state_with_store, InMemoryStore};
 use common::{build_jwks, signed_token, TokenOptions};
 use http_body_util::BodyExt;
 use kari_website_api::routes::create_router;
+use kari_website_api::services::object_store::ObjectStore;
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
@@ -446,6 +447,32 @@ async fn list_blog_posts_ignores_public_object_when_private_missing() {
 }
 
 #[tokio::test]
+async fn update_blog_posts_public_write_failure_is_500_after_private_write() {
+    // The private (all-posts) write succeeds, then the outage begins and the
+    // public write fails. Private-first ordering means nothing draft-related
+    // was exposed and the full list is already saved.
+    let (store, app) = setup();
+    store.set_failing_puts_after(1);
+    let (status, body) = send(app, put_json("/blog", mixed_blog_posts())).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(body, json!({"error": "Failed to update public blog posts"}));
+    assert!(store.contains("blog-posts-all.json"));
+    assert!(!store.contains("blog-posts.json"));
+}
+
+#[tokio::test]
+async fn get_blog_post_content_invalid_utf8_is_500() {
+    let (_, app) =
+        setup_with(InMemoryStore::default().with_object("blog/b1.html", vec![0xff, 0xfe, 0xfd]));
+    let (status, body) = send(app, get_auth("/blog-content/b1")).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(
+        body,
+        json!({"error": "Stored blog post content is invalid"})
+    );
+}
+
+#[tokio::test]
 async fn update_blog_posts_store_outage_is_500() {
     let (store, app) = setup();
     store.set_failing(true);
@@ -662,6 +689,68 @@ async fn upload_drops_unusable_extensions() {
         assert_eq!(status, StatusCode::OK, "client name {client_name:?}");
         uploaded_file_name(&body, "");
     }
+}
+
+#[tokio::test]
+async fn upload_with_malformed_multipart_body_is_400() {
+    // The content type promises multipart but the body never contains the
+    // boundary, so reading the first field fails.
+    let (_, app) = setup();
+    let req = multipart_request(
+        "/images?isPublished=true",
+        b"this body is not multipart at all".to_vec(),
+    );
+    let (status, body) = send(app, req).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body, json!({"error": "Invalid multipart"}));
+}
+
+#[tokio::test]
+async fn upload_failing_mid_stream_is_400_and_stores_nothing() {
+    // The request body errors after the field header and some data: the
+    // handler must fail the upload rather than store a truncated image.
+    let (store, app) = setup();
+    let prefix = bytes::Bytes::from(format!(
+        "--{BOUNDARY}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"photo.png\"\r\n\r\nPARTIAL-DATA"
+    ));
+    // First poll: the field headers plus some data. Second poll: Pending, so
+    // the multipart parser hands the field to the handler instead of eagerly
+    // consuming the error during `next_field`. Third poll: the stream fails,
+    // surfacing as a mid-stream `field.chunk()` error.
+    let mut polls = 0;
+    let stream = futures::stream::poll_fn(move |cx| {
+        polls += 1;
+        match polls {
+            1 => std::task::Poll::Ready(Some(Ok::<_, std::io::Error>(prefix.clone()))),
+            2 => {
+                cx.waker().wake_by_ref();
+                std::task::Poll::Pending
+            }
+            _ => std::task::Poll::Ready(Some(Err(std::io::Error::new(
+                std::io::ErrorKind::ConnectionReset,
+                "connection reset mid-upload",
+            )))),
+        }
+    });
+    let req = Request::builder()
+        .method("POST")
+        .uri("/images?isPublished=true")
+        .header(header::AUTHORIZATION, bearer())
+        .header(
+            header::CONTENT_TYPE,
+            format!("multipart/form-data; boundary={BOUNDARY}"),
+        )
+        .body(Body::from_stream(stream))
+        .unwrap();
+    let (status, body) = send(app, req).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body, json!({"error": "Failed to read uploaded file"}));
+    // Nothing may have been stored under images/.
+    assert!(store
+        .list_objects("images/")
+        .await
+        .expect("list")
+        .is_empty());
 }
 
 #[tokio::test]

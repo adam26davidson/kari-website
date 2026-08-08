@@ -62,12 +62,18 @@ pub const EXPECTED_ISSUER: &str = "https://dev-ivkddn8ec0pdwd5a.us.auth0.com/";
 
 /// Build a `JwkSet` containing the test public key under [`TEST_KID`].
 pub fn build_jwks() -> JwkSet {
+    build_jwks_with_kid(TEST_KID)
+}
+
+/// Build a `JwkSet` containing the test public key under an arbitrary key id,
+/// so tests can simulate the identity provider rotating to a new key.
+pub fn build_jwks_with_kid(kid: &str) -> JwkSet {
     let value = serde_json::json!({
         "keys": [{
             "kty": "RSA",
             "use": "sig",
             "alg": "RS256",
-            "kid": TEST_KID,
+            "kid": kid,
             "n": TEST_RSA_MODULUS,
             "e": "AQAB",
         }]
@@ -155,15 +161,33 @@ pub fn dummy_s3_client() -> Client {
 /// refresh path fails fast and locally instead of calling the real Auth0.
 #[allow(dead_code)]
 pub fn test_state(jwks: JwkSet) -> AppState {
+    test_state_with_jwks_url(jwks, "http://127.0.0.1:1/jwks.json".to_string())
+}
+
+/// Build a real [`AppState`] whose `JwksCache` refreshes from `jwks_url`, so
+/// refresh tests can point it at a local HTTP endpoint they control.
+#[allow(dead_code)]
+pub fn test_state_with_jwks_url(jwks: JwkSet, jwks_url: String) -> AppState {
     let client = dummy_s3_client();
     let s3_service: Arc<dyn ObjectStore> =
         Arc::new(S3Service::new(client, "test-bucket".to_string()));
     AppState {
-        jwks: Arc::new(JwksCache::new(
-            jwks,
-            "http://127.0.0.1:1/jwks.json".to_string(),
-        )),
+        jwks: Arc::new(JwksCache::new(jwks, jwks_url)),
         s3_service,
         health: Arc::new(HealthCache::default()),
     }
+}
+
+/// Install a per-test tracing subscriber so `tracing::` statements in the
+/// code under test are actually evaluated (they are no-ops otherwise, which
+/// also leaves them uncounted by coverage). Hold the returned guard for the
+/// duration of the test.
+#[allow(dead_code)]
+pub fn capture_tracing() -> tracing::subscriber::DefaultGuard {
+    tracing::subscriber::set_default(
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::DEBUG)
+            .with_test_writer()
+            .finish(),
+    )
 }

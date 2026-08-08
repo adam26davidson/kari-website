@@ -283,6 +283,7 @@ async fn gc_explicit_dry_run_true_deletes_nothing() {
 
 #[tokio::test]
 async fn gc_real_run_deletes_orphans_and_never_referenced_files() {
+    let _trace = common::capture_tracing();
     let (store, app) = setup_with(store_with_orphan());
 
     let (status, body) = send(app, gc_request(Some(false), true)).await;
@@ -374,6 +375,79 @@ async fn gc_treats_unknown_last_modified_as_recent() {
     assert_eq!(status, StatusCode::OK);
     assert!(keys(&body, "skipped_recent").contains(&"images/no-mtime.jpg".to_string()));
     assert!(store.contains("images/no-mtime.jpg"));
+}
+
+#[tokio::test]
+async fn gc_ignores_bare_images_folder_marker() {
+    // Some S3 tools create a zero-byte "images/" folder-marker object. It is
+    // seeded old (outside the safety margin) and referenced by nothing, yet
+    // it must be skipped entirely — not deleted, not even reported.
+    let store = store_with_orphan().with_object("images/", "");
+    let (store, app) = setup_with(store);
+
+    let (status, body) = send(app, gc_request(Some(false), true)).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(store.contains("images/"), "folder marker must survive");
+    for field in ["referenced", "orphaned", "skipped_recent", "deleted"] {
+        assert!(
+            !keys(&body, field).contains(&"images/".to_string()),
+            "{field} contained the folder marker"
+        );
+    }
+}
+
+#[tokio::test]
+async fn gc_treats_future_last_modified_as_recent() {
+    // Clock skew can put an object's last-modified in the future; the sweep
+    // cannot prove such an object is old, so it must keep it.
+    let store = store_with_orphan().with_object_modified_at(
+        "images/from-the-future.jpg",
+        "x",
+        SystemTime::now() + Duration::from_secs(60 * 60),
+    );
+    let (store, app) = setup_with(store);
+
+    let (status, body) = send(app, gc_request(Some(false), true)).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(keys(&body, "skipped_recent").contains(&"images/from-the-future.jpg".to_string()));
+    assert_eq!(keys(&body, "deleted"), vec!["images/orphan.jpg"]);
+    assert!(store.contains("images/from-the-future.jpg"));
+}
+
+#[tokio::test]
+async fn gc_delete_failure_partway_aborts_with_500_and_keeps_the_rest() {
+    let _trace = common::capture_tracing();
+    // Two old orphans, deleted in sorted order; the store fails after the
+    // first delete. Everything already deleted was a proven orphan, so the
+    // sweep reports the failure and leaves the rest for a re-run.
+    let store = seeded_store()
+        .with_object("images/haiga.jpg", "referenced bytes")
+        .with_object("images/orphan-a.jpg", "x")
+        .with_object("images/orphan-b.jpg", "x");
+    store.set_failing_deletes_after(1);
+    let (store, app) = setup_with(store);
+
+    let (status, body) = send(app, gc_request(Some(false), true)).await;
+
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(
+        body,
+        json!({"error": "Image GC: delete failed partway; re-run to finish"})
+    );
+    assert!(
+        !store.contains("images/orphan-a.jpg"),
+        "the delete that succeeded was a proven orphan"
+    );
+    assert!(
+        store.contains("images/orphan-b.jpg"),
+        "the failed delete must leave the object in place"
+    );
+    assert!(
+        store.contains("images/haiga.jpg"),
+        "referenced files survive"
+    );
 }
 
 #[tokio::test]

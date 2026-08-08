@@ -166,6 +166,29 @@ describe("AdminOtherWorksPage image removal on save", () => {
     expect(ImageService.delete).not.toHaveBeenCalled();
   });
 
+  it("skips removed images whose src has no file name", async () => {
+    // A trailing-slash src has no extractable file name; removing it must
+    // not attempt a delete (there is nothing to delete it by).
+    vi.mocked(BlogService.getContent).mockResolvedValue(
+      savedContent + '<img src="https://api.test.local/images/">',
+    );
+    const { container, notify } = await openEditorAndRemoveImage();
+
+    fireEvent.click(iconButton(container, "floppy-disk"));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("Other works item saved"),
+    );
+    // Only the image with a real file name is deleted.
+    await waitFor(() =>
+      expect(ImageService.delete).toHaveBeenCalledWith(
+        "old.png",
+        expect.any(Function),
+      ),
+    );
+    expect(ImageService.delete).toHaveBeenCalledOnce();
+  });
+
   it("deletes the removed image only after the content save succeeds", async () => {
     const { container, notify } = await openEditorAndRemoveImage();
 
@@ -371,6 +394,25 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       expect(contentOrder).toBeLessThan(listOrder);
     });
 
+    it("flips only images with a real file name when publishing", async () => {
+      // A trailing-slash src has no extractable file name; its visibility
+      // cannot be flipped, but the publish still goes through.
+      vi.mocked(BlogService.getContent).mockResolvedValue(
+        draftContent + '<img src="https://api.test.local/images/">',
+      );
+      const { container, notify } = await openEditorAndTogglePublished();
+
+      fireEvent.click(iconButton(container, "floppy-disk"));
+
+      await waitFor(() =>
+        expect(notify).toHaveBeenCalledWith("Other works item saved"),
+      );
+      expect(callsOf(ImageService.setPublished)).toEqual([
+        ["a.png", true, expect.any(Function)],
+        ["b.png", true, expect.any(Function)],
+      ]);
+    });
+
     it("flips already-flipped images back when a flip fails mid-loop", async () => {
       vi.mocked(ImageService.setPublished).mockImplementation(
         async (fileName, isPublished) => {
@@ -458,6 +500,34 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
           ["b.png", false, expect.any(Function)],
         ]),
       );
+    });
+
+    it("reports loudly when flipping images back also fails", async () => {
+      // The publish flip fails mid-loop, and un-flipping the already
+      // flipped image fails too — the images are left half-flipped.
+      vi.mocked(ImageService.setPublished).mockImplementation(
+        async (fileName, isPublished) => {
+          if (fileName === "b.png" && isPublished) {
+            throw new Error("flip failed");
+          }
+          if (fileName === "a.png" && !isPublished) {
+            throw new Error("unflip failed");
+          }
+        },
+      );
+      const { container, notify } = await openEditorAndTogglePublished();
+
+      fireEvent.click(iconButton(container, "floppy-disk"));
+
+      await waitFor(() =>
+        expect(notify).toHaveBeenCalledWith(
+          expect.stringContaining("rolling back was incomplete"),
+          "error",
+        ),
+      );
+      // The draft content and list were never touched.
+      expect(BlogService.updateContent).not.toHaveBeenCalled();
+      expect(BlogService.updateList).not.toHaveBeenCalled();
     });
 
     it("reports loudly when the rollback itself fails", async () => {
@@ -570,6 +640,70 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
         ]),
       );
       expect(ImageService.setPublished).not.toHaveBeenCalled();
+    });
+
+    it("reports loudly when restoring the list after a failed content save also fails", async () => {
+      // The draft content save fails after the list already hid the post,
+      // and restoring the published list fails too.
+      vi.mocked(BlogService.updateContent).mockRejectedValue(
+        new Error("PUT failed"),
+      );
+      vi.mocked(BlogService.updateList)
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValue(new Error("rollback PUT failed"));
+      const { container, notify } = await openEditorAndTogglePublished();
+
+      fireEvent.click(iconButton(container, "floppy-disk"));
+
+      await waitFor(() =>
+        expect(notify).toHaveBeenCalledWith(
+          expect.stringContaining("rolling back was incomplete"),
+          "error",
+        ),
+      );
+      // Both the unpublish list save and the restore attempt were made.
+      expect(callsOf(BlogService.updateList)).toEqual([
+        [
+          [expect.objectContaining({ id: "b1", isPublished: false })],
+          expect.any(Function),
+        ],
+        [
+          [expect.objectContaining({ id: "b1", isPublished: true })],
+          expect.any(Function),
+        ],
+      ]);
+      expect(ImageService.setPublished).not.toHaveBeenCalled();
+    });
+
+    it("reports loudly when rolling back a failed image flip also fails", async () => {
+      // The private flip fails mid-loop, and restoring the published
+      // content during the rollback fails too.
+      vi.mocked(ImageService.setPublished).mockImplementation(
+        async (fileName, isPublished) => {
+          if (fileName === "b.png" && !isPublished) {
+            throw new Error("flip failed");
+          }
+        },
+      );
+      vi.mocked(BlogService.updateContent)
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValue(new Error("rollback PUT failed"));
+      const { container, notify } = await openEditorAndTogglePublished();
+
+      fireEvent.click(iconButton(container, "floppy-disk"));
+
+      await waitFor(() =>
+        expect(notify).toHaveBeenCalledWith(
+          expect.stringContaining("rolling back was incomplete"),
+          "error",
+        ),
+      );
+      // The flipped image was restored before the content rollback failed.
+      expect(callsOf(ImageService.setPublished)).toEqual([
+        ["a.png", false, expect.any(Function)],
+        ["b.png", false, expect.any(Function)],
+        ["a.png", true, expect.any(Function)],
+      ]);
     });
 
     it("rolls the whole unpublish back when a flip fails mid-loop", async () => {
@@ -691,6 +825,29 @@ describe("AdminOtherWorksPage deletion", () => {
     expect(BlogService.deleteContent).not.toHaveBeenCalled();
   });
 
+  it("skips images whose src has no file name when deleting", async () => {
+    vi.mocked(BlogService.getContent).mockResolvedValue(
+      savedContent + '<img src="https://api.test.local/images/">',
+    );
+    const { notify } = await confirmDelete();
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("Other works item deleted"),
+    );
+    await waitFor(() =>
+      expect(BlogService.deleteContent).toHaveBeenCalledWith(
+        "b1",
+        expect.any(Function),
+      ),
+    );
+    // Only the image with a real file name is deleted.
+    expect(ImageService.delete).toHaveBeenCalledWith(
+      "old.png",
+      expect.any(Function),
+    );
+    expect(ImageService.delete).toHaveBeenCalledOnce();
+  });
+
   it("deletes content and images only after the shortened list is saved", async () => {
     const { notify } = await confirmDelete();
 
@@ -721,5 +878,227 @@ describe("AdminOtherWorksPage deletion", () => {
     expect(listOrder).toBeLessThan(
       vi.mocked(BlogService.deleteContent).mock.invocationCallOrder[0],
     );
+  });
+});
+
+describe("AdminOtherWorksPage creation", () => {
+  // Renders the page and clicks the add-item control, returning the
+  // confirmation dialog handed to setConfirmation.
+  async function openCreateConfirmation() {
+    const { container, notify, setConfirmation } = await renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Add item" }));
+    const confirmation = setConfirmation.mock.calls.at(-1)?.[0] as {
+      options: Array<{ label: string; callback: () => void }>;
+    };
+    return { container, notify, confirmation };
+  }
+
+  it("creates an empty draft and opens it in the editor on Yes", async () => {
+    const { notify, confirmation } = await openCreateConfirmation();
+    const yes = confirmation.options.find((o) => o.label === "Yes");
+    await act(async () => {
+      yes?.callback();
+    });
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("New other works item created"),
+    );
+    // The saved list is the existing post plus a fresh unpublished one.
+    const [savedList] = vi.mocked(BlogService.updateList).mock.calls[0] as [
+      Array<BlogPost>,
+      () => Promise<string>,
+    ];
+    expect(savedList).toHaveLength(2);
+    expect(savedList[0]).toEqual(savedPost);
+    expect(savedList[1]).toMatchObject({ title: "", isPublished: false });
+    expect(savedList[1].id).not.toBe("");
+    // Empty content is created for the new id, after the list save.
+    expect(BlogService.updateContent).toHaveBeenCalledWith(
+      savedList[1].id,
+      "",
+      false,
+      expect.any(Function),
+    );
+    expect(
+      vi.mocked(BlogService.updateList).mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      vi.mocked(BlogService.updateContent).mock.invocationCallOrder[0],
+    );
+    // The new post is open in the editor.
+    await screen.findByPlaceholderText("post content");
+  });
+
+  it("does nothing on No", async () => {
+    const { notify, confirmation } = await openCreateConfirmation();
+    const no = confirmation.options.find((o) => o.label === "No");
+    await act(async () => {
+      no?.callback();
+    });
+
+    expect(BlogService.updateList).not.toHaveBeenCalled();
+    expect(BlogService.updateContent).not.toHaveBeenCalled();
+    expect(notify).not.toHaveBeenCalled();
+    expect(screen.queryByPlaceholderText("post content")).toBeNull();
+  });
+
+  it("aborts before creating content when the list save fails", async () => {
+    vi.mocked(BlogService.updateList).mockRejectedValue(
+      new Error("PUT failed"),
+    );
+    const { notify, confirmation } = await openCreateConfirmation();
+    const yes = confirmation.options.find((o) => o.label === "Yes");
+    await act(async () => {
+      yes?.callback();
+    });
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith(
+        "Failed to save — your change was not saved",
+        "error",
+      ),
+    );
+    expect(BlogService.updateContent).not.toHaveBeenCalled();
+    expect(screen.queryByPlaceholderText("post content")).toBeNull();
+  });
+
+  it("stays on the list when creating the empty content fails", async () => {
+    vi.mocked(BlogService.updateContent).mockRejectedValue(
+      new Error("PUT failed"),
+    );
+    const { notify, confirmation } = await openCreateConfirmation();
+    const yes = confirmation.options.find((o) => o.label === "Yes");
+    await act(async () => {
+      yes?.callback();
+    });
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith(
+        "Failed to create other works item",
+        "error",
+      ),
+    );
+    // The editor must not open without its content object.
+    expect(screen.queryByPlaceholderText("post content")).toBeNull();
+  });
+});
+
+describe("AdminOtherWorksPage list reordering", () => {
+  let secondPost: BlogPost;
+
+  beforeEach(() => {
+    secondPost = {
+      id: "b2",
+      title: "B Post",
+      date: "2024-06-01T00:00:00.000Z",
+      isPublished: false,
+    };
+    vi.mocked(BlogService.getListFromApi).mockResolvedValue([
+      savedPost,
+      secondPost,
+    ]);
+  });
+
+  it("saves the reordered list on move down", async () => {
+    const { notify } = await renderPage();
+    // Only the first item has a move-down control.
+    fireEvent.click(screen.getByRole("button", { name: "Move down" }));
+
+    await waitFor(() => expect(notify).toHaveBeenCalledWith("Order updated"));
+    expect(BlogService.updateList).toHaveBeenCalledWith(
+      [secondPost, savedPost],
+      expect.any(Function),
+    );
+  });
+
+  it("saves the reordered list on move up", async () => {
+    const { notify } = await renderPage();
+    // Only the second item has a move-up control.
+    fireEvent.click(screen.getByRole("button", { name: "Move up" }));
+
+    await waitFor(() => expect(notify).toHaveBeenCalledWith("Order updated"));
+    expect(BlogService.updateList).toHaveBeenCalledWith(
+      [secondPost, savedPost],
+      expect.any(Function),
+    );
+  });
+});
+
+describe("AdminOtherWorksPage opening the editor", () => {
+  it("does not open the editor when loading the content fails", async () => {
+    vi.mocked(BlogService.getContent).mockRejectedValue(
+      new Error("GET failed"),
+    );
+    const { container, notify } = await renderPage();
+
+    fireEvent.click(iconButton(container, "pencil"));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("Failed to load content", "error"),
+    );
+    // Never open the editor with missing content — saving it would
+    // overwrite the real content.
+    expect(screen.queryByPlaceholderText("post content")).toBeNull();
+  });
+});
+
+describe("AdminOtherWorksPage load failure", () => {
+  it("shows a retryable error instead of an empty editable list", async () => {
+    vi.mocked(BlogService.getListFromApi).mockRejectedValueOnce(
+      new Error("GET failed"),
+    );
+    const { container } = render(
+      <AdminOtherWorksPage
+        setLoading={vi.fn()}
+        setConfirmation={vi.fn()}
+        notify={vi.fn()}
+      />,
+    );
+
+    await screen.findByText("Failed to load other works.");
+    // No editable list — saving one would overwrite the real data.
+    expect(screen.queryByRole("button", { name: "Add item" })).toBeNull();
+
+    // Retry reloads and shows the list.
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => iconButton(container, "pencil"));
+  });
+});
+
+describe("AdminOtherWorksPage closing the editor", () => {
+  it("abandons the open post without saving", async () => {
+    const { container } = await renderPage();
+    fireEvent.click(iconButton(container, "pencil"));
+    await screen.findByPlaceholderText("post content");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(screen.queryByPlaceholderText("post content")).toBeNull();
+    expect(BlogService.updateList).not.toHaveBeenCalled();
+    expect(BlogService.updateContent).not.toHaveBeenCalled();
+    // Back on the list view.
+    iconButton(container, "pencil");
+  });
+});
+
+describe("AdminOtherWorksPage image upload on save", () => {
+  it("treats an empty upload result as a failed upload", async () => {
+    vi.mocked(ImageService.upload).mockResolvedValue("");
+    const { container, notify } = await renderPage();
+    fireEvent.click(iconButton(container, "pencil"));
+    await screen.findByPlaceholderText("post content");
+    fireEvent.click(screen.getByText("attach pending file"));
+
+    fireEvent.click(iconButton(container, "floppy-disk"));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith(
+        "Failed to save other works item",
+        "error",
+      ),
+    );
+    // Nothing was saved or deleted for a post whose upload failed.
+    expect(BlogService.updateContent).not.toHaveBeenCalled();
+    expect(BlogService.updateList).not.toHaveBeenCalled();
+    expect(ImageService.delete).not.toHaveBeenCalled();
   });
 });
