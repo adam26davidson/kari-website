@@ -16,9 +16,6 @@ import {
 import "./tiptap.css";
 
 import TextAlign from "@tiptap/extension-text-align";
-import ListItem from "@tiptap/extension-list-item";
-import Document from "@tiptap/extension-document";
-import Dropcursor from "@tiptap/extension-dropcursor";
 import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import { Editor, EditorContent, useEditor } from "@tiptap/react";
@@ -159,6 +156,8 @@ const ToolbarButton = ({
       item.isActive ? (item.isActive(editor) ? "is-active" : "") : undefined
     }
     disabled={item.isDisabled?.(editor)}
+    aria-label={item.name}
+    title={item.name}
   >
     <FontAwesomeIcon icon={item.icon} />
   </button>
@@ -214,6 +213,7 @@ const MenuBar = ({
     <div className="control-group">
       <div className="button-group">
         <select
+          aria-label="text style"
           onChange={(event) => {
             const value = event.target.value;
             const level = HEADING_LEVELS.find((l) => value === `h${l}`);
@@ -243,7 +243,7 @@ const MenuBar = ({
             ))
           ),
         )}
-        <button onClick={addImage}>
+        <button onClick={addImage} aria-label="image" title="image">
           <FontAwesomeIcon icon={faImage} />
         </button>
       </div>
@@ -262,7 +262,8 @@ export function Tiptap({
 }) {
   const editor = useEditor({
     extensions: [
-      ListItem,
+      // StarterKit already bundles Document, ListItem, and Dropcursor —
+      // registering them again triggers Tiptap's duplicate-extension warning.
       StarterKit,
       Link,
       Image.configure({
@@ -270,8 +271,6 @@ export function Tiptap({
           className: "blog-post-image",
         },
       }),
-      Document,
-      Dropcursor,
       TextAlign.configure({
         types: ["heading", "paragraph"],
       }),
