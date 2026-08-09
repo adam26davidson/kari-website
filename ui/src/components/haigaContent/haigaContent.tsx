@@ -31,31 +31,29 @@ export function HaigaContent({
     );
   }
   return (
-    <>
+    <div
+      className={
+        isMobile
+          ? "haiga-list-item-content-mobile"
+          : "haiga-list-item-content"
+      }
+    >
       <div
         className={
           isMobile
-            ? "haiga-list-item-content-mobile"
-            : "haiga-list-item-content"
+            ? "haiga-list-item-image-box-mobile"
+            : "haiga-list-item-image-box"
         }
       >
-        <div
-          className={
-            isMobile
-              ? "haiga-list-item-image-box-mobile"
-              : "haiga-list-item-image-box"
-          }
-        >
-          <img
-            src={`${S3_URL}/images/${haiga.image}`}
-            alt={altText}
-            className="haiga-list-item-image"
-          />
-        </div>
-        <div>
-          <div className="haiga-list-publisher">{haiga.publisher}</div>
-        </div>
+        <img
+          src={`${S3_URL}/images/${haiga.image}`}
+          alt={altText}
+          className="haiga-list-item-image"
+        />
       </div>
-    </>
+      <div>
+        <div className="haiga-list-publisher">{haiga.publisher}</div>
+      </div>
+    </div>
   );
 }

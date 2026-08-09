@@ -14,8 +14,3 @@ export const changeImageUrlToApi = (url: string) => {
 export const getImageFileName = (url: string) => {
   return url.split("/").pop();
 };
-
-export const getImageIdFromUrl = (url: string) => {
-  const fileName = url.split("/").pop();
-  return fileName?.split(".")[0];
-};
