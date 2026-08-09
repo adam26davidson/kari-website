@@ -29,22 +29,18 @@ const post: BlogPost = {
   isPublished: false,
 };
 
-function renderEditor(overrides?: {
-  post?: BlogPost;
-  validate?: (post: BlogPost) => boolean;
-}) {
+function renderEditor(overrides?: { post?: BlogPost; saveDisabled?: boolean }) {
   const setPost = vi.fn();
   const setContent = vi.fn();
   const onSave = vi.fn();
   const onClose = vi.fn();
-  const validate = overrides?.validate ?? (() => true);
   const utils = render(
     <BlogPostEditor
       post={overrides?.post ?? post}
       content="<p>hello</p>"
       setContent={setContent}
       setPost={setPost}
-      validate={validate}
+      saveDisabled={overrides?.saveDisabled ?? false}
       onSave={onSave}
       onClose={onClose}
       onAddImage={vi.fn()}
@@ -126,8 +122,8 @@ describe("BlogPostEditor", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("disables the save button when validation fails", () => {
-    renderEditor({ validate: () => false });
+  it("disables the save button when the page says the post is invalid", () => {
+    renderEditor({ saveDisabled: true });
     expect(screen.getByRole("button", { name: "Save" })).toHaveClass(
       "disabled",
     );
