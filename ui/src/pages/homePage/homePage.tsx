@@ -1,37 +1,25 @@
-import { useCallback, useEffect, useState } from "react";
 import { useIsMobile } from "../../hooks/isMobile";
 import "./homePage.css";
 import { HomePageData } from "../../Models";
 import { LoadError } from "../../components/load-error/load-error";
 import { HomePageService } from "../../services/home-page";
+import { useS3Load } from "../../hooks/useS3Load";
 
 const S3_URL = import.meta.env.VITE_S3_URL;
 
+const EMPTY_HOME_PAGE: HomePageData = {
+  photo: "",
+  blurb: "",
+};
+
 function Home() {
   const isMobile = useIsMobile();
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [homePageData, setHomePageData] = useState<HomePageData>({
-    photo: "",
-    blurb: "",
-  });
-
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    setLoadFailed(false);
-    try {
-      setHomePageData(await HomePageService.getFromS3());
-    } catch (error) {
-      console.error(error);
-      setLoadFailed(true);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const {
+    data: homePageData,
+    isLoading,
+    loadFailed,
+    load,
+  } = useS3Load(HomePageService.getFromS3, EMPTY_HOME_PAGE);
 
   return (
     <div className={isMobile ? "home-page mobile" : "home-page"}>
