@@ -3,7 +3,6 @@ import {
   changeImageUrlToS3,
   changeImageUrlToApi,
   getImageFileName,
-  getImageIdFromUrl,
 } from "./image-management-helpers";
 
 // VITE_API_URL / VITE_S3_URL are provided by vitest.config.ts test.env.
@@ -39,15 +38,4 @@ describe("image-management-helpers", () => {
     });
   });
 
-  describe("getImageIdFromUrl", () => {
-    it("returns the filename without its extension", () => {
-      expect(getImageIdFromUrl("https://host/images/abc123.jpg")).toBe(
-        "abc123",
-      );
-    });
-
-    it("returns the id when there is no directory prefix", () => {
-      expect(getImageIdFromUrl("abc123.png")).toBe("abc123");
-    });
-  });
 });

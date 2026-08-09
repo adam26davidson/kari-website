@@ -119,11 +119,16 @@ describe("BlogService.updateList", () => {
     });
   });
 
-  it("throws when the update fails so callers can surface the error", async () => {
+  it("throws an HttpError when the update fails so callers can surface the error", async () => {
     mockFetchOnce({ ok: false, status: 401, json: async () => ({}) });
-    await expect(
-      BlogService.updateList([publishedPost], getToken),
-    ).rejects.toThrow("Failed to update blog list (HTTP 401)");
+    const failure = BlogService.updateList([publishedPost], getToken);
+    await expect(failure).rejects.toThrow(
+      "Failed to update blog list (HTTP 401)",
+    );
+    await expect(failure).rejects.toMatchObject({
+      name: "HttpError",
+      status: 401,
+    });
   });
 });
 

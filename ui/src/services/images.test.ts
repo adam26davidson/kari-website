@@ -109,12 +109,15 @@ describe("ImageService.upload", () => {
     );
   });
 
-  it("throws when the upload fails so the editor can surface the error", async () => {
+  it("throws an HttpError when the upload fails so the editor can surface the error", async () => {
     mockFetchOnce({ ok: false, status: 500, text: async () => "" });
     const file = new File(["x"], "photo.png", { type: "image/png" });
-    await expect(ImageService.upload(file, true, getToken)).rejects.toThrow(
-      "HTTP error! status: 500",
-    );
+    const failure = ImageService.upload(file, true, getToken);
+    await expect(failure).rejects.toThrow("HTTP error! status: 500");
+    await expect(failure).rejects.toMatchObject({
+      name: "HttpError",
+      status: 500,
+    });
   });
 });
 
@@ -133,11 +136,16 @@ describe("ImageService.delete", () => {
     );
   });
 
-  it("throws when the delete fails so callers can surface the error", async () => {
+  it("throws an HttpError when the delete fails so callers can surface the error", async () => {
     mockFetchOnce({ ok: false, status: 500, json: async () => ({}) });
-    await expect(
-      ImageService.delete("fixed-uuid.png", getToken),
-    ).rejects.toThrow("Failed to delete image: fixed-uuid.png");
+    const failure = ImageService.delete("fixed-uuid.png", getToken);
+    await expect(failure).rejects.toThrow(
+      "Failed to delete image: fixed-uuid.png (HTTP 500)",
+    );
+    await expect(failure).rejects.toMatchObject({
+      name: "HttpError",
+      status: 500,
+    });
   });
 });
 
@@ -157,13 +165,16 @@ describe("ImageService.setPublished", () => {
     );
   });
 
-  it("throws including the server's error text when the request fails", async () => {
+  it("throws an HttpError including the server's error text when the request fails", async () => {
     mockFetchOnce({ ok: false, status: 500, text: async () => "S3 exploded" });
-    await expect(
-      ImageService.setPublished("fixed-uuid.png", true, getToken),
-    ).rejects.toThrow(
+    const failure = ImageService.setPublished("fixed-uuid.png", true, getToken);
+    await expect(failure).rejects.toThrow(
       "Failed to set image published status: fixed-uuid.png. Error: S3 exploded",
     );
+    await expect(failure).rejects.toMatchObject({
+      name: "HttpError",
+      status: 500,
+    });
   });
 });
 

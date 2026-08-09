@@ -98,10 +98,15 @@ describe("PhotographyService.updateList", () => {
     });
   });
 
-  it("throws when the update fails so callers can surface the error", async () => {
+  it("throws an HttpError when the update fails so callers can surface the error", async () => {
     mockFetchOnce({ ok: false, status: 401, json: async () => ({}) });
-    await expect(
-      PhotographyService.updateList([samplePost], getToken),
-    ).rejects.toThrow("Failed to update photography post list (HTTP 401)");
+    const failure = PhotographyService.updateList([samplePost], getToken);
+    await expect(failure).rejects.toThrow(
+      "Failed to update photography post list (HTTP 401)",
+    );
+    await expect(failure).rejects.toMatchObject({
+      name: "HttpError",
+      status: 401,
+    });
   });
 });

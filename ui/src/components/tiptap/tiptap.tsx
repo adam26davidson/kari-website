@@ -11,6 +11,7 @@ import {
   faListUl,
   faStrikethrough,
   faUnlink,
+  IconDefinition,
 } from "@fortawesome/free-solid-svg-icons";
 import "./tiptap.css";
 
@@ -24,6 +25,144 @@ import { Editor, EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { v4 as uuidv4 } from "uuid";
+
+const HEADING_LEVELS = [1, 2, 3] as const;
+
+const setLink = (editor: Editor) => {
+  const previousUrl = editor.getAttributes("link").href;
+  const url = window.prompt("URL", previousUrl);
+
+  // cancelled
+  if (url === null) {
+    return;
+  }
+
+  // empty
+  if (url === "") {
+    editor.chain().focus().extendMarkRange("link").unsetLink().run();
+
+    return;
+  }
+
+  // update link
+  try {
+    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+  } catch (e) {
+    console.error("Error setting link:", e);
+  }
+};
+
+interface ToolbarItem {
+  name: string;
+  icon: IconDefinition;
+  command: (editor: Editor) => void;
+  isActive?: (editor: Editor) => boolean;
+  isDisabled?: (editor: Editor) => boolean;
+}
+
+interface ToolbarGroup {
+  name: string;
+  // Grouped items render inside a shared .grouped-buttons wrapper;
+  // ungrouped items render as bare buttons in the .button-group row.
+  grouped: boolean;
+  items: ToolbarItem[];
+}
+
+const TOOLBAR_GROUPS: ToolbarGroup[] = [
+  {
+    name: "marks",
+    grouped: true,
+    items: [
+      {
+        name: "bold",
+        icon: faBold,
+        command: (editor) => editor.chain().focus().toggleBold().run(),
+        isActive: (editor) => editor.isActive("bold"),
+      },
+      {
+        name: "italic",
+        icon: faItalic,
+        command: (editor) => editor.chain().focus().toggleItalic().run(),
+        isActive: (editor) => editor.isActive("italic"),
+      },
+      {
+        name: "strike",
+        icon: faStrikethrough,
+        command: (editor) => editor.chain().focus().toggleStrike().run(),
+        isActive: (editor) => editor.isActive("strike"),
+      },
+    ],
+  },
+  {
+    name: "alignment",
+    grouped: true,
+    items: (["left", "center", "right", "justify"] as const).map((align) => ({
+      name: `align-${align}`,
+      icon: {
+        left: faAlignLeft,
+        center: faAlignCenter,
+        right: faAlignRight,
+        justify: faAlignJustify,
+      }[align],
+      command: (editor) => editor.chain().focus().setTextAlign(align).run(),
+      isActive: (editor) => editor.isActive({ textAlign: align }),
+    })),
+  },
+  {
+    name: "lists",
+    grouped: true,
+    items: [
+      {
+        name: "bullet-list",
+        icon: faListUl,
+        command: (editor) => editor.chain().focus().toggleBulletList().run(),
+        isActive: (editor) => editor.isActive("bulletList"),
+      },
+      {
+        name: "ordered-list",
+        icon: faListOl,
+        command: (editor) => editor.chain().focus().toggleOrderedList().run(),
+        isActive: (editor) => editor.isActive("orderedList"),
+      },
+    ],
+  },
+  {
+    name: "links",
+    grouped: false,
+    items: [
+      {
+        name: "link",
+        icon: faLink,
+        command: setLink,
+        isActive: (editor) => editor.isActive("link"),
+      },
+      {
+        name: "unlink",
+        icon: faUnlink,
+        command: (editor) => editor.chain().focus().unsetLink().run(),
+        isDisabled: (editor) => !editor.isActive("link"),
+      },
+    ],
+  },
+];
+
+const ToolbarButton = ({
+  editor,
+  item,
+}: {
+  editor: Editor;
+  item: ToolbarItem;
+}) => (
+  <button
+    onClick={() => item.command(editor)}
+    className={
+      item.isActive ? (item.isActive(editor) ? "is-active" : "") : undefined
+    }
+    disabled={item.isDisabled?.(editor)}
+  >
+    <FontAwesomeIcon icon={item.icon} />
+  </button>
+);
 
 const MenuBar = ({
   editor,
@@ -62,38 +201,14 @@ const MenuBar = ({
     };
   };
 
-  const setLink = () => {
-    const previousUrl = editor.getAttributes("link").href;
-    const url = window.prompt("URL", previousUrl);
-
-    // cancelled
-    if (url === null) {
-      return;
-    }
-
-    // empty
-    if (url === "") {
-      editor.chain().focus().extendMarkRange("link").unsetLink().run();
-
-      return;
-    }
-
-    // update link
-    try {
-      editor
-        .chain()
-        .focus()
-        .extendMarkRange("link")
-        .setLink({ href: url })
-        .run();
-    } catch (e) {
-      console.error("Error setting link:", e);
-    }
-  };
-
-  if (!editor) {
-    return null;
-  }
+  const activeHeadingLevel = HEADING_LEVELS.find((level) =>
+    editor.isActive("heading", { level }),
+  );
+  const headingValue = activeHeadingLevel
+    ? `h${activeHeadingLevel}`
+    : editor.isActive("paragraph")
+      ? "p"
+      : "";
 
   return (
     <div className="control-group">
@@ -101,113 +216,33 @@ const MenuBar = ({
         <select
           onChange={(event) => {
             const value = event.target.value;
-            if (value === "h1") {
-              editor.chain().focus().toggleHeading({ level: 1 }).run();
-            } else if (value === "h2") {
-              editor.chain().focus().toggleHeading({ level: 2 }).run();
-            } else if (value === "h3") {
-              editor.chain().focus().toggleHeading({ level: 3 }).run();
+            const level = HEADING_LEVELS.find((l) => value === `h${l}`);
+            if (level) {
+              editor.chain().focus().toggleHeading({ level }).run();
             } else if (value === "p") {
               editor.chain().focus().setParagraph().run();
             }
           }}
-          value={
-            editor.isActive("heading", { level: 1 })
-              ? "h1"
-              : editor.isActive("heading", { level: 2 })
-                ? "h2"
-                : editor.isActive("heading", { level: 3 })
-                  ? "h3"
-                  : editor.isActive("paragraph")
-                    ? "p"
-                    : ""
-          }
+          value={headingValue}
         >
           <option value="h1">Heading 1</option>
           <option value="h2">Heading 2</option>
           <option value="h3">Heading 3</option>
           <option value="p">Paragraph</option>
         </select>
-        <div className="grouped-buttons">
-          <button
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            className={editor.isActive("bold") ? "is-active" : ""}
-          >
-            <FontAwesomeIcon icon={faBold} />
-          </button>
-          <button
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={editor.isActive("italic") ? "is-active" : ""}
-          >
-            <FontAwesomeIcon icon={faItalic} />
-          </button>
-          <button
-            onClick={() => editor.chain().focus().toggleStrike().run()}
-            className={editor.isActive("strike") ? "is-active" : ""}
-          >
-            <FontAwesomeIcon icon={faStrikethrough} />
-          </button>
-        </div>
-        <div className="grouped-buttons">
-          <button
-            onClick={() => editor.chain().focus().setTextAlign("left").run()}
-            className={
-              editor.isActive({ textAlign: "left" }) ? "is-active" : ""
-            }
-          >
-            <FontAwesomeIcon icon={faAlignLeft} />
-          </button>
-          <button
-            onClick={() => editor.chain().focus().setTextAlign("center").run()}
-            className={
-              editor.isActive({ textAlign: "center" }) ? "is-active" : ""
-            }
-          >
-            <FontAwesomeIcon icon={faAlignCenter} />
-          </button>
-          <button
-            onClick={() => editor.chain().focus().setTextAlign("right").run()}
-            className={
-              editor.isActive({ textAlign: "right" }) ? "is-active" : ""
-            }
-          >
-            <FontAwesomeIcon icon={faAlignRight} />
-          </button>
-          <button
-            onClick={() => editor.chain().focus().setTextAlign("justify").run()}
-            className={
-              editor.isActive({ textAlign: "justify" }) ? "is-active" : ""
-            }
-          >
-            <FontAwesomeIcon icon={faAlignJustify} />
-          </button>
-        </div>
-        <div className="grouped-buttons">
-          <button
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
-            className={editor.isActive("bulletList") ? "is-active" : ""}
-          >
-            <FontAwesomeIcon icon={faListUl} />
-          </button>
-          <button
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            className={editor.isActive("orderedList") ? "is-active" : ""}
-          >
-            <FontAwesomeIcon icon={faListOl} />
-          </button>
-        </div>
-        <button
-          onClick={setLink}
-          className={editor.isActive("link") ? "is-active" : ""}
-        >
-          <FontAwesomeIcon icon={faLink} />
-        </button>
-        <button
-          onClick={() => editor.chain().focus().unsetLink().run()}
-          disabled={!editor.isActive("link")}
-        >
-          <FontAwesomeIcon icon={faUnlink} />
-        </button>
+        {TOOLBAR_GROUPS.map((group) =>
+          group.grouped ? (
+            <div className="grouped-buttons" key={group.name}>
+              {group.items.map((item) => (
+                <ToolbarButton key={item.name} editor={editor} item={item} />
+              ))}
+            </div>
+          ) : (
+            group.items.map((item) => (
+              <ToolbarButton key={item.name} editor={editor} item={item} />
+            ))
+          ),
+        )}
         <button onClick={addImage}>
           <FontAwesomeIcon icon={faImage} />
         </button>
@@ -247,8 +282,6 @@ export function Tiptap({
       setContent(html);
     },
   });
-
-  // whenever img is removed, call onRemoveImage
 
   return (
     <div className="tiptap-container">
