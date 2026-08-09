@@ -4,6 +4,7 @@ import { AdminOtherWorksPage } from "./admin-other-works-page";
 import { BlogPost } from "../../../Models";
 import { BlogService } from "../../../services/blog";
 import { ImageService } from "../../../services/images";
+import { TokenGetter } from "../../../services/http";
 import { answerYes, renderWithAdminUi } from "../admin-ui-test-helpers";
 
 vi.mock("../../../services/blog", () => ({
@@ -888,7 +889,7 @@ describe("AdminOtherWorksPage creation", () => {
     // The saved list is the existing post plus a fresh unpublished one.
     const [savedList] = vi.mocked(BlogService.updateList).mock.calls[0] as [
       Array<BlogPost>,
-      () => Promise<string>,
+      TokenGetter,
     ];
     expect(savedList).toHaveLength(2);
     expect(savedList[0]).toEqual(savedPost);

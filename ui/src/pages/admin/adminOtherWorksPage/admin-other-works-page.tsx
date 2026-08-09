@@ -8,26 +8,14 @@ import { BlogService } from "../../../services/blog";
 import { BlogPostSummary } from "../../../components/blog-post-summary/blog-post-summary";
 import { BlogPostEditor } from "./components/blog-post-editor/blog-post-editor";
 import { ImageService } from "../../../services/images";
-import {
-  changeImageUrlToApi,
-  changeImageUrlToS3,
-  getImageFileName,
-} from "../../../utils/image-management-helpers";
+import { getImageFileName } from "../../../utils/image-management-helpers";
 import { HttpError } from "../../../services/http-error";
 import { LoadError } from "../../../components/load-error/load-error";
 import { AdminItemList } from "../../../components/admin-item-list/admin-item-list";
 import { useAdminToken } from "../../../hooks/useAdminToken";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
-
-const S3_URL = import.meta.env.VITE_S3_URL;
-const API_URL = import.meta.env.VITE_API_URL;
-
-// Shown when a failed publish/unpublish could not fully restore the
-// previous state; storage stays mixed until the same save is retried.
-const ROLLBACK_INCOMPLETE_MESSAGE =
-  "Save failed and rolling back was incomplete — some content or images " +
-  "may have the wrong visibility. Save again to retry.";
+import { saveBlogPost } from "./blog-post-save";
 
 export function AdminOtherWorksPage() {
   const getAccessTokenSilently = useAdminToken();
@@ -191,6 +179,10 @@ export function AdminOtherWorksPage() {
     setPendingImageFiles((prev) => new Map(prev).set(id, file));
   };
 
+  // The save itself — image diffing, uploads, and the publish/unpublish/
+  // no-flip transaction with its rollbacks — lives in blog-post-save.ts;
+  // this wrapper only wires the page's state and services into it and
+  // closes the editor when the save fully succeeds.
   const saveOpenPost = async () => {
     if (!openPost) return;
     const originalPostList = postList;
@@ -202,309 +194,38 @@ export function AdminOtherWorksPage() {
     }
     const originalPost = { ...newPostList[idx] };
     newPostList[idx] = { ...openPost };
-    const publishing = !originalPost.isPublished && openPost.isPublished;
-    const unpublishing = originalPost.isPublished && !openPost.isPublished;
-
-    // Set when a rollback could not fully restore the previous state; the
-    // final error toast then reports it instead of the generic message.
-    let rollbackIncomplete = false;
-
-    // Best-effort flip-back used only on rollback paths. Image visibility
-    // is a reversible tag on the same S3 object (no data is moved), so
-    // re-flipping restores the previous state exactly; a failure here
-    // leaves images half-flipped and is reported loudly, never swallowed.
-    const rollBackImageFlips = async (
-      fileNames: Array<string>,
-      isPublished: boolean,
-    ) => {
-      for (const fileName of fileNames) {
-        try {
-          await ImageService.setPublished(
-            fileName,
-            isPublished,
-            getAccessTokenSilently,
-          );
-        } catch (error) {
-          console.error(error);
-          rollbackIncomplete = true;
-        }
-      }
-    };
-
-    // Flip each image's visibility one at a time, flipping the already-
-    // flipped ones back on a mid-loop failure so no half-migrated image
-    // set survives; rethrows the original failure.
-    const setImagesPublishedOrRollBack = async (
-      fileNames: Array<string>,
-      isPublished: boolean,
-    ) => {
-      const flipped: Array<string> = [];
-      try {
-        for (const fileName of fileNames) {
-          await ImageService.setPublished(
-            fileName,
-            isPublished,
-            getAccessTokenSilently,
-          );
-          flipped.push(fileName);
-        }
-      } catch (error) {
-        await rollBackImageFlips(flipped, !isPublished);
-        throw error;
-      }
-    };
 
     try {
-      // image upload
-      // go through content html
-      const newHtmlDoc = new DOMParser().parseFromString(
-        openPostContent || "",
-        "text/html",
-      );
-      const originalHtmlDoc = new DOMParser().parseFromString(
-        originalOpenPostContent || "",
-        "text/html",
-      );
-
-      // find all images
-      const newImages = newHtmlDoc.querySelectorAll("img");
-      const originalImages = originalHtmlDoc.querySelectorAll("img");
-      const baseUrl = `${openPost.isPublished ? S3_URL : API_URL}/images/`;
-
-      // Images in the original content but not in the new become
-      // unreferenced once the save succeeds. Collect them now, before any
-      // src rewriting below — they are only deleted after the content
-      // save has succeeded, so a failure at any step leaves the published
-      // content intact.
-      const removedImageFileNames: Array<string> = [];
-      for (let i = 0; i < originalImages.length; i++) {
-        const originalImage = originalImages[i];
-        const newImage = Array.from(newImages).find((img) => {
-          return img.src === originalImage.src;
-        });
-        if (!newImage) {
-          // image is in original but not in new
-          const fileName = getImageFileName(originalImage.src);
-          if (!fileName) {
-            console.error(
-              `File name not found for image to delete: ${originalImage.src}`,
-            );
-            continue;
-          }
-          removedImageFileNames.push(fileName);
-        }
-      }
-
-      /**
-       * when a post is published, image URLs use the S3 URL
-       * when a post is not published, image URLs use the API URL
-       *
-       * Rewrite the kept images' srcs to the destination host and collect
-       * their file names. In-memory only — the actual visibility flips
-       * happen below, at the safe point for each direction.
-       */
-      const keptImageFileNames: Array<string> = [];
-      if (publishing || unpublishing) {
-        const urlConverter = openPost.isPublished
-          ? changeImageUrlToS3
-          : changeImageUrlToApi;
-        for (let i = 0; i < originalImages.length; i++) {
-          const originalImage = originalImages[i];
-          const newImage = Array.from(newImages).find((img) => {
-            return img.src === originalImage.src;
-          });
-          if (!newImage) continue;
-          const fileName = getImageFileName(originalImage.src);
-          newImage.src = urlConverter(originalImage.src);
-          if (fileName) {
-            keptImageFileNames.push(fileName);
-          } else {
-            console.error(
-              `File name not found for image: ${originalImage.src}`,
-            );
-          }
-        }
-      }
-
-      // Upload images in new that are not in original. This happens before
-      // anything existing is touched: a failed upload aborts the save with
-      // the previous state fully intact (at worst it leaves orphaned
-      // uploads for the GC sweep).
-      showLoading("Uploading images...");
-      for (let i = 0; i < newImages.length; i++) {
-        const newImage = newImages[i];
-        const originalImage = Array.from(originalImages).find((img) => {
-          return img.src === newImage.src;
-        });
-        if (!originalImage) {
-          // The img's title carries the stable id its pending file is
-          // keyed by, so the file stays attached however the image has
-          // been moved around inside the content. The map is not
-          // touched here — on a later failure the whole save retries
-          // with every pending file still present (a re-upload just
-          // leaves an orphan for the GC sweep).
-          const pendingFile = pendingImageFiles.get(newImage.title);
-          if (pendingFile) {
-            const fileName = await ImageService.upload(
-              pendingFile,
-              openPost.isPublished,
+      const result = await saveBlogPost({
+        post: openPost,
+        wasPublished: originalPost.isPublished,
+        newPostList,
+        originalContent: originalOpenPostContent,
+        newContent: openPostContent,
+        pendingImageFiles,
+        deps: {
+          getToken: getAccessTokenSilently,
+          updateContent: BlogService.updateContent,
+          uploadImage: ImageService.upload,
+          deleteImage: ImageService.delete,
+          setImagePublished: ImageService.setPublished,
+          saveList: savePostList,
+          restoreList: async () => {
+            await BlogService.updateList(
+              originalPostList,
               getAccessTokenSilently,
             );
-            if (!fileName) {
-              throw new Error("Failed to upload image");
-            }
-            newImage.src = baseUrl + fileName;
-          }
-        }
+            setPostList(originalPostList);
+          },
+          showLoading,
+          notify,
+        },
+      });
+      if (result.outcome === "saved") {
+        setOpenPost(null);
+        setOpenPostContent(null);
+        setPendingImageFiles(new Map());
       }
-
-      // convert the new HTML back to a string; serialize only the body
-      // fragment so saved content isn't wrapped in
-      // <html><head></head><body>…</body></html> (#80)
-      const newHtmlString = newHtmlDoc.body.innerHTML;
-
-      // Publishing is committed by the list save, which therefore goes
-      // LAST — the public list must never claim a post whose public
-      // content and images don't exist yet. Unpublishing flips the list
-      // FIRST, hiding the post before any public object changes, and a
-      // failure aborts with everything else untouched (#112). A no-flip
-      // save orders content before list too, so a content failure can't
-      // leave new metadata (title/date) over old content (#135).
-      if (unpublishing && !(await savePostList(newPostList))) return;
-
-      if (publishing) {
-        // Public images first: this is safe while the post is still a
-        // draft, because the editor loads images through the API, which
-        // serves them regardless of their public tag.
-        showLoading("Updating image visibility...");
-        await setImagesPublishedOrRollBack(keptImageFileNames, true);
-
-        showLoading("Saving other works item content...");
-        try {
-          await BlogService.updateContent(
-            openPost.id,
-            newHtmlString || "",
-            true,
-            getAccessTokenSilently,
-          );
-        } catch (error) {
-          // The draft content object is untouched (this PUT failed), so
-          // flipping the images back restores the previous state exactly.
-          await rollBackImageFlips(keptImageFileNames, false);
-          throw error;
-        }
-
-        // Commit point: only now may the list mark the post published.
-        if (!(await savePostList(newPostList))) {
-          // The public list still says draft; restore the draft content
-          // and image visibility so the previous state stays intact.
-          // (savePostList already showed its own error toast.)
-          showLoading("Rolling back...");
-          try {
-            await BlogService.updateContent(
-              openPost.id,
-              originalOpenPostContent || "",
-              false,
-              getAccessTokenSilently,
-            );
-          } catch (rollbackError) {
-            console.error(rollbackError);
-            rollbackIncomplete = true;
-          }
-          await rollBackImageFlips(keptImageFileNames, false);
-          if (rollbackIncomplete) {
-            notify(ROLLBACK_INCOMPLETE_MESSAGE, "error");
-          }
-          return;
-        }
-      } else {
-        showLoading("Saving other works item content...");
-        try {
-          await BlogService.updateContent(
-            openPost.id,
-            newHtmlString || "",
-            openPost.isPublished,
-            getAccessTokenSilently,
-          );
-        } catch (error) {
-          if (unpublishing) {
-            // The list already says draft, but the published content
-            // object is untouched (this PUT failed); restoring the list
-            // restores the previous published state exactly.
-            try {
-              await BlogService.updateList(
-                originalPostList,
-                getAccessTokenSilently,
-              );
-              setPostList(originalPostList);
-            } catch (rollbackError) {
-              console.error(rollbackError);
-              rollbackIncomplete = true;
-            }
-          }
-          throw error;
-        }
-
-        if (unpublishing) {
-          // The post is hidden and its content now uses API URLs, so
-          // nothing public references these images any more — make them
-          // private. On a mid-loop failure the whole unpublish rolls
-          // back: the helper re-publishes the flipped images, then the
-          // published content and list are restored.
-          showLoading("Updating image visibility...");
-          try {
-            await setImagesPublishedOrRollBack(keptImageFileNames, false);
-          } catch (error) {
-            showLoading("Rolling back...");
-            try {
-              await BlogService.updateContent(
-                openPost.id,
-                originalOpenPostContent || "",
-                true,
-                getAccessTokenSilently,
-              );
-              await BlogService.updateList(
-                originalPostList,
-                getAccessTokenSilently,
-              );
-              setPostList(originalPostList);
-            } catch (rollbackError) {
-              console.error(rollbackError);
-              rollbackIncomplete = true;
-            }
-            throw error;
-          }
-        } else if (!(await savePostList(newPostList))) {
-          // No-flip: the content is already saved, so a failed list save
-          // leaves the old title/date over the new content — the reverse
-          // (new metadata over old content) would misrepresent what the
-          // post contains. Saving again retries both. (savePostList
-          // already showed its own error toast.)
-          return;
-        }
-      }
-
-      // The saved content no longer references the removed images; a
-      // failed delete just leaves an orphan for later cleanup.
-      showLoading("Deleting images...");
-      for (const fileName of removedImageFileNames) {
-        await ImageService.delete(fileName, getAccessTokenSilently).catch(
-          console.error,
-        );
-      }
-
-      notify("Other works item saved");
-      setOpenPost(null);
-      setOpenPostContent(null);
-      setPendingImageFiles(new Map());
-    } catch (error) {
-      console.error(error);
-      notify(
-        rollbackIncomplete
-          ? ROLLBACK_INCOMPLETE_MESSAGE
-          : "Failed to save other works item",
-        "error",
-      );
     } finally {
       hideLoading();
     }
@@ -531,7 +252,7 @@ export function AdminOtherWorksPage() {
       content={openPostContent}
       setContent={setOpenPostContent}
       setPost={setOpenPost}
-      validate={openPostIsValid}
+      saveDisabled={!openPostIsValid()}
       onSave={saveOpenPost}
       onClose={closeOpenPost}
       onAddImage={onAddImage}

@@ -15,7 +15,7 @@ export function BlogPostEditor({
   content,
   setContent,
   setPost,
-  validate,
+  saveDisabled,
   onSave,
   onClose,
   onAddImage,
@@ -24,7 +24,8 @@ export function BlogPostEditor({
   content: string | null;
   setContent: (content: string | null) => void;
   setPost: (post: BlogPost) => void;
-  validate: (post: BlogPost) => boolean;
+  /** Computed by the page (e.g. empty title); passed to DataEditor. */
+  saveDisabled: boolean;
   onSave: () => void;
   onClose: () => void;
   onAddImage: (image: File, id: string) => void;
@@ -39,7 +40,7 @@ export function BlogPostEditor({
   };
 
   return (
-    <DataEditor onSave={onSave} onClose={onClose} disableSave={!validate(post)}>
+    <DataEditor onSave={onSave} onClose={onClose} disableSave={saveDisabled}>
       <input
         type="text"
         placeholder="Title"
