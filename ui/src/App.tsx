@@ -45,19 +45,19 @@ function RouteFallback() {
 }
 
 function App() {
-  const [showingMobileMobileMenu, setShowingMobileMenu] = useState(false);
+  const [showingMobileMenu, setShowingMobileMenu] = useState(false);
   const isMobile = useIsMobile();
   return (
     <div className="whole-page">
       <Header
-        showingMobileMenu={showingMobileMobileMenu}
+        showingMobileMenu={showingMobileMenu}
         setShowingMobileMenu={setShowingMobileMenu}
       />
       <div className="content">
-        {isMobile && showingMobileMobileMenu && (
+        {isMobile && showingMobileMenu && (
           <MobileMenu setShowingMobileMenu={setShowingMobileMenu} />
         )}
-        {!showingMobileMobileMenu && (
+        {!showingMobileMenu && (
           <RouteErrorBoundary>
             <Suspense fallback={<RouteFallback />}>
               <Routes>

@@ -20,6 +20,13 @@
 }
 
 .admin-menu-item {
+  /* Real <button> for keyboard access; neutralize default button chrome
+     so it looks identical to the former <div>. */
+  background: none;
+  border: none;
+  font: inherit;
+  text-align: left;
+  box-sizing: content-box;
   color: #757575;
   display: flex;
   justify-content: flex-start;

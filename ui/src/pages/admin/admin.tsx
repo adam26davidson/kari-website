@@ -35,15 +35,16 @@ function Admin() {
         <>
           <div className="admin-menu">
             {ADMIN_PAGES.map(({ id, label }) => (
-              <div
+              <button
                 key={id}
+                type="button"
                 className={`admin-menu-item ${
                   currentPage === id ? "selected" : ""
                 }`}
                 onClick={() => setCurrentPage(id)}
               >
                 {label}
-              </div>
+              </button>
             ))}
           </div>
           <div className="admin-content">

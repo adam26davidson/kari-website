@@ -72,11 +72,9 @@ describe("Header on desktop, non-admin routes", () => {
     );
   });
 
-  it("does not render the hamburger menu icon", () => {
-    const { container } = renderHeader("/");
-    expect(
-      container.querySelector(".header-menu-icon"),
-    ).not.toBeInTheDocument();
+  it("does not render the hamburger menu button", () => {
+    renderHeader("/");
+    expect(screen.queryByRole("button", { name: "Menu" })).toBeNull();
   });
 });
 
@@ -91,23 +89,29 @@ describe("Header on mobile", () => {
   });
 
   it("toggles the mobile menu open when the hamburger is clicked", async () => {
-    const { container, setShowingMobileMenu } = renderHeader("/", {
+    const { setShowingMobileMenu } = renderHeader("/", {
       showingMobileMenu: false,
     });
-    const icon = container.querySelector(".header-menu-icon");
-    expect(icon).toBeInTheDocument();
-    await userEvent.click(icon as Element);
+    await userEvent.click(screen.getByRole("button", { name: "Menu" }));
     expect(setShowingMobileMenu).toHaveBeenCalledWith(true);
   });
 
   it("toggles the mobile menu closed when it is already open", async () => {
-    const { container, setShowingMobileMenu } = renderHeader("/", {
+    const { setShowingMobileMenu } = renderHeader("/", {
       showingMobileMenu: true,
     });
-    await userEvent.click(
-      container.querySelector(".header-menu-icon") as Element,
-    );
+    await userEvent.click(screen.getByRole("button", { name: "Menu" }));
     expect(setShowingMobileMenu).toHaveBeenCalledWith(false);
+  });
+
+  it("toggles the mobile menu with the keyboard", async () => {
+    const { setShowingMobileMenu } = renderHeader("/", {
+      showingMobileMenu: false,
+    });
+    const button = screen.getByRole("button", { name: "Menu" });
+    button.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(setShowingMobileMenu).toHaveBeenCalledWith(true);
   });
 });
 

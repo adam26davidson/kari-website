@@ -66,12 +66,12 @@ describe("Admin authentication gating", () => {
 });
 
 describe("Admin menu", () => {
-  it("lists every admin page with its label, in order", () => {
+  it("lists every admin page as a button with its label, in order", () => {
     render(<Admin />);
 
-    const labels = Array.from(
-      document.querySelectorAll(".admin-menu-item"),
-    ).map((item) => item.textContent);
+    const labels = screen
+      .getAllByRole("button")
+      .map((item) => item.textContent);
     expect(labels).toEqual([
       "Home",
       "Haiku",
@@ -85,7 +85,9 @@ describe("Admin menu", () => {
   it("starts on the home page editor", () => {
     render(<Admin />);
     expect(screen.getByText("home-page-stub")).toBeInTheDocument();
-    expect(screen.getByText("Home")).toHaveClass("selected");
+    expect(screen.getByRole("button", { name: "Home" })).toHaveClass(
+      "selected",
+    );
   });
 
   it.each([
@@ -97,10 +99,10 @@ describe("Admin menu", () => {
   ])("switches to %s on click", (label, stub) => {
     render(<Admin />);
 
-    fireEvent.click(screen.getByText(label));
+    fireEvent.click(screen.getByRole("button", { name: label }));
 
     expect(screen.getByText(stub)).toBeInTheDocument();
-    expect(screen.getByText(label)).toHaveClass("selected");
+    expect(screen.getByRole("button", { name: label })).toHaveClass("selected");
     expect(screen.queryByText("home-page-stub")).toBeNull();
   });
 });
