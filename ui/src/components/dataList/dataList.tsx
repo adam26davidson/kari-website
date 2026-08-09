@@ -1,6 +1,8 @@
 import "./dataList.css";
+// NOT redundant: DataListItem does not import its own stylesheet, so this
+// is the only place dataListItem.css gets loaded for every DataList usage
+// (moving the import into dataListItem.tsx would let this line go).
 import "../dataListItem/dataListItem.css";
-import "../../pages/admin/admin.css";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus } from "@fortawesome/free-solid-svg-icons";
 import { isValidElement } from "react";

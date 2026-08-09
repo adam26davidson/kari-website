@@ -3,6 +3,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import AdminHaigaPage from "./adminHaigaPage";
 import { Haiga } from "../../../Models";
 import { HaigaService } from "../../../services/haiga";
+import { TokenGetter } from "../../../services/http";
 import { ImageService } from "../../../services/images";
 import { answerYes, renderWithAdminUi } from "../admin-ui-test-helpers";
 
@@ -251,7 +252,7 @@ describe("AdminHaigaPage creation", () => {
     // The saved list is the existing haiga plus a fresh empty one.
     const [savedList] = vi.mocked(HaigaService.updateList).mock.calls[0] as [
       Array<Haiga>,
-      () => Promise<string>,
+      TokenGetter,
     ];
     expect(savedList).toHaveLength(2);
     expect(savedList[0]).toEqual(savedHaiga);

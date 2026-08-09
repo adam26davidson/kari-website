@@ -79,11 +79,6 @@ function AdminHaikuPage() {
     await saveList(newHaikuList, "Haiku saved");
   };
 
-  const openHaikuIsValid = () => {
-    if (!openHaiku) return false;
-    return openHaiku.lines.length > 0 && openHaiku.lines[0].length > 0;
-  };
-
   if (loadFailed) {
     return <LoadError message="Failed to load haiku." onRetry={load} />;
   }
@@ -92,7 +87,9 @@ function AdminHaikuPage() {
     <HaikuEditor
       haiku={openHaiku}
       setHaiku={setOpenHaiku}
-      validate={openHaikuIsValid}
+      saveDisabled={
+        openHaiku.lines.length === 0 || openHaiku.lines[0].length === 0
+      }
       onSave={saveOpenHaiku}
       onClose={() => setOpenHaiku(null)}
     />

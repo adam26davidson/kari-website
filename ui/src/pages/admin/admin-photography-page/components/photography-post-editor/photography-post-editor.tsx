@@ -3,14 +3,13 @@ import { AdminItemList } from "../../../../../components/admin-item-list/admin-i
 import { DataEditor } from "../../../../../components/data-editor/data-editor";
 import { PhotoPicker } from "../../../../../components/photo-picker/photo-picker";
 import { moveItemByOne } from "../../../../../utils/data-list-helpers";
-import { copyPhotographyPost } from "../../../../../utils/misc-utils";
 import { EditorImage, newEditorImage } from "./editor-image";
 import "./photography-post-editor.css";
 
 export function PhotographyPostEditor({
   post,
   setPost,
-  validate,
+  saveDisabled,
   onSave,
   onClose,
   images,
@@ -18,29 +17,17 @@ export function PhotographyPostEditor({
 }: {
   post: PhotographyPost;
   setPost: (post: PhotographyPost) => void;
-  validate: (post: PhotographyPost) => boolean;
+  saveDisabled: boolean;
   onSave: () => void;
   onClose: () => void;
   images: Array<EditorImage>;
   setImages: (images: Array<EditorImage>) => void;
 }) {
-  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newPost = copyPhotographyPost(post);
-    newPost.title = e.target.value;
-    setPost(newPost);
-  };
-
-  const handleSubtitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newPost = copyPhotographyPost(post);
-    newPost.subtitle = e.target.value;
-    setPost(newPost);
-  };
-
-  const handleBlurbChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newPost = copyPhotographyPost(post);
-    newPost.blurb = e.target.value;
-    setPost(newPost);
-  };
+  const updateField =
+    (field: "title" | "subtitle" | "blurb") =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      setPost({ ...post, [field]: e.target.value });
+    };
 
   const onNewImage = () => {
     setImages([...images, newEditorImage()]);
@@ -78,27 +65,27 @@ export function PhotographyPostEditor({
   };
 
   return (
-    <DataEditor onSave={onSave} onClose={onClose} disableSave={!validate(post)}>
+    <DataEditor onSave={onSave} onClose={onClose} disableSave={saveDisabled}>
       <div className="photography-post-editor-fields">
         <input
           type="text"
           placeholder="Title"
           aria-label="Title"
           value={post.title}
-          onChange={handleTitleChange}
+          onChange={updateField("title")}
         />
         <input
           type="text"
           placeholder="Subtitle"
           aria-label="Subtitle"
           value={post.subtitle}
-          onChange={handleSubtitleChange}
+          onChange={updateField("subtitle")}
         />
         <textarea
           value={post.blurb}
           placeholder={"Optional blurb"}
           aria-label="Optional blurb"
-          onChange={handleBlurbChange}
+          onChange={updateField("blurb")}
         />
       </div>
       <div className="photography-post-editor-images">

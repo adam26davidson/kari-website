@@ -6,20 +6,16 @@ export function HaikuEditor({
   setHaiku,
   onSave,
   onClose,
-  validate,
+  saveDisabled,
 }: {
   haiku: Haiku;
   setHaiku: (haiku: Haiku) => void;
   onSave: () => void;
   onClose: () => void;
-  validate: (haiku: Haiku) => boolean;
+  saveDisabled: boolean;
 }) {
   return (
-    <DataEditor
-      onSave={onSave}
-      onClose={onClose}
-      disableSave={!validate(haiku)}
-    >
+    <DataEditor onSave={onSave} onClose={onClose} disableSave={saveDisabled}>
       <textarea
         value={haiku.lines.join("\n")}
         placeholder={"line 1\nline 2\nline 3"}

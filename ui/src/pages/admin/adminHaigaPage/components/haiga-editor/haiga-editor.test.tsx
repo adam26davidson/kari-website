@@ -11,19 +11,16 @@ const haiga: Haiga = {
   publisher: "kari",
 };
 
-function renderEditor(overrides?: {
-  validate?: (haiga: Haiga) => boolean;
-}) {
+function renderEditor(overrides?: { saveDisabled?: boolean }) {
   const setHaiga = vi.fn();
   const setImageFile = vi.fn();
   const onSave = vi.fn();
   const onClose = vi.fn();
-  const validate = overrides?.validate ?? (() => true);
   const utils = render(
     <HaigaEditor
       haiga={haiga}
       setHaiga={setHaiga}
-      validate={validate}
+      saveDisabled={overrides?.saveDisabled ?? false}
       imageFile={null}
       setImageFile={setImageFile}
       onSave={onSave}
@@ -69,8 +66,8 @@ describe("HaigaEditor", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("disables the save button when validation fails", () => {
-    renderEditor({ validate: () => false });
+  it("disables the save button when the page says so", () => {
+    renderEditor({ saveDisabled: true });
     expect(screen.getByRole("button", { name: "Save" })).toHaveClass(
       "disabled",
     );
