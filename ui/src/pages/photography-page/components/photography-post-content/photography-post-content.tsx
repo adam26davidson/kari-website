@@ -1,7 +1,6 @@
 import { PhotographyPost } from "../../../../Models";
+import { s3ImageUrl } from "../../../../utils/image-management-helpers";
 import "./photography-post-content.css";
-
-const S3_URL = import.meta.env.VITE_S3_URL;
 
 export function PhotographyPostContent({ post }: { post: PhotographyPost }) {
   return (
@@ -15,7 +14,7 @@ export function PhotographyPostContent({ post }: { post: PhotographyPost }) {
         {post.images.map((image, idx) => (
           <div key={idx} className="photography-post-image-container">
             <img
-              src={S3_URL + "/images/" + image.image}
+              src={s3ImageUrl(image.image)}
               alt={image.blurb}
               className="photography-post-image"
             />

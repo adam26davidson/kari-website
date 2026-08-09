@@ -3,6 +3,8 @@ import {
   changeImageUrlToS3,
   changeImageUrlToApi,
   getImageFileName,
+  s3ImageUrl,
+  apiImageUrl,
 } from "./image-management-helpers";
 
 // VITE_API_URL / VITE_S3_URL are provided by vitest.config.ts test.env.
@@ -22,6 +24,10 @@ describe("image-management-helpers", () => {
         `${S3}/images/pic.png`,
       );
     });
+
+    it("maps a trailing-slash url to an empty filename", () => {
+      expect(changeImageUrlToS3("https://host/images/")).toBe(`${S3}/images/`);
+    });
   });
 
   describe("changeImageUrlToApi", () => {
@@ -29,6 +35,18 @@ describe("image-management-helpers", () => {
       expect(changeImageUrlToApi(`${S3}/images/photo.jpg`)).toBe(
         `${API}/images/photo.jpg`,
       );
+    });
+  });
+
+  describe("s3ImageUrl", () => {
+    it("builds an S3 images url from a file name", () => {
+      expect(s3ImageUrl("photo.jpg")).toBe(`${S3}/images/photo.jpg`);
+    });
+  });
+
+  describe("apiImageUrl", () => {
+    it("builds an API images url from a file name", () => {
+      expect(apiImageUrl("photo.jpg")).toBe(`${API}/images/photo.jpg`);
     });
   });
 
