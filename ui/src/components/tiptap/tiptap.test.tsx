@@ -1,18 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Tiptap } from "./tiptap";
 
-// The toolbar buttons are icon-only; locate them through the FontAwesome
-// svg's data-icon attribute rather than accessible names.
-const getButton = (container: HTMLElement, icon: string) => {
-  const svg = container.querySelector(`svg[data-icon="${icon}"]`);
-  const button = svg?.closest("button");
-  if (!button) {
-    throw new Error(`toolbar button with icon "${icon}" not found`);
-  }
-  return button;
-};
+// Toolbar buttons carry aria-labels from their config names, so they can
+// be looked up through their accessible name.
+const getButton = (name: string) =>
+  screen.getByRole("button", { name });
 
 const renderTiptap = (content = "<p>hello</p>") => {
   const setContent = vi.fn();
@@ -44,10 +38,33 @@ describe("Tiptap toolbar", () => {
     expect(container.querySelectorAll(".button-group button")).toHaveLength(12);
   });
 
+  it("labels every toolbar button and the block-style select", () => {
+    const { container } = renderTiptap();
+
+    for (const button of container.querySelectorAll(".button-group button")) {
+      expect(button).toHaveAttribute("aria-label");
+      expect(button.getAttribute("title")).toBe(
+        button.getAttribute("aria-label")
+      );
+    }
+    expect(
+      screen.getByRole("combobox", { name: "text style" })
+    ).toBeInTheDocument();
+  });
+
+  it("mounts without Tiptap's duplicate-extension warning", () => {
+    const warn = vi.spyOn(console, "warn");
+    renderTiptap();
+    const messages = warn.mock.calls.map((call) => call.join(" "));
+    expect(
+      messages.filter((m) => m.includes("Duplicate extension names"))
+    ).toEqual([]);
+  });
+
   it("marks the bold button active once toggled", async () => {
     const user = userEvent.setup();
-    const { container } = renderTiptap();
-    const bold = getButton(container, "bold");
+    renderTiptap();
+    const bold = getButton("bold");
 
     expect(bold.className).not.toContain("is-active");
     await user.click(bold);
@@ -58,9 +75,9 @@ describe("Tiptap toolbar", () => {
 
   it("tracks the active text alignment across the alignment buttons", async () => {
     const user = userEvent.setup();
-    const { container, setContent } = renderTiptap();
-    const center = getButton(container, "align-center");
-    const left = getButton(container, "align-left");
+    const { setContent } = renderTiptap();
+    const center = getButton("align-center");
+    const left = getButton("align-left");
 
     await user.click(center);
     expect(center.className).toContain("is-active");
@@ -76,19 +93,17 @@ describe("Tiptap toolbar", () => {
 
   it("toggles list types from the list buttons", async () => {
     const user = userEvent.setup();
-    const { container, setContent } = renderTiptap();
+    const { setContent } = renderTiptap();
 
-    await user.click(getButton(container, "list-ul"));
-    expect(getButton(container, "list-ul").className).toContain("is-active");
+    await user.click(getButton("bullet-list"));
+    expect(getButton("bullet-list").className).toContain("is-active");
     expect(setContent).toHaveBeenLastCalledWith(
       "<ul><li><p>hello</p></li></ul>"
     );
 
-    await user.click(getButton(container, "list-ol"));
-    expect(getButton(container, "list-ol").className).toContain("is-active");
-    expect(getButton(container, "list-ul").className).not.toContain(
-      "is-active"
-    );
+    await user.click(getButton("ordered-list"));
+    expect(getButton("ordered-list").className).toContain("is-active");
+    expect(getButton("bullet-list").className).not.toContain("is-active");
     expect(setContent).toHaveBeenLastCalledWith(
       "<ol><li><p>hello</p></li></ol>"
     );
@@ -96,9 +111,8 @@ describe("Tiptap toolbar", () => {
 
   it("shows the current block in the heading select and switches on change", async () => {
     const user = userEvent.setup();
-    const { container, setContent } = renderTiptap();
-    const select = container.querySelector("select");
-    if (!select) throw new Error("heading select not found");
+    const { setContent } = renderTiptap();
+    const select = screen.getByRole("combobox", { name: "text style" });
 
     expect(select).toHaveValue("p");
     await user.selectOptions(select, "h2");
@@ -111,51 +125,51 @@ describe("Tiptap toolbar", () => {
   });
 
   it("disables unlink when the cursor is not on a link", () => {
-    const { container } = renderTiptap();
-    expect(getButton(container, "link-slash")).toBeDisabled();
+    renderTiptap();
+    expect(getButton("unlink")).toBeDisabled();
   });
 
   it("does nothing when the link prompt is cancelled", async () => {
     const user = userEvent.setup();
     vi.spyOn(window, "prompt").mockReturnValue(null);
-    const { container, setContent } = renderTiptap();
+    const { setContent } = renderTiptap();
 
-    await user.click(getButton(container, "link"));
+    await user.click(getButton("link"));
     expect(window.prompt).toHaveBeenCalledWith("URL", undefined);
     expect(setContent).not.toHaveBeenCalled();
   });
 
   it("enables unlink on a link and strips it on click", async () => {
     const user = userEvent.setup();
-    const { container, setContent } = renderTiptap(
+    const { setContent } = renderTiptap(
       '<p><a href="https://x.test/">hello</a></p>'
     );
-    const unlink = getButton(container, "link-slash");
-    const link = getButton(container, "link");
+    const unlink = getButton("unlink");
+    const link = getButton("link");
 
     // the initial cursor sits at the start of the link text
     expect(link.className).toContain("is-active");
     expect(unlink).toBeEnabled();
     await user.click(unlink);
     expect(setContent).toHaveBeenLastCalledWith("<p>hello</p>");
-    expect(getButton(container, "link-slash")).toBeDisabled();
+    expect(getButton("unlink")).toBeDisabled();
   });
 
   it("applies the prompted url as a link", async () => {
     const user = userEvent.setup();
     vi.spyOn(window, "prompt").mockReturnValue("https://example.com");
-    const { container } = renderTiptap();
+    renderTiptap();
 
-    await user.click(getButton(container, "link"));
+    await user.click(getButton("link"));
     expect(window.prompt).toHaveBeenCalledWith("URL", undefined);
   });
 
   it("removes the link when the prompt returns an empty string", async () => {
     const user = userEvent.setup();
     vi.spyOn(window, "prompt").mockReturnValue("");
-    const { container, setContent } = renderTiptap();
+    const { setContent } = renderTiptap();
 
-    await user.click(getButton(container, "link"));
+    await user.click(getButton("link"));
     // unsetLink on a linkless cursor leaves the document unchanged
     expect(setContent).not.toHaveBeenCalled();
   });
@@ -167,9 +181,9 @@ describe("Tiptap toolbar", () => {
     const clickSpy = vi
       .spyOn(HTMLInputElement.prototype, "click")
       .mockImplementation(() => {});
-    const { container, setContent, onAddImage } = renderTiptap();
+    const { setContent, onAddImage } = renderTiptap();
 
-    await user.click(getButton(container, "image"));
+    await user.click(getButton("image"));
     const fileInput = clickSpy.mock.contexts[0] as HTMLInputElement;
     if (!fileInput) throw new Error("file input was not opened");
     expect(fileInput.getAttribute("accept")).toBe("image/*");
@@ -197,9 +211,9 @@ describe("Tiptap toolbar", () => {
     const clickSpy = vi
       .spyOn(HTMLInputElement.prototype, "click")
       .mockImplementation(() => {});
-    const { container, onAddImage } = renderTiptap();
+    const { onAddImage } = renderTiptap();
 
-    await user.click(getButton(container, "image"));
+    await user.click(getButton("image"));
     const fileInput = clickSpy.mock.contexts[0] as HTMLInputElement;
     Object.defineProperty(fileInput, "files", { value: [] });
     fileInput.onchange?.(new Event("change"));
