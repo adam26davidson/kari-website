@@ -24,55 +24,51 @@ function Header({
   const isAdminPage = location.pathname === "/admin";
 
   return (
-    <>
-      <div className={isAdminPage ? "admin-header" : "header"}>
-        {isMobile && (
-          <FontAwesomeIcon
-            icon={faBars}
-            className="header-menu-icon"
-            onClick={() => setShowingMobileMenu(!showingMobileMenu)}
-          />
-        )}
-        <div
-          className={
-            isMobile
-              ? "header-title-mobile"
-              : (isAdminPage ? "admin-" : "") + "header-title"
-          }
-        >
-          {"Kari Davidson" + (location.pathname === "/admin" ? " - Admin" : "")}
-        </div>
-        {location.pathname !== "/admin" && !isMobile && (
-          <div className="pages">
-            {PAGES.map((page) => (
-              <Link
-                key={page.path}
-                to={page.path}
-                className={location.pathname === page.path ? "active" : ""}
-              >
-                {page.name}
-              </Link>
-            ))}
-          </div>
-        )}
-        {location.pathname === "/admin" && isAuthenticated && !isLoading && (
-          <>
-            <div className="header-user-section">
-              <FontAwesomeIcon icon={faUser} />
-              <div className="header-user-name">{user?.name}</div>
-              <AdminButton
-                onClick={() =>
-                  logout({ logoutParams: { returnTo: window.location.origin } })
-                }
-              >
-                <FontAwesomeIcon icon={faRightFromBracket} />
-              </AdminButton>
-            </div>
-          </>
-        )}
-        {location.pathname == "/admin" && isLoading && "Logging in..."}
+    <div className={isAdminPage ? "admin-header" : "header"}>
+      {isMobile && (
+        <FontAwesomeIcon
+          icon={faBars}
+          className="header-menu-icon"
+          onClick={() => setShowingMobileMenu(!showingMobileMenu)}
+        />
+      )}
+      <div
+        className={
+          isMobile
+            ? "header-title-mobile"
+            : (isAdminPage ? "admin-" : "") + "header-title"
+        }
+      >
+        {"Kari Davidson" + (location.pathname === "/admin" ? " - Admin" : "")}
       </div>
-    </>
+      {location.pathname !== "/admin" && !isMobile && (
+        <div className="pages">
+          {PAGES.map((page) => (
+            <Link
+              key={page.path}
+              to={page.path}
+              className={location.pathname === page.path ? "active" : ""}
+            >
+              {page.name}
+            </Link>
+          ))}
+        </div>
+      )}
+      {location.pathname === "/admin" && isAuthenticated && !isLoading && (
+        <div className="header-user-section">
+          <FontAwesomeIcon icon={faUser} />
+          <div className="header-user-name">{user?.name}</div>
+          <AdminButton
+            onClick={() =>
+              logout({ logoutParams: { returnTo: window.location.origin } })
+            }
+          >
+            <FontAwesomeIcon icon={faRightFromBracket} />
+          </AdminButton>
+        </div>
+      )}
+      {location.pathname == "/admin" && isLoading && "Logging in..."}
+    </div>
   );
 }
 

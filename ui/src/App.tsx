@@ -48,38 +48,36 @@ function App() {
   const [showingMobileMobileMenu, setShowingMobileMenu] = useState(false);
   const isMobile = useIsMobile();
   return (
-    <>
-      <div className="whole-page">
-        <Header
-          showingMobileMenu={showingMobileMobileMenu}
-          setShowingMobileMenu={setShowingMobileMenu}
-        />
-        <div className="content">
-          {isMobile && showingMobileMobileMenu && (
-            <MobileMenu setShowingMobileMenu={setShowingMobileMenu} />
-          )}
-          {!showingMobileMobileMenu && (
-            <RouteErrorBoundary>
-              <Suspense fallback={<RouteFallback />}>
-                <Routes>
-                  <Route path="/" element={<Home />} />
-                  <Route path="haiku" element={<HaikuPage />} />
-                  <Route path="haiga" element={<HaigaPage />} />
-                  <Route path="other-works" element={<OtherWorksPage />} />
-                  <Route
-                    path="blog"
-                    element={<Navigate to="/other-works" replace />}
-                  />
-                  <Route path="blog/:id" element={<BlogPostPage />} />
-                  <Route path="admin" element={<Admin />} />
-                  <Route path="photography" element={<PhotographyPage />} />
-                </Routes>
-              </Suspense>
-            </RouteErrorBoundary>
-          )}
-        </div>
+    <div className="whole-page">
+      <Header
+        showingMobileMenu={showingMobileMobileMenu}
+        setShowingMobileMenu={setShowingMobileMenu}
+      />
+      <div className="content">
+        {isMobile && showingMobileMobileMenu && (
+          <MobileMenu setShowingMobileMenu={setShowingMobileMenu} />
+        )}
+        {!showingMobileMobileMenu && (
+          <RouteErrorBoundary>
+            <Suspense fallback={<RouteFallback />}>
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="haiku" element={<HaikuPage />} />
+                <Route path="haiga" element={<HaigaPage />} />
+                <Route path="other-works" element={<OtherWorksPage />} />
+                <Route
+                  path="blog"
+                  element={<Navigate to="/other-works" replace />}
+                />
+                <Route path="blog/:id" element={<BlogPostPage />} />
+                <Route path="admin" element={<Admin />} />
+                <Route path="photography" element={<PhotographyPage />} />
+              </Routes>
+            </Suspense>
+          </RouteErrorBoundary>
+        )}
       </div>
-    </>
+    </div>
   );
 }
 
