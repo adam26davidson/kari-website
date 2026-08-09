@@ -77,12 +77,10 @@ describe("App", () => {
 
   it("shows the mobile menu instead of the route when opened, and closes on selection", async () => {
     vi.mocked(useIsMobile).mockReturnValue(true);
-    const { container } = renderApp("/");
+    renderApp("/");
     expect(await screen.findByText("Home page stub")).toBeInTheDocument();
 
-    await userEvent.click(
-      container.querySelector(".header-menu-icon") as Element,
-    );
+    await userEvent.click(screen.getByRole("button", { name: "Menu" }));
     expect(screen.getByRole("link", { name: "Haiku" })).toHaveClass(
       "mobile-menu-item",
     );

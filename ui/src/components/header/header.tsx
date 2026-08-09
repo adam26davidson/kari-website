@@ -26,22 +26,27 @@ function Header({
   return (
     <div className={isAdminPage ? "admin-header" : "header"}>
       {isMobile && (
-        <FontAwesomeIcon
-          icon={faBars}
-          className="header-menu-icon"
+        <button
+          type="button"
+          aria-label="Menu"
+          className="header-menu-button"
           onClick={() => setShowingMobileMenu(!showingMobileMenu)}
-        />
+        >
+          <FontAwesomeIcon icon={faBars} className="header-menu-icon" />
+        </button>
       )}
       <div
         className={
           isMobile
             ? "header-title-mobile"
-            : (isAdminPage ? "admin-" : "") + "header-title"
+            : isAdminPage
+              ? "admin-header-title"
+              : "header-title"
         }
       >
-        {"Kari Davidson" + (location.pathname === "/admin" ? " - Admin" : "")}
+        {"Kari Davidson" + (isAdminPage ? " - Admin" : "")}
       </div>
-      {location.pathname !== "/admin" && !isMobile && (
+      {!isAdminPage && !isMobile && (
         <div className="pages">
           {PAGES.map((page) => (
             <Link
@@ -54,7 +59,7 @@ function Header({
           ))}
         </div>
       )}
-      {location.pathname === "/admin" && isAuthenticated && !isLoading && (
+      {isAdminPage && isAuthenticated && !isLoading && (
         <div className="header-user-section">
           <FontAwesomeIcon icon={faUser} />
           <div className="header-user-name">{user?.name}</div>
@@ -67,7 +72,7 @@ function Header({
           </AdminButton>
         </div>
       )}
-      {location.pathname == "/admin" && isLoading && "Logging in..."}
+      {isAdminPage && isLoading && "Logging in..."}
     </div>
   );
 }

@@ -63,8 +63,18 @@
   margin-left: 20px;
 }
 
-.header-menu-icon {
+/* Real <button> for keyboard access; neutralize default button chrome
+   so the hamburger icon looks exactly as it did as a bare icon. */
+.header-menu-button {
+  background: none;
+  border: none;
+  padding: 0;
   margin-left: 20px;
+  font: inherit;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
 }
 
 .pages {
