@@ -1,12 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import "./admin-other-works-page.css";
 import "../admin.css";
-import { useAdminToken } from "../../../hooks/useAdminToken";
-import { Confirmation, Loading, Notify } from "../admin";
-import DataList from "../../../components/dataList/dataList";
 import { v4 as uuidv4 } from "uuid";
 import { BlogPost } from "../../../Models";
-import DataListItem from "../../../components/dataListItem/dataListItem";
 import { moveItemByOne } from "../../../utils/data-list-helpers";
 import { BlogService } from "../../../services/blog";
 import { BlogPostSummary } from "../../../components/blog-post-summary/blog-post-summary";
@@ -19,6 +15,10 @@ import {
 } from "../../../utils/image-management-helpers";
 import { HttpError } from "../../../services/http-error";
 import { LoadError } from "../../../components/load-error/load-error";
+import { AdminItemList } from "../../../components/admin-item-list/admin-item-list";
+import { useAdminToken } from "../../../hooks/useAdminToken";
+import { useAdminUi } from "../admin-ui-context";
+import { useAdminList } from "../use-admin-list";
 
 const S3_URL = import.meta.env.VITE_S3_URL;
 const API_URL = import.meta.env.VITE_API_URL;
@@ -29,19 +29,20 @@ const ROLLBACK_INCOMPLETE_MESSAGE =
   "Save failed and rolling back was incomplete — some content or images " +
   "may have the wrong visibility. Save again to retry.";
 
-interface AdminOtherWorksPageProps {
-  setLoading: (loading: Loading) => void;
-  setConfirmation: (confirmation: Confirmation) => void;
-  notify: Notify;
-}
-
-export function AdminOtherWorksPage({
-  setLoading,
-  setConfirmation,
-  notify,
-}: AdminOtherWorksPageProps) {
+export function AdminOtherWorksPage() {
   const getAccessTokenSilently = useAdminToken();
-  const [postList, setPostList] = useState<Array<BlogPost>>([]);
+  const { showLoading, hideLoading, confirm, notify } = useAdminUi();
+  const {
+    list: postList,
+    setList: setPostList,
+    loadFailed,
+    load,
+    saveList: savePostList,
+  } = useAdminList<BlogPost>({
+    noun: "other works",
+    getList: BlogService.getListFromApi,
+    updateList: BlogService.updateList,
+  });
   const [openPost, setOpenPost] = useState<BlogPost | null>(null);
   const [openPostContent, setOpenPostContent] = useState<string | null>(null);
   const [originalOpenPostContent, setOriginalOpenPostContent] = useState<
@@ -59,62 +60,13 @@ export function AdminOtherWorksPage({
     new Map(),
   );
 
-  const [loadFailed, setLoadFailed] = useState(false);
-
-  const load = async () => {
-    setLoading({ isLoading: true, message: "Loading other works..." });
-    setLoadFailed(false);
-    try {
-      const data = await BlogService.getListFromApi(getAccessTokenSilently);
-      setPostList(data);
-    } catch (error) {
-      // Never show an empty editable list after a failed load — saving it
-      // would overwrite the real data.
-      console.error(error);
-      setLoadFailed(true);
-    } finally {
-      setLoading({ isLoading: false, message: "" });
-    }
-  };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Toasts on error always; toasts success only when a message is given, so
-  // multi-step flows can notify once at the end.
-  const savePostList = async (
-    newPostList: Array<BlogPost>,
-    successMessage?: string,
-  ): Promise<boolean> => {
-    setLoading({ isLoading: true, message: "Updating other works..." });
-    try {
-      await BlogService.updateList(newPostList, getAccessTokenSilently);
-      setPostList(newPostList);
-      if (successMessage) {
-        notify(successMessage);
-      }
-      return true;
-    } catch (error) {
-      console.error(error);
-      notify("Failed to save — your change was not saved", "error");
-      return false;
-    } finally {
-      setLoading({ isLoading: false, message: "" });
-    }
-  };
-
-  const deletePost = (idx: number) => async () => {
+  const deletePost = async (idx: number) => {
     const postToDelete = postList[idx];
     if (!postToDelete) {
       console.error("Post not found");
       return;
     }
-    setLoading({
-      isLoading: true,
-      message: "Deleting other works item...",
-    });
+    showLoading("Deleting other works item...");
 
     // First get the content of the post so its images can be cleaned up
     // once the delete has succeeded; content that was never created (404)
@@ -129,7 +81,7 @@ export function AdminOtherWorksPage({
       if (!(error instanceof HttpError) || error.status !== 404) {
         console.error(error);
         notify("Failed to delete other works item", "error");
-        setLoading({ isLoading: false, message: "" });
+        hideLoading();
         return;
       }
     }
@@ -143,10 +95,7 @@ export function AdminOtherWorksPage({
     // The saved list no longer references the item, so its content and
     // images can go; a failed delete just leaves orphans for later
     // cleanup.
-    setLoading({
-      isLoading: true,
-      message: "Deleting other works item images...",
-    });
+    showLoading("Deleting other works item images...");
     const htmlDoc = new DOMParser().parseFromString(content, "text/html");
     const images = htmlDoc.querySelectorAll("img");
     for (let i = 0; i < images.length; i++) {
@@ -164,27 +113,16 @@ export function AdminOtherWorksPage({
       postToDelete.id,
       getAccessTokenSilently,
     ).catch(console.error);
-    setLoading({ isLoading: false, message: "" });
+    hideLoading();
   };
 
   // List display functions ---------------------------------------------------
 
-  const onNewItem = async () => {
-    setConfirmation({
-      show: true,
-      message:
-        "This will create a new empty other works item which you can then edit. Do you want to continue?",
-      options: [
-        {
-          label: "Yes",
-          callback: () => createNewPost(),
-        },
-        {
-          label: "No",
-          callback: () => {},
-        },
-      ],
-    });
+  const onNewItem = () => {
+    confirm(
+      "This will create a new empty other works item which you can then edit. Do you want to continue?",
+      () => createNewPost(),
+    );
   };
 
   const createNewPost = async () => {
@@ -197,10 +135,7 @@ export function AdminOtherWorksPage({
     };
     const newPostList = [...postList, { ...newPost }];
     if (!(await savePostList(newPostList))) return;
-    setLoading({
-      isLoading: true,
-      message: "Creating new other works item...",
-    });
+    showLoading("Creating new other works item...");
     try {
       await BlogService.updateContent(id, "", false, getAccessTokenSilently);
     } catch (error) {
@@ -208,7 +143,7 @@ export function AdminOtherWorksPage({
       notify("Failed to create other works item", "error");
       return;
     } finally {
-      setLoading({ isLoading: false, message: "" });
+      hideLoading();
     }
     notify("New other works item created");
     setPendingImageFiles(new Map());
@@ -217,24 +152,19 @@ export function AdminOtherWorksPage({
     setOpenPost(newPost);
   };
 
-  const onDelete = (idx: number) => () => {
-    setConfirmation({
-      show: true,
-      message: "Are you sure you want to delete this other works item?",
-      options: [
-        { label: "Yes", callback: () => deletePost(idx)() },
-        { label: "No", callback: () => {} },
-      ],
-    });
+  const onDelete = (idx: number) => {
+    confirm("Are you sure you want to delete this other works item?", () =>
+      deletePost(idx),
+    );
   };
 
-  const onMove = (idx: number, direction: "up" | "down") => async () => {
+  const onMove = async (idx: number, direction: "up" | "down") => {
     const newPostList = moveItemByOne(postList, idx, direction);
     await savePostList(newPostList, "Order updated");
   };
 
-  const onEdit = (idx: number) => async () => {
-    setLoading({ isLoading: true, message: "Loading content..." });
+  const onEdit = async (idx: number) => {
+    showLoading("Loading content...");
     const openItem = { ...postList[idx] };
     try {
       const content = await BlogService.getContent(
@@ -251,7 +181,7 @@ export function AdminOtherWorksPage({
       console.error(error);
       notify("Failed to load content", "error");
     } finally {
-      setLoading({ isLoading: false, message: "" });
+      hideLoading();
     }
   };
 
@@ -400,10 +330,7 @@ export function AdminOtherWorksPage({
       // anything existing is touched: a failed upload aborts the save with
       // the previous state fully intact (at worst it leaves orphaned
       // uploads for the GC sweep).
-      setLoading({
-        isLoading: true,
-        message: "Uploading images...",
-      });
+      showLoading("Uploading images...");
       for (let i = 0; i < newImages.length; i++) {
         const newImage = newImages[i];
         const originalImage = Array.from(originalImages).find((img) => {
@@ -449,16 +376,10 @@ export function AdminOtherWorksPage({
         // Public images first: this is safe while the post is still a
         // draft, because the editor loads images through the API, which
         // serves them regardless of their public tag.
-        setLoading({
-          isLoading: true,
-          message: "Updating image visibility...",
-        });
+        showLoading("Updating image visibility...");
         await setImagesPublishedOrRollBack(keptImageFileNames, true);
 
-        setLoading({
-          isLoading: true,
-          message: "Saving other works item content...",
-        });
+        showLoading("Saving other works item content...");
         try {
           await BlogService.updateContent(
             openPost.id,
@@ -478,7 +399,7 @@ export function AdminOtherWorksPage({
           // The public list still says draft; restore the draft content
           // and image visibility so the previous state stays intact.
           // (savePostList already showed its own error toast.)
-          setLoading({ isLoading: true, message: "Rolling back..." });
+          showLoading("Rolling back...");
           try {
             await BlogService.updateContent(
               openPost.id,
@@ -497,10 +418,7 @@ export function AdminOtherWorksPage({
           return;
         }
       } else {
-        setLoading({
-          isLoading: true,
-          message: "Saving other works item content...",
-        });
+        showLoading("Saving other works item content...");
         try {
           await BlogService.updateContent(
             openPost.id,
@@ -533,14 +451,11 @@ export function AdminOtherWorksPage({
           // private. On a mid-loop failure the whole unpublish rolls
           // back: the helper re-publishes the flipped images, then the
           // published content and list are restored.
-          setLoading({
-            isLoading: true,
-            message: "Updating image visibility...",
-          });
+          showLoading("Updating image visibility...");
           try {
             await setImagesPublishedOrRollBack(keptImageFileNames, false);
           } catch (error) {
-            setLoading({ isLoading: true, message: "Rolling back..." });
+            showLoading("Rolling back...");
             try {
               await BlogService.updateContent(
                 openPost.id,
@@ -571,10 +486,7 @@ export function AdminOtherWorksPage({
 
       // The saved content no longer references the removed images; a
       // failed delete just leaves an orphan for later cleanup.
-      setLoading({
-        isLoading: true,
-        message: "Deleting images...",
-      });
+      showLoading("Deleting images...");
       for (const fileName of removedImageFileNames) {
         await ImageService.delete(fileName, getAccessTokenSilently).catch(
           console.error,
@@ -594,7 +506,7 @@ export function AdminOtherWorksPage({
         "error",
       );
     } finally {
-      setLoading({ isLoading: false, message: "" });
+      hideLoading();
     }
   };
 
@@ -622,30 +534,23 @@ export function AdminOtherWorksPage({
       validate={openPostIsValid}
       onSave={saveOpenPost}
       onClose={closeOpenPost}
-      setLoading={setLoading}
       onAddImage={onAddImage}
     />
   ) : (
-    <DataList isAdmin={true} onNewItem={onNewItem}>
-      {postList.map((post, idx) => (
-        <DataListItem
-          key={post.id}
+    <AdminItemList
+      items={postList}
+      onNewItem={onNewItem}
+      onEdit={onEdit}
+      onDelete={onDelete}
+      onMove={onMove}
+      renderItem={(post, idx) => (
+        <BlogPostSummary
+          post={post}
+          showPublished={true}
           isAdmin={true}
-          isLast={idx === postList.length - 1}
-          isFirst={idx === 0}
-          onEdit={onEdit(idx)}
-          onDelete={onDelete(idx)}
-          onMoveUp={onMove(idx, "up")}
-          onMoveDown={onMove(idx, "down")}
-        >
-          <BlogPostSummary
-            post={post}
-            showPublished={true}
-            isAdmin={true}
-            onClick={onEdit(idx)}
-          />
-        </DataListItem>
-      ))}
-    </DataList>
+          onClick={() => onEdit(idx)}
+        />
+      )}
+    />
   );
 }

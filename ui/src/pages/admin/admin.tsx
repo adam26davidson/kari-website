@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import "./admin.css";
 import AdminHaikuPage from "./adminHaikuPage/adminHaikuPage";
 import { useAuth0 } from "@auth0/auth0-react";
@@ -8,165 +8,57 @@ import { AdminOtherWorksPage } from "./adminOtherWorksPage/admin-other-works-pag
 import { AdminPhotographyPage } from "./admin-photography-page/admin-photography-page";
 import { AdminImageGcPage } from "./admin-image-gc-page/admin-image-gc-page";
 import { AdminButton } from "../../components/admin-button/admin-button";
+import { AdminUiProvider } from "./admin-ui-provider";
 
-type Page =
-  | "home"
-  | "haiku"
-  | "haiga"
-  | "other-works"
-  | "photography"
-  | "image-cleanup";
+// Single source of truth for the admin menu: ids, order, and labels.
+const ADMIN_PAGES = [
+  { id: "home", label: "Home" },
+  { id: "haiku", label: "Haiku" },
+  { id: "haiga", label: "Haiga" },
+  { id: "photography", label: "Photography" },
+  { id: "other-works", label: "Other works" },
+  { id: "image-cleanup", label: "Image cleanup" },
+] as const;
 
-export interface Loading {
-  isLoading: boolean;
-  message: string;
-}
-
-export interface Confirmation {
-  message: string;
-  show: boolean;
-  options: Array<{ label: string; callback: () => void }>;
-}
-
-export interface Notification {
-  message: string;
-  type: "success" | "error";
-}
-
-export type Notify = (message: string, type?: "success" | "error") => void;
+type Page = (typeof ADMIN_PAGES)[number]["id"];
 
 function Admin() {
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
-  const [loading, setLoading] = useState<Loading>({
-    isLoading: false,
-    message: "",
-  });
-  const [confirmation, setConfirmation] = useState<Confirmation>({
-    message: "",
-    show: false,
-    options: [],
-  });
-  const [notification, setNotification] = useState<Notification | null>(null);
-
-  useEffect(() => {
-    if (!notification) return;
-    const timer = setTimeout(() => setNotification(null), 3000);
-    return () => clearTimeout(timer);
-  }, [notification]);
-
-  const notify: Notify = (message, type = "success") =>
-    setNotification({ message, type });
 
   return (
-    <>
-      <div className="admin-container">
-        {!isAuthenticated && !isLoading && (
-          <AdminButton onClick={() => loginWithRedirect()}>Log In</AdminButton>
-        )}
-        {isAuthenticated && !isLoading && (
-          <>
-            <div className="admin-menu">
-              {[
-                "home",
-                "haiku",
-                "haiga",
-                "photography",
-                "other-works",
-                "image-cleanup",
-              ].map(
-                (page) => (
-                  <div
-                    key={page}
-                    className={`admin-menu-item ${
-                      currentPage === page ? "selected" : ""
-                    }`}
-                    onClick={() => setCurrentPage(page as Page)}
-                  >
-                    {page.charAt(0).toUpperCase() +
-                      page.slice(1).replace("-", " ")}
-                  </div>
-                ),
-              )}
-            </div>
-            <div className="admin-content">
-              {confirmation.show && (
-                <div className="admin-confirmation">
-                  <div className="admin-confirmation-dialog">
-                    {confirmation.message}
-                    <div className="admin-confirmation-options">
-                      {confirmation.options.map((option, idx) => (
-                        <AdminButton
-                          key={idx}
-                          onClick={() => {
-                            option.callback();
-                            setConfirmation({ ...confirmation, show: false });
-                          }}
-                        >
-                          {option.label}
-                        </AdminButton>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-              {loading.isLoading && (
-                <div className="admin-loading">
-                  <div className="admin-loading-message">{loading.message}</div>
-                </div>
-              )}
-              {notification && (
-                <div className={`admin-toast admin-toast-${notification.type}`}>
-                  {notification.message}
-                </div>
-              )}
-              {currentPage === "home" && (
-                <HomePageEditor
-                  setLoading={setLoading}
-                  isLoading={loading.isLoading}
-                  notify={notify}
-                />
-              )}
-              {currentPage === "haiku" && (
-                <AdminHaikuPage
-                  setLoading={setLoading}
-                  setConfirmation={setConfirmation}
-                  notify={notify}
-                />
-              )}
-              {currentPage === "haiga" && (
-                <AdminHaigaPage
-                  setLoading={setLoading}
-                  setConfirmation={setConfirmation}
-                  notify={notify}
-                />
-              )}
-              {currentPage === "other-works" && (
-                <AdminOtherWorksPage
-                  setLoading={setLoading}
-                  setConfirmation={setConfirmation}
-                  notify={notify}
-                />
-              )}
-              {currentPage === "photography" && (
-                <AdminPhotographyPage
-                  setLoading={setLoading}
-                  setConfirmation={setConfirmation}
-                  notify={notify}
-                />
-              )}
-              {currentPage === "image-cleanup" && (
-                <AdminImageGcPage
-                  setLoading={setLoading}
-                  setConfirmation={setConfirmation}
-                  notify={notify}
-                />
-              )}
-            </div>
-          </>
-        )}
-      </div>
-    </>
+    <div className="admin-container">
+      {!isAuthenticated && !isLoading && (
+        <AdminButton onClick={() => loginWithRedirect()}>Log In</AdminButton>
+      )}
+      {isAuthenticated && !isLoading && (
+        <>
+          <div className="admin-menu">
+            {ADMIN_PAGES.map(({ id, label }) => (
+              <div
+                key={id}
+                className={`admin-menu-item ${
+                  currentPage === id ? "selected" : ""
+                }`}
+                onClick={() => setCurrentPage(id)}
+              >
+                {label}
+              </div>
+            ))}
+          </div>
+          <div className="admin-content">
+            <AdminUiProvider>
+              {currentPage === "home" && <HomePageEditor />}
+              {currentPage === "haiku" && <AdminHaikuPage />}
+              {currentPage === "haiga" && <AdminHaigaPage />}
+              {currentPage === "other-works" && <AdminOtherWorksPage />}
+              {currentPage === "photography" && <AdminPhotographyPage />}
+              {currentPage === "image-cleanup" && <AdminImageGcPage />}
+            </AdminUiProvider>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

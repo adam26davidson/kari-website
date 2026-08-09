@@ -1,82 +1,41 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import "./adminHaigaPage.css";
-import { Confirmation, Loading, Notify } from "../admin";
-import { useAdminToken } from "../../../hooks/useAdminToken";
-import DataList from "../../../components/dataList/dataList";
 import { v4 as uuidv4 } from "uuid";
 import { Haiga } from "../../../Models";
 import { HaigaService } from "../../../services/haiga";
 import { ImageService } from "../../../services/images";
 import { HaigaEditor } from "./components/haiga-editor/haiga-editor";
 import { moveItemByOne } from "../../../utils/data-list-helpers";
-import DataListItem from "../../../components/dataListItem/dataListItem";
 import { HaigaContent } from "../../../components/haigaContent/haigaContent";
 import { LoadError } from "../../../components/load-error/load-error";
+import { AdminItemList } from "../../../components/admin-item-list/admin-item-list";
+import { useAdminToken } from "../../../hooks/useAdminToken";
+import { useAdminUi } from "../admin-ui-context";
+import { useAdminList } from "../use-admin-list";
 
-interface HaigaEditorProps {
-  setLoading: (loading: Loading) => void;
-  setConfirmation: (confirmation: Confirmation) => void;
-  notify: Notify;
-}
-
-function AdminHaigaPage({
-  setLoading,
-  setConfirmation,
-  notify,
-}: HaigaEditorProps) {
+function AdminHaigaPage() {
   const getAccessTokenSilently = useAdminToken();
-  const [haigaList, setHaigaList] = useState<Array<Haiga>>([]);
+  const { showLoading, hideLoading, confirm, notify } = useAdminUi();
+  const {
+    list: haigaList,
+    loadFailed,
+    load,
+    saveList,
+  } = useAdminList<Haiga>({
+    noun: "haiga",
+    getList: HaigaService.getListFromApi,
+    updateList: HaigaService.updateList,
+  });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [openHaiga, setOpenHaiga] = useState<Haiga | null>(null);
-  const [loadFailed, setLoadFailed] = useState(false);
 
-  const load = async () => {
-    setLoading({ isLoading: true, message: "Loading haiga..." });
-    setLoadFailed(false);
-    try {
-      const data = await HaigaService.getListFromApi(getAccessTokenSilently);
-      setHaigaList(data);
-    } catch (error) {
-      // Never show an empty editable list after a failed load — saving it
-      // would overwrite the real data.
-      console.error(error);
-      setLoadFailed(true);
-    } finally {
-      setLoading({ isLoading: false, message: "" });
-    }
-  };
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const saveHaigaList = async (
-    newHaigaList: Array<Haiga>,
-    successMessage: string,
-  ): Promise<boolean> => {
-    setLoading({ isLoading: true, message: "Updating haiga..." });
-    try {
-      await HaigaService.updateList(newHaigaList, getAccessTokenSilently);
-      setHaigaList(newHaigaList);
-      notify(successMessage);
-      return true;
-    } catch (error) {
-      console.error(error);
-      notify("Failed to save — your change was not saved", "error");
-      return false;
-    } finally {
-      setLoading({ isLoading: false, message: "" });
-    }
-  };
-
-  const deleteHaiga = (idx: number) => async () => {
+  const deleteHaiga = async (idx: number) => {
     const imageToDelete = haigaList[idx].image;
     const newDataList = haigaList.slice();
     newDataList.splice(idx, 1);
     // Save the shortened list first — if this fails the haiga stays
     // fully intact and referenced.
-    if (await saveHaigaList(newDataList, "Haiga deleted")) {
+    if (await saveList(newDataList, "Haiga deleted")) {
       // The saved list no longer references the image; a failed delete
       // just leaves an orphan for later cleanup.
       if (imageToDelete) {
@@ -88,21 +47,10 @@ function AdminHaigaPage({
   // List display functions ---------------------------------------------------
 
   const onNewItem = () => {
-    setConfirmation({
-      show: true,
-      message:
-        "This will create a new empty haiga that you can edit. Do you want to continue?",
-      options: [
-        {
-          label: "Yes",
-          callback: () => createNewHaiga(),
-        },
-        {
-          label: "No",
-          callback: () => {},
-        },
-      ],
-    });
+    confirm(
+      "This will create a new empty haiga that you can edit. Do you want to continue?",
+      () => createNewHaiga(),
+    );
   };
 
   const createNewHaiga = async () => {
@@ -113,35 +61,24 @@ function AdminHaigaPage({
       image: "",
     };
     const newHaigaList = [...haigaList, { ...newHaiga }];
-    if (await saveHaigaList(newHaigaList, "New haiga created")) {
+    if (await saveList(newHaigaList, "New haiga created")) {
       setImageFile(null);
       setOpenHaiga(newHaiga);
     }
   };
 
-  const onDelete = (idx: number) => () => {
-    setConfirmation({
-      show: true,
-      message: "Are you sure you want to delete this haiga?",
-      options: [
-        {
-          label: "Yes",
-          callback: () => deleteHaiga(idx)(),
-        },
-        {
-          label: "No",
-          callback: () => {},
-        },
-      ],
-    });
+  const onDelete = (idx: number) => {
+    confirm("Are you sure you want to delete this haiga?", () =>
+      deleteHaiga(idx),
+    );
   };
 
-  const onMove = (idx: number, direction: "up" | "down") => async () => {
+  const onMove = async (idx: number, direction: "up" | "down") => {
     const newHaigaList = moveItemByOne(haigaList, idx, direction);
-    await saveHaigaList(newHaigaList, "Order updated");
+    await saveList(newHaigaList, "Order updated");
   };
 
-  const onEdit = (idx: number) => () => {
+  const onEdit = (idx: number) => {
     // copy the haiga to openHaiga
     // this is to avoid mutating the original haiga
     const openItem = { ...haigaList[idx] };
@@ -152,20 +89,20 @@ function AdminHaigaPage({
   // Editor functions ---------------------------------------------------------
 
   const uploadImage = async (file: File | null) => {
-    setLoading({ isLoading: true, message: "Uploading image..." });
+    showLoading("Uploading image...");
     try {
       return await ImageService.upload(file, true, getAccessTokenSilently);
     } finally {
-      setLoading({ isLoading: false, message: "" });
+      hideLoading();
     }
   };
 
   const deleteImage = async (fileName: string) => {
-    setLoading({ isLoading: true, message: "Deleting image..." });
+    showLoading("Deleting image...");
     try {
       await ImageService.delete(fileName, getAccessTokenSilently);
     } finally {
-      setLoading({ isLoading: false, message: "" });
+      hideLoading();
     }
   };
 
@@ -197,7 +134,7 @@ function AdminHaigaPage({
       return;
     }
     newDataList[idx] = editedHaiga;
-    if (await saveHaigaList(newDataList, "Haiga saved")) {
+    if (await saveList(newDataList, "Haiga saved")) {
       setOpenHaiga(editedHaiga);
       setImageFile(null);
       // The save succeeded, so nothing references the old image anymore;
@@ -232,23 +169,15 @@ function AdminHaigaPage({
       onClose={() => setOpenHaiga(null)}
     />
   ) : (
-    <DataList isAdmin={true} onNewItem={onNewItem}>
-      {haigaList.map((haiga, idx) => (
-        <DataListItem
-          key={haiga.id}
-          isAdmin={true}
-          compact={true}
-          isLast={idx === haigaList.length - 1}
-          isFirst={idx === 0}
-          onEdit={onEdit(idx)}
-          onDelete={onDelete(idx)}
-          onMoveUp={onMove(idx, "up")}
-          onMoveDown={onMove(idx, "down")}
-        >
-          <HaigaContent haiga={haiga} compact={true} />
-        </DataListItem>
-      ))}
-    </DataList>
+    <AdminItemList
+      items={haigaList}
+      compact={true}
+      onNewItem={onNewItem}
+      onEdit={onEdit}
+      onDelete={onDelete}
+      onMove={onMove}
+      renderItem={(haiga) => <HaigaContent haiga={haiga} compact={true} />}
+    />
   );
 }
 

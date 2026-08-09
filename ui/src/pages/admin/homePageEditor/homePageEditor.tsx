@@ -6,21 +6,12 @@ import { HomePageData } from "../../../Models";
 import { PhotoPicker } from "../../../components/photo-picker/photo-picker";
 import { ImageService } from "../../../services/images";
 import { HomePageService } from "../../../services/home-page";
-import { Notify } from "../admin";
 import { AdminButton } from "../../../components/admin-button/admin-button";
 import { LoadError } from "../../../components/load-error/load-error";
+import { useAdminUi } from "../admin-ui-context";
 
-export interface HomePageEditorProps {
-  setLoading: (loading: { isLoading: boolean; message: string }) => void;
-  isLoading: boolean;
-  notify: Notify;
-}
-
-export function HomePageEditor({
-  setLoading,
-  isLoading,
-  notify,
-}: HomePageEditorProps) {
+export function HomePageEditor() {
+  const { isLoading, showLoading, hideLoading, notify } = useAdminUi();
   const [homePageData, setHomePageData] = useState<HomePageData>({
     photo: "",
     blurb: "",
@@ -30,10 +21,7 @@ export function HomePageEditor({
   const [loadFailed, setLoadFailed] = useState(false);
 
   const fetchHomePageData = async () => {
-    setLoading({
-      isLoading: true,
-      message: "Loading home page data...",
-    });
+    showLoading("Loading home page data...");
     setLoadFailed(false);
     try {
       const data = await HomePageService.getFromApi(getAccessTokenSilently);
@@ -44,7 +32,7 @@ export function HomePageEditor({
       console.error(error);
       setLoadFailed(true);
     } finally {
-      setLoading({ isLoading: false, message: "" });
+      hideLoading();
     }
   };
 
@@ -54,10 +42,7 @@ export function HomePageEditor({
   }, []);
 
   const saveData = async () => {
-    setLoading({
-      isLoading: true,
-      message: "Updating home page data...",
-    });
+    showLoading("Updating home page data...");
     try {
       const newHomePageData = { ...homePageData };
       const previousPhoto = homePageData.photo;
@@ -91,7 +76,7 @@ export function HomePageEditor({
       console.error(error);
       notify("Failed to save — your change was not saved", "error");
     } finally {
-      setLoading({ isLoading: false, message: "" });
+      hideLoading();
     }
   };
 
