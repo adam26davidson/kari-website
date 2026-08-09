@@ -1,6 +1,6 @@
 import { BlogPost, BlogPostContentUpdate } from "../Models";
 import DOMPurify from "dompurify";
-import { HttpError } from "./http-error";
+import { TokenGetter, authorizedFetch, ensureOk } from "./http";
 
 const API_BLOG_URL = import.meta.env.VITE_API_URL + "/blog";
 const API_BLOG_CONTENT_URL = import.meta.env.VITE_API_URL + "/blog-content";
@@ -9,36 +9,30 @@ const S3_BLOG_CONTENT_URL = import.meta.env.VITE_S3_URL + "/blog";
 
 export class BlogService {
   static async getListFromApi(
-    getAccessTokenSilently: () => Promise<string>,
+    getAccessTokenSilently: TokenGetter,
   ): Promise<Array<BlogPost>> {
-    const token = await getAccessTokenSilently();
-    const response = await fetch(API_BLOG_URL, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) {
-      console.error("Failed to fetch blog from API", response.status);
-      throw new HttpError(
-        `Failed to fetch blog list (HTTP ${response.status})`,
-        response.status,
-      );
-    }
+    const response = await authorizedFetch(
+      API_BLOG_URL,
+      getAccessTokenSilently,
+    );
+    ensureOk(
+      response,
+      "Failed to fetch blog list",
+      "Failed to fetch blog from API",
+    );
     const data: Array<BlogPost> = await response.json();
     return data;
   }
 
   static async getPublicListFromS3(): Promise<Array<BlogPost>> {
     const response = await fetch(S3_BLOG_LIST_URL);
-    if (!response.ok) {
-      // Throw instead of returning [] so an S3 outage is never mistaken
-      // for a legitimately empty page.
-      console.error("Failed to fetch blog from S3", response.status);
-      throw new HttpError(
-        `Failed to fetch blog list (HTTP ${response.status})`,
-        response.status,
-      );
-    }
+    // Throw instead of returning [] so an S3 outage is never mistaken
+    // for a legitimately empty page.
+    ensureOk(
+      response,
+      "Failed to fetch blog list",
+      "Failed to fetch blog from S3",
+    );
     let data: Array<BlogPost> = await response.json();
     data = data.filter((p) => p.isPublished);
     return data;
@@ -46,55 +40,46 @@ export class BlogService {
 
   static async updateList(
     blogList: Array<BlogPost>,
-    getAccessTokenSilently: () => Promise<string>,
+    getAccessTokenSilently: TokenGetter,
   ): Promise<void> {
-    const token = await getAccessTokenSilently();
-    const response = await fetch(API_BLOG_URL, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+    const response = await authorizedFetch(
+      API_BLOG_URL,
+      getAccessTokenSilently,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(blogList),
       },
-      body: JSON.stringify(blogList),
-    });
-    if (!response.ok) {
-      console.error("Failed to update blog list", response.status);
-      throw new Error(`Failed to update blog list (HTTP ${response.status})`);
-    }
+    );
+    ensureOk(response, "Failed to update blog list");
   }
 
   static async getContent(
     id: string,
-    getAccessTokenSilently: () => Promise<string>,
+    getAccessTokenSilently: TokenGetter,
   ): Promise<string> {
-    const token = await getAccessTokenSilently();
-    const response = await fetch(`${API_BLOG_CONTENT_URL}/${id}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) {
-      console.error("Failed to fetch blog content from API", response.status);
-      throw new HttpError(
-        `Failed to fetch blog content (HTTP ${response.status})`,
-        response.status,
-      );
-    }
+    const response = await authorizedFetch(
+      `${API_BLOG_CONTENT_URL}/${id}`,
+      getAccessTokenSilently,
+    );
+    ensureOk(
+      response,
+      "Failed to fetch blog content",
+      "Failed to fetch blog content from API",
+    );
     const data: { content: string } = await response.json();
     return data["content"];
   }
 
   static async getSanitizedContentFromS3(id: string) {
     const response = await fetch(`${S3_BLOG_CONTENT_URL}/${id}.html`);
-    if (!response.ok) {
-      // Throw instead of returning "" so a failed content fetch is never
-      // mistaken for a legitimately empty post body.
-      console.error("Failed to fetch blog content from S3", response.status);
-      throw new HttpError(
-        `Failed to fetch blog content (HTTP ${response.status})`,
-        response.status,
-      );
-    }
+    // Throw instead of returning "" so a failed content fetch is never
+    // mistaken for a legitimately empty post body.
+    ensureOk(
+      response,
+      "Failed to fetch blog content",
+      "Failed to fetch blog content from S3",
+    );
     const content: string = await response.text();
     const sanitizedContent = DOMPurify.sanitize(content);
     return sanitizedContent;
@@ -104,42 +89,30 @@ export class BlogService {
     id: string,
     content: string,
     isPublished: boolean,
-    getAccessTokenSilently: () => Promise<string>,
+    getAccessTokenSilently: TokenGetter,
   ): Promise<void> {
-    const token = await getAccessTokenSilently();
     const body: BlogPostContentUpdate = { id, content, isPublished };
-    const response = await fetch(`${API_BLOG_CONTENT_URL}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+    const response = await authorizedFetch(
+      `${API_BLOG_CONTENT_URL}`,
+      getAccessTokenSilently,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       },
-      body: JSON.stringify(body),
-    });
-    if (!response.ok) {
-      console.error("Failed to update blog content", response.status);
-      throw new Error(
-        `Failed to update blog content (HTTP ${response.status})`,
-      );
-    }
+    );
+    ensureOk(response, "Failed to update blog content");
   }
 
   static async deleteContent(
     id: string,
-    getAccessTokenSilently: () => Promise<string>,
+    getAccessTokenSilently: TokenGetter,
   ): Promise<void> {
-    const token = await getAccessTokenSilently();
-    const response = await fetch(`${API_BLOG_CONTENT_URL}/${id}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) {
-      console.error("Failed to delete blog content", response.status);
-      throw new Error(
-        `Failed to delete blog content (HTTP ${response.status})`,
-      );
-    }
+    const response = await authorizedFetch(
+      `${API_BLOG_CONTENT_URL}/${id}`,
+      getAccessTokenSilently,
+      { method: "DELETE" },
+    );
+    ensureOk(response, "Failed to delete blog content");
   }
 }

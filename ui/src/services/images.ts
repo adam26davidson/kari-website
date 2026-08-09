@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import { HttpError } from "./http-error";
+import { TokenGetter, authorizedFetch, ensureOk } from "./http";
 
 const API_IMAGES_URL = import.meta.env.VITE_API_URL + "/images";
 
@@ -16,13 +17,12 @@ export class ImageService {
   static async upload(
     file: File | null,
     isPublished: boolean,
-    getAccessTokenSilently: () => Promise<string>,
+    getAccessTokenSilently: TokenGetter,
   ) {
     if (!file) {
       console.error("No file provided for upload.");
       return null;
     }
-    const token = await getAccessTokenSilently();
 
     // The API generates the stored name (uuid + extension) and returns it;
     // that returned name is authoritative. The client-side uuid rename is
@@ -41,22 +41,21 @@ export class ImageService {
     const formData = new FormData();
     formData.append("file", file); // Ensure that your server is expecting the file under the key "file"
 
-    // Set up the request to your file upload endpoint
+    // Set up the request to your file upload endpoint. Content-Type is set
+    // to multipart/form-data automatically by the browser when the body is
+    // FormData, so only the bearer header is added.
     try {
-      const response = await fetch(
+      const response = await authorizedFetch(
         `${API_IMAGES_URL}?isPublished=${isPublished}`,
-        {
-          method: "POST",
-          headers: {
-            // Normally, Content-Type is automatically set to multipart/form-data by the browser when you use FormData
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        },
+        getAccessTokenSilently,
+        { method: "POST", body: formData },
       );
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new HttpError(
+          `HTTP error! status: ${response.status}`,
+          response.status,
+        );
       }
 
       // Use the name the server stored the image under, falling back to
@@ -71,45 +70,33 @@ export class ImageService {
     }
   }
 
-  static async delete(
-    fileName: string,
-    getAccessTokenSilently: () => Promise<string>,
-  ) {
-    const token = await getAccessTokenSilently();
-    const response = await fetch(`${API_IMAGES_URL}/${fileName}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) {
-      console.error(`Failed to delete image: ${fileName}`);
-      throw new Error(`Failed to delete image: ${fileName}`);
-    }
+  static async delete(fileName: string, getAccessTokenSilently: TokenGetter) {
+    const response = await authorizedFetch(
+      `${API_IMAGES_URL}/${fileName}`,
+      getAccessTokenSilently,
+      { method: "DELETE" },
+    );
+    ensureOk(response, `Failed to delete image: ${fileName}`);
   }
 
   static async setPublished(
     fileName: string,
     isPublished: boolean,
-    getAccessTokenSilently: () => Promise<string>,
+    getAccessTokenSilently: TokenGetter,
   ) {
-    const token = await getAccessTokenSilently();
-    const response = await fetch(
+    const response = await authorizedFetch(
       `${API_IMAGES_URL}/${fileName}/set-published?isPublished=${isPublished}`,
-      {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
+      getAccessTokenSilently,
+      { method: "PUT" },
     );
     if (!response.ok) {
       const errorText = await response.text();
       console.error(
         `Failed to set image published status: ${fileName}. Error: ${errorText}`,
       );
-      throw new Error(
+      throw new HttpError(
         `Failed to set image published status: ${fileName}. Error: ${errorText}`,
+        response.status,
       );
     }
   }
@@ -121,15 +108,13 @@ export class ImageService {
    */
   static async gc(
     dryRun: boolean,
-    getAccessTokenSilently: () => Promise<string>,
+    getAccessTokenSilently: TokenGetter,
   ): Promise<GcReport> {
-    const token = await getAccessTokenSilently();
-    const response = await fetch(`${API_IMAGES_URL}/gc?dry_run=${dryRun}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    const response = await authorizedFetch(
+      `${API_IMAGES_URL}/gc?dry_run=${dryRun}`,
+      getAccessTokenSilently,
+      { method: "POST" },
+    );
     if (!response.ok) {
       // Surface the server's reason (e.g. "aborted before any delete") —
       // a swallowed GC failure would look like a clean, empty report.

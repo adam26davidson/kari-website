@@ -100,10 +100,15 @@ describe("HaikuService.updateList", () => {
     });
   });
 
-  it("throws when the update fails so callers can surface the error", async () => {
+  it("throws an HttpError when the update fails so callers can surface the error", async () => {
     mockFetchOnce({ ok: false, status: 401, json: async () => ({}) });
-    await expect(
-      HaikuService.updateList([sampleHaiku], getToken),
-    ).rejects.toThrow("Failed to update haiku list (HTTP 401)");
+    const failure = HaikuService.updateList([sampleHaiku], getToken);
+    await expect(failure).rejects.toThrow(
+      "Failed to update haiku list (HTTP 401)",
+    );
+    await expect(failure).rejects.toMatchObject({
+      name: "HttpError",
+      status: 401,
+    });
   });
 });
