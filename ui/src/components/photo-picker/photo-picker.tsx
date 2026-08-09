@@ -3,8 +3,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useId, useState } from "react";
 import "./photo-picker.css";
 import { AdminButton } from "../admin-button/admin-button";
-
-const API_IMAGE_URL = import.meta.env.VITE_API_URL + "/images";
+import { apiImageUrl } from "../../utils/image-management-helpers";
 
 export function PhotoPicker({
   imageFile,
@@ -51,7 +50,7 @@ export function PhotoPicker({
       {(previewUrl || fileName !== "") && (
         <div className="photo-picker-selection">
           <img
-            src={previewUrl ?? `${API_IMAGE_URL}/${fileName}`}
+            src={previewUrl ?? apiImageUrl(fileName)}
             alt="Selected"
             className="photo-picker-image"
           />

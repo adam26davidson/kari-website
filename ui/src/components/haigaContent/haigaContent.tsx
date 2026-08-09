@@ -1,8 +1,7 @@
 import { useIsMobile } from "../../hooks/isMobile";
 import { Haiga } from "../../Models";
+import { s3ImageUrl } from "../../utils/image-management-helpers";
 import "./haigaContent.css";
-
-const S3_URL = import.meta.env.VITE_S3_URL;
 
 export function HaigaContent({
   haiga,
@@ -20,7 +19,7 @@ export function HaigaContent({
     return (
       <div className="haiga-list-item-content-compact">
         <img
-          src={`${S3_URL}/images/${haiga.image}`}
+          src={s3ImageUrl(haiga.image)}
           alt={altText}
           className="haiga-list-item-thumbnail"
         />
@@ -46,7 +45,7 @@ export function HaigaContent({
         }
       >
         <img
-          src={`${S3_URL}/images/${haiga.image}`}
+          src={s3ImageUrl(haiga.image)}
           alt={altText}
           className="haiga-list-item-image"
         />

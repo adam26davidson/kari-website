@@ -1,8 +1,7 @@
 import { TitleLink } from "../../../../../components/title-link/title-link";
 import { PhotographyPost } from "../../../../../Models";
+import { apiImageUrl } from "../../../../../utils/image-management-helpers";
 import "./photography-post-summary.css";
-
-const API_IMAGE_URL = import.meta.env.VITE_API_URL + "/images";
 
 export function PhotographyPostSummary({
   post,
@@ -19,7 +18,7 @@ export function PhotographyPostSummary({
           <img
             key={img.image}
             className="photography-post-summary-image"
-            src={`${API_IMAGE_URL}/${img.image}`}
+            src={apiImageUrl(img.image)}
             alt={img.blurb}
           />
         ))}

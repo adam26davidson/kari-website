@@ -4,8 +4,7 @@ import { HomePageData } from "../../Models";
 import { LoadError } from "../../components/load-error/load-error";
 import { HomePageService } from "../../services/home-page";
 import { useS3Load } from "../../hooks/useS3Load";
-
-const S3_URL = import.meta.env.VITE_S3_URL;
+import { s3ImageUrl } from "../../utils/image-management-helpers";
 
 const EMPTY_HOME_PAGE: HomePageData = {
   photo: "",
@@ -33,7 +32,7 @@ function Home() {
             {homePageData.photo && (
               <img
                 className="home-page-photo"
-                src={`${S3_URL}/images/${homePageData.photo}`}
+                src={s3ImageUrl(homePageData.photo)}
                 alt="Kari Davidson"
               />
             )}
