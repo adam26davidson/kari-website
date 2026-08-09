@@ -1,64 +1,52 @@
 import { Haiga } from "../Models";
-import { HttpError } from "./http-error";
+import { TokenGetter, authorizedFetch, ensureOk } from "./http";
 
 const API_HAIGA_URL = import.meta.env.VITE_API_URL + "/haiga";
 const S3_HAIGA_URL = import.meta.env.VITE_S3_URL + "/haiga.json";
 
 export class HaigaService {
   static async getListFromApi(
-    getAccessTokenSilently: () => Promise<string>,
+    getAccessTokenSilently: TokenGetter,
   ): Promise<Array<Haiga>> {
-    const token = await getAccessTokenSilently();
-    const response = await fetch(API_HAIGA_URL, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) {
-      console.error("Failed to fetch haiga from API", response.status);
-      throw new HttpError(
-        `Failed to fetch haiga list (HTTP ${response.status})`,
-        response.status,
-      );
-    }
+    const response = await authorizedFetch(
+      API_HAIGA_URL,
+      getAccessTokenSilently,
+    );
+    ensureOk(
+      response,
+      "Failed to fetch haiga list",
+      "Failed to fetch haiga from API",
+    );
     const data: Array<Haiga> = await response.json();
     return data;
   }
 
   static async getListFromS3(): Promise<Array<Haiga>> {
     const response = await fetch(S3_HAIGA_URL);
-    if (!response.ok) {
-      // Throw instead of returning [] so an S3 outage is never mistaken
-      // for a legitimately empty page.
-      console.error("Failed to fetch haiga from S3", response.status);
-      throw new HttpError(
-        `Failed to fetch haiga list (HTTP ${response.status})`,
-        response.status,
-      );
-    }
+    // Throw instead of returning [] so an S3 outage is never mistaken
+    // for a legitimately empty page.
+    ensureOk(
+      response,
+      "Failed to fetch haiga list",
+      "Failed to fetch haiga from S3",
+    );
     const data: Array<Haiga> = await response.json();
     return data;
   }
 
   static async updateList(
     haigaList: Array<Haiga>,
-    getAccessTokenSilently: () => Promise<string>,
+    getAccessTokenSilently: TokenGetter,
   ): Promise<void> {
-    const token = await getAccessTokenSilently();
-    const response = await fetch(API_HAIGA_URL, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+    const response = await authorizedFetch(
+      API_HAIGA_URL,
+      getAccessTokenSilently,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(haigaList),
       },
-      body: JSON.stringify(haigaList),
-    });
-    if (!response.ok) {
-      console.error("Failed to update haiga list", response.status);
-      throw new HttpError(
-        `Failed to update haiga list (HTTP ${response.status})`,
-        response.status,
-      );
-    }
+    );
+    ensureOk(response, "Failed to update haiga list");
   }
 }
