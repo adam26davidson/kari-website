@@ -54,3 +54,16 @@ export function ensureOk(
     throw new HttpError(`${what} (HTTP ${response.status})`, response.status);
   }
 }
+
+/**
+ * Best-effort read of a failed response's body, for callers that include
+ * the server's reason in their error message. An unreadable body yields
+ * "" so the caller can still fail on the status alone.
+ */
+export async function readErrorText(response: Response): Promise<string> {
+  try {
+    return await response.text();
+  } catch {
+    return "";
+  }
+}

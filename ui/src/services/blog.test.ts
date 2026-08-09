@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { BlogService } from "./blog";
 import { BlogPost } from "../Models";
+import { getToken, mockFetchOnce, setupServiceTestHooks } from "./test-helpers";
 
 const API_BLOG_URL = "https://api.test.local/blog";
 const API_BLOG_CONTENT_URL = "https://api.test.local/blog-content";
@@ -21,31 +22,7 @@ const draftPost: BlogPost = {
   isPublished: false,
 };
 
-function mockFetchOnce(
-  response: Partial<Response> & {
-    json?: () => Promise<unknown>;
-    text?: () => Promise<string>;
-  },
-) {
-  const fetchMock = vi.fn().mockResolvedValue(response);
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
-}
-
-const getToken = vi.fn().mockResolvedValue("test-token");
-
-beforeEach(() => {
-  // keep test output clean; the service logs on both success and error paths
-  vi.spyOn(console, "log").mockImplementation(() => {});
-  vi.spyOn(console, "error").mockImplementation(() => {});
-  // Re-establish each test: the global afterEach runs vi.restoreAllMocks().
-  getToken.mockReset();
-  getToken.mockResolvedValue("test-token");
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+setupServiceTestHooks();
 
 describe("BlogService.getListFromApi", () => {
   it("sends a bearer token and returns the full list including drafts", async () => {

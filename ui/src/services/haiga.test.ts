@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { HaigaService } from "./haiga";
 import { Haiga } from "../Models";
+import { getToken, mockFetchOnce, setupServiceTestHooks } from "./test-helpers";
 
 const API_HAIGA_URL = "https://api.test.local/haiga";
 const S3_HAIGA_URL = "https://s3.test.local/haiga.json";
@@ -12,28 +13,7 @@ const sampleHaiga: Haiga = {
   image: "moon.jpg",
 };
 
-function mockFetchOnce(
-  response: Partial<Response> & { json?: () => Promise<unknown> },
-) {
-  const fetchMock = vi.fn().mockResolvedValue(response);
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
-}
-
-const getToken = vi.fn().mockResolvedValue("test-token");
-
-beforeEach(() => {
-  // keep test output clean; the service logs on both success and error paths
-  vi.spyOn(console, "log").mockImplementation(() => {});
-  vi.spyOn(console, "error").mockImplementation(() => {});
-  // Re-establish each test: the global afterEach runs vi.restoreAllMocks().
-  getToken.mockReset();
-  getToken.mockResolvedValue("test-token");
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+setupServiceTestHooks();
 
 describe("HaigaService.getListFromApi", () => {
   it("sends a bearer token and returns the parsed list", async () => {

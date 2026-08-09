@@ -1,36 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { ImageService } from "./images";
+import { getToken, mockFetchOnce, setupServiceTestHooks } from "./test-helpers";
 
 const API_IMAGES_URL = "https://api.test.local/images";
 
 // Pin the generated filename so upload assertions are deterministic.
 vi.mock("uuid", () => ({ v4: () => "fixed-uuid" }));
 
-function mockFetchOnce(
-  response: Partial<Response> & {
-    json?: () => Promise<unknown>;
-    text?: () => Promise<string>;
-  },
-) {
-  const fetchMock = vi.fn().mockResolvedValue(response);
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
-}
-
-const getToken = vi.fn().mockResolvedValue("test-token");
-
-beforeEach(() => {
-  // keep test output clean; the service logs on both success and error paths
-  vi.spyOn(console, "log").mockImplementation(() => {});
-  vi.spyOn(console, "error").mockImplementation(() => {});
-  // Re-establish each test: the global afterEach runs vi.restoreAllMocks().
-  getToken.mockReset();
-  getToken.mockResolvedValue("test-token");
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+setupServiceTestHooks();
 
 describe("ImageService.upload", () => {
   it("returns null without fetching when no file is provided", async () => {
@@ -113,7 +90,7 @@ describe("ImageService.upload", () => {
     mockFetchOnce({ ok: false, status: 500, text: async () => "" });
     const file = new File(["x"], "photo.png", { type: "image/png" });
     const failure = ImageService.upload(file, true, getToken);
-    await expect(failure).rejects.toThrow("HTTP error! status: 500");
+    await expect(failure).rejects.toThrow("Failed to upload image (HTTP 500)");
     await expect(failure).rejects.toMatchObject({
       name: "HttpError",
       status: 500,
