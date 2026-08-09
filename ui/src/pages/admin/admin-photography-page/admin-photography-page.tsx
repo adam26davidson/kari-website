@@ -11,12 +11,17 @@ import {
   newEditorImage,
 } from "./components/photography-post-editor/editor-image";
 import { PhotographyPostSummary } from "./components/photography-post-summary/photography-post-summary";
-import { copyPhotographyPost } from "../../../utils/misc-utils";
 import { LoadError } from "../../../components/load-error/load-error";
 import { AdminItemList } from "../../../components/admin-item-list/admin-item-list";
 import { useAdminToken } from "../../../hooks/useAdminToken";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
+
+/** Copies a post deeply enough that edits to the copy never leak back. */
+const copyPost = (post: PhotographyPost): PhotographyPost => ({
+  ...post,
+  images: post.images.map((image) => ({ ...image })),
+});
 
 export function AdminPhotographyPage() {
   const getAccessTokenSilently = useAdminToken();
@@ -72,13 +77,17 @@ export function AdminPhotographyPage() {
   };
 
   const createNewPost = async () => {
-    const id = uuidv4();
-    const newPost = new PhotographyPost();
-    newPost.id = id;
+    const newPost: PhotographyPost = {
+      id: uuidv4(),
+      title: "",
+      subtitle: "",
+      blurb: "",
+      images: [],
+    };
 
     showLoading("Creating new photography post...");
 
-    const newPostList = [...postList, copyPhotographyPost(newPost)];
+    const newPostList = [...postList, copyPost(newPost)];
     if (await saveList(newPostList, "New photography post created")) {
       setEditorImages([]);
       setOpenPost(newPost);
@@ -97,7 +106,7 @@ export function AdminPhotographyPage() {
   };
 
   const onEdit = (idx: number) => {
-    const openItem = copyPhotographyPost(postList[idx]);
+    const openItem = copyPost(postList[idx]);
     setEditorImages(
       openItem.images.map((image) => newEditorImage(image.image, image.blurb)),
     );
@@ -115,14 +124,14 @@ export function AdminPhotographyPage() {
       return;
     }
 
-    const originalPost = copyPhotographyPost(newPostList[idx]);
+    const originalPost = copyPost(newPostList[idx]);
 
     // Upload images in the new post that are not in the original,
     // building fresh image objects instead of mutating the open post's
     // React state in place. Nothing is deleted yet — images removed from
     // the post are only deleted after the list save has succeeded, so a
     // failure at any step leaves the published post intact.
-    const editedPost = copyPhotographyPost(openPost);
+    const editedPost = copyPost(openPost);
     try {
       showLoading("Uploading images...");
       editedPost.images = [];
@@ -180,11 +189,6 @@ export function AdminPhotographyPage() {
     setEditorImages([]);
   };
 
-  const openPostIsValid = () => {
-    if (!openPost) return false;
-    return openPost.title.length > 0;
-  };
-
   if (loadFailed) {
     return (
       <LoadError message="Failed to load photography posts." onRetry={load} />
@@ -195,7 +199,7 @@ export function AdminPhotographyPage() {
     <PhotographyPostEditor
       post={openPost}
       setPost={setOpenPost}
-      validate={openPostIsValid}
+      saveDisabled={openPost.title.length === 0}
       onSave={saveOpenPost}
       onClose={closeOpenPost}
       images={editorImages}

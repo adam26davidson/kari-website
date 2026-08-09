@@ -7,12 +7,13 @@ import { EditorImage, newEditorImage } from "./editor-image";
 import { PhotographyPost } from "../../../../../Models";
 
 function makePost(): PhotographyPost {
-  const post = new PhotographyPost();
-  post.id = "p1";
-  post.title = "Trip";
-  post.subtitle = "Coast";
-  post.blurb = "Some photos";
-  return post;
+  return {
+    id: "p1",
+    title: "Trip",
+    subtitle: "Coast",
+    blurb: "Some photos",
+    images: [],
+  };
 }
 
 // Editor image entries with fixed ids so tests can assert identity travel.
@@ -25,7 +26,7 @@ function makeImages(): Array<EditorImage> {
 }
 
 function renderEditor(overrides?: {
-  validate?: (post: PhotographyPost) => boolean;
+  saveDisabled?: boolean;
   images?: Array<EditorImage>;
 }) {
   const post = makePost();
@@ -34,12 +35,11 @@ function renderEditor(overrides?: {
   const setImages = vi.fn();
   const onSave = vi.fn();
   const onClose = vi.fn();
-  const validate = overrides?.validate ?? (() => true);
   const utils = render(
     <PhotographyPostEditor
       post={post}
       setPost={setPost}
-      validate={validate}
+      saveDisabled={overrides?.saveDisabled ?? false}
       onSave={onSave}
       onClose={onClose}
       images={images}
@@ -205,8 +205,8 @@ describe("PhotographyPostEditor", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("disables the save button when validation fails", () => {
-    renderEditor({ validate: () => false });
+  it("disables the save button when the page says so", () => {
+    renderEditor({ saveDisabled: true });
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
@@ -220,7 +220,7 @@ describe("PhotographyPostEditor", () => {
         <PhotographyPostEditor
           post={post}
           setPost={setPost}
-          validate={() => true}
+          saveDisabled={false}
           onSave={() => {}}
           onClose={() => {}}
           images={images}

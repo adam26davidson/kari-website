@@ -34,10 +34,10 @@ export interface PhotographyImage {
   blurb: string;
 }
 
-export class PhotographyPost {
-  id: string = "";
-  title: string = "";
-  subtitle: string = "";
-  blurb: string = "";
-  images: Array<PhotographyImage> = [];
+export interface PhotographyPost {
+  id: string;
+  title: string;
+  subtitle: string;
+  blurb: string;
+  images: Array<PhotographyImage>;
 }

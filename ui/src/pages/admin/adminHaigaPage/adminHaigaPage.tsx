@@ -30,7 +30,12 @@ function AdminHaigaPage() {
   const [openHaiga, setOpenHaiga] = useState<Haiga | null>(null);
 
   const deleteHaiga = async (idx: number) => {
-    const imageToDelete = haigaList[idx].image;
+    const haigaToDelete = haigaList[idx];
+    if (!haigaToDelete) {
+      console.error("Haiga not found");
+      return;
+    }
+    const imageToDelete = haigaToDelete.image;
     const newDataList = haigaList.slice();
     newDataList.splice(idx, 1);
     // Save the shortened list first — if this fails the haiga stays
@@ -145,15 +150,6 @@ function AdminHaigaPage() {
     }
   };
 
-  const openHaigaIsValid = () => {
-    if (!openHaiga) return false;
-
-    // The artwork is the content — the haiku lines live inside the image
-    // itself, so an image (already saved or freshly picked) is all that's
-    // required.
-    return openHaiga.image.length > 0 || imageFile !== null;
-  };
-
   if (loadFailed) {
     return <LoadError message="Failed to load haiga." onRetry={load} />;
   }
@@ -162,7 +158,10 @@ function AdminHaigaPage() {
     <HaigaEditor
       haiga={openHaiga}
       setHaiga={setOpenHaiga}
-      validate={openHaigaIsValid}
+      // The artwork is the content — the haiku lines live inside the image
+      // itself, so an image (already saved or freshly picked) is all that's
+      // required.
+      saveDisabled={openHaiga.image.length === 0 && imageFile === null}
       setImageFile={setImageFile}
       imageFile={imageFile}
       onSave={saveOpenHaiga}

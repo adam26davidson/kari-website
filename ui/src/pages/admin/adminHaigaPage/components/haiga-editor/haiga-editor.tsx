@@ -6,7 +6,7 @@ import "./haiga-editor.css";
 export function HaigaEditor({
   haiga,
   setHaiga,
-  validate,
+  saveDisabled,
   setImageFile,
   imageFile,
   onSave,
@@ -14,18 +14,14 @@ export function HaigaEditor({
 }: {
   haiga: Haiga;
   setHaiga: (haiga: Haiga) => void;
-  validate: (haiga: Haiga) => boolean;
+  saveDisabled: boolean;
   setImageFile: (file: File | null) => void;
   imageFile: File | null;
   onSave: () => void;
   onClose: () => void;
 }) {
   return (
-    <DataEditor
-      onSave={onSave}
-      onClose={onClose}
-      disableSave={!validate(haiga)}
-    >
+    <DataEditor onSave={onSave} onClose={onClose} disableSave={saveDisabled}>
       <div className="haiga-editor">
         <PhotoPicker
           imageFile={imageFile}

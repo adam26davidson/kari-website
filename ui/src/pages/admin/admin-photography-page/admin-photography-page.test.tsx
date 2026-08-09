@@ -3,6 +3,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { AdminPhotographyPage } from "./admin-photography-page";
 import { PhotographyPost } from "../../../Models";
 import { PhotographyService } from "../../../services/photography";
+import { TokenGetter } from "../../../services/http";
 import { ImageService } from "../../../services/images";
 import { answerYes, renderWithAdminUi } from "../admin-ui-test-helpers";
 
@@ -60,10 +61,13 @@ async function openEditorAndReplaceImage() {
 }
 
 beforeEach(() => {
-  savedPost = new PhotographyPost();
-  savedPost.id = "p1";
-  savedPost.title = "A Post";
-  savedPost.images = [{ image: "old.png", blurb: "a photo" }];
+  savedPost = {
+    id: "p1",
+    title: "A Post",
+    subtitle: "",
+    blurb: "",
+    images: [{ image: "old.png", blurb: "a photo" }],
+  };
   vi.mocked(PhotographyService.getListFromApi).mockResolvedValue([savedPost]);
   vi.mocked(PhotographyService.updateList).mockResolvedValue(undefined);
   vi.mocked(ImageService.upload).mockResolvedValue("new.png");
@@ -149,7 +153,7 @@ describe("AdminPhotographyPage image replacement", () => {
     );
     // Saved list references the new upload and keeps the blurb.
     const [savedList] = vi.mocked(PhotographyService.updateList).mock
-      .calls[0] as [Array<PhotographyPost>, () => Promise<string>];
+      .calls[0] as [Array<PhotographyPost>, TokenGetter];
     expect(savedList[0].images).toEqual([
       { image: "new.png", blurb: "a photo" },
     ]);
@@ -205,7 +209,7 @@ describe("AdminPhotographyPage reordering in the editor", () => {
     // its blurb) second.
     expect(ImageService.upload).toHaveBeenCalledOnce();
     const [savedList] = vi.mocked(PhotographyService.updateList).mock
-      .calls[0] as [Array<PhotographyPost>, () => Promise<string>];
+      .calls[0] as [Array<PhotographyPost>, TokenGetter];
     expect(savedList[0].images).toEqual([
       { image: "old2.png", blurb: "second" },
       { image: "new.png", blurb: "first" },
@@ -297,7 +301,7 @@ describe("AdminPhotographyPage creation", () => {
     );
     // The saved list is the existing post plus a fresh empty one.
     const [savedList] = vi.mocked(PhotographyService.updateList).mock
-      .calls[0] as [Array<PhotographyPost>, () => Promise<string>];
+      .calls[0] as [Array<PhotographyPost>, TokenGetter];
     expect(savedList).toHaveLength(2);
     expect(savedList[0]).toEqual(savedPost);
     expect(savedList[1]).toMatchObject({
@@ -347,9 +351,13 @@ describe("AdminPhotographyPage list reordering", () => {
   let secondPost: PhotographyPost;
 
   beforeEach(() => {
-    secondPost = new PhotographyPost();
-    secondPost.id = "p2";
-    secondPost.title = "B Post";
+    secondPost = {
+      id: "p2",
+      title: "B Post",
+      subtitle: "",
+      blurb: "",
+      images: [],
+    };
     vi.mocked(PhotographyService.getListFromApi).mockResolvedValue([
       savedPost,
       secondPost,

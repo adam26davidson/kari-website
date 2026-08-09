@@ -10,20 +10,17 @@ const haiku: Haiku = {
   publisher: "kari",
 };
 
-function renderEditor(overrides?: {
-  validate?: (haiku: Haiku) => boolean;
-}) {
+function renderEditor(overrides?: { saveDisabled?: boolean }) {
   const setHaiku = vi.fn();
   const onSave = vi.fn();
   const onClose = vi.fn();
-  const validate = overrides?.validate ?? (() => true);
   const utils = render(
     <HaikuEditor
       haiku={haiku}
       setHaiku={setHaiku}
       onSave={onSave}
       onClose={onClose}
-      validate={validate}
+      saveDisabled={overrides?.saveDisabled ?? false}
     />,
   );
   return { ...utils, setHaiku, onSave, onClose };
@@ -65,8 +62,8 @@ describe("HaikuEditor", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("disables the save button when validation fails", () => {
-    renderEditor({ validate: () => false });
+  it("disables the save button when the page says so", () => {
+    renderEditor({ saveDisabled: true });
     expect(screen.getByRole("button", { name: "Save" })).toHaveClass(
       "disabled",
     );
