@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import { HttpError } from "./http-error";
-import { TokenGetter, authorizedFetch, ensureOk } from "./http";
+import { TokenGetter, authorizedFetch, ensureOk, readErrorText } from "./http";
 
 const API_IMAGES_URL = import.meta.env.VITE_API_URL + "/images";
 
@@ -44,30 +44,19 @@ export class ImageService {
     // Set up the request to your file upload endpoint. Content-Type is set
     // to multipart/form-data automatically by the browser when the body is
     // FormData, so only the bearer header is added.
-    try {
-      const response = await authorizedFetch(
-        `${API_IMAGES_URL}?isPublished=${isPublished}`,
-        getAccessTokenSilently,
-        { method: "POST", body: formData },
-      );
+    const response = await authorizedFetch(
+      `${API_IMAGES_URL}?isPublished=${isPublished}`,
+      getAccessTokenSilently,
+      { method: "POST", body: formData },
+    );
+    ensureOk(response, "Failed to upload image");
 
-      if (!response.ok) {
-        throw new HttpError(
-          `HTTP error! status: ${response.status}`,
-          response.status,
-        );
-      }
-
-      // Use the name the server stored the image under, falling back to
-      // the sent name for older API versions that don't return one.
-      const data = (await response.json().catch(() => null)) as {
-        fileName?: string;
-      } | null;
-      return data?.fileName ?? fileName;
-    } catch (error) {
-      console.error("Failed to upload image", error);
-      throw error;
-    }
+    // Use the name the server stored the image under, falling back to
+    // the sent name for older API versions that don't return one.
+    const data = (await response.json().catch(() => null)) as {
+      fileName?: string;
+    } | null;
+    return data?.fileName ?? fileName;
   }
 
   static async delete(fileName: string, getAccessTokenSilently: TokenGetter) {
@@ -90,14 +79,10 @@ export class ImageService {
       { method: "PUT" },
     );
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(
-        `Failed to set image published status: ${fileName}. Error: ${errorText}`,
-      );
-      throw new HttpError(
-        `Failed to set image published status: ${fileName}. Error: ${errorText}`,
-        response.status,
-      );
+      const errorText = await readErrorText(response);
+      const message = `Failed to set image published status: ${fileName}. Error: ${errorText}`;
+      console.error(message);
+      throw new HttpError(message, response.status);
     }
   }
 
@@ -118,7 +103,7 @@ export class ImageService {
     if (!response.ok) {
       // Surface the server's reason (e.g. "aborted before any delete") —
       // a swallowed GC failure would look like a clean, empty report.
-      const errorText = await response.text().catch(() => "");
+      const errorText = await readErrorText(response);
       console.error("Image GC request failed", response.status, errorText);
       throw new HttpError(
         `Image cleanup failed (HTTP ${response.status})` +

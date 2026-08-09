@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { HaikuService } from "./haiku";
 import { Haiku } from "../Models";
+import { getToken, mockFetchOnce, setupServiceTestHooks } from "./test-helpers";
 
 const API_HAIKU_URL = "https://api.test.local/haiku";
 const S3_HAIKU_URL = "https://s3.test.local/haiku.json";
@@ -15,28 +16,7 @@ const sampleHaiku: Haiku = {
   publisher: "kari",
 };
 
-function mockFetchOnce(
-  response: Partial<Response> & { json?: () => Promise<unknown> },
-) {
-  const fetchMock = vi.fn().mockResolvedValue(response);
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
-}
-
-const getToken = vi.fn().mockResolvedValue("test-token");
-
-beforeEach(() => {
-  // keep test output clean; the service logs on both success and error paths
-  vi.spyOn(console, "log").mockImplementation(() => {});
-  vi.spyOn(console, "error").mockImplementation(() => {});
-  // Re-establish each test: the global afterEach runs vi.restoreAllMocks().
-  getToken.mockReset();
-  getToken.mockResolvedValue("test-token");
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+setupServiceTestHooks();
 
 describe("HaikuService.getListFromApi", () => {
   it("sends a bearer token and returns the parsed list", async () => {

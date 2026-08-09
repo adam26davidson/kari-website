@@ -1,26 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { authorizedFetch, ensureOk } from "./http";
+import { describe, it, expect } from "vitest";
+import { authorizedFetch, ensureOk, readErrorText } from "./http";
 import { HttpError } from "./http-error";
+import { getToken, mockFetchOnce, setupServiceTestHooks } from "./test-helpers";
 
-function mockFetchOnce(response: Partial<Response>) {
-  const fetchMock = vi.fn().mockResolvedValue(response);
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
-}
-
-const getToken = vi.fn().mockResolvedValue("test-token");
-
-beforeEach(() => {
-  // keep test output clean; ensureOk logs on the error path
-  vi.spyOn(console, "error").mockImplementation(() => {});
-  // Re-establish each test: the global afterEach runs vi.restoreAllMocks().
-  getToken.mockReset();
-  getToken.mockResolvedValue("test-token");
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+setupServiceTestHooks();
 
 describe("authorizedFetch", () => {
   it("fetches with a bearer header from the token getter", async () => {
@@ -94,5 +77,21 @@ describe("ensureOk", () => {
       ensureOk(response, "Failed to fetch thing", "Failed to fetch from S3"),
     ).toThrow("Failed to fetch thing (HTTP 500)");
     expect(console.error).toHaveBeenCalledWith("Failed to fetch from S3", 500);
+  });
+});
+
+describe("readErrorText", () => {
+  it("returns the response body text", async () => {
+    const response = { text: async () => "S3 exploded" } as Response;
+    expect(await readErrorText(response)).toBe("S3 exploded");
+  });
+
+  it("returns an empty string when the body cannot be read", async () => {
+    const response = {
+      text: async () => {
+        throw new Error("body stream lost");
+      },
+    } as unknown as Response;
+    expect(await readErrorText(response)).toBe("");
   });
 });

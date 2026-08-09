@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { HomePageService } from "./home-page";
 import { HomePageData } from "../Models";
 import { HttpError } from "./http-error";
+import { getToken, mockFetchOnce, setupServiceTestHooks } from "./test-helpers";
 
 const API_HOME_PAGE_URL = "https://api.test.local/home-page";
 const S3_HOME_PAGE_URL = "https://s3.test.local/home-page.json";
@@ -11,27 +12,7 @@ const sampleHomePageData: HomePageData = {
   blurb: "Welcome to the site",
 };
 
-function mockFetchOnce(
-  response: Partial<Response> & { json?: () => Promise<unknown> },
-) {
-  const fetchMock = vi.fn().mockResolvedValue(response);
-  vi.stubGlobal("fetch", fetchMock);
-  return fetchMock;
-}
-
-const getToken = vi.fn().mockResolvedValue("test-token");
-
-beforeEach(() => {
-  // keep test output clean; the service logs on error paths
-  vi.spyOn(console, "error").mockImplementation(() => {});
-  // Re-establish each test: the global afterEach runs vi.restoreAllMocks().
-  getToken.mockReset();
-  getToken.mockResolvedValue("test-token");
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
+setupServiceTestHooks();
 
 describe("HomePageService.getFromApi", () => {
   it("sends a bearer token and returns the parsed data", async () => {
