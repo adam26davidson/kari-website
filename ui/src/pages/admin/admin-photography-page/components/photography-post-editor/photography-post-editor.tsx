@@ -1,7 +1,6 @@
 import { PhotographyPost } from "../../../../../Models";
+import { AdminItemList } from "../../../../../components/admin-item-list/admin-item-list";
 import { DataEditor } from "../../../../../components/data-editor/data-editor";
-import DataList from "../../../../../components/dataList/dataList";
-import DataListItem from "../../../../../components/dataListItem/dataListItem";
 import { PhotoPicker } from "../../../../../components/photo-picker/photo-picker";
 import { moveItemByOne } from "../../../../../utils/data-list-helpers";
 import { copyPhotographyPost } from "../../../../../utils/misc-utils";
@@ -47,11 +46,12 @@ export function PhotographyPostEditor({
     setImages([...images, newEditorImage()]);
   };
 
-  const onDelete = (id: string) => () => {
+  const onDelete = (idx: number) => {
+    const id = images[idx].id;
     setImages(images.filter((entry) => entry.id !== id));
   };
 
-  const onMove = (idx: number, direction: "up" | "down") => () => {
+  const onMove = (idx: number, direction: "up" | "down") => {
     setImages(moveItemByOne(images, idx, direction));
   };
 
@@ -102,34 +102,28 @@ export function PhotographyPostEditor({
         />
       </div>
       <div className="photography-post-editor-images">
-        <DataList isAdmin={true} onNewItem={onNewImage}>
-          {images.map((entry, idx) => (
-            <DataListItem
-              key={entry.id}
-              isAdmin={true}
-              isLast={idx === images.length - 1}
-              isFirst={idx === 0}
-              onDelete={onDelete(entry.id)}
-              onMoveUp={onMove(idx, "up")}
-              onMoveDown={onMove(idx, "down")}
-              hideEdit
-            >
-              <div className="photography-post-editor-image-fields">
-                <PhotoPicker
-                  imageFile={entry.file}
-                  fileName={entry.image}
-                  setImageFile={setImageFile(entry.id)}
-                />
-                <textarea
-                  value={entry.blurb}
-                  placeholder={"image blurb or caption"}
-                  aria-label="image blurb or caption"
-                  onChange={handleImageBlurbChange(entry.id)}
-                />
-              </div>
-            </DataListItem>
-          ))}
-        </DataList>
+        <AdminItemList
+          items={images}
+          onNewItem={onNewImage}
+          onDelete={onDelete}
+          onMove={onMove}
+          hideEdit
+          renderItem={(entry) => (
+            <div className="photography-post-editor-image-fields">
+              <PhotoPicker
+                imageFile={entry.file}
+                fileName={entry.image}
+                setImageFile={setImageFile(entry.id)}
+              />
+              <textarea
+                value={entry.blurb}
+                placeholder={"image blurb or caption"}
+                aria-label="image blurb or caption"
+                onChange={handleImageBlurbChange(entry.id)}
+              />
+            </div>
+          )}
+        />
       </div>
     </DataEditor>
   );

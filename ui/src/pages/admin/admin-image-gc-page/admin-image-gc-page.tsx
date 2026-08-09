@@ -2,15 +2,9 @@ import { useState } from "react";
 import "./admin-image-gc-page.css";
 import "../admin.css";
 import { useAdminToken } from "../../../hooks/useAdminToken";
-import { Confirmation, Loading, Notify } from "../admin";
 import { GcReport, ImageService } from "../../../services/images";
 import { AdminButton } from "../../../components/admin-button/admin-button";
-
-interface AdminImageGcPageProps {
-  setLoading: (loading: Loading) => void;
-  setConfirmation: (confirmation: Confirmation) => void;
-  notify: Notify;
-}
+import { useAdminUi } from "../admin-ui-context";
 
 function KeyList({ title, keys }: { title: string; keys: Array<string> }) {
   return (
@@ -29,22 +23,16 @@ function KeyList({ title, keys }: { title: string; keys: Array<string> }) {
   );
 }
 
-export function AdminImageGcPage({
-  setLoading,
-  setConfirmation,
-  notify,
-}: AdminImageGcPageProps) {
+export function AdminImageGcPage() {
   const getAccessTokenSilently = useAdminToken();
+  const { showLoading, hideLoading, confirm, notify } = useAdminUi();
   const [report, setReport] = useState<GcReport | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const runGc = async (dryRun: boolean) => {
-    setLoading({
-      isLoading: true,
-      message: dryRun
-        ? "Previewing image cleanup..."
-        : "Deleting orphaned images...",
-    });
+    showLoading(
+      dryRun ? "Previewing image cleanup..." : "Deleting orphaned images...",
+    );
     setError(null);
     try {
       const result = await ImageService.gc(dryRun, getAccessTokenSilently);
@@ -64,23 +52,18 @@ export function AdminImageGcPage({
       setError(e instanceof Error ? e.message : "Image cleanup failed");
       notify("Image cleanup failed", "error");
     } finally {
-      setLoading({ isLoading: false, message: "" });
+      hideLoading();
     }
   };
 
   const onDeleteOrphaned = () => {
     if (!report) return;
-    setConfirmation({
-      show: true,
-      message:
-        `This will permanently delete ${report.orphaned.length} orphaned ` +
+    confirm(
+      `This will permanently delete ${report.orphaned.length} orphaned ` +
         `image${report.orphaned.length === 1 ? "" : "s"} from storage. ` +
         "Do you want to continue?",
-      options: [
-        { label: "Yes", callback: () => runGc(false) },
-        { label: "No", callback: () => {} },
-      ],
-    });
+      () => runGc(false),
+    );
   };
 
   return (

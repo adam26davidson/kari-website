@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, screen } from "@testing-library/react";
 import { AdminImageGcPage } from "./admin-image-gc-page";
 import { GcReport, ImageService } from "../../../services/images";
 import { HttpError } from "../../../services/http-error";
+import { answerYes, renderWithAdminUi } from "../admin-ui-test-helpers";
 
 vi.mock("../../../services/images", () => ({
   ImageService: {
@@ -31,17 +32,13 @@ const realRunReport: GcReport = {
 };
 
 function renderPage() {
-  const notify = vi.fn();
-  const setLoading = vi.fn();
-  const setConfirmation = vi.fn();
-  render(
-    <AdminImageGcPage
-      setLoading={setLoading}
-      setConfirmation={setConfirmation}
-      notify={notify}
-    />,
-  );
-  return { notify, setLoading, setConfirmation };
+  const { adminUi } = renderWithAdminUi(<AdminImageGcPage />);
+  return {
+    adminUi,
+    notify: adminUi.notify,
+    showLoading: adminUi.showLoading,
+    hideLoading: adminUi.hideLoading,
+  };
 }
 
 async function clickPreview() {
@@ -96,25 +93,22 @@ describe("AdminImageGcPage dry run", () => {
 
   it("wraps the loading state around the request", async () => {
     vi.mocked(ImageService.gc).mockResolvedValue(dryRunReport);
-    const { setLoading } = renderPage();
+    const { showLoading, hideLoading } = renderPage();
 
     await clickPreview();
 
-    expect(setLoading).toHaveBeenNthCalledWith(1, {
-      isLoading: true,
-      message: "Previewing image cleanup...",
-    });
-    expect(setLoading).toHaveBeenLastCalledWith({
-      isLoading: false,
-      message: "",
-    });
+    expect(showLoading).toHaveBeenNthCalledWith(
+      1,
+      "Previewing image cleanup...",
+    );
+    expect(hideLoading).toHaveBeenCalled();
   });
 });
 
 describe("AdminImageGcPage real run", () => {
   it("deletes only after explicit confirmation and shows what was deleted", async () => {
     vi.mocked(ImageService.gc).mockResolvedValue(dryRunReport);
-    const { notify, setConfirmation } = renderPage();
+    const { notify, adminUi } = renderPage();
     await clickPreview();
 
     fireEvent.click(screen.getByText("Delete 2 orphaned images"));
@@ -122,19 +116,13 @@ describe("AdminImageGcPage real run", () => {
     // No deletion happens before the dialog is confirmed.
     expect(ImageService.gc).toHaveBeenCalledOnce();
     expect(ImageService.gc).toHaveBeenCalledWith(true, expect.any(Function));
-    const confirmation = setConfirmation.mock.calls.at(-1)?.[0] as {
-      message: string;
-      options: Array<{ label: string; callback: () => void }>;
-    };
-    expect(confirmation.message).toContain(
-      "permanently delete 2 orphaned images",
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      expect.stringContaining("permanently delete 2 orphaned images"),
+      expect.any(Function),
     );
 
     vi.mocked(ImageService.gc).mockResolvedValue(realRunReport);
-    const yes = confirmation.options.find((o) => o.label === "Yes");
-    await act(async () => {
-      yes?.callback();
-    });
+    await answerYes(adminUi);
 
     expect(ImageService.gc).toHaveBeenLastCalledWith(
       false,
@@ -147,20 +135,16 @@ describe("AdminImageGcPage real run", () => {
     expect(screen.queryByText("Delete 2 orphaned images")).toBeNull();
   });
 
-  it("does not run the sweep when the dialog is declined", async () => {
+  it("does not run the sweep until the dialog is confirmed", async () => {
     vi.mocked(ImageService.gc).mockResolvedValue(dryRunReport);
-    const { setConfirmation } = renderPage();
+    const { adminUi } = renderPage();
     await clickPreview();
 
     fireEvent.click(screen.getByText("Delete 2 orphaned images"));
-    const confirmation = setConfirmation.mock.calls.at(-1)?.[0] as {
-      options: Array<{ label: string; callback: () => void }>;
-    };
-    const no = confirmation.options.find((o) => o.label === "No");
-    await act(async () => {
-      no?.callback();
-    });
 
+    // The page only hands the dialog to confirm(); the sweep runs only
+    // when the provider invokes the Yes callback.
+    expect(adminUi.confirm).toHaveBeenCalledOnce();
     expect(ImageService.gc).toHaveBeenCalledOnce();
     expect(ImageService.gc).toHaveBeenCalledWith(true, expect.any(Function));
   });

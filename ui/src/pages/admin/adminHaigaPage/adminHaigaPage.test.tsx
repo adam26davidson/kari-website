@@ -1,15 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import AdminHaigaPage from "./adminHaigaPage";
 import { Haiga } from "../../../Models";
 import { HaigaService } from "../../../services/haiga";
 import { ImageService } from "../../../services/images";
+import { answerYes, renderWithAdminUi } from "../admin-ui-test-helpers";
 
 vi.mock("../../../services/haiga", () => ({
   HaigaService: {
@@ -35,14 +30,8 @@ let savedHaiga: Haiga;
 // Renders the page, opens the only haiga in the editor, and picks a
 // replacement image file — the state right before the user hits save.
 async function openEditorAndPickImage() {
-  const notify = vi.fn();
-  const { container } = render(
-    <AdminHaigaPage
-      setLoading={vi.fn()}
-      setConfirmation={vi.fn()}
-      notify={notify}
-    />,
-  );
+  const { container, adminUi } = renderWithAdminUi(<AdminHaigaPage />);
+  const notify = adminUi.notify;
   fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
   const input = container.querySelector('input[type="file"]');
   fireEvent.change(input as HTMLInputElement, {
@@ -183,23 +172,10 @@ describe("AdminHaigaPage deletion", () => {
   // Renders the page, clicks the delete control of the only haiga, and
   // confirms the deletion dialog.
   async function confirmDelete() {
-    const notify = vi.fn();
-    const setConfirmation = vi.fn();
-    render(
-      <AdminHaigaPage
-        setLoading={vi.fn()}
-        setConfirmation={setConfirmation}
-        notify={notify}
-      />,
-    );
+    const { adminUi } = renderWithAdminUi(<AdminHaigaPage />);
+    const notify = adminUi.notify;
     fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
-    const confirmation = setConfirmation.mock.calls.at(-1)?.[0] as {
-      options: Array<{ label: string; callback: () => void }>;
-    };
-    const yes = confirmation.options.find((o) => o.label === "Yes");
-    await act(async () => {
-      yes?.callback();
-    });
+    await answerYes(adminUi);
     return { notify };
   }
 
@@ -254,33 +230,20 @@ describe("AdminHaigaPage creation", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
-  // Renders the page and clicks the add-item control, returning the
-  // confirmation dialog handed to setConfirmation.
+  // Renders the page and clicks the add-item control, so the creation
+  // dialog has been handed to confirm().
   async function openCreateConfirmation() {
-    const notify = vi.fn();
-    const setConfirmation = vi.fn();
-    render(
-      <AdminHaigaPage
-        setLoading={vi.fn()}
-        setConfirmation={setConfirmation}
-        notify={notify}
-      />,
-    );
+    const { adminUi } = renderWithAdminUi(<AdminHaigaPage />);
+    const notify = adminUi.notify;
     // Wait for the list to load so the saved list is deterministic.
     await screen.findByRole("button", { name: "Edit" });
     fireEvent.click(screen.getByRole("button", { name: "Add item" }));
-    const confirmation = setConfirmation.mock.calls.at(-1)?.[0] as {
-      options: Array<{ label: string; callback: () => void }>;
-    };
-    return { notify, confirmation };
+    return { notify, adminUi };
   }
 
   it("creates an empty haiga and opens it in the editor on Yes", async () => {
-    const { notify, confirmation } = await openCreateConfirmation();
-    const yes = confirmation.options.find((o) => o.label === "Yes");
-    await act(async () => {
-      yes?.callback();
-    });
+    const { notify, adminUi } = await openCreateConfirmation();
+    await answerYes(adminUi);
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("New haiga created"),
@@ -302,13 +265,15 @@ describe("AdminHaigaPage creation", () => {
     await screen.findByRole("button", { name: "Save" });
   });
 
-  it("does nothing on No", async () => {
-    const { notify, confirmation } = await openCreateConfirmation();
-    const no = confirmation.options.find((o) => o.label === "No");
-    await act(async () => {
-      no?.callback();
-    });
+  it("does nothing until the confirmation is answered", async () => {
+    const { notify, adminUi } = await openCreateConfirmation();
 
+    // The page only hands the dialog to confirm(); nothing is created
+    // unless the provider runs the Yes callback.
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      expect.stringContaining("new empty haiga"),
+      expect.any(Function),
+    );
     expect(HaigaService.updateList).not.toHaveBeenCalled();
     expect(notify).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
@@ -318,11 +283,8 @@ describe("AdminHaigaPage creation", () => {
     vi.mocked(HaigaService.updateList).mockRejectedValue(
       new Error("PUT failed"),
     );
-    const { notify, confirmation } = await openCreateConfirmation();
-    const yes = confirmation.options.find((o) => o.label === "Yes");
-    await act(async () => {
-      yes?.callback();
-    });
+    const { notify, adminUi } = await openCreateConfirmation();
+    await answerYes(adminUi);
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
@@ -359,14 +321,8 @@ describe("AdminHaigaPage list reordering", () => {
   });
 
   async function renderList() {
-    const notify = vi.fn();
-    render(
-      <AdminHaigaPage
-        setLoading={vi.fn()}
-        setConfirmation={vi.fn()}
-        notify={notify}
-      />,
-    );
+    const { adminUi } = renderWithAdminUi(<AdminHaigaPage />);
+    const notify = adminUi.notify;
     await screen.findAllByRole("button", { name: "Edit" });
     return { notify };
   }
@@ -411,13 +367,7 @@ describe("AdminHaigaPage load failure", () => {
     vi.mocked(HaigaService.getListFromApi)
       .mockRejectedValueOnce(new Error("GET failed"))
       .mockResolvedValue([savedHaiga]);
-    render(
-      <AdminHaigaPage
-        setLoading={vi.fn()}
-        setConfirmation={vi.fn()}
-        notify={vi.fn()}
-      />,
-    );
+    renderWithAdminUi(<AdminHaigaPage />);
 
     await screen.findByText("Failed to load haiga.");
     // No editable list — saving one would overwrite the real data.

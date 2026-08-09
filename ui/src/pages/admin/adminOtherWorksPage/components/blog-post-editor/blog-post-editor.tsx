@@ -3,6 +3,13 @@ import { DataEditor } from "../../../../../components/data-editor/data-editor";
 import { Tiptap } from "../../../../../components/tiptap/tiptap";
 import "./blog-post-editor.css";
 
+// The yyyy-mm-dd value the date input needs, or "" when the stored date
+// is malformed — an Invalid Date's toISOString() would throw (#154).
+function toDateInputValue(value: string): string {
+  const date = new Date(value);
+  return isNaN(date.getTime()) ? "" : date.toISOString().split("T")[0];
+}
+
 export function BlogPostEditor({
   post,
   content,
@@ -20,13 +27,15 @@ export function BlogPostEditor({
   validate: (post: BlogPost) => boolean;
   onSave: () => void;
   onClose: () => void;
-  setLoading: (loading: { isLoading: boolean; message: string }) => void;
   onAddImage: (image: File, id: string) => void;
 }) {
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const date = new Date(e.target.value);
-    const formattedDate = date.toISOString();
-    setPost({ ...post, date: formattedDate });
+    // Clearing the input yields "" and so an Invalid Date; ignore it and
+    // keep the post's last valid date instead of crashing on
+    // toISOString() or corrupting post.date (#154).
+    if (isNaN(date.getTime())) return;
+    setPost({ ...post, date: date.toISOString() });
   };
 
   return (
@@ -40,7 +49,7 @@ export function BlogPostEditor({
       <div className="blog-post-editor-input-line">
         <input
           type="date"
-          value={new Date(post.date).toISOString().split("T")[0]}
+          value={toDateInputValue(post.date)}
           onChange={handleDateChange}
         />
         <div className="blog-post-editor-status">

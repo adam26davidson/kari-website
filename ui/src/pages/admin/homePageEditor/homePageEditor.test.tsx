@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HomePageEditor } from "./homePageEditor";
 import { ImageService } from "../../../services/images";
 import { HomePageService } from "../../../services/home-page";
+import { renderWithAdminUi } from "../admin-ui-test-helpers";
 
 vi.mock("../../../services/images", () => ({
   ImageService: {
@@ -26,10 +27,8 @@ vi.mock("../../../hooks/useAdminToken", () => ({
 // Renders the editor and picks a replacement photo — the state right
 // before the user hits save.
 async function renderAndPickImage() {
-  const notify = vi.fn();
-  const { container } = render(
-    <HomePageEditor setLoading={vi.fn()} isLoading={false} notify={notify} />,
-  );
+  const { container, adminUi } = renderWithAdminUi(<HomePageEditor />);
+  const notify = adminUi.notify;
   await screen.findByDisplayValue("hello");
   const input = container.querySelector('input[type="file"]');
   fireEvent.change(input as HTMLInputElement, {
@@ -60,9 +59,7 @@ describe("HomePageEditor initial load", () => {
       new Error("network down"),
     );
 
-    render(
-      <HomePageEditor setLoading={vi.fn()} isLoading={false} notify={vi.fn()} />,
-    );
+    renderWithAdminUi(<HomePageEditor />);
 
     expect(
       await screen.findByText("Failed to load home page data."),
@@ -77,9 +74,7 @@ describe("HomePageEditor initial load", () => {
       new Error("network down"),
     );
 
-    render(
-      <HomePageEditor setLoading={vi.fn()} isLoading={false} notify={vi.fn()} />,
-    );
+    renderWithAdminUi(<HomePageEditor />);
     await userEvent.click(await screen.findByText("Retry"));
 
     expect(await screen.findByDisplayValue("hello")).toBeInTheDocument();

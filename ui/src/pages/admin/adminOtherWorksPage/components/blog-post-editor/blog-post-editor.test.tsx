@@ -30,6 +30,7 @@ const post: BlogPost = {
 };
 
 function renderEditor(overrides?: {
+  post?: BlogPost;
   validate?: (post: BlogPost) => boolean;
 }) {
   const setPost = vi.fn();
@@ -39,14 +40,13 @@ function renderEditor(overrides?: {
   const validate = overrides?.validate ?? (() => true);
   const utils = render(
     <BlogPostEditor
-      post={post}
+      post={overrides?.post ?? post}
       content="<p>hello</p>"
       setContent={setContent}
       setPost={setPost}
       validate={validate}
       onSave={onSave}
       onClose={onClose}
-      setLoading={vi.fn()}
       onAddImage={vi.fn()}
     />,
   );
@@ -74,6 +74,32 @@ describe("BlogPostEditor", () => {
       ...post,
       date: "2025-01-15T00:00:00.000Z",
     });
+  });
+
+  it("ignores clearing the date instead of crashing on Invalid Date", () => {
+    const { container, setPost } = renderEditor();
+    const dateInput = container.querySelector('input[type="date"]');
+
+    // Clearing the input fires a change with "" — new Date("") is an
+    // Invalid Date whose toISOString() would throw (#154). The change is
+    // ignored, so post.date keeps its last valid value.
+    fireEvent.change(dateInput as HTMLInputElement, {
+      target: { value: "" },
+    });
+
+    expect(setPost).not.toHaveBeenCalled();
+    expect(dateInput).toHaveValue("2024-05-01");
+  });
+
+  it("renders a malformed stored date as an empty date input", () => {
+    const { container } = renderEditor({
+      post: { ...post, date: "not-a-date" },
+    });
+
+    // A corrupted stored date must not crash the editor (#154); the
+    // input just starts empty until a valid date is picked.
+    const dateInput = container.querySelector('input[type="date"]');
+    expect(dateInput).toHaveValue("");
   });
 
   it("toggles the published flag", async () => {

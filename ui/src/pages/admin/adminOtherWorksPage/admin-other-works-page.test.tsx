@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { AdminOtherWorksPage } from "./admin-other-works-page";
 import { BlogPost } from "../../../Models";
 import { BlogService } from "../../../services/blog";
 import { ImageService } from "../../../services/images";
+import { answerYes, renderWithAdminUi } from "../admin-ui-test-helpers";
 
 vi.mock("../../../services/blog", () => ({
   BlogService: {
@@ -84,17 +85,10 @@ const savedContent =
   '<p>hello</p><img src="https://api.test.local/images/old.png">';
 
 async function renderPage() {
-  const notify = vi.fn();
-  const setConfirmation = vi.fn();
-  const { container } = render(
-    <AdminOtherWorksPage
-      setLoading={vi.fn()}
-      setConfirmation={setConfirmation}
-      notify={notify}
-    />,
-  );
+  const { container, adminUi } = renderWithAdminUi(<AdminOtherWorksPage />);
+  const notify = adminUi.notify;
   await waitFor(() => iconButton(container, "pencil"));
-  return { container, notify, setConfirmation };
+  return { container, notify, adminUi };
 }
 
 // Renders the page, opens the only post in the editor, and removes the
@@ -778,15 +772,9 @@ describe("AdminOtherWorksPage deletion", () => {
   // Renders the page, clicks the delete control of the only post, and
   // confirms the deletion dialog.
   async function confirmDelete() {
-    const { container, notify, setConfirmation } = await renderPage();
+    const { container, notify, adminUi } = await renderPage();
     fireEvent.click(iconButton(container, "trash"));
-    const confirmation = setConfirmation.mock.calls.at(-1)?.[0] as {
-      options: Array<{ label: string; callback: () => void }>;
-    };
-    const yes = confirmation.options.find((o) => o.label === "Yes");
-    await act(async () => {
-      yes?.callback();
-    });
+    await answerYes(adminUi);
     return { notify };
   }
 
@@ -882,23 +870,17 @@ describe("AdminOtherWorksPage deletion", () => {
 });
 
 describe("AdminOtherWorksPage creation", () => {
-  // Renders the page and clicks the add-item control, returning the
-  // confirmation dialog handed to setConfirmation.
+  // Renders the page and clicks the add-item control, so the creation
+  // dialog has been handed to confirm().
   async function openCreateConfirmation() {
-    const { container, notify, setConfirmation } = await renderPage();
+    const { container, notify, adminUi } = await renderPage();
     fireEvent.click(screen.getByRole("button", { name: "Add item" }));
-    const confirmation = setConfirmation.mock.calls.at(-1)?.[0] as {
-      options: Array<{ label: string; callback: () => void }>;
-    };
-    return { container, notify, confirmation };
+    return { container, notify, adminUi };
   }
 
   it("creates an empty draft and opens it in the editor on Yes", async () => {
-    const { notify, confirmation } = await openCreateConfirmation();
-    const yes = confirmation.options.find((o) => o.label === "Yes");
-    await act(async () => {
-      yes?.callback();
-    });
+    const { notify, adminUi } = await openCreateConfirmation();
+    await answerYes(adminUi);
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("New other works item created"),
@@ -928,13 +910,15 @@ describe("AdminOtherWorksPage creation", () => {
     await screen.findByPlaceholderText("post content");
   });
 
-  it("does nothing on No", async () => {
-    const { notify, confirmation } = await openCreateConfirmation();
-    const no = confirmation.options.find((o) => o.label === "No");
-    await act(async () => {
-      no?.callback();
-    });
+  it("does nothing until the confirmation is answered", async () => {
+    const { notify, adminUi } = await openCreateConfirmation();
 
+    // The page only hands the dialog to confirm(); nothing is created
+    // unless the provider runs the Yes callback.
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      expect.stringContaining("new empty other works item"),
+      expect.any(Function),
+    );
     expect(BlogService.updateList).not.toHaveBeenCalled();
     expect(BlogService.updateContent).not.toHaveBeenCalled();
     expect(notify).not.toHaveBeenCalled();
@@ -945,11 +929,8 @@ describe("AdminOtherWorksPage creation", () => {
     vi.mocked(BlogService.updateList).mockRejectedValue(
       new Error("PUT failed"),
     );
-    const { notify, confirmation } = await openCreateConfirmation();
-    const yes = confirmation.options.find((o) => o.label === "Yes");
-    await act(async () => {
-      yes?.callback();
-    });
+    const { notify, adminUi } = await openCreateConfirmation();
+    await answerYes(adminUi);
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
@@ -965,11 +946,8 @@ describe("AdminOtherWorksPage creation", () => {
     vi.mocked(BlogService.updateContent).mockRejectedValue(
       new Error("PUT failed"),
     );
-    const { notify, confirmation } = await openCreateConfirmation();
-    const yes = confirmation.options.find((o) => o.label === "Yes");
-    await act(async () => {
-      yes?.callback();
-    });
+    const { notify, adminUi } = await openCreateConfirmation();
+    await answerYes(adminUi);
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
@@ -1046,13 +1024,7 @@ describe("AdminOtherWorksPage load failure", () => {
     vi.mocked(BlogService.getListFromApi).mockRejectedValueOnce(
       new Error("GET failed"),
     );
-    const { container } = render(
-      <AdminOtherWorksPage
-        setLoading={vi.fn()}
-        setConfirmation={vi.fn()}
-        notify={vi.fn()}
-      />,
-    );
+    const { container } = renderWithAdminUi(<AdminOtherWorksPage />);
 
     await screen.findByText("Failed to load other works.");
     // No editable list — saving one would overwrite the real data.
