@@ -1,4 +1,4 @@
-import { Haiku } from "../Models";
+import { Haiku } from "../models";
 import { TokenGetter, authorizedFetch, ensureOk } from "./http";
 
 const API_HAIKU_URL = import.meta.env.VITE_API_URL + "/haiku";

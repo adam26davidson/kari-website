@@ -1,7 +1,7 @@
 import { useState } from "react";
 import "../admin.css";
 import { v4 as uuidv4 } from "uuid";
-import { PhotographyPost } from "../../../Models";
+import { PhotographyPost } from "../../../models";
 import { moveItemByOne } from "../../../utils/data-list-helpers";
 import { ImageService } from "../../../services/images";
 import { PhotographyService } from "../../../services/photography";
@@ -13,7 +13,7 @@ import {
 import { PhotographyPostSummary } from "./components/photography-post-summary/photography-post-summary";
 import { LoadError } from "../../../components/load-error/load-error";
 import { AdminItemList } from "../../../components/admin-item-list/admin-item-list";
-import { useAdminToken } from "../../../hooks/useAdminToken";
+import { useAdminToken } from "../../../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
 

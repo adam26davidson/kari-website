@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { HomePageService } from "./home-page";
-import { HomePageData } from "../Models";
+import { HomePageData } from "../models";
 import { HttpError } from "./http-error";
 import { getToken, mockFetchOnce, setupServiceTestHooks } from "./test-helpers";
 

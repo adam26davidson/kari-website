@@ -2,7 +2,7 @@ import "./other-works-item.css";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { BlogService } from "../../../../services/blog";
-import { BlogPost as BlogPostData } from "../../../../Models";
+import { BlogPost as BlogPostData } from "../../../../models";
 import { LoadError } from "../../../../components/load-error/load-error";
 
 export function OtherWorksItem({ id }: { id: string }) {

@@ -1,4 +1,4 @@
-import { HomePageData } from "../Models";
+import { HomePageData } from "../models";
 import { TokenGetter, authorizedFetch, ensureOk } from "./http";
 
 const API_HOME_PAGE_URL = import.meta.env.VITE_API_URL + "/home-page";

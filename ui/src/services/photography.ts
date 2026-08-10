@@ -1,4 +1,4 @@
-import { PhotographyPost } from "../Models";
+import { PhotographyPost } from "../models";
 import { TokenGetter, authorizedFetch, ensureOk } from "./http";
 
 const API_URL = import.meta.env.VITE_API_URL + "/photography";

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import Admin from "./admin";
+import { Admin } from "./admin";
 import { useAuth0 } from "@auth0/auth0-react";
 
 vi.mock("@auth0/auth0-react", () => ({
@@ -9,16 +9,16 @@ vi.mock("@auth0/auth0-react", () => ({
 
 // The sub-pages have their own tests; stub them so this file exercises
 // only the shell: auth gating, the menu, and page switching.
-vi.mock("./homePageEditor/homePageEditor", () => ({
+vi.mock("./home-page-editor/home-page-editor", () => ({
   HomePageEditor: () => <div>home-page-stub</div>,
 }));
-vi.mock("./adminHaikuPage/adminHaikuPage", () => ({
-  default: () => <div>haiku-page-stub</div>,
+vi.mock("./admin-haiku-page/admin-haiku-page", () => ({
+  AdminHaikuPage: () => <div>haiku-page-stub</div>,
 }));
-vi.mock("./adminHaigaPage/adminHaigaPage", () => ({
-  default: () => <div>haiga-page-stub</div>,
+vi.mock("./admin-haiga-page/admin-haiga-page", () => ({
+  AdminHaigaPage: () => <div>haiga-page-stub</div>,
 }));
-vi.mock("./adminOtherWorksPage/admin-other-works-page", () => ({
+vi.mock("./admin-other-works-page/admin-other-works-page", () => ({
   AdminOtherWorksPage: () => <div>other-works-page-stub</div>,
 }));
 vi.mock("./admin-photography-page/admin-photography-page", () => ({

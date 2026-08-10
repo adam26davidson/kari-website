@@ -7,11 +7,11 @@ import {
   faRightFromBracket,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { useIsMobile } from "../../hooks/isMobile";
+import { useIsMobile } from "../../hooks/use-is-mobile";
 import { PAGES } from "../../constants";
 import { AdminButton } from "../admin-button/admin-button";
 
-function Header({
+export function Header({
   showingMobileMenu,
   setShowingMobileMenu,
 }: {
@@ -76,5 +76,3 @@ function Header({
     </div>
   );
 }
-
-export default Header;

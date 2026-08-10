@@ -1,5 +1,5 @@
 import { TitleLink } from "../../../../../components/title-link/title-link";
-import { PhotographyPost } from "../../../../../Models";
+import { PhotographyPost } from "../../../../../models";
 import { apiImageUrl } from "../../../../../utils/image-management-helpers";
 import "./photography-post-summary.css";
 

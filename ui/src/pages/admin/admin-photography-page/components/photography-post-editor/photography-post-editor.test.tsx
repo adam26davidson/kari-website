@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { PhotographyPostEditor } from "./photography-post-editor";
 import { EditorImage, newEditorImage } from "./editor-image";
-import { PhotographyPost } from "../../../../../Models";
+import { PhotographyPost } from "../../../../../models";
 
 function makePost(): PhotographyPost {
   return {

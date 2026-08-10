@@ -1,10 +1,10 @@
 import { useState } from "react";
 import "./admin.css";
-import AdminHaikuPage from "./adminHaikuPage/adminHaikuPage";
+import { AdminHaikuPage } from "./admin-haiku-page/admin-haiku-page";
 import { useAuth0 } from "@auth0/auth0-react";
-import AdminHaigaPage from "./adminHaigaPage/adminHaigaPage";
-import { HomePageEditor } from "./homePageEditor/homePageEditor";
-import { AdminOtherWorksPage } from "./adminOtherWorksPage/admin-other-works-page";
+import { AdminHaigaPage } from "./admin-haiga-page/admin-haiga-page";
+import { HomePageEditor } from "./home-page-editor/home-page-editor";
+import { AdminOtherWorksPage } from "./admin-other-works-page/admin-other-works-page";
 import { AdminPhotographyPage } from "./admin-photography-page/admin-photography-page";
 import { AdminImageGcPage } from "./admin-image-gc-page/admin-image-gc-page";
 import { AdminButton } from "../../components/admin-button/admin-button";
@@ -22,7 +22,7 @@ const ADMIN_PAGES = [
 
 type Page = (typeof ADMIN_PAGES)[number]["id"];
 
-function Admin() {
+export function Admin() {
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
 
@@ -62,5 +62,3 @@ function Admin() {
     </div>
   );
 }
-
-export default Admin;

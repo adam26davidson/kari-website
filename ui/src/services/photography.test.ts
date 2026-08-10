@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { PhotographyService } from "./photography";
-import { PhotographyPost } from "../Models";
+import { PhotographyPost } from "../models";
 import { getToken, mockFetchOnce, setupServiceTestHooks } from "./test-helpers";
 
 const API_URL = "https://api.test.local/photography";

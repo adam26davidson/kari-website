@@ -2,12 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import Header from "./header";
+import { Header } from "./header";
 import { PAGES } from "../../constants";
-import { useIsMobile } from "../../hooks/isMobile";
+import { useIsMobile } from "../../hooks/use-is-mobile";
 import { useAuth0 } from "@auth0/auth0-react";
 
-vi.mock("../../hooks/isMobile", () => ({
+vi.mock("../../hooks/use-is-mobile", () => ({
   useIsMobile: vi.fn(),
 }));
 

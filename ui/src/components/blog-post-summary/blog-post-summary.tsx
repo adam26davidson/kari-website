@@ -1,4 +1,4 @@
-import { BlogPost } from "../../Models";
+import { BlogPost } from "../../models";
 import { TitleLink } from "../title-link/title-link";
 import "./blog-post-summary.css";
 

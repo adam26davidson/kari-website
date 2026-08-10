@@ -1,4 +1,4 @@
-import { PhotographyPost } from "../../../../../Models";
+import { PhotographyPost } from "../../../../../models";
 import { AdminItemList } from "../../../../../components/admin-item-list/admin-item-list";
 import { DataEditor } from "../../../../../components/data-editor/data-editor";
 import { PhotoPicker } from "../../../../../components/photo-picker/photo-picker";
