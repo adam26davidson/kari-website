@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useAdminToken } from "../../hooks/useAdminToken";
+import { useAdminToken } from "../../hooks/use-admin-token";
 import { useAdminUi } from "./admin-ui-context";
 
 type TokenGetter = () => Promise<string>;

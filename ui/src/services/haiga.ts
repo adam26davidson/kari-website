@@ -1,4 +1,4 @@
-import { Haiga } from "../Models";
+import { Haiga } from "../models";
 import { TokenGetter, authorizedFetch, ensureOk } from "./http";
 
 const API_HAIGA_URL = import.meta.env.VITE_API_URL + "/haiga";

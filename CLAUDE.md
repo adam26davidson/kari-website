@@ -86,12 +86,13 @@ auto-merge once these checks pass.
   not the PR.
 
 ## Code Style Guidelines
-- TypeScript: Use strict typing with interfaces (see Models.ts)
+- TypeScript: Use strict typing with interfaces (see models.ts)
 - React components: Use functional components with typed props
 - CSS: Each component has its own CSS file
 - Formatting: 2 space indentation, 80 character line width
-- Component file naming: lowercase with extension matching content (.tsx, .css)
-- Directory naming: camelCase for components
+- File naming: kebab-case with extension matching content (.tsx, .css)
+- Directory naming: kebab-case for component directories and files
+- Exports: named exports only (no default exports)
 - Error handling: Proper type checking and error handling
 
 ## AWS Integration

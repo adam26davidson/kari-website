@@ -1,5 +1,5 @@
-import DataList from "../dataList/dataList";
-import DataListItem from "../dataListItem/dataListItem";
+import { DataList } from "../data-list/data-list";
+import { DataListItem } from "../data-list-item/data-list-item";
 
 export interface AdminItemListProps<T extends { id: string }> {
   items: Array<T>;

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { AdminPhotographyPage } from "./admin-photography-page";
-import { PhotographyPost } from "../../../Models";
+import { PhotographyPost } from "../../../models";
 import { PhotographyService } from "../../../services/photography";
 import { TokenGetter } from "../../../services/http";
 import { ImageService } from "../../../services/images";
@@ -21,7 +21,7 @@ vi.mock("../../../services/images", () => ({
   },
 }));
 
-vi.mock("../../../hooks/useAdminToken", () => ({
+vi.mock("../../../hooks/use-admin-token", () => ({
   useAdminToken: () => async () => "token",
 }));
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { BlogService } from "./blog";
-import { BlogPost } from "../Models";
+import { BlogPost } from "../models";
 import { getToken, mockFetchOnce, setupServiceTestHooks } from "./test-helpers";
 
 const API_BLOG_URL = "https://api.test.local/blog";

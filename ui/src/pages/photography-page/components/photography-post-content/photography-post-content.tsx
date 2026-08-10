@@ -1,4 +1,4 @@
-import { PhotographyPost } from "../../../../Models";
+import { PhotographyPost } from "../../../../models";
 import { s3ImageUrl } from "../../../../utils/image-management-helpers";
 import "./photography-post-content.css";
 

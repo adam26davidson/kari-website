@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { HaigaService } from "./haiga";
-import { Haiga } from "../Models";
+import { Haiga } from "../models";
 import { getToken, mockFetchOnce, setupServiceTestHooks } from "./test-helpers";
 
 const API_HAIGA_URL = "https://api.test.local/haiga";

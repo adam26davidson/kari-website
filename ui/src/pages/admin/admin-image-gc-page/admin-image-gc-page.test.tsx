@@ -11,7 +11,7 @@ vi.mock("../../../services/images", () => ({
   },
 }));
 
-vi.mock("../../../hooks/useAdminToken", () => ({
+vi.mock("../../../hooks/use-admin-token", () => ({
   useAdminToken: () => async () => "token",
 }));
 

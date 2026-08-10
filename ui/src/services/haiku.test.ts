@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { HaikuService } from "./haiku";
-import { Haiku } from "../Models";
+import { Haiku } from "../models";
 import { getToken, mockFetchOnce, setupServiceTestHooks } from "./test-helpers";
 
 const API_HAIKU_URL = "https://api.test.local/haiku";

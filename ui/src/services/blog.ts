@@ -1,4 +1,4 @@
-import { BlogPost, BlogPostContentUpdate } from "../Models";
+import { BlogPost, BlogPostContentUpdate } from "../models";
 import DOMPurify from "dompurify";
 import { TokenGetter, authorizedFetch, ensureOk } from "./http";
 
