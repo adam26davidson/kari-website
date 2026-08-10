@@ -26,7 +26,7 @@ aws-smithy-types = "1.2.8"
 aws-smithy-http = "0.60.11"
 aws-sig-auth = "0.60.3"
 async-trait = "0.1.92"
-mime_guess = "2.0"
+mime_guess = "2.0.5"
 uuid = { version = "1", features = ["v4"] }
 dotenv = "0.15"
 
