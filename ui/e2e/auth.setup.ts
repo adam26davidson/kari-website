@@ -73,16 +73,26 @@ setup("authenticate as admin", async ({ page, request }) => {
   await expect(usernameInput).toBeVisible({ timeout: 30_000 });
   await usernameInput.fill(username);
 
+  // The page also contains an aria-hidden Continue button (Auth0's Enter-key
+  // default-action catcher) that matches button[type="submit"] but can never
+  // be clicked. Role-based locators exclude aria-hidden elements, so this
+  // always resolves to the visible button. "Continue" is exact to avoid
+  // matching social-login buttons like "Continue with Google".
+  const continueButton = page.getByRole("button", {
+    name: "Continue",
+    exact: true,
+  });
+
   const passwordInput = page
     .locator('input[name="password"], input#password')
     .first();
   if (!(await passwordInput.isVisible())) {
     // Identifier-first: submit the username to reveal the password screen.
-    await page.locator('button[type="submit"]').first().click();
+    await continueButton.click();
     await expect(passwordInput).toBeVisible({ timeout: 30_000 });
   }
   await passwordInput.fill(password);
-  await page.locator('button[type="submit"]').first().click();
+  await continueButton.click();
 
   // Auth0 may interpose a consent screen for localhost callback URLs.
   const consentAccept = page.locator(
