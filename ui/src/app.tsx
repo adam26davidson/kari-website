@@ -78,7 +78,7 @@ export function App() {
                   element={<Navigate to="/other-works" replace />}
                 />
                 <Route path="blog/:id" element={<BlogPostPage />} />
-                <Route path="admin" element={<Admin />} />
+                <Route path="admin/*" element={<Admin />} />
                 <Route path="photography" element={<PhotographyPage />} />
               </Routes>
             </Suspense>

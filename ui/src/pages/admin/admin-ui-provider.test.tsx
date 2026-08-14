@@ -16,6 +16,17 @@ function Consumer() {
       <button onClick={() => confirm("Really do it?", () => notify("done"))}>
         ask
       </button>
+      <button
+        onClick={() =>
+          confirm(
+            "Discard changes?",
+            () => notify("discarded"),
+            () => notify("kept"),
+          )
+        }
+      >
+        ask-with-no
+      </button>
       <button onClick={() => notify("saved")}>notify-success</button>
       <button onClick={() => notify("broke", "error")}>notify-error</button>
     </div>
@@ -67,6 +78,27 @@ describe("AdminUiProvider confirmation dialog", () => {
     expect(screen.queryByText("Really do it?")).toBeNull();
     // onYes never ran, so no toast appeared.
     expect(screen.queryByText("done")).toBeNull();
+  });
+
+  it("runs onNo (when given) and closes on No", () => {
+    renderProvider();
+    fireEvent.click(screen.getByText("ask-with-no"));
+
+    fireEvent.click(screen.getByRole("button", { name: "No" }));
+
+    expect(screen.queryByText("Discard changes?")).toBeNull();
+    expect(screen.getByText("kept")).toBeInTheDocument();
+    expect(screen.queryByText("discarded")).toBeNull();
+  });
+
+  it("does not run onNo on Yes", () => {
+    renderProvider();
+    fireEvent.click(screen.getByText("ask-with-no"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Yes" }));
+
+    expect(screen.getByText("discarded")).toBeInTheDocument();
+    expect(screen.queryByText("kept")).toBeNull();
   });
 });
 

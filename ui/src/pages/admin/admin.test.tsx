@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { Admin } from "./admin";
 import { useAuth0 } from "@auth0/auth0-react";
 
@@ -8,7 +9,7 @@ vi.mock("@auth0/auth0-react", () => ({
 }));
 
 // The sub-pages have their own tests; stub them so this file exercises
-// only the shell: auth gating, the menu, and page switching.
+// only the shell: auth gating, the menu, and section routing.
 vi.mock("./home-page-editor/home-page-editor", () => ({
   HomePageEditor: () => <div>home-page-stub</div>,
 }));
@@ -41,6 +42,17 @@ function mockAuth(overrides?: {
   } as unknown as ReturnType<typeof useAuth0>);
 }
 
+// Mounted the way App mounts it: as the catch-all under /admin.
+function renderAdmin(path: string = "/admin") {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/admin/*" element={<Admin />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
 beforeEach(() => {
   mockAuth();
 });
@@ -48,7 +60,7 @@ beforeEach(() => {
 describe("Admin authentication gating", () => {
   it("offers login when unauthenticated", () => {
     mockAuth({ isAuthenticated: false });
-    render(<Admin />);
+    renderAdmin();
 
     fireEvent.click(screen.getByRole("button", { name: "Log In" }));
 
@@ -58,7 +70,7 @@ describe("Admin authentication gating", () => {
 
   it("shows neither login nor menu while auth is loading", () => {
     mockAuth({ isAuthenticated: false, isLoading: true });
-    render(<Admin />);
+    renderAdmin();
 
     expect(screen.queryByRole("button", { name: "Log In" })).toBeNull();
     expect(screen.queryByText("Home")).toBeNull();
@@ -66,13 +78,11 @@ describe("Admin authentication gating", () => {
 });
 
 describe("Admin menu", () => {
-  it("lists every admin page as a button with its label, in order", () => {
-    render(<Admin />);
+  it("lists every admin section as a link to its route, in order", () => {
+    renderAdmin();
 
-    const labels = screen
-      .getAllByRole("button")
-      .map((item) => item.textContent);
-    expect(labels).toEqual([
+    const links = screen.getAllByRole("link");
+    expect(links.map((link) => link.textContent)).toEqual([
       "Home",
       "Haiku",
       "Haiga",
@@ -80,14 +90,20 @@ describe("Admin menu", () => {
       "Other works",
       "Image cleanup",
     ]);
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([
+      "/admin/home",
+      "/admin/haiku",
+      "/admin/haiga",
+      "/admin/photography",
+      "/admin/other-works",
+      "/admin/image-cleanup",
+    ]);
   });
 
-  it("starts on the home page editor", () => {
-    render(<Admin />);
+  it("redirects /admin to the home section", () => {
+    renderAdmin("/admin");
     expect(screen.getByText("home-page-stub")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Home" })).toHaveClass(
-      "selected",
-    );
+    expect(screen.getByRole("link", { name: "Home" })).toHaveClass("selected");
   });
 
   it.each([
@@ -97,12 +113,28 @@ describe("Admin menu", () => {
     ["Other works", "other-works-page-stub"],
     ["Image cleanup", "image-gc-page-stub"],
   ])("switches to %s on click", (label, stub) => {
-    render(<Admin />);
+    renderAdmin();
 
-    fireEvent.click(screen.getByRole("button", { name: label }));
+    fireEvent.click(screen.getByRole("link", { name: label }));
 
     expect(screen.getByText(stub)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: label })).toHaveClass("selected");
+    expect(screen.getByRole("link", { name: label })).toHaveClass("selected");
     expect(screen.queryByText("home-page-stub")).toBeNull();
+  });
+
+  it("opens a section directly from its URL", () => {
+    renderAdmin("/admin/haiku");
+    expect(screen.getByText("haiku-page-stub")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Haiku" })).toHaveClass("selected");
+  });
+
+  it("marks the section link selected on its editor URLs too", () => {
+    renderAdmin("/admin/haiku/some-id");
+    expect(screen.getByRole("link", { name: "Haiku" })).toHaveClass("selected");
+  });
+
+  it("redirects unknown sections to home", () => {
+    renderAdmin("/admin/nonsense");
+    expect(screen.getByText("home-page-stub")).toBeInTheDocument();
   });
 });

@@ -6,7 +6,7 @@ import { AdminUi, AdminUiContext } from "./admin-ui-context";
 export interface AdminUiMock extends AdminUi {
   showLoading: Mock<(message: string) => void>;
   hideLoading: Mock<() => void>;
-  confirm: Mock<(message: string, onYes: () => void) => void>;
+  confirm: Mock<(message: string, onYes: () => void, onNo?: () => void) => void>;
   notify: Mock<(message: string, type?: "success" | "error") => void>;
 }
 
@@ -33,13 +33,25 @@ export function renderWithAdminUi(
 
 /**
  * Runs the onYes callback of the most recent confirm() call, exactly as
- * the provider's Yes button would. (Declining is just not calling onYes —
- * the provider owns the No button, and its own tests cover it.)
+ * the provider's Yes button would.
  */
 export async function answerYes(adminUi: AdminUiMock) {
   const call = adminUi.confirm.mock.calls.at(-1);
   if (!call) throw new Error("confirm() was never called");
   await act(async () => {
     call[1]();
+  });
+}
+
+/**
+ * Runs the onNo callback of the most recent confirm() call, exactly as
+ * the provider's No button would. (Callers that pass no onNo are simply
+ * not run — same as the provider.)
+ */
+export async function answerNo(adminUi: AdminUiMock) {
+  const call = adminUi.confirm.mock.calls.at(-1);
+  if (!call) throw new Error("confirm() was never called");
+  await act(async () => {
+    call[2]?.();
   });
 }

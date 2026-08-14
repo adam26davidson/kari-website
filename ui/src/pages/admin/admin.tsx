@@ -1,5 +1,5 @@
-import { useState } from "react";
 import "./admin.css";
+import { Navigate, NavLink, Route, Routes } from "react-router-dom";
 import { AdminHaikuPage } from "./admin-haiku-page/admin-haiku-page";
 import { useAuth0 } from "@auth0/auth0-react";
 import { AdminHaigaPage } from "./admin-haiga-page/admin-haiga-page";
@@ -10,7 +10,8 @@ import { AdminImageGcPage } from "./admin-image-gc-page/admin-image-gc-page";
 import { AdminButton } from "../../components/admin-button/admin-button";
 import { AdminUiProvider } from "./admin-ui-provider";
 
-// Single source of truth for the admin menu: ids, order, and labels.
+// Single source of truth for the admin menu: ids (also the URL segment
+// under /admin), order, and labels.
 const ADMIN_PAGES = [
   { id: "home", label: "Home" },
   { id: "haiku", label: "Haiku" },
@@ -20,10 +21,7 @@ const ADMIN_PAGES = [
   { id: "image-cleanup", label: "Image cleanup" },
 ] as const;
 
-type Page = (typeof ADMIN_PAGES)[number]["id"];
-
 export function Admin() {
-  const [currentPage, setCurrentPage] = useState<Page>("home");
   const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
 
   return (
@@ -35,26 +33,37 @@ export function Admin() {
         <>
           <div className="admin-menu">
             {ADMIN_PAGES.map(({ id, label }) => (
-              <button
+              <NavLink
                 key={id}
-                type="button"
-                className={`admin-menu-item ${
-                  currentPage === id ? "selected" : ""
-                }`}
-                onClick={() => setCurrentPage(id)}
+                to={`/admin/${id}`}
+                className={({ isActive }) =>
+                  `admin-menu-item ${isActive ? "selected" : ""}`
+                }
               >
                 {label}
-              </button>
+              </NavLink>
             ))}
           </div>
           <div className="admin-content">
             <AdminUiProvider>
-              {currentPage === "home" && <HomePageEditor />}
-              {currentPage === "haiku" && <AdminHaikuPage />}
-              {currentPage === "haiga" && <AdminHaigaPage />}
-              {currentPage === "other-works" && <AdminOtherWorksPage />}
-              {currentPage === "photography" && <AdminPhotographyPage />}
-              {currentPage === "image-cleanup" && <AdminImageGcPage />}
+              <Routes>
+                <Route path="home" element={<HomePageEditor />} />
+                <Route path="haiku/:id?" element={<AdminHaikuPage />} />
+                <Route path="haiga/:id?" element={<AdminHaigaPage />} />
+                <Route
+                  path="photography/:id?"
+                  element={<AdminPhotographyPage />}
+                />
+                <Route
+                  path="other-works/:id?"
+                  element={<AdminOtherWorksPage />}
+                />
+                <Route path="image-cleanup" element={<AdminImageGcPage />} />
+                <Route
+                  path="*"
+                  element={<Navigate to="/admin/home" replace />}
+                />
+              </Routes>
             </AdminUiProvider>
           </div>
         </>
