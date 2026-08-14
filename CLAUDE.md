@@ -65,11 +65,17 @@ auto-merge once these checks pass.
   (multiple `Closes #N` lines in the body) instead of in parallel — the label
   convention above prevents duplicate pickup but not file collisions.
 - When multiple sessions share one clone concurrently, each session must
-  create its own worktree for its branch
-  (`git worktree add <dir> -b <branch> origin/main`) and work only there.
+  create its own worktree for its branch and work only there.
   Never run `git checkout`/`git switch` in the shared tree — concurrent
   checkouts move HEAD out from under other sessions, so commits land on the
   wrong branch, sweep in foreign files, or clobber uncommitted work.
+- Standard worktree location: a sibling directory of the main clone, named
+  `kari-website-<short-name>` (e.g.
+  `git worktree add ../kari-website-admin-routes -b <branch> origin/main`).
+  Sibling dirs are easy to reach and can't be swept up by tools that walk
+  the repo tree (`grep -r`, test globs, docker build contexts). Don't put
+  worktrees inside the repo; harness-managed ones under `.claude/worktrees/`
+  are the exception — leave those to the tooling that created them.
 - Commit only explicitly listed paths (`git add <paths>`, never `git add -A`
   in a shared tree); treat any file outside your issue's scope as owned by
   another session.
