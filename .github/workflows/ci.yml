@@ -83,11 +83,9 @@ jobs:
       # real API runs on localhost:3000 against it. No AWS account or shared
       # bucket is involved, so runs can't be broken by drifting bucket data.
       - name: Start local S3 (MinIO)
-        run: |
-          docker run -d --rm --name kari-e2e-s3 -p 9000:9000 \
-            -e MINIO_ROOT_USER=kari-e2e \
-            -e MINIO_ROOT_PASSWORD=kari-e2e-secret \
-            minio/minio server /data
+        # docker-compose.yml lives at the repo root, not in ui/.
+        working-directory: .
+        run: docker compose up -d --wait minio
 
       # Create + seed the bucket before the API starts: its /health probes
       # S3 read/write, so the bucket must exist first. (npm run test:e2e
@@ -105,7 +103,7 @@ jobs:
           BUCKET_NAME: kari-e2e
           AWS_ENDPOINT_URL: http://localhost:9000
           AWS_REGION: us-east-1
-          # Local MinIO credentials (match the docker run above) — not secrets.
+          # Local MinIO credentials (match docker-compose.yml) — not secrets.
           AWS_ACCESS_KEY_ID: kari-e2e
           AWS_SECRET_ACCESS_KEY: kari-e2e-secret
         run: |
