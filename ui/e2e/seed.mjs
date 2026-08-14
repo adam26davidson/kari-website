@@ -20,11 +20,17 @@ import {
   S3_ENDPOINT,
   TINY_PNG_BASE64,
   createS3Client,
+  makeSolidPng,
 } from "./config.mjs";
 
 const client = createS3Client();
 
 const PNG = Buffer.from(TINY_PNG_BASE64, "base64");
+
+// The home photo is landscape at real-photo dimensions (the production photo
+// is 1690x1268) so the visitor spec can catch the card layout overflowing —
+// a 1x1 image fits any box and would mask regressions.
+const HOME_PHOTO_PNG = makeSolidPng(1600, 1200);
 
 const SEED_BLOG_ID = "seed-blog-1";
 
@@ -91,7 +97,7 @@ const SEED_OBJECTS = [
     body: "<p>Seeded published post content.</p>",
     type: "text/html",
   },
-  { key: "images/seed-home.png", body: PNG, type: "image/png" },
+  { key: "images/seed-home.png", body: HOME_PHOTO_PNG, type: "image/png" },
   { key: "images/seed-haiga.png", body: PNG, type: "image/png" },
   { key: "images/seed-photo.png", body: PNG, type: "image/png" },
 ];

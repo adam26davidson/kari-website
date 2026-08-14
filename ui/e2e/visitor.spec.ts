@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { TEST_S3_URL } from "./helpers";
 
 // Visitor journeys: the public pages render the fixture content seeded into
@@ -24,6 +24,46 @@ test("home page renders the photo and a non-empty blurb", async ({ page }) => {
   const blurb = page.locator(".fade-in").last();
   await expect(blurb).toBeVisible();
   expect((await blurb.innerText()).trim().length).toBeGreaterThan(0);
+});
+
+// The seeded home photo is landscape at real-photo dimensions (see
+// seed.mjs), so these catch the photo overflowing the card layout — a
+// regression that a 1x1 seed image can never trigger. Horizontal-only
+// checks: the photo must sit inside its container and the container
+// inside the card, at both desktop and mobile widths.
+async function expectHomePhotoContained(page: Page) {
+  await page.goto("/");
+  const photo = page.locator(".home-page-photo");
+  await expect(photo).toBeVisible();
+  await expect
+    .poll(() => photo.evaluate((img: HTMLImageElement) => img.naturalWidth), {
+      timeout: 15_000,
+    })
+    .toBeGreaterThan(0);
+  const photoBox = await photo.boundingBox();
+  const containerBox = await page
+    .locator(".home-page-photo-container")
+    .boundingBox();
+  const cardBox = await page.locator(".home-page-card").boundingBox();
+  if (!photoBox || !containerBox || !cardBox)
+    throw new Error("home page card elements not rendered");
+  expect(photoBox.x).toBeGreaterThanOrEqual(containerBox.x - 1);
+  expect(photoBox.x + photoBox.width).toBeLessThanOrEqual(
+    containerBox.x + containerBox.width + 1,
+  );
+  expect(containerBox.x).toBeGreaterThanOrEqual(cardBox.x - 1);
+  expect(containerBox.x + containerBox.width).toBeLessThanOrEqual(
+    cardBox.x + cardBox.width + 1,
+  );
+}
+
+test("home page photo stays inside its card (desktop)", async ({ page }) => {
+  await expectHomePhotoContained(page);
+});
+
+test("home page photo stays inside its card (mobile)", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectHomePhotoContained(page);
 });
 
 test("haiku page renders at least one seeded haiku", async ({ page }) => {
