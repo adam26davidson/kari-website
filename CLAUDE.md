@@ -3,6 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Build Commands
+- `./scripts/dev.sh` - Start the whole dev stack (MinIO + seed + API + UI);
+  `--aws` targets the real test bucket via SSO instead of local MinIO
 - UI: `npm run dev` - Start development server
 - UI: `npm run build` - Build production UI
 - UI: `npm run build:test` - Build UI for test environment
@@ -20,7 +22,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   are set, as they are in CI). The stack is fully local and hermetic — no
   AWS account or shared bucket. Two things must be running:
   1. a throwaway MinIO standing in for S3:
-     `docker run -d --rm --name kari-e2e-s3 -p 9000:9000 -e MINIO_ROOT_USER=kari-e2e -e MINIO_ROOT_PASSWORD=kari-e2e-secret minio/minio server /data`
+     `docker compose up -d --wait minio` (defined in `docker-compose.yml`;
+     `./scripts/dev.sh` starts this too, so a running dev stack already
+     satisfies both prerequisites)
   2. the API on localhost:3000: `cargo run` in `api/` (its `.env` already
      targets the local MinIO; run `node e2e/seed.mjs` in `ui/` first so the
      bucket exists for the API's health probe)
