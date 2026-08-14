@@ -18,16 +18,23 @@ vi.mock("../../hooks/use-admin-token", () => ({
 // A minimal host page: renders the list, a retry control, and save
 // buttons covering both toast variants.
 function Host() {
-  const { list, setList, loadFailed, load, saveList } = useAdminList<Item>({
-    noun: "widgets",
-    getList,
-    updateList,
-  });
+  const { list, setList, loaded, loadFailed, load, saveList } =
+    useAdminList<Item>({
+      noun: "widgets",
+      getList,
+      updateList,
+    });
   if (loadFailed) {
-    return <button onClick={() => load()}>retry</button>;
+    return (
+      <div>
+        <div>loaded: {String(loaded)}</div>
+        <button onClick={() => load()}>retry</button>
+      </div>
+    );
   }
   return (
     <div>
+      <div>loaded: {String(loaded)}</div>
       <ul>
         {list.map((item) => (
           <li key={item.id}>{item.name}</li>
@@ -55,6 +62,24 @@ beforeEach(() => {
   ]);
   updateList.mockResolvedValue(undefined);
   vi.spyOn(console, "error").mockImplementation(() => {});
+});
+
+describe("useAdminList loaded flag", () => {
+  it("is false until the initial load settles, then true", async () => {
+    renderWithAdminUi(<Host />);
+
+    expect(screen.getByText("loaded: false")).toBeInTheDocument();
+    expect(await screen.findByText("alpha")).toBeInTheDocument();
+    expect(screen.getByText("loaded: true")).toBeInTheDocument();
+  });
+
+  it("is true after a failed load too", async () => {
+    getList.mockRejectedValue(new Error("GET failed"));
+    renderWithAdminUi(<Host />);
+
+    expect(await screen.findByText("retry")).toBeInTheDocument();
+    expect(screen.getByText("loaded: true")).toBeInTheDocument();
+  });
 });
 
 describe("useAdminList loading", () => {

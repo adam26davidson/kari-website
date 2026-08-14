@@ -1,5 +1,6 @@
 import { Mock, vi } from "vitest";
 import { act, render } from "@testing-library/react";
+import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { AdminUi, AdminUiContext } from "./admin-ui-context";
 
 /** AdminUi with every function mocked, for asserting page behavior. */
@@ -29,6 +30,35 @@ export function renderWithAdminUi(
     <AdminUiContext.Provider value={adminUi}>{ui}</AdminUiContext.Provider>,
   );
   return { ...utils, adminUi };
+}
+
+/**
+ * Renders an admin page the way the admin shell mounts it: on a data
+ * router (required by useBlocker) at its /admin/<section>/:id? route,
+ * inside a mocked AdminUiContext. Returns the router for URL assertions
+ * and history navigation (router.navigate(-1) is the browser back button).
+ */
+export function renderAdminPage(
+  ui: React.ReactElement,
+  path: string,
+  initialEntry: string = path.replace("/:id?", ""),
+  adminUi: AdminUiMock = mockAdminUi(),
+) {
+  const router = createMemoryRouter(
+    [
+      {
+        path,
+        element: (
+          <AdminUiContext.Provider value={adminUi}>
+            {ui}
+          </AdminUiContext.Provider>
+        ),
+      },
+    ],
+    { initialEntries: [initialEntry] },
+  );
+  const utils = render(<RouterProvider router={router} />);
+  return { ...utils, adminUi, router };
 }
 
 /**

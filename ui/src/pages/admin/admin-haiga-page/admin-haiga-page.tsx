@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./admin-haiga-page.css";
 import { v4 as uuidv4 } from "uuid";
+import { useNavigate, useParams } from "react-router-dom";
 import { Haiga } from "../../../models";
 import { HaigaService } from "../../../services/haiga";
 import { ImageService } from "../../../services/images";
@@ -12,12 +13,18 @@ import { AdminItemList } from "../../../components/admin-item-list/admin-item-li
 import { useAdminToken } from "../../../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
+import { useUnsavedChanges } from "../use-unsaved-changes";
+
+const LIST_PATH = "/admin/haiga";
 
 export function AdminHaigaPage() {
   const getAccessTokenSilently = useAdminToken();
   const { showLoading, hideLoading, confirm, notify } = useAdminUi();
+  const { id } = useParams();
+  const navigate = useNavigate();
   const {
     list: haigaList,
+    loaded,
     loadFailed,
     load,
     saveList,
@@ -28,6 +35,36 @@ export function AdminHaigaPage() {
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [openHaiga, setOpenHaiga] = useState<Haiga | null>(null);
+
+  // The editor is URL-driven: /admin/haiga/:id opens a copy of that haiga,
+  // navigating back to /admin/haiga closes it. An id that isn't in the
+  // loaded list (stale link, deleted item) falls back to the list.
+  useEffect(() => {
+    if (!id) {
+      setOpenHaiga(null);
+      setImageFile(null);
+      return;
+    }
+    if (openHaiga?.id === id || !loaded) return;
+    const item = haigaList.find((haiga) => haiga.id === id);
+    if (item) {
+      setOpenHaiga({ ...item });
+      setImageFile(null);
+    } else {
+      navigate(LIST_PATH, { replace: true });
+    }
+  }, [id, openHaiga, loaded, haigaList, navigate]);
+
+  // The open copy is dirty when it differs from its saved list entry or a
+  // replacement image has been picked but not saved.
+  const savedHaiga = openHaiga
+    ? haigaList.find((haiga) => haiga.id === openHaiga.id)
+    : undefined;
+  useUnsavedChanges(
+    !!openHaiga &&
+      (imageFile !== null ||
+        JSON.stringify(openHaiga) !== JSON.stringify(savedHaiga)),
+  );
 
   const deleteHaiga = async (idx: number) => {
     const haigaToDelete = haigaList[idx];
@@ -67,8 +104,7 @@ export function AdminHaigaPage() {
     };
     const newHaigaList = [...haigaList, { ...newHaiga }];
     if (await saveList(newHaigaList, "New haiga created")) {
-      setImageFile(null);
-      setOpenHaiga(newHaiga);
+      navigate(`${LIST_PATH}/${newHaiga.id}`);
     }
   };
 
@@ -84,11 +120,7 @@ export function AdminHaigaPage() {
   };
 
   const onEdit = (idx: number) => {
-    // copy the haiga to openHaiga
-    // this is to avoid mutating the original haiga
-    const openItem = { ...haigaList[idx] };
-    setOpenHaiga(openItem);
-    setImageFile(null);
+    navigate(`${LIST_PATH}/${haigaList[idx].id}`);
   };
 
   // Editor functions ---------------------------------------------------------
@@ -165,7 +197,7 @@ export function AdminHaigaPage() {
       setImageFile={setImageFile}
       imageFile={imageFile}
       onSave={saveOpenHaiga}
-      onClose={() => setOpenHaiga(null)}
+      onClose={() => navigate(LIST_PATH)}
     />
   ) : (
     <AdminItemList

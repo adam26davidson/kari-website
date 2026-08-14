@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { AdminOtherWorksPage } from "./admin-other-works-page";
 import { BlogPost } from "../../../models";
 import { BlogService } from "../../../services/blog";
 import { ImageService } from "../../../services/images";
 import { TokenGetter } from "../../../services/http";
-import { answerYes, renderWithAdminUi } from "../admin-ui-test-helpers";
+import { answerYes, renderAdminPage } from "../admin-ui-test-helpers";
 
 vi.mock("../../../services/blog", () => ({
   BlogService: {
@@ -85,11 +85,15 @@ let savedPost: BlogPost;
 const savedContent =
   '<p>hello</p><img src="https://api.test.local/images/old.png">';
 
-async function renderPage() {
-  const { container, adminUi } = renderWithAdminUi(<AdminOtherWorksPage />);
+async function renderPage(initialEntry?: string) {
+  const { container, adminUi, router } = renderAdminPage(
+    <AdminOtherWorksPage />,
+    "/admin/other-works/:id?",
+    initialEntry,
+  );
   const notify = adminUi.notify;
   await waitFor(() => iconButton(container, "pencil"));
-  return { container, notify, adminUi };
+  return { container, notify, adminUi, router };
 }
 
 // Renders the page, opens the only post in the editor, and removes the
@@ -1025,7 +1029,10 @@ describe("AdminOtherWorksPage load failure", () => {
     vi.mocked(BlogService.getListFromApi).mockRejectedValueOnce(
       new Error("GET failed"),
     );
-    const { container } = renderWithAdminUi(<AdminOtherWorksPage />);
+    const { container } = renderAdminPage(
+      <AdminOtherWorksPage />,
+      "/admin/other-works/:id?",
+    );
 
     await screen.findByText("Failed to load other works.");
     // No editable list — saving one would overwrite the real data.
@@ -1039,16 +1046,137 @@ describe("AdminOtherWorksPage load failure", () => {
 
 describe("AdminOtherWorksPage closing the editor", () => {
   it("abandons the open post without saving", async () => {
-    const { container } = await renderPage();
+    const { container, adminUi } = await renderPage();
     fireEvent.click(iconButton(container, "pencil"));
     await screen.findByPlaceholderText("post content");
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
-    expect(screen.queryByPlaceholderText("post content")).toBeNull();
+    await waitFor(() =>
+      expect(screen.queryByPlaceholderText("post content")).toBeNull(),
+    );
     expect(BlogService.updateList).not.toHaveBeenCalled();
     expect(BlogService.updateContent).not.toHaveBeenCalled();
+    expect(adminUi.confirm).not.toHaveBeenCalled();
     // Back on the list view.
+    iconButton(container, "pencil");
+  });
+});
+
+describe("AdminOtherWorksPage routing", () => {
+  it("opens the editor at /admin/other-works/:id when editing", async () => {
+    const { container, router } = await renderPage();
+
+    fireEvent.click(iconButton(container, "pencil"));
+    await screen.findByPlaceholderText("post content");
+
+    expect(router.state.location.pathname).toBe("/admin/other-works/b1");
+  });
+
+  it("opens the editor directly from an editor URL", async () => {
+    renderAdminPage(
+      <AdminOtherWorksPage />,
+      "/admin/other-works/:id?",
+      "/admin/other-works/b1",
+    );
+
+    expect(
+      await screen.findByPlaceholderText("post content"),
+    ).toHaveValue(savedContent);
+  });
+
+  it("falls back to the list for an unknown editor URL", async () => {
+    const { container, router } = renderAdminPage(
+      <AdminOtherWorksPage />,
+      "/admin/other-works/:id?",
+      "/admin/other-works/no-such-id",
+    );
+
+    await waitFor(() => iconButton(container, "pencil"));
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe("/admin/other-works"),
+    );
+  });
+
+  it("returns to the list URL when loading the content fails", async () => {
+    vi.mocked(BlogService.getContent).mockRejectedValue(
+      new Error("GET failed"),
+    );
+    const { container, notify, router } = await renderPage();
+
+    fireEvent.click(iconButton(container, "pencil"));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("Failed to load content", "error"),
+    );
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe("/admin/other-works"),
+    );
+    iconButton(container, "pencil");
+  });
+
+  it("returns to the list on browser back", async () => {
+    const { container, router } = await renderPage();
+    fireEvent.click(iconButton(container, "pencil"));
+    await screen.findByPlaceholderText("post content");
+
+    await act(async () => {
+      router.navigate(-1);
+    });
+
+    await waitFor(() =>
+      expect(screen.queryByPlaceholderText("post content")).toBeNull(),
+    );
+    iconButton(container, "pencil");
+  });
+
+  it("asks before discarding edited content on Close", async () => {
+    const { container, adminUi } = await renderPage();
+    fireEvent.click(iconButton(container, "pencil"));
+    const textarea = await screen.findByPlaceholderText("post content");
+    fireEvent.change(textarea, { target: { value: "<p>changed</p>" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      "You have unsaved changes. Discard them?",
+      expect.any(Function),
+      expect.any(Function),
+    );
+  });
+
+  it("asks before discarding an edited title on Close", async () => {
+    const { container, adminUi } = await renderPage();
+    fireEvent.click(iconButton(container, "pencil"));
+    await screen.findByPlaceholderText("post content");
+    fireEvent.change(screen.getByPlaceholderText("Title"), {
+      target: { value: "New Title" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      "You have unsaved changes. Discard them?",
+      expect.any(Function),
+      expect.any(Function),
+    );
+  });
+
+  it("returns to the list after a successful save without asking", async () => {
+    const { container, notify, adminUi } = await renderPage();
+    fireEvent.click(iconButton(container, "pencil"));
+    const textarea = await screen.findByPlaceholderText("post content");
+    fireEvent.change(textarea, { target: { value: "<p>hello</p>" } });
+
+    fireEvent.click(iconButton(container, "floppy-disk"));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("Other works item saved"),
+    );
+    await waitFor(() =>
+      expect(screen.queryByPlaceholderText("post content")).toBeNull(),
+    );
+    expect(adminUi.confirm).not.toHaveBeenCalled();
     iconButton(container, "pencil");
   });
 });

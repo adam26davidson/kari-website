@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./admin-haiku-page.css";
 import "../admin.css";
 import { v4 as uuidv4 } from "uuid";
+import { useNavigate, useParams } from "react-router-dom";
 import { Haiku } from "../../../models";
 import { HaikuContent } from "../../../components/haiku-content/haiku-content";
 import { HaikuService } from "../../../services/haiku";
@@ -11,11 +12,17 @@ import { LoadError } from "../../../components/load-error/load-error";
 import { AdminItemList } from "../../../components/admin-item-list/admin-item-list";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
+import { useUnsavedChanges } from "../use-unsaved-changes";
+
+const LIST_PATH = "/admin/haiku";
 
 export function AdminHaikuPage() {
   const { confirm } = useAdminUi();
+  const { id } = useParams();
+  const navigate = useNavigate();
   const {
     list: haikuList,
+    loaded,
     loadFailed,
     load,
     saveList,
@@ -25,6 +32,32 @@ export function AdminHaikuPage() {
     updateList: HaikuService.updateList,
   });
   const [openHaiku, setOpenHaiku] = useState<Haiku | null>(null);
+
+  // The editor is URL-driven: /admin/haiku/:id opens a copy of that haiku,
+  // navigating back to /admin/haiku closes it. An id that isn't in the
+  // loaded list (stale link, deleted item) falls back to the list.
+  useEffect(() => {
+    if (!id) {
+      setOpenHaiku(null);
+      return;
+    }
+    if (openHaiku?.id === id || !loaded) return;
+    const item = haikuList.find((haiku) => haiku.id === id);
+    if (item) {
+      setOpenHaiku({ ...item });
+    } else {
+      navigate(LIST_PATH, { replace: true });
+    }
+  }, [id, openHaiku, loaded, haikuList, navigate]);
+
+  // The open copy is dirty when it differs from its saved list entry;
+  // navigating away then requires confirmation.
+  const savedHaiku = openHaiku
+    ? haikuList.find((haiku) => haiku.id === openHaiku.id)
+    : undefined;
+  useUnsavedChanges(
+    !!openHaiku && JSON.stringify(openHaiku) !== JSON.stringify(savedHaiku),
+  );
 
   const deleteHaiku = async (idx: number) => {
     const newList = haikuList.slice();
@@ -45,7 +78,7 @@ export function AdminHaikuPage() {
     const newHaiku: Haiku = { lines: [], publisher: "", id: uuidv4() };
     const newHaikuList = [...haikuList, { ...newHaiku }];
     if (await saveList(newHaikuList, "New haiku created")) {
-      setOpenHaiku(newHaiku);
+      navigate(`${LIST_PATH}/${newHaiku.id}`);
     }
   };
 
@@ -61,8 +94,7 @@ export function AdminHaikuPage() {
   };
 
   const onEdit = (idx: number) => {
-    const openItem = { ...haikuList[idx] };
-    setOpenHaiku(openItem);
+    navigate(`${LIST_PATH}/${haikuList[idx].id}`);
   };
 
   // Editor functions ---------------------------------------------------------
@@ -91,7 +123,7 @@ export function AdminHaikuPage() {
         openHaiku.lines.length === 0 || openHaiku.lines[0].length === 0
       }
       onSave={saveOpenHaiku}
-      onClose={() => setOpenHaiku(null)}
+      onClose={() => navigate(LIST_PATH)}
     />
   ) : (
     <AdminItemList

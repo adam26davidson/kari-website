@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { AdminHaikuPage } from "./admin-haiku-page";
 import { Haiku } from "../../../models";
 import { HaikuService } from "../../../services/haiku";
-import { answerYes, renderWithAdminUi } from "../admin-ui-test-helpers";
+import { answerNo, answerYes, renderAdminPage } from "../admin-ui-test-helpers";
 
 vi.mock("../../../services/haiku", () => ({
   HaikuService: {
@@ -23,8 +23,15 @@ vi.mock("uuid", () => ({ v4: () => "new-id" }));
 let first: Haiku;
 let second: Haiku;
 
-function renderPage() {
-  return renderWithAdminUi(<AdminHaikuPage />).adminUi;
+function renderPage(initialEntry?: string) {
+  return renderAdminPage(<AdminHaikuPage />, "/admin/haiku/:id?", initialEntry);
+}
+
+/** Opens the first haiku's editor from the list and waits for it. */
+async function openFirstHaiku() {
+  const edits = await screen.findAllByRole("button", { name: "Edit" });
+  fireEvent.click(edits[0]);
+  return await screen.findByPlaceholderText(/line 1/);
 }
 
 beforeEach(() => {
@@ -41,7 +48,7 @@ beforeEach(() => {
 
 describe("AdminHaikuPage loading", () => {
   it("renders the loaded haiku list", async () => {
-    const adminUi = renderPage();
+    const { adminUi } = renderPage();
 
     expect(await screen.findByText("old pond")).toBeInTheDocument();
     expect(screen.getByText("a frog jumps in")).toBeInTheDocument();
@@ -85,7 +92,7 @@ describe("AdminHaikuPage loading", () => {
 
 describe("AdminHaikuPage new haiku", () => {
   it("creates and opens a new empty haiku on Yes", async () => {
-    const adminUi = renderPage();
+    const { adminUi } = renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Add item" }));
 
     await answerYes(adminUi);
@@ -97,11 +104,11 @@ describe("AdminHaikuPage new haiku", () => {
     expect(adminUi.notify).toHaveBeenCalledWith("New haiku created");
     // The editor opened on the new haiku, whose empty lines are invalid,
     // so save is disabled.
-    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Save" })).toBeDisabled();
   });
 
   it("does nothing until the confirmation is answered", async () => {
-    const adminUi = renderPage();
+    const { adminUi } = renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Add item" }));
 
     // The page only hands the dialog to confirm(); nothing is created
@@ -119,7 +126,7 @@ describe("AdminHaikuPage new haiku", () => {
     vi.mocked(HaikuService.updateList).mockRejectedValue(
       new Error("PUT failed"),
     );
-    const adminUi = renderPage();
+    const { adminUi } = renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Add item" }));
 
     await answerYes(adminUi);
@@ -139,7 +146,7 @@ describe("AdminHaikuPage new haiku", () => {
 
 describe("AdminHaikuPage deletion", () => {
   it("removes the confirmed haiku and saves the shortened list", async () => {
-    const adminUi = renderPage();
+    const { adminUi } = renderPage();
     const deletes = await screen.findAllByRole("button", { name: "Delete" });
     fireEvent.click(deletes[0]);
 
@@ -155,7 +162,7 @@ describe("AdminHaikuPage deletion", () => {
 
 describe("AdminHaikuPage reordering", () => {
   it("moves an item down and saves the new order", async () => {
-    const adminUi = renderPage();
+    const { adminUi } = renderPage();
     // Only the first item has a "Move down" control.
     fireEvent.click(await screen.findByRole("button", { name: "Move down" }));
 
@@ -169,7 +176,7 @@ describe("AdminHaikuPage reordering", () => {
   });
 
   it("moves an item up and saves the new order", async () => {
-    const adminUi = renderPage();
+    const { adminUi } = renderPage();
     // Only the second item has a "Move up" control.
     fireEvent.click(await screen.findByRole("button", { name: "Move up" }));
 
@@ -185,11 +192,8 @@ describe("AdminHaikuPage reordering", () => {
 
 describe("AdminHaikuPage editing", () => {
   it("edits a copy and saves it back into the list by id", async () => {
-    const adminUi = renderPage();
-    const edits = await screen.findAllByRole("button", { name: "Edit" });
-    fireEvent.click(edits[0]);
-
-    const textarea = screen.getByPlaceholderText(/line 1/);
+    const { adminUi } = renderPage();
+    const textarea = await openFirstHaiku();
     expect(textarea).toHaveValue("old pond\na frog jumps in\nsplash");
     fireEvent.change(textarea, {
       target: { value: "new pond\nstill water" },
@@ -215,24 +219,21 @@ describe("AdminHaikuPage editing", () => {
 
   it("disables save when the first line is empty", async () => {
     renderPage();
-    const edits = await screen.findAllByRole("button", { name: "Edit" });
-    fireEvent.click(edits[0]);
+    const textarea = await openFirstHaiku();
 
-    fireEvent.change(screen.getByPlaceholderText(/line 1/), {
-      target: { value: "" },
-    });
+    fireEvent.change(textarea, { target: { value: "" } });
 
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
   it("skips the save when the open haiku left the list", async () => {
-    const adminUi = renderPage();
+    const { adminUi } = renderPage();
     // Queue up a deletion of the first haiku, then open it in the editor
     // before confirming — the stale confirmation removes it underneath
     // the open editor.
     const deletes = await screen.findAllByRole("button", { name: "Delete" });
     fireEvent.click(deletes[0]);
-    fireEvent.click(screen.getAllByRole("button", { name: "Edit" })[0]);
+    await openFirstHaiku();
     await answerYes(adminUi);
     expect(HaikuService.updateList).toHaveBeenCalledTimes(1);
 
@@ -244,5 +245,99 @@ describe("AdminHaikuPage editing", () => {
     );
     expect(HaikuService.updateList).toHaveBeenCalledTimes(1);
     expect(adminUi.notify).not.toHaveBeenCalledWith("Haiku saved");
+  });
+});
+
+describe("AdminHaikuPage routing", () => {
+  it("opens the editor at /admin/haiku/:id when editing", async () => {
+    const { router } = renderPage();
+
+    await openFirstHaiku();
+
+    expect(router.state.location.pathname).toBe("/admin/haiku/h1");
+  });
+
+  it("opens the editor directly from an editor URL", async () => {
+    renderPage("/admin/haiku/h2");
+
+    expect(await screen.findByPlaceholderText(/line 1/)).toHaveValue(
+      "summer grass",
+    );
+  });
+
+  it("falls back to the list for an unknown editor URL", async () => {
+    const { router } = renderPage("/admin/haiku/no-such-id");
+
+    expect(await screen.findByText("old pond")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe("/admin/haiku"),
+    );
+  });
+
+  it("returns to the list on browser back", async () => {
+    const { router } = renderPage();
+    await openFirstHaiku();
+
+    await act(async () => {
+      router.navigate(-1);
+    });
+
+    expect(await screen.findByText("summer grass")).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/line 1/)).toBeNull();
+  });
+
+  it("closes to the list without confirmation while clean", async () => {
+    const { adminUi, router } = renderPage();
+    await openFirstHaiku();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(await screen.findByText("summer grass")).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/admin/haiku");
+    expect(adminUi.confirm).not.toHaveBeenCalled();
+  });
+
+  it("asks before discarding unsaved edits and stays on No", async () => {
+    const { adminUi } = renderPage();
+    const textarea = await openFirstHaiku();
+    fireEvent.change(textarea, { target: { value: "changed line" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      "You have unsaved changes. Discard them?",
+      expect.any(Function),
+      expect.any(Function),
+    );
+    await answerNo(adminUi);
+    expect(screen.getByPlaceholderText(/line 1/)).toBeInTheDocument();
+  });
+
+  it("discards unsaved edits and leaves on Yes", async () => {
+    const { adminUi } = renderPage();
+    const textarea = await openFirstHaiku();
+    fireEvent.change(textarea, { target: { value: "changed line" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    await answerYes(adminUi);
+
+    // Back on the list with the original, unedited haiku.
+    expect(await screen.findByText("old pond")).toBeInTheDocument();
+    expect(HaikuService.updateList).not.toHaveBeenCalled();
+  });
+
+  it("does not block leaving after the edits were saved", async () => {
+    const { adminUi } = renderPage();
+    const textarea = await openFirstHaiku();
+    fireEvent.change(textarea, { target: { value: "changed line" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(adminUi.notify).toHaveBeenCalledWith("Haiku saved"),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(await screen.findByText("changed line")).toBeInTheDocument();
+    expect(adminUi.confirm).not.toHaveBeenCalled();
   });
 });

@@ -18,6 +18,11 @@ export interface AdminList<T> {
    * have already talked to the API themselves.
    */
   setList: (list: Array<T>) => void;
+  /**
+   * True once the initial load has settled (successfully or not) — lets
+   * URL-driven pages hold off judging an editor id until the list is real.
+   */
+  loaded: boolean;
   loadFailed: boolean;
   load: () => Promise<void>;
   /**
@@ -41,6 +46,7 @@ export function useAdminList<T extends { id: string }>({
   const getAccessTokenSilently = useAdminToken();
   const { showLoading, hideLoading, notify } = useAdminUi();
   const [list, setList] = useState<Array<T>>([]);
+  const [loaded, setLoaded] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
 
   const load = async () => {
@@ -55,6 +61,7 @@ export function useAdminList<T extends { id: string }>({
       console.error(error);
       setLoadFailed(true);
     } finally {
+      setLoaded(true);
       hideLoading();
     }
   };
@@ -85,5 +92,5 @@ export function useAdminList<T extends { id: string }>({
     }
   };
 
-  return { list, setList, loadFailed, load, saveList };
+  return { list, setList, loaded, loadFailed, load, saveList };
 }

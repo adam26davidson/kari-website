@@ -14,11 +14,14 @@ import { useUnsavedChanges } from "./use-unsaved-changes";
 // in-app navigation away, exactly like a page's close button or a menu
 // link would.
 function Editor({ dirty }: { dirty: boolean }) {
-  useUnsavedChanges(dirty);
+  const navigateWithoutGuard = useUnsavedChanges(dirty);
   return (
     <div>
       <div>editor-view</div>
       <Link to="/list">leave</Link>
+      <button onClick={() => navigateWithoutGuard("/list")}>
+        save-and-leave
+      </button>
     </div>
   );
 }
@@ -74,6 +77,18 @@ describe("useUnsavedChanges in-app navigation", () => {
     await answerYes(adminUi);
 
     expect(await screen.findByText("list-view")).toBeInTheDocument();
+  });
+
+  it("lets a guard-bypassing navigation through even while dirty", async () => {
+    // Programmatic close-after-save: the just-saved state is only
+    // reflected on the next render, so the page navigates via the
+    // bypass instead of waiting out the stale dirty flag.
+    const adminUi = renderAt(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "save-and-leave" }));
+
+    expect(await screen.findByText("list-view")).toBeInTheDocument();
+    expect(adminUi.confirm).not.toHaveBeenCalled();
   });
 
   it("stays put on No and blocks the next attempt again", async () => {

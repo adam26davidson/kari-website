@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { AdminPhotographyPage } from "./admin-photography-page";
 import { PhotographyPost } from "../../../models";
 import { PhotographyService } from "../../../services/photography";
 import { TokenGetter } from "../../../services/http";
 import { ImageService } from "../../../services/images";
-import { answerYes, renderWithAdminUi } from "../admin-ui-test-helpers";
+import { answerYes, renderAdminPage } from "../admin-ui-test-helpers";
 
 vi.mock("../../../services/photography", () => ({
   PhotographyService: {
@@ -38,11 +38,15 @@ function iconButton(container: HTMLElement, icon: string): HTMLElement {
 // The saved post as it exists in the published list before the edit.
 let savedPost: PhotographyPost;
 
-async function renderPage() {
-  const { container, adminUi } = renderWithAdminUi(<AdminPhotographyPage />);
+async function renderPage(initialEntry?: string) {
+  const { container, adminUi, router } = renderAdminPage(
+    <AdminPhotographyPage />,
+    "/admin/photography/:id?",
+    initialEntry,
+  );
   const notify = adminUi.notify;
   await waitFor(() => iconButton(container, "pencil"));
-  return { container, notify, adminUi };
+  return { container, notify, adminUi, router };
 }
 
 // Renders the page, opens the only post in the editor, and picks a
@@ -51,6 +55,8 @@ async function renderPage() {
 async function openEditorAndReplaceImage() {
   const { container, notify } = await renderPage();
   fireEvent.click(iconButton(container, "pencil"));
+  // Opening the editor is a navigation now; wait for it to render.
+  await screen.findByLabelText("Title");
   const input = container.querySelector('input[type="file"]');
   fireEvent.change(input as HTMLInputElement, {
     target: {
@@ -187,6 +193,7 @@ describe("AdminPhotographyPage reordering in the editor", () => {
     vi.mocked(PhotographyService.getListFromApi).mockResolvedValue([savedPost]);
     const { container, notify } = await renderPage();
     fireEvent.click(iconButton(container, "pencil"));
+    await screen.findByLabelText("Title");
 
     // Replace the first image with a not-yet-uploaded file...
     const input = container.querySelector('input[type="file"]');
@@ -394,7 +401,10 @@ describe("AdminPhotographyPage load failure", () => {
     vi.mocked(PhotographyService.getListFromApi).mockRejectedValueOnce(
       new Error("GET failed"),
     );
-    const { container } = renderWithAdminUi(<AdminPhotographyPage />);
+    const { container } = renderAdminPage(
+      <AdminPhotographyPage />,
+      "/admin/photography/:id?",
+    );
 
     await screen.findByText("Failed to load photography posts.");
     // No editable list — saving one would overwrite the real data.
@@ -408,15 +418,113 @@ describe("AdminPhotographyPage load failure", () => {
 
 describe("AdminPhotographyPage closing the editor", () => {
   it("abandons the open post without saving", async () => {
-    const { container } = await renderPage();
+    const { container, adminUi } = await renderPage();
     fireEvent.click(iconButton(container, "pencil"));
     await screen.findByLabelText("Title");
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
-    expect(screen.queryByLabelText("Title")).toBeNull();
+    await waitFor(() => expect(screen.queryByLabelText("Title")).toBeNull());
     expect(PhotographyService.updateList).not.toHaveBeenCalled();
+    expect(adminUi.confirm).not.toHaveBeenCalled();
     // Back on the list view.
+    iconButton(container, "pencil");
+  });
+});
+
+describe("AdminPhotographyPage routing", () => {
+  it("opens the editor at /admin/photography/:id when editing", async () => {
+    const { container, router } = await renderPage();
+
+    fireEvent.click(iconButton(container, "pencil"));
+    await screen.findByLabelText("Title");
+
+    expect(router.state.location.pathname).toBe("/admin/photography/p1");
+  });
+
+  it("opens the editor directly from an editor URL", async () => {
+    renderAdminPage(
+      <AdminPhotographyPage />,
+      "/admin/photography/:id?",
+      "/admin/photography/p1",
+    );
+
+    expect(await screen.findByLabelText("Title")).toHaveValue("A Post");
+  });
+
+  it("falls back to the list for an unknown editor URL", async () => {
+    const { container, router } = renderAdminPage(
+      <AdminPhotographyPage />,
+      "/admin/photography/:id?",
+      "/admin/photography/no-such-id",
+    );
+
+    await waitFor(() => iconButton(container, "pencil"));
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe("/admin/photography"),
+    );
+  });
+
+  it("returns to the list on browser back", async () => {
+    const { container, router } = await renderPage();
+    fireEvent.click(iconButton(container, "pencil"));
+    await screen.findByLabelText("Title");
+
+    await act(async () => {
+      router.navigate(-1);
+    });
+
+    await waitFor(() => expect(screen.queryByLabelText("Title")).toBeNull());
+    iconButton(container, "pencil");
+  });
+
+  it("asks before discarding an edited title on Close", async () => {
+    const { container, adminUi } = await renderPage();
+    fireEvent.click(iconButton(container, "pencil"));
+    const title = await screen.findByLabelText("Title");
+    fireEvent.change(title, { target: { value: "New Title" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      "You have unsaved changes. Discard them?",
+      expect.any(Function),
+      expect.any(Function),
+    );
+  });
+
+  it("treats a pending image file as unsaved changes on Close", async () => {
+    const { container, adminUi } = await renderPage();
+    fireEvent.click(iconButton(container, "pencil"));
+    await screen.findByLabelText("Title");
+    fireEvent.change(
+      container.querySelector('input[type="file"]') as HTMLInputElement,
+      {
+        target: {
+          files: [new File(["img"], "next.png", { type: "image/png" })],
+        },
+      },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      "You have unsaved changes. Discard them?",
+      expect.any(Function),
+      expect.any(Function),
+    );
+  });
+
+  it("returns to the list after a successful save without asking", async () => {
+    const { container, notify } = await openEditorAndReplaceImage();
+
+    fireEvent.click(iconButton(container, "floppy-disk"));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("Photography post saved"),
+    );
+    // The editor closed to the list with no unsaved-changes dialog.
+    await waitFor(() => expect(screen.queryByLabelText("Title")).toBeNull());
     iconButton(container, "pencil");
   });
 });

@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { useBlocker } from "react-router-dom";
+import { useCallback, useEffect, useRef } from "react";
+import { To, useBlocker, useNavigate } from "react-router-dom";
 import { useAdminUi } from "./admin-ui-context";
 
 /**
@@ -7,10 +7,22 @@ import { useAdminUi } from "./admin-ui-context";
  * any in-app navigation (browser back, close button, menu link) is held
  * until the user confirms discarding, and tab close/refresh triggers the
  * browser's native leave prompt. Requires a data router (createBrowserRouter).
+ *
+ * Returns a navigate function that skips the guard once — for programmatic
+ * close-after-save, where the freshly saved (clean) state is only reflected
+ * on the next render and isDirty is still stale.
  */
-export function useUnsavedChanges(isDirty: boolean) {
+export function useUnsavedChanges(isDirty: boolean): (to: To) => void {
   const { confirm } = useAdminUi();
-  const blocker = useBlocker(isDirty);
+  const navigate = useNavigate();
+  const bypassRef = useRef(false);
+  const blocker = useBlocker(() => isDirty && !bypassRef.current);
+
+  // A bypass only spans the navigation it was requested for; clear it as
+  // soon as the next render commits.
+  useEffect(() => {
+    bypassRef.current = false;
+  });
 
   useEffect(() => {
     if (blocker.state !== "blocked") return;
@@ -30,4 +42,12 @@ export function useUnsavedChanges(isDirty: boolean) {
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [isDirty]);
+
+  return useCallback(
+    (to: To) => {
+      bypassRef.current = true;
+      navigate(to);
+    },
+    [navigate],
+  );
 }

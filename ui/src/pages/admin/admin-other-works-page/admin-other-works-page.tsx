@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./admin-other-works-page.css";
 import "../admin.css";
 import { v4 as uuidv4 } from "uuid";
+import { useNavigate, useParams } from "react-router-dom";
 import { BlogPost } from "../../../models";
 import { moveItemByOne } from "../../../utils/data-list-helpers";
 import { BlogService } from "../../../services/blog";
@@ -15,14 +16,20 @@ import { AdminItemList } from "../../../components/admin-item-list/admin-item-li
 import { useAdminToken } from "../../../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
+import { useUnsavedChanges } from "../use-unsaved-changes";
 import { saveBlogPost } from "./blog-post-save";
+
+const LIST_PATH = "/admin/other-works";
 
 export function AdminOtherWorksPage() {
   const getAccessTokenSilently = useAdminToken();
   const { showLoading, hideLoading, confirm, notify } = useAdminUi();
+  const { id } = useParams();
+  const navigate = useNavigate();
   const {
     list: postList,
     setList: setPostList,
+    loaded,
     loadFailed,
     load,
     saveList: savePostList,
@@ -46,6 +53,70 @@ export function AdminOtherWorksPage() {
   // with every pending file still attached.
   const [pendingImageFiles, setPendingImageFiles] = useState<Map<string, File>>(
     new Map(),
+  );
+  // The id whose content fetch is in flight, so the URL-sync effect below
+  // doesn't kick off a second fetch while one is pending.
+  const loadingIdRef = useRef<string | null>(null);
+
+  const openPostFromList = async (item: BlogPost) => {
+    showLoading("Loading content...");
+    try {
+      const content = await BlogService.getContent(
+        item.id,
+        getAccessTokenSilently,
+      );
+      setPendingImageFiles(new Map());
+      setOriginalOpenPostContent(content);
+      setOpenPostContent(content);
+      setOpenPost({ ...item });
+    } catch (error) {
+      // Never open the editor with missing content — saving it would
+      // overwrite the real content.
+      console.error(error);
+      notify("Failed to load content", "error");
+      navigate(LIST_PATH, { replace: true });
+    } finally {
+      hideLoading();
+    }
+  };
+
+  // The editor is URL-driven: /admin/other-works/:id fetches that post's
+  // content and opens a copy, navigating back to /admin/other-works closes
+  // it. An id that isn't in the loaded list (stale link, deleted item)
+  // falls back to the list.
+  useEffect(() => {
+    if (!id) {
+      loadingIdRef.current = null;
+      setOpenPost(null);
+      setOpenPostContent(null);
+      setOriginalOpenPostContent(null);
+      setPendingImageFiles(new Map());
+      return;
+    }
+    if (openPost?.id === id || !loaded || loadingIdRef.current === id) return;
+    const item = postList.find((post) => post.id === id);
+    if (!item) {
+      navigate(LIST_PATH, { replace: true });
+      return;
+    }
+    loadingIdRef.current = id;
+    openPostFromList(item).finally(() => {
+      loadingIdRef.current = null;
+    });
+    // openPostFromList depends on stable services/context only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, openPost, loaded, postList, navigate]);
+
+  // Dirty when the open copy's fields, its content, or its pending image
+  // files differ from what is saved.
+  const savedPost = openPost
+    ? postList.find((post) => post.id === openPost.id)
+    : undefined;
+  const navigateWithoutGuard = useUnsavedChanges(
+    !!openPost &&
+      (pendingImageFiles.size > 0 ||
+        openPostContent !== originalOpenPostContent ||
+        JSON.stringify(openPost) !== JSON.stringify(savedPost)),
   );
 
   const deletePost = async (idx: number) => {
@@ -134,10 +205,7 @@ export function AdminOtherWorksPage() {
       hideLoading();
     }
     notify("New other works item created");
-    setPendingImageFiles(new Map());
-    setOriginalOpenPostContent("");
-    setOpenPostContent("");
-    setOpenPost(newPost);
+    navigate(`${LIST_PATH}/${newPost.id}`);
   };
 
   const onDelete = (idx: number) => {
@@ -151,26 +219,8 @@ export function AdminOtherWorksPage() {
     await savePostList(newPostList, "Order updated");
   };
 
-  const onEdit = async (idx: number) => {
-    showLoading("Loading content...");
-    const openItem = { ...postList[idx] };
-    try {
-      const content = await BlogService.getContent(
-        openItem.id,
-        getAccessTokenSilently,
-      );
-      setPendingImageFiles(new Map());
-      setOriginalOpenPostContent(content);
-      setOpenPostContent(content);
-      setOpenPost(openItem);
-    } catch (error) {
-      // Never open the editor with missing content — saving it would
-      // overwrite the real content.
-      console.error(error);
-      notify("Failed to load content", "error");
-    } finally {
-      hideLoading();
-    }
+  const onEdit = (idx: number) => {
+    navigate(`${LIST_PATH}/${postList[idx].id}`);
   };
 
   // Editor functions ---------------------------------------------------------
@@ -222,9 +272,9 @@ export function AdminOtherWorksPage() {
         },
       });
       if (result.outcome === "saved") {
-        setOpenPost(null);
-        setOpenPostContent(null);
-        setPendingImageFiles(new Map());
+        // The dirty flag still reflects the pre-save state until the next
+        // render, so close the editor via the guard bypass.
+        navigateWithoutGuard(LIST_PATH);
       }
     } finally {
       hideLoading();
@@ -232,9 +282,7 @@ export function AdminOtherWorksPage() {
   };
 
   const closeOpenPost = () => {
-    setOpenPost(null);
-    setOpenPostContent(null);
-    setPendingImageFiles(new Map());
+    navigate(LIST_PATH);
   };
 
   const openPostIsValid = () => {

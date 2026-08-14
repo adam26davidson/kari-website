@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "../admin.css";
 import { v4 as uuidv4 } from "uuid";
+import { useNavigate, useParams } from "react-router-dom";
 import { PhotographyPost } from "../../../models";
 import { moveItemByOne } from "../../../utils/data-list-helpers";
 import { ImageService } from "../../../services/images";
@@ -16,6 +17,9 @@ import { AdminItemList } from "../../../components/admin-item-list/admin-item-li
 import { useAdminToken } from "../../../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
+import { useUnsavedChanges } from "../use-unsaved-changes";
+
+const LIST_PATH = "/admin/photography";
 
 /** Copies a post deeply enough that edits to the copy never leak back. */
 const copyPost = (post: PhotographyPost): PhotographyPost => ({
@@ -26,8 +30,11 @@ const copyPost = (post: PhotographyPost): PhotographyPost => ({
 export function AdminPhotographyPage() {
   const getAccessTokenSilently = useAdminToken();
   const { showLoading, hideLoading, confirm, notify } = useAdminUi();
+  const { id } = useParams();
+  const navigate = useNavigate();
   const {
     list: postList,
+    loaded,
     loadFailed,
     load,
     saveList,
@@ -42,6 +49,48 @@ export function AdminPhotographyPage() {
   // list. openPost.images is only the as-opened snapshot; saveOpenPost
   // rebuilds the saved images from these entries.
   const [editorImages, setEditorImages] = useState<Array<EditorImage>>([]);
+
+  // The editor is URL-driven: /admin/photography/:id opens a copy of that
+  // post, navigating back to /admin/photography closes it. An id that isn't
+  // in the loaded list (stale link, deleted item) falls back to the list.
+  useEffect(() => {
+    if (!id) {
+      setOpenPost(null);
+      setEditorImages([]);
+      return;
+    }
+    if (openPost?.id === id || !loaded) return;
+    const item = postList.find((post) => post.id === id);
+    if (item) {
+      const openItem = copyPost(item);
+      setEditorImages(
+        openItem.images.map((image) =>
+          newEditorImage(image.image, image.blurb),
+        ),
+      );
+      setOpenPost(openItem);
+    } else {
+      navigate(LIST_PATH, { replace: true });
+    }
+  }, [id, openPost, loaded, postList, navigate]);
+
+  // Dirty when the open copy's fields differ from the saved list entry, or
+  // the editor's image entries differ from the saved images (reorder,
+  // add/remove, blurb edit, or a picked file awaiting upload).
+  const savedPost = openPost
+    ? postList.find((post) => post.id === openPost.id)
+    : undefined;
+  const editorImagesDirty =
+    !!openPost &&
+    (editorImages.some((entry) => entry.file) ||
+      JSON.stringify(
+        editorImages.map(({ image, blurb }) => ({ image, blurb })),
+      ) !== JSON.stringify(savedPost?.images));
+  const navigateWithoutGuard = useUnsavedChanges(
+    !!openPost &&
+      (editorImagesDirty ||
+        JSON.stringify(openPost) !== JSON.stringify(savedPost)),
+  );
 
   const deletePost = async (idx: number) => {
     const postToDelete = postList[idx];
@@ -89,8 +138,7 @@ export function AdminPhotographyPage() {
 
     const newPostList = [...postList, copyPost(newPost)];
     if (await saveList(newPostList, "New photography post created")) {
-      setEditorImages([]);
-      setOpenPost(newPost);
+      navigate(`${LIST_PATH}/${newPost.id}`);
     }
   };
 
@@ -106,11 +154,7 @@ export function AdminPhotographyPage() {
   };
 
   const onEdit = (idx: number) => {
-    const openItem = copyPost(postList[idx]);
-    setEditorImages(
-      openItem.images.map((image) => newEditorImage(image.image, image.blurb)),
-    );
-    setOpenPost(openItem);
+    navigate(`${LIST_PATH}/${postList[idx].id}`);
   };
 
   // Editor functions ---------------------------------------------------------
@@ -164,8 +208,9 @@ export function AdminPhotographyPage() {
     // save the post list
     newPostList[idx] = editedPost;
     if (!(await saveList(newPostList, "Photography post saved"))) return;
-    setOpenPost(null);
-    setEditorImages([]);
+    // The dirty flag still reflects the pre-save state until the next
+    // render, so close the editor via the guard bypass.
+    navigateWithoutGuard(LIST_PATH);
 
     // The saved list no longer references images that were removed from
     // the post; a failed delete just leaves an orphan for later cleanup.
@@ -185,8 +230,7 @@ export function AdminPhotographyPage() {
   };
 
   const closeOpenPost = () => {
-    setOpenPost(null);
-    setEditorImages([]);
+    navigate(LIST_PATH);
   };
 
   if (loadFailed) {
