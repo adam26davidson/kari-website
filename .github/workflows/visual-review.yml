@@ -1,0 +1,195 @@
+name: Visual review
+
+# AI visual check on PRs that touch the UI: stands up the same hermetic
+# stack as the e2e job (MinIO + seed + API + test-mode preview), captures
+# screenshots of the public pages (ui/e2e/screenshots.mjs), and has Claude
+# review them for visual defects — overflow, clipped images, illegible
+# text, broken mobile layout — that behavioral tests can't catch. Findings
+# are posted as an advisory sticky PR comment; this job never blocks a
+# merge on a design judgment.
+#
+# Requires an ANTHROPIC_API_KEY repo secret; without it the job exits
+# early with a notice (so forks and pre-setup clones aren't broken).
+on:
+  pull_request:
+    paths:
+      - "ui/src/**"
+      - "ui/public/**"
+      - "ui/index.html"
+      - "ui/package.json"
+      - "ui/package-lock.json"
+      - "ui/e2e/screenshots.mjs"
+      - ".github/workflows/visual-review.yml"
+
+concurrency:
+  group: visual-review-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  visual-review:
+    name: Screenshot + Claude review
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      # All later steps gate on this so the job is a cheap no-op until the
+      # secret exists (and on forks, where secrets are never available).
+      - name: Check ANTHROPIC_API_KEY is configured
+        id: check
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping visual review — no ANTHROPIC_API_KEY secret."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.enabled == 'true'
+
+      - name: Setup Node
+        if: steps.check.outputs.enabled == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.2'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install dependencies
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: ui
+        run: npm ci
+
+      - name: Setup Rust
+        if: steps.check.outputs.enabled == 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        if: steps.check.outputs.enabled == 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: api
+
+      # Same hermetic stack as the frontend-e2e job in ci.yml: throwaway
+      # MinIO seeded with fixture content, real API against it, test-mode
+      # bundle previewed locally.
+      - name: Start local S3 (MinIO)
+        if: steps.check.outputs.enabled == 'true'
+        run: docker compose up -d --wait minio
+
+      - name: Seed local S3
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: ui
+        run: node e2e/seed.mjs
+
+      - name: Build API
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: api
+        run: cargo build
+
+      - name: Start API
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: api
+        env:
+          BUCKET_NAME: kari-e2e
+          AWS_ENDPOINT_URL: http://localhost:9000
+          AWS_REGION: us-east-1
+          # Local MinIO credentials (match docker-compose.yml) — not secrets.
+          AWS_ACCESS_KEY_ID: kari-e2e
+          AWS_SECRET_ACCESS_KEY: kari-e2e-secret
+        run: |
+          PORT=3000 nohup cargo run > api.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000/health > /dev/null; then
+              echo "API is healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API never became healthy" >&2
+          cat api.log >&2
+          exit 1
+
+      - name: Install Playwright browsers
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: ui
+        run: npx playwright install --with-deps chromium
+
+      - name: Build and preview test-mode bundle
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: ui
+        run: |
+          npm run build:test
+          nohup npm run preview -- --port 4173 --strictPort > preview.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:4173 > /dev/null; then
+              echo "Preview is up"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Preview never came up" >&2
+          cat preview.log >&2
+          exit 1
+
+      - name: Capture screenshots
+        if: steps.check.outputs.enabled == 'true'
+        working-directory: ui
+        run: node e2e/screenshots.mjs --base-url http://localhost:4173
+
+      - name: Upload screenshots
+        if: steps.check.outputs.enabled == 'true' && !cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-review-screenshots
+          path: ui/e2e/screenshots/
+          retention-days: 7
+
+      - name: Claude visual review
+        if: steps.check.outputs.enabled == 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: '--allowedTools "Read,Glob,Write"'
+          prompt: |
+            You are doing a visual QA review of a personal website (a
+            writer/artist portfolio: haiku, haiga, photography, blog).
+            Screenshots of every public page live in ui/e2e/screenshots/,
+            named <page>.<desktop|mobile>.png (desktop is 1280px wide,
+            mobile 390px). The content is seeded fixture data, so judge
+            layout and legibility, not the content itself; gray placeholder
+            rectangles where photos would be are expected and fine.
+
+            Read and look at EVERY png in that directory. For each, check:
+            - content overflowing or escaping its container (images
+              spilling out of cards, horizontal page overflow)
+            - clipped, squashed, or stretched images
+            - text that is hard to read against its actual rendered
+              background (low contrast, text over busy imagery, text
+              overlapping other text or elements)
+            - elements overlapping or colliding
+            - broken layout at the mobile width (content cut off,
+              unusably cramped, elements stacked wrongly)
+
+            Then write your findings to visual-review.md (repo root) as
+            GitHub-flavored markdown, starting with the heading
+            "## Visual review" followed by a one-line verdict. If
+            everything looks fine, say so in one short paragraph — do not
+            invent nitpicks. If there are problems, list each as a bullet:
+            **page (viewport)** — what is wrong, in one or two sentences.
+            Order the list most-severe first. This review is advisory;
+            keep it short and concrete. End the file with the line:
+            "*Automated visual review of [this run's
+            screenshots](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+            Advisory only — it does not block merging.*"
+
+      - name: Comment review on PR
+        if: steps.check.outputs.enabled == 'true'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: visual-review
+          path: visual-review.md
