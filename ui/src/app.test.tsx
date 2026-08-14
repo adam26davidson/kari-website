@@ -68,6 +68,11 @@ describe("App", () => {
     expect(await screen.findByText("Haiku page stub")).toBeInTheDocument();
   });
 
+  it("routes nested admin paths to the admin shell", async () => {
+    renderApp("/admin/haiku/some-id");
+    expect(await screen.findByText("Admin page stub")).toBeInTheDocument();
+  });
+
   it("redirects /blog to /other-works", async () => {
     renderApp("/blog");
     expect(

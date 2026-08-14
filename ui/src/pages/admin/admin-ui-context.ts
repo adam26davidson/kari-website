@@ -8,8 +8,11 @@ export interface AdminUi {
   isLoading: boolean;
   showLoading: (message: string) => void;
   hideLoading: () => void;
-  /** Shows a Yes/No dialog; onYes runs only when Yes is chosen. */
-  confirm: (message: string, onYes: () => void) => void;
+  /**
+   * Shows a Yes/No dialog; onYes runs only when Yes is chosen, onNo (if
+   * given) only when No is chosen.
+   */
+  confirm: (message: string, onYes: () => void, onNo?: () => void) => void;
   notify: Notify;
 }
 

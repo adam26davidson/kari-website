@@ -20,12 +20,14 @@
 }
 
 .admin-menu-item {
-  /* Real <button> for keyboard access; neutralize default button chrome
-     so it looks identical to the former <div>. */
+  /* Real <a> (NavLink) so the section is a browser-history entry;
+     neutralize default anchor/button chrome so it keeps the plain-text
+     menu look. */
   background: none;
   border: none;
   font: inherit;
   text-align: left;
+  text-decoration: none;
   box-sizing: content-box;
   color: #757575;
   display: flex;

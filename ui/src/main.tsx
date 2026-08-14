@@ -1,9 +1,14 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { App } from "./app.tsx";
-import { BrowserRouter } from "react-router-dom";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { Auth0Provider } from "@auth0/auth0-react";
 import "./index.css";
+
+// A data router (not <BrowserRouter>) so useBlocker can hold navigations
+// while an admin editor has unsaved changes. App keeps owning the route
+// tree via descendant <Routes>.
+const router = createBrowserRouter([{ path: "*", element: <App /> }]);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -21,9 +26,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         import.meta.env.MODE === "test" ? "localstorage" : undefined
       }
     >
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </Auth0Provider>
   </React.StrictMode>,
 );

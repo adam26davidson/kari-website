@@ -11,6 +11,7 @@ interface Loading {
 interface Confirmation {
   message: string;
   onYes: () => void;
+  onNo?: () => void;
 }
 
 interface Notification {
@@ -46,7 +47,8 @@ export function AdminUiProvider({ children }: { children: React.ReactNode }) {
     [],
   );
   const confirm = useCallback(
-    (message: string, onYes: () => void) => setConfirmation({ message, onYes }),
+    (message: string, onYes: () => void, onNo?: () => void) =>
+      setConfirmation({ message, onYes, onNo }),
     [],
   );
   const notify = useCallback<Notify>(
@@ -80,7 +82,12 @@ export function AdminUiProvider({ children }: { children: React.ReactNode }) {
               >
                 Yes
               </AdminButton>
-              <AdminButton onClick={() => setConfirmation(null)}>
+              <AdminButton
+                onClick={() => {
+                  confirmation.onNo?.();
+                  setConfirmation(null);
+                }}
+              >
                 No
               </AdminButton>
             </div>

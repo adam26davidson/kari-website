@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { AdminHaigaPage } from "./admin-haiga-page";
 import { Haiga } from "../../../models";
 import { HaigaService } from "../../../services/haiga";
 import { TokenGetter } from "../../../services/http";
 import { ImageService } from "../../../services/images";
-import { answerYes, renderWithAdminUi } from "../admin-ui-test-helpers";
+import { answerYes, renderAdminPage } from "../admin-ui-test-helpers";
+
+function renderPage(initialEntry?: string) {
+  return renderAdminPage(<AdminHaigaPage />, "/admin/haiga/:id?", initialEntry);
+}
 
 vi.mock("../../../services/haiga", () => ({
   HaigaService: {
@@ -31,9 +35,11 @@ let savedHaiga: Haiga;
 // Renders the page, opens the only haiga in the editor, and picks a
 // replacement image file — the state right before the user hits save.
 async function openEditorAndPickImage() {
-  const { container, adminUi } = renderWithAdminUi(<AdminHaigaPage />);
+  const { container, adminUi } = renderPage();
   const notify = adminUi.notify;
   fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+  // Opening the editor is a navigation now; wait for it to render.
+  await screen.findByRole("button", { name: "Save" });
   const input = container.querySelector('input[type="file"]');
   fireEvent.change(input as HTMLInputElement, {
     target: {
@@ -173,7 +179,7 @@ describe("AdminHaigaPage deletion", () => {
   // Renders the page, clicks the delete control of the only haiga, and
   // confirms the deletion dialog.
   async function confirmDelete() {
-    const { adminUi } = renderWithAdminUi(<AdminHaigaPage />);
+    const { adminUi } = renderPage();
     const notify = adminUi.notify;
     fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
     await answerYes(adminUi);
@@ -234,7 +240,7 @@ describe("AdminHaigaPage creation", () => {
   // Renders the page and clicks the add-item control, so the creation
   // dialog has been handed to confirm().
   async function openCreateConfirmation() {
-    const { adminUi } = renderWithAdminUi(<AdminHaigaPage />);
+    const { adminUi } = renderPage();
     const notify = adminUi.notify;
     // Wait for the list to load so the saved list is deterministic.
     await screen.findByRole("button", { name: "Edit" });
@@ -322,7 +328,7 @@ describe("AdminHaigaPage list reordering", () => {
   });
 
   async function renderList() {
-    const { adminUi } = renderWithAdminUi(<AdminHaigaPage />);
+    const { adminUi } = renderPage();
     const notify = adminUi.notify;
     await screen.findAllByRole("button", { name: "Edit" });
     return { notify };
@@ -368,7 +374,7 @@ describe("AdminHaigaPage load failure", () => {
     vi.mocked(HaigaService.getListFromApi)
       .mockRejectedValueOnce(new Error("GET failed"))
       .mockResolvedValue([savedHaiga]);
-    renderWithAdminUi(<AdminHaigaPage />);
+    renderPage();
 
     await screen.findByText("Failed to load haiga.");
     // No editable list — saving one would overwrite the real data.
@@ -377,5 +383,89 @@ describe("AdminHaigaPage load failure", () => {
     // Retry reloads and shows the list.
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await screen.findByRole("button", { name: "Edit" });
+  });
+});
+
+describe("AdminHaigaPage routing", () => {
+  beforeEach(() => {
+    savedHaiga = {
+      id: "h1",
+      lines: [],
+      publisher: "kari",
+      image: "old.png",
+    };
+    vi.mocked(HaigaService.getListFromApi).mockResolvedValue([savedHaiga]);
+    vi.mocked(HaigaService.updateList).mockResolvedValue(undefined);
+    vi.spyOn(window.URL, "createObjectURL").mockReturnValue("blob:preview");
+  });
+
+  it("opens the editor at /admin/haiga/:id when editing", async () => {
+    const { router } = renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    await screen.findByRole("button", { name: "Save" });
+
+    expect(router.state.location.pathname).toBe("/admin/haiga/h1");
+  });
+
+  it("opens the editor directly from an editor URL", async () => {
+    renderPage("/admin/haiga/h1");
+
+    expect(await screen.findByRole("button", { name: "Save" })).toBeInTheDocument();
+  });
+
+  it("falls back to the list for an unknown editor URL", async () => {
+    const { router } = renderPage("/admin/haiga/no-such-id");
+
+    expect(await screen.findByRole("button", { name: "Edit" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe("/admin/haiga"),
+    );
+  });
+
+  it("returns to the list on browser back", async () => {
+    const { router } = renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    await screen.findByRole("button", { name: "Save" });
+
+    await act(async () => {
+      router.navigate(-1);
+    });
+
+    expect(await screen.findByRole("button", { name: "Edit" })).toBeInTheDocument();
+  });
+
+  it("treats a freshly picked image as unsaved changes on Close", async () => {
+    const { container, adminUi } = renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    await screen.findByRole("button", { name: "Save" });
+    fireEvent.change(
+      container.querySelector('input[type="file"]') as HTMLInputElement,
+      {
+        target: {
+          files: [new File(["img"], "next.png", { type: "image/png" })],
+        },
+      },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      "You have unsaved changes. Discard them?",
+      expect.any(Function),
+      expect.any(Function),
+    );
+  });
+
+  it("closes to the list without confirmation while clean", async () => {
+    const { adminUi, router } = renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    await screen.findByRole("button", { name: "Save" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(await screen.findByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/admin/haiga");
+    expect(adminUi.confirm).not.toHaveBeenCalled();
   });
 });

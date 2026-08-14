@@ -54,6 +54,72 @@ async function expectToast(page: Page, text: string | RegExp) {
   });
 }
 
+test.describe("admin navigation", () => {
+  let marker: string;
+  test.beforeEach(() => {
+    marker = uniqueMarker("nav");
+  });
+
+  test.afterEach(async ({ page }) => {
+    await deleteItemsMatching(page, "Haiku", marker);
+  });
+
+  test("history walks sections and editors, guarding unsaved edits", async ({
+    page,
+  }) => {
+    await openAdminSection(page, "Haiku");
+    await expect(page).toHaveURL(/\/admin\/haiku$/);
+
+    // Switching sections pushes history; back returns to the previous one.
+    await page.locator(".admin-menu-item", { hasText: "Haiga" }).click();
+    await expect(page).toHaveURL(/\/admin\/haiga$/);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/admin\/haiku$/);
+
+    // Create a haiku to exercise the editor routes (cleaned up afterEach).
+    await createNewItem(page);
+    await expect(page).toHaveURL(/\/admin\/haiku\/[\w-]+$/);
+    await page.locator(".data-editor textarea").fill(`${marker}\nline two`);
+    await saveEditor(page);
+    await expectToast(page, "Haiku saved");
+    await closeEditor(page);
+    await expect(page).toHaveURL(/\/admin\/haiku$/);
+
+    // Opening an editor pushes history too, and its URL survives a reload.
+    await iconButton(adminListItem(page, marker), "pencil").click();
+    await expect(page.locator(".data-editor")).toBeVisible();
+    await expect(page).toHaveURL(/\/admin\/haiku\/[\w-]+$/);
+    const editorUrl = page.url();
+    await page.reload();
+    await expect(page.locator(".data-editor")).toBeVisible({
+      timeout: 60_000,
+    });
+    await expect(
+      page.locator(".data-editor textarea"),
+    ).toHaveValue(new RegExp(marker));
+
+    // Back from a clean editor returns to the list, no questions asked.
+    await page.goBack();
+    await expect(page).toHaveURL(/\/admin\/haiku$/);
+    await expect(page.locator(".data-editor")).toBeHidden();
+
+    // Back from a dirty editor asks first: No stays, Yes discards.
+    await iconButton(adminListItem(page, marker), "pencil").click();
+    await expect(page.locator(".data-editor")).toBeVisible();
+    await page.locator(".data-editor textarea").fill(`${marker}\nedited`);
+    await page.goBack();
+    await confirmDialog(page, "No");
+    await expect(page.locator(".data-editor")).toBeVisible();
+    await expect(page).toHaveURL(editorUrl);
+    await page.goBack();
+    await confirmDialog(page, "Yes");
+    await expect(page).toHaveURL(/\/admin\/haiku$/);
+    await expect(page.locator(".data-editor")).toBeHidden();
+    // The discarded edit never reached the list.
+    await expect(adminListItem(page, marker)).not.toContainText("edited");
+  });
+});
+
 test.describe("haiku", () => {
   // A fresh marker per test AND per retry attempt: with a shared marker, a
   // row left by an earlier test/attempt matches this attempt's locators and
