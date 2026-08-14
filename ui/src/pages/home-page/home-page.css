@@ -33,8 +33,13 @@
   flex-direction: column;
 }
 
+/* The min-width reserves the photo column's share of the card but must
+   never exceed the card's content box, or the container (and the photo
+   with it) pokes out of the card on narrow viewports. */
 .home-page-photo-container {
-  min-width: 400px;
+  box-sizing: border-box;
+  min-width: min(400px, 100%);
+  max-width: 100%;
   padding: 20px;
   display: flex;
   justify-content: center;
@@ -42,11 +47,14 @@
 }
 
 .home-page.mobile .home-page-photo-container {
-  min-width: 300px;
+  min-width: min(300px, 100%);
 }
 
 .home-page-photo {
   max-height: 400px;
+  /* A landscape photo is wider than 400px at max-height; without a width
+     cap it overflows the container into the divider and blurb. */
+  max-width: 100%;
 }
 
 .home-page-divider {
