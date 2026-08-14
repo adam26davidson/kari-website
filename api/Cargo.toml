@@ -32,7 +32,7 @@ dotenv = "0.15"
 
 [dev-dependencies]
 tower-test = "0.4.0"
-http-body-util = "0.1.4"
+http-body-util = "0.1.5"
 jsonwebtoken = "9.3.1"
 serde = { version = "1.0.229", features = ["derive"] }
 aws-sdk-s3 = { version = "1.57.0", features = ["test-util"] }
