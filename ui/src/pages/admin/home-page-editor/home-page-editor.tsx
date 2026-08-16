@@ -9,6 +9,7 @@ import { HomePageService } from "../../../services/home-page";
 import { AdminButton } from "../../../components/admin-button/admin-button";
 import { LoadError } from "../../../components/load-error/load-error";
 import { useAdminUi } from "../admin-ui-context";
+import { useUnsavedChanges } from "../use-unsaved-changes";
 
 export function HomePageEditor() {
   const { isLoading, showLoading, hideLoading, notify } = useAdminUi();
@@ -16,9 +17,23 @@ export function HomePageEditor() {
     photo: "",
     blurb: "",
   });
+  // The last loaded or saved data — the baseline the form is compared
+  // against to decide whether there are unsaved edits.
+  const [savedHomePageData, setSavedHomePageData] = useState<HomePageData>({
+    photo: "",
+    blurb: "",
+  });
   const getAccessTokenSilently = useAdminToken();
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
+
+  // The form is dirty when its fields differ from the loaded data or a
+  // replacement photo is pending; navigating away then requires
+  // confirmation.
+  useUnsavedChanges(
+    !!imageFile ||
+      JSON.stringify(homePageData) !== JSON.stringify(savedHomePageData),
+  );
 
   const fetchHomePageData = async () => {
     showLoading("Loading home page data...");
@@ -26,6 +41,7 @@ export function HomePageEditor() {
     try {
       const data = await HomePageService.getFromApi(getAccessTokenSilently);
       setHomePageData(data);
+      setSavedHomePageData(data);
     } catch (error) {
       // Never show an empty editor after a failed load — saving it would
       // overwrite the real data.
@@ -63,6 +79,7 @@ export function HomePageEditor() {
 
       await HomePageService.update(newHomePageData, getAccessTokenSilently);
       setHomePageData(newHomePageData);
+      setSavedHomePageData(newHomePageData);
       setImageFile(null);
       // The save succeeded, so nothing references the old photo anymore;
       // a failed delete just leaves an orphan for later cleanup.
