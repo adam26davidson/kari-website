@@ -29,7 +29,15 @@
 // would only capture the first viewport-height of every page. Before each
 // capture the viewport is therefore grown until no scroll container still
 // overflows, which pulls all below-fold content (long haiku/haiga lists,
-// photography captions, admin lists) into the PNG.
+// photography captions, admin lists) into view.
+//
+// A single tall PNG would defeat the purpose, though: image review (Claude
+// reading the PNG, in the dev loop and in CI) downscales to ~1.15 megapixels,
+// so a 10000px-tall capture arrives a couple hundred px wide and illegible.
+// Tall pages are therefore sliced into sequential full-resolution tiles
+// (<name>.<viewport>.1.png, .2.png, …) with a small overlap so nothing is
+// lost on a cut line; pages that fit in one tile keep the plain
+// <name>.<viewport>.png filename.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -155,7 +163,8 @@ const MAX_CAPTURE_HEIGHT = 12_000;
  *
  * @param {import("@playwright/test").Page} page
  * @param {{ width: number, height: number }} viewport
- * @returns {Promise<number>} px of content still hidden when capped (0 when
+ * @returns {Promise<{ height: number, hidden: number }>} the final viewport
+ *   height and the px of content still hidden when capped (0 when
  *   everything fits)
  */
 async function expandViewportToContent(page, viewport) {
@@ -174,13 +183,59 @@ async function expandViewportToContent(page, viewport) {
       }
       return max;
     });
-    if (overflow <= 1 || overflow >= previousOverflow) return 0;
-    if (height >= MAX_CAPTURE_HEIGHT) return overflow;
+    if (overflow <= 1 || overflow >= previousOverflow) break;
+    if (height >= MAX_CAPTURE_HEIGHT) return { height, hidden: overflow };
     previousOverflow = overflow;
     height = Math.min(height + overflow, MAX_CAPTURE_HEIGHT);
     await page.setViewportSize({ width: viewport.width, height });
   }
-  return 0;
+  return { height, hidden: 0 };
+}
+
+/**
+ * Max height of a single PNG. Review happens by Claude reading the images,
+ * and vision input is downscaled to ~1.15 megapixels — a taller PNG would
+ * arrive shrunk past legibility. Pages that grew beyond this are sliced
+ * into tiles of this height instead.
+ */
+const TILE_HEIGHT = 2000;
+
+/** Overlap between consecutive tiles, so a defect can't hide on a cut. */
+const TILE_OVERLAP = 100;
+
+/**
+ * Captures the current page (already grown to `height` px) as one PNG when
+ * it fits in a single tile, or as sequential overlapping tiles otherwise.
+ *
+ * @param {import("@playwright/test").Page} page
+ * @param {{ width: number, height: number }} viewport the base viewport
+ * @param {number} height the grown viewport height
+ * @param {string} stem output path without the .png / .N.png suffix
+ * @returns {Promise<string[]>} the files written
+ */
+async function captureTiles(page, viewport, height, stem) {
+  if (height <= TILE_HEIGHT) {
+    const file = `${stem}.png`;
+    await page.screenshot({ path: file, fullPage: true });
+    return [file];
+  }
+  /** @type {number[]} */
+  const offsets = [];
+  for (let y = 0; ; y += TILE_HEIGHT - TILE_OVERLAP) {
+    offsets.push(Math.min(y, height - TILE_HEIGHT));
+    if (y + TILE_HEIGHT >= height) break;
+  }
+  /** @type {string[]} */
+  const files = [];
+  for (const [index, y] of offsets.entries()) {
+    const file = `${stem}.${index + 1}.png`;
+    await page.screenshot({
+      path: file,
+      clip: { x: 0, y, width: viewport.width, height: TILE_HEIGHT },
+    });
+    files.push(file);
+  }
+  return files;
 }
 
 /**
@@ -195,7 +250,7 @@ async function expandViewportToContent(page, viewport) {
 async function captureRoutes(page, entries, failures) {
   for (const viewport of VIEWPORTS) {
     for (const entry of entries) {
-      const file = path.join(OUTPUT_DIR, `${entry.name}.${viewport.name}.png`);
+      const stem = path.join(OUTPUT_DIR, `${entry.name}.${viewport.name}`);
       try {
         // Start at the real device size so the page lays out exactly as a
         // visitor first sees it, then grow the viewport for the capture.
@@ -208,18 +263,23 @@ async function captureRoutes(page, entries, failures) {
           timeout: 60_000,
         });
         await waitForImages(page);
-        const hidden = await expandViewportToContent(page, viewport);
+        const { height, hidden } = await expandViewportToContent(
+          page,
+          viewport,
+        );
         // Growing the viewport can reveal images that only start loading
         // once visible, and can retrigger transitions — settle both again.
         await waitForImages(page);
         await waitForAnimations(page);
-        await page.screenshot({ path: file, fullPage: true });
-        console.log(`captured ${path.relative(process.cwd(), file)}`);
+        const files = await captureTiles(page, viewport, height, stem);
+        for (const file of files) {
+          console.log(`captured ${path.relative(process.cwd(), file)}`);
+        }
         if (hidden > 0) {
           console.warn(
             `  warning: ${entry.route} (${viewport.name}) is taller than ` +
               `the ${MAX_CAPTURE_HEIGHT}px capture cap — the last ` +
-              `~${hidden}px of content are not in the screenshot`,
+              `~${hidden}px of content are not in the screenshots`,
           );
         }
       } catch (error) {

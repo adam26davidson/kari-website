@@ -177,7 +177,12 @@ jobs:
             writer/artist portfolio: haiku, haiga, photography, blog).
             Screenshots live in ui/e2e/screenshots/, named
             <page>.<desktop|mobile>.png (desktop is 1280px wide, mobile
-            390px). They cover the public pages and, when captured, the
+            390px). Pages too tall for one legible image are split into
+            sequential tiles named <page>.<viewport>.1.png, .2.png, … —
+            top of the page first, with ~100px of overlap between
+            consecutive tiles, so review a tiled page by reading its
+            tiles in order as one page. They cover the public pages
+            and, when captured, the
             admin pages (files named admin-*: list pages, editors opened
             on a fixture item, and image cleanup). The admin pages are
             utilitarian editing UI — judge their layout, legibility, and
