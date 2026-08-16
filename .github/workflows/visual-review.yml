@@ -158,6 +158,12 @@ jobs:
           # Claude Pro/Max subscription OAuth token — deliberately the only
           # supported credential, so CI can never bill pay-per-use API credits.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The action needs a GitHub token for its own setup; without one it
+          # attempts an OIDC exchange, which requires the id-token: write
+          # permission. The built-in token suffices — Claude only reads the
+          # screenshots and writes visual-review.md; the PR comment is posted
+          # by the sticky-comment step below.
+          github_token: ${{ github.token }}
           claude_args: '--allowedTools "Read,Glob,Write"'
           prompt: |
             You are doing a visual QA review of a personal website (a
