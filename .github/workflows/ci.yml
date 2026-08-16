@@ -60,67 +60,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.23.2'
-          cache: npm
-          cache-dependency-path: ui/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo build
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: api
-
-      # The e2e stack is fully local and hermetic: a throwaway MinIO stands
-      # in for S3 (seeded with fixture content by ui/e2e/seed.mjs), and the
-      # real API runs on localhost:3000 against it. No AWS account or shared
-      # bucket is involved, so runs can't be broken by drifting bucket data.
-      - name: Start local S3 (MinIO)
-        # docker-compose.yml lives at the repo root, not in ui/.
-        working-directory: .
-        run: docker compose up -d --wait minio
-
-      # Create + seed the bucket before the API starts: its /health probes
-      # S3 read/write, so the bucket must exist first. (npm run test:e2e
-      # re-seeds, which is idempotent.)
-      - name: Seed local S3
-        run: node e2e/seed.mjs
-
-      - name: Build API
-        working-directory: api
-        run: cargo build
-
-      - name: Start API
-        working-directory: api
-        env:
-          BUCKET_NAME: kari-e2e
-          AWS_ENDPOINT_URL: http://localhost:9000
-          AWS_REGION: us-east-1
-          # Local MinIO credentials (match docker-compose.yml) — not secrets.
-          AWS_ACCESS_KEY_ID: kari-e2e
-          AWS_SECRET_ACCESS_KEY: kari-e2e-secret
-        run: |
-          PORT=3000 nohup cargo run > api.log 2>&1 &
-          for i in $(seq 1 60); do
-            if curl -sf http://localhost:3000/health > /dev/null; then
-              echo "API is healthy"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "API never became healthy" >&2
-          cat api.log >&2
-          exit 1
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+      # Node + npm ci, Rust + cargo cache, MinIO seeded with fixture
+      # content, the API health-polled on localhost:3000, and Playwright's
+      # chromium. Shared with visual-review.yml — see the action for the
+      # hermetic-stack details.
+      - name: Stand up hermetic e2e stack
+        uses: ./.github/actions/e2e-stack
 
       - name: Run e2e tests
         run: npm run test:e2e
