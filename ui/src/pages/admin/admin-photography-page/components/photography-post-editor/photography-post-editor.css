@@ -19,3 +19,24 @@
   align-items: center;
   gap: 15px;
 }
+
+/* Narrow viewports: these wrappers are otherwise shrink-to-fit, so they
+   inflate to the 400px global input width and drag the fields (and the
+   per-image delete button) past the card and viewport. Pin them to their
+   container so the inputs' max-width: 100% clamp (admin.css) can bite. */
+@media (max-width: 767.98px) {
+  .photography-post-editor-fields,
+  .photography-post-editor-images,
+  .photography-post-editor-image-fields {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  /* Caption textarea is a row flex item; let it shrink below its 400px
+     specified width instead of forcing the row wider than the card. */
+  .photography-post-editor-image-fields textarea {
+    flex: 1 1 150px;
+    min-width: 0;
+  }
+}
