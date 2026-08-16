@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HomePageEditor } from "./home-page-editor";
 import { ImageService } from "../../../services/images";
 import { HomePageService } from "../../../services/home-page";
-import { renderWithAdminUi } from "../admin-ui-test-helpers";
+import {
+  answerNo,
+  answerYes,
+  renderAdminPage,
+} from "../admin-ui-test-helpers";
 
 vi.mock("../../../services/images", () => ({
   ImageService: {
@@ -24,10 +28,18 @@ vi.mock("../../../hooks/use-admin-token", () => ({
   useAdminToken: () => async () => "token",
 }));
 
+// The editor mounts at /admin/home; the hook behind the unsaved-changes
+// guard needs a data router, and the /admin/:section pattern also matches
+// /admin/haiku, giving the guard tests somewhere to navigate to.
+function renderPage() {
+  return renderAdminPage(<HomePageEditor />, "/admin/:section", "/admin/home");
+}
+
 // Renders the editor and picks a replacement photo — the state right
 // before the user hits save.
 async function renderAndPickImage() {
-  const { container, adminUi } = renderWithAdminUi(<HomePageEditor />);
+  const utils = renderPage();
+  const { container, adminUi } = utils;
   const notify = adminUi.notify;
   await screen.findByDisplayValue("hello");
   const input = container.querySelector('input[type="file"]');
@@ -36,7 +48,7 @@ async function renderAndPickImage() {
       files: [new File(["img"], "next.png", { type: "image/png" })],
     },
   });
-  return { notify };
+  return { ...utils, notify };
 }
 
 beforeEach(() => {
@@ -59,7 +71,7 @@ describe("HomePageEditor initial load", () => {
       new Error("network down"),
     );
 
-    renderWithAdminUi(<HomePageEditor />);
+    renderPage();
 
     expect(
       await screen.findByText("Failed to load home page data."),
@@ -74,7 +86,7 @@ describe("HomePageEditor initial load", () => {
       new Error("network down"),
     );
 
-    renderWithAdminUi(<HomePageEditor />);
+    renderPage();
     await userEvent.click(await screen.findByText("Retry"));
 
     expect(await screen.findByDisplayValue("hello")).toBeInTheDocument();
@@ -147,5 +159,97 @@ describe("HomePageEditor photo replacement", () => {
       vi.mocked(ImageService.delete).mock.invocationCallOrder[0];
     expect(uploadOrder).toBeLessThan(saveOrder);
     expect(saveOrder).toBeLessThan(deleteOrder);
+  });
+});
+
+describe("HomePageEditor unsaved-changes guard", () => {
+  it("navigates away without confirmation while clean", async () => {
+    const { adminUi, router } = renderPage();
+    await screen.findByDisplayValue("hello");
+
+    await act(async () => {
+      router.navigate("/admin/haiku");
+    });
+
+    expect(router.state.location.pathname).toBe("/admin/haiku");
+    expect(adminUi.confirm).not.toHaveBeenCalled();
+  });
+
+  it("asks before discarding an edited blurb and stays on No", async () => {
+    const { adminUi, router } = renderPage();
+    const textarea = await screen.findByDisplayValue("hello");
+    fireEvent.change(textarea, { target: { value: "changed blurb" } });
+
+    await act(async () => {
+      router.navigate("/admin/haiku");
+    });
+
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      "You have unsaved changes. Discard them?",
+      expect.any(Function),
+      expect.any(Function),
+    );
+    await answerNo(adminUi);
+    expect(router.state.location.pathname).toBe("/admin/home");
+    expect(screen.getByDisplayValue("changed blurb")).toBeInTheDocument();
+  });
+
+  it("asks before discarding a freshly picked photo and leaves on Yes", async () => {
+    const { adminUi, router } = await renderAndPickImage();
+
+    await act(async () => {
+      router.navigate("/admin/haiku");
+    });
+
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      "You have unsaved changes. Discard them?",
+      expect.any(Function),
+      expect.any(Function),
+    );
+    await answerYes(adminUi);
+    expect(router.state.location.pathname).toBe("/admin/haiku");
+    expect(HomePageService.update).not.toHaveBeenCalled();
+  });
+
+  it("does not block leaving after the edits were saved", async () => {
+    const { adminUi, notify, router } = await renderAndPickImage();
+    fireEvent.change(screen.getByDisplayValue("hello"), {
+      target: { value: "changed blurb" },
+    });
+    fireEvent.click(screen.getByText("Save"));
+    await waitFor(() => expect(notify).toHaveBeenCalledWith("Home page saved"));
+
+    await act(async () => {
+      router.navigate("/admin/haiku");
+    });
+
+    expect(router.state.location.pathname).toBe("/admin/haiku");
+    expect(adminUi.confirm).not.toHaveBeenCalled();
+  });
+
+  it("keeps guarding after a failed save", async () => {
+    vi.mocked(HomePageService.update).mockRejectedValueOnce(
+      new Error("Failed to save home page data (HTTP 500)"),
+    );
+    const { adminUi, notify, router } = await renderAndPickImage();
+    fireEvent.click(screen.getByText("Save"));
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith(
+        "Failed to save — your change was not saved",
+        "error",
+      ),
+    );
+
+    await act(async () => {
+      router.navigate("/admin/haiku");
+    });
+
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      "You have unsaved changes. Discard them?",
+      expect.any(Function),
+      expect.any(Function),
+    );
+    await answerNo(adminUi);
+    expect(router.state.location.pathname).toBe("/admin/home");
   });
 });
