@@ -2,8 +2,9 @@ name: Visual review
 
 # AI visual check on PRs that touch the UI: stands up the same hermetic
 # stack as the e2e job (MinIO + seed + API + test-mode preview), captures
-# screenshots of the public pages (ui/e2e/screenshots.mjs), and has Claude
-# review them for visual defects — overflow, clipped images, illegible
+# screenshots of the public pages and — via the same Auth0 test user the
+# admin e2e journeys use — the admin pages (ui/e2e/screenshots.mjs), and
+# has Claude review them for visual defects — overflow, clipped images, illegible
 # text, broken mobile layout — that behavioral tests can't catch. Findings
 # are posted as an advisory sticky PR comment; this job never blocks a
 # merge on a design judgment.
@@ -141,6 +142,12 @@ jobs:
       - name: Capture screenshots
         if: steps.check.outputs.enabled == 'true'
         working-directory: ui
+        env:
+          # Same admin test user as the e2e admin journeys; with these set
+          # the script logs in through Auth0 and captures the admin pages
+          # too. Absent (e.g. on forks), it captures public pages only.
+          E2E_AUTH0_USERNAME: ${{ secrets.E2E_AUTH0_USERNAME }}
+          E2E_AUTH0_PASSWORD: ${{ secrets.E2E_AUTH0_PASSWORD }}
         run: node e2e/screenshots.mjs --base-url http://localhost:4173
 
       - name: Upload screenshots
@@ -164,15 +171,21 @@ jobs:
           # screenshots and writes visual-review.md; the PR comment is posted
           # by the sticky-comment step below.
           github_token: ${{ github.token }}
-          claude_args: '--allowedTools "Read,Glob,Write"'
+          claude_args: '--model claude-opus-5 --allowedTools "Read,Glob,Write"'
           prompt: |
             You are doing a visual QA review of a personal website (a
             writer/artist portfolio: haiku, haiga, photography, blog).
-            Screenshots of every public page live in ui/e2e/screenshots/,
-            named <page>.<desktop|mobile>.png (desktop is 1280px wide,
-            mobile 390px). The content is seeded fixture data, so judge
-            layout and legibility, not the content itself; gray placeholder
-            rectangles where photos would be are expected and fine.
+            Screenshots live in ui/e2e/screenshots/, named
+            <page>.<desktop|mobile>.png (desktop is 1280px wide, mobile
+            390px). They cover the public pages and, when captured, the
+            admin pages (files named admin-*: list pages, editors opened
+            on a fixture item, and image cleanup). The admin pages are
+            utilitarian editing UI — judge their layout, legibility, and
+            usability (fields and buttons visible, reachable, not
+            overlapping), not their visual polish. The content everywhere
+            is seeded fixture data, so judge layout and legibility, not
+            the content itself; gray placeholder rectangles where photos
+            would be are expected and fine.
 
             Read and look at EVERY png in that directory. For each, check:
             - content overflowing or escaping its container (images

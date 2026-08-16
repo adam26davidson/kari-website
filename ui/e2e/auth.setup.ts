@@ -3,18 +3,14 @@ import path from "node:path";
 import { test as setup, expect, APIRequestContext } from "@playwright/test";
 import { ADMIN_STORAGE_STATE, PORT } from "../playwright.config";
 import { MINIO_START_COMMAND } from "./config.mjs";
+import { loginAsAdmin } from "./auth0-login.mjs";
 import { TEST_API_URL } from "./helpers";
 
-// Logs into the app once through the real Auth0 Universal Login and saves the
-// browser storage state (Auth0 SPA token cache lives in localStorage in test
-// builds) for the admin project to reuse. This file only runs when
-// E2E_AUTH0_USERNAME / E2E_AUTH0_PASSWORD are present — the config drops the
-// setup + admin projects otherwise.
-
-// The URL Auth0 redirects back to after login — derived from the same PORT
-// constant that playwright.config.ts uses for baseURL and the web server, so
-// changing the port there can't silently break this check.
-const ADMIN_RETURN_URL = new RegExp(`localhost:${PORT}/admin`);
+// Logs into the app once through the real Auth0 Universal Login (the shared
+// flow in auth0-login.mjs) and saves the browser storage state (Auth0 SPA
+// token cache lives in localStorage in test builds) for the admin project to
+// reuse. This file only runs when E2E_AUTH0_USERNAME / E2E_AUTH0_PASSWORD
+// are present — the config drops the setup + admin projects otherwise.
 
 /**
  * The API runs on localhost (the CI job starts it before Playwright; for
@@ -59,82 +55,14 @@ setup("authenticate as admin", async ({ page, request }) => {
 
   await checkApiIsUp(request);
 
-  await page.goto("/admin");
-  await page.locator(".admin-button", { hasText: "Log In" }).click();
-
-  // Auth0 Universal Login. The new (default) experience uses
-  // input[name="username"] / input[name="password"]; older or customized
-  // forms may use name="email". Identifier-first flows show the password
-  // field only after submitting the username.
-  await page.waitForURL(/auth0\.com/, { timeout: 60_000 });
-  const usernameInput = page
-    .locator('input[name="username"], input[name="email"], input#username')
-    .first();
-  await expect(usernameInput).toBeVisible({ timeout: 30_000 });
-  await usernameInput.fill(username);
-
-  // The page also contains an aria-hidden Continue button (Auth0's Enter-key
-  // default-action catcher) that matches button[type="submit"] but can never
-  // be clicked. Role-based locators exclude aria-hidden elements, so this
-  // always resolves to the visible button. "Continue" is exact to avoid
-  // matching social-login buttons like "Continue with Google".
-  const continueButton = page.getByRole("button", {
-    name: "Continue",
-    exact: true,
+  await loginAsAdmin(page, {
+    baseUrl: `http://localhost:${PORT}`,
+    username,
+    password,
   });
-
-  const passwordInput = page
-    .locator('input[name="password"], input#password')
-    .first();
-  if (!(await passwordInput.isVisible())) {
-    // Identifier-first: submit the username to reveal the password screen.
-    await continueButton.click();
-    await expect(passwordInput).toBeVisible({ timeout: 30_000 });
-  }
-  await passwordInput.fill(password);
-  await continueButton.click();
-
-  // Auth0 may interpose a consent screen for localhost callback URLs.
-  const consentAccept = page.locator(
-    'button[name="action"][value="accept"], button:has-text("Accept")',
-  );
-  try {
-    await page.waitForURL(ADMIN_RETURN_URL, { timeout: 20_000 });
-  } catch {
-    // Not back at the app: either a consent screen (fine, accept it) or a
-    // login failure. Surface Auth0's own error message when there is one —
-    // "Wrong email or password" here means the E2E_AUTH0_* secrets don't
-    // match a user in the tenant, which no code change can fix.
-    if (!(await consentAccept.first().isVisible().catch(() => false))) {
-      const bodyText = await page
-        .locator("body")
-        .innerText()
-        .catch(() => "");
-      const details = bodyText
-        .replace(/\s+/g, " ")
-        .match(
-          /wrong email or password|your account has been blocked|too many attempts|verify your email|something went wrong/i,
-        )?.[0];
-      throw new Error(
-        `Auth0 login did not return to the app. ${
-          details
-            ? `Auth0 reports: "${details}" — check the E2E_AUTH0_USERNAME / ` +
-              "E2E_AUTH0_PASSWORD secrets against the test user in the " +
-              "Username-Password-Authentication connection."
-            : `Stuck on ${page.url()} with no consent screen or known ` +
-              "error message; inspect the trace."
-        }`,
-      );
-    }
-    await consentAccept.first().click();
-    await page.waitForURL(ADMIN_RETURN_URL, { timeout: 60_000 });
-  }
-
-  // The admin menu only renders once Auth0 reports isAuthenticated, and by
-  // then the SPA SDK has written its token cache to localStorage.
   await expect(
     page.locator(".admin-menu-item", { hasText: "Haiku" }),
-  ).toBeVisible({ timeout: 60_000 });
+  ).toBeVisible();
 
   fs.mkdirSync(path.dirname(ADMIN_STORAGE_STATE), { recursive: true });
   await page.context().storageState({ path: ADMIN_STORAGE_STATE });

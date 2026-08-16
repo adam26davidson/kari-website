@@ -56,7 +56,10 @@ opening a PR:
 1. With the dev stack running (`./scripts/dev.sh`), run
    `node e2e/screenshots.mjs` in `ui/` (add `--routes /,/haiku` to limit to
    affected pages; `--base-url` to target a non-default server). Full-page
-   desktop + mobile PNGs land in `ui/e2e/screenshots/`.
+   desktop + mobile PNGs land in `ui/e2e/screenshots/`. Admin pages (lists,
+   editors, image cleanup) are captured too when `E2E_AUTH0_USERNAME` /
+   `E2E_AUTH0_PASSWORD` are set (as they are in CI); without them the script
+   captures the public pages only and says so.
 2. Actually LOOK at each screenshot (Read the PNG files) and check for:
    content overflowing its container, clipped/squashed/stretched images,
    text that is hard to read against its actual rendered background,
