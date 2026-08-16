@@ -18,19 +18,23 @@ import {
   MINIO_START_COMMAND,
   S3_BUCKET,
   S3_ENDPOINT,
-  TINY_PNG_BASE64,
   createS3Client,
   makeSolidPng,
 } from "./config.mjs";
 
 const client = createS3Client();
 
-const PNG = Buffer.from(TINY_PNG_BASE64, "base64");
-
 // The home photo is landscape at real-photo dimensions (the production photo
 // is 1690x1268) so the visitor spec can catch the card layout overflowing —
 // a 1x1 image fits any box and would mask regressions.
 const HOME_PHOTO_PNG = makeSolidPng(1600, 1200);
+
+// Haiga and photography seeds are real-sized for the same reason: a 1x1
+// image renders invisibly wherever CSS doesn't force a height (the haiga
+// desktop layout sizes the image intrinsically), which both hides real
+// layout bugs and makes the CI visual review flag phantom ones.
+const HAIGA_PNG = makeSolidPng(900, 1200);
+const PHOTO_PNG = makeSolidPng(1600, 1200);
 
 const SEED_BLOG_ID = "seed-blog-1";
 
@@ -98,8 +102,8 @@ const SEED_OBJECTS = [
     type: "text/html",
   },
   { key: "images/seed-home.png", body: HOME_PHOTO_PNG, type: "image/png" },
-  { key: "images/seed-haiga.png", body: PNG, type: "image/png" },
-  { key: "images/seed-photo.png", body: PNG, type: "image/png" },
+  { key: "images/seed-haiga.png", body: HAIGA_PNG, type: "image/png" },
+  { key: "images/seed-photo.png", body: PHOTO_PNG, type: "image/png" },
 ];
 
 /** The browser fetches these objects unsigned, so the bucket is public-read. */
