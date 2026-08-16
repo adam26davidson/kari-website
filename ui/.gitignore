@@ -32,3 +32,4 @@ playwright/.cache
 # Playwright e2e artifacts
 e2e/.auth
 e2e/fixtures
+e2e/screenshots

@@ -47,6 +47,32 @@ the same PR — never lower them to make a PR pass.
 Dependency updates are managed by Renovate (`renovate.json`); non-major updates
 auto-merge once these checks pass.
 
+## Visual Checks (required for UI changes)
+Tests assert behavior, not appearance — features have shipped green while an
+image overflowed its card or text was illegible against the background. So
+after ANY change that can affect how the UI looks (components, CSS, layout,
+`index.html`, UI dependency bumps), before claiming the work is done or
+opening a PR:
+1. With the dev stack running (`./scripts/dev.sh`), run
+   `node e2e/screenshots.mjs` in `ui/` (add `--routes /,/haiku` to limit to
+   affected pages; `--base-url` to target a non-default server). Full-page
+   desktop + mobile PNGs land in `ui/e2e/screenshots/`.
+2. Actually LOOK at each screenshot (Read the PNG files) and check for:
+   content overflowing its container, clipped/squashed/stretched images,
+   text that is hard to read against its actual rendered background,
+   overlapping elements, and broken layout at the 390px mobile width.
+3. Fix what you find and re-capture until the pages look right. Mention in
+   the PR that the visual check was done and what it covered.
+
+CI runs the same check on PRs touching `ui/**`
+(`.github/workflows/visual-review.yml`): it captures the same screenshots
+against the seeded e2e stack and Claude reviews them, posting an advisory
+sticky PR comment (needs the `CLAUDE_CODE_OAUTH_TOKEN` repo secret, from
+`claude setup-token` — usage draws from the Claude Pro/Max subscription,
+deliberately never API credits; skips with a notice when absent). Advisory
+means treat findings as a reviewer's notes —
+address or explicitly dismiss them, but the job never blocks a merge.
+
 ## Working on GitHub Issues
 - Before starting work on an issue, add the `in progress` label and leave a
   comment naming your branch, so parallel sessions don't pick up the same
