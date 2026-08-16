@@ -63,6 +63,48 @@
   overflow-y: auto;
 }
 
+/* Narrow viewports: the fixed-width sidebar would leave too little room
+   for the content (~230px on a 390px phone), so it collapses into a
+   wrapping top bar and the content takes the full width. The breakpoint
+   matches useIsMobile()'s 768px default used by the public header. */
+@media (max-width: 767.98px) {
+  .admin-container {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+
+  .admin-menu {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    height: auto;
+    padding: 4px 0;
+  }
+
+  .admin-menu-item {
+    width: auto;
+    padding: 8px 12px;
+    font-size: 16px;
+  }
+
+  .admin-content {
+    width: 100%;
+    flex-grow: 1;
+    height: auto;
+    min-height: 0;
+  }
+
+  /* The global 400px input/textarea width (index.css) overflows narrow
+     screens; cap it to the containing editor card. */
+  .admin-content input,
+  .admin-content textarea {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+
 .admin-icon-button {
   display: flex;
   justify-content: center;

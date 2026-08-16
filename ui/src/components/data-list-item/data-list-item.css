@@ -47,3 +47,23 @@
 .admin-data-list-item.compact .data-list-item-controls {
   flex-direction: row;
 }
+
+/* Narrow viewports: let the content shrink and the control buttons wrap
+   onto their own line instead of pushing past the right edge. Admin rows
+   only — the public .data-list-item is untouched. */
+@media (max-width: 767.98px) {
+  .admin-data-list-item {
+    flex-wrap: wrap;
+  }
+
+  .admin-data-list-item .data-list-item-content {
+    min-width: 0;
+  }
+
+  .admin-data-list-item .data-list-item-controls {
+    flex-grow: 1;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}

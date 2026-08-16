@@ -32,6 +32,21 @@
   max-height: 100%; /* Added max-height property */
 }
 
+/* Narrow viewports: the 550px minimum would push the form (and the
+   save/close controls) off-screen, so the card takes the full width. */
+@media (max-width: 767.98px) {
+  .data-editor-content {
+    box-sizing: border-box;
+    min-width: 0;
+    width: calc(100% - 16px);
+  }
+
+  .data-list-item-inputs {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
 .data-editor-item-controls {
   position: absolute;
   top: 5px;

@@ -15,6 +15,7 @@
 .photography-post-editor-image-fields {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
   gap: 15px;
 }

@@ -10,17 +10,24 @@
   align-items: flex-start;
   justify-content: flex-start;
   width: 800px;
+  max-width: 100%;
+  box-sizing: border-box;
   min-height: 350px;
   max-height: calc(100% - 24px);
-  margin: 10px;
+  margin: 10px 0;
   border-radius: 3px;
   border: 1px solid rgba(0, 0, 0, 0.1);
-  background-color: rgba(0, 0, 0, 0.1);
+  /* Opaque fill, like the other inputs' effective color, so post text
+     never sits directly on the photo background (#210) */
+  background-color: rgb(240, 240, 240);
 }
 
 .tiptap {
   height: content-fit;
   margin: 10px;
+  /* The body text must not inherit the page's light-on-photo color */
+  color: #181818;
+  overflow-wrap: anywhere;
 }
 
 .tiptap:focus,
@@ -35,10 +42,12 @@
 .button-group {
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-start;
   border-bottom: 1px solid rgba(0, 0, 0, 0.1);
   width: 100%;
+  box-sizing: border-box;
 }
 
 .button-group button {
