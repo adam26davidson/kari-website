@@ -23,6 +23,13 @@
 //
 // Each route is captured at desktop (1280px) and mobile (390px) widths.
 // Animations are disabled and images awaited, so captures are stable.
+//
+// The app is a fixed-viewport layout (`.whole-page` is 100vh) whose content
+// scrolls inside inner containers, so Playwright's `fullPage: true` alone
+// would only capture the first viewport-height of every page. Before each
+// capture the viewport is therefore grown until no scroll container still
+// overflows, which pulls all below-fold content (long haiku/haiga lists,
+// photography captions, admin lists) into the PNG.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -118,8 +125,67 @@ async function waitForImages(page) {
 }
 
 /**
+ * Waits for entrance animations (.fade-in) to finish so text isn't captured
+ * mid-transition at partial opacity.
+ *
+ * @param {import("@playwright/test").Page} page
+ */
+async function waitForAnimations(page) {
+  await page
+    .evaluate(() =>
+      Promise.all(document.getAnimations().map((a) => a.finished)),
+    )
+    .catch(() => {});
+}
+
+/**
+ * Ceiling on the grown capture height — keeps a runaway page from producing
+ * an absurd viewport or PNG, and stays under Chromium's ~16384px screenshot
+ * texture limit. A warning is printed when a page is truncated by this cap.
+ */
+const MAX_CAPTURE_HEIGHT = 12_000;
+
+/**
+ * Grows the viewport height until no scroll container overflows, so the
+ * subsequent screenshot includes below-fold content that lives inside the
+ * app's inner scrolling areas. Runs a few passes because scrollers can nest
+ * (admin lists inside the content area); stops early when nothing overflows
+ * or when growing stops helping (a fixed-height scroller like a textarea
+ * can never be resolved by a taller window).
+ *
+ * @param {import("@playwright/test").Page} page
+ * @param {{ width: number, height: number }} viewport
+ * @returns {Promise<number>} px of content still hidden when capped (0 when
+ *   everything fits)
+ */
+async function expandViewportToContent(page, viewport) {
+  let height = viewport.height;
+  let previousOverflow = Infinity;
+  for (let pass = 0; pass < 5; pass++) {
+    /** Tallest unscrolled remainder among all scroll containers, in px. */
+    const overflow = await page.evaluate(() => {
+      let max = 0;
+      for (const el of document.querySelectorAll("*")) {
+        const hidden = el.scrollHeight - el.clientHeight;
+        if (hidden <= 1) continue; // <=1px is just rounding, not content
+        const { overflowY } = getComputedStyle(el);
+        if (overflowY !== "auto" && overflowY !== "scroll") continue;
+        max = Math.max(max, hidden);
+      }
+      return max;
+    });
+    if (overflow <= 1 || overflow >= previousOverflow) return 0;
+    if (height >= MAX_CAPTURE_HEIGHT) return overflow;
+    previousOverflow = overflow;
+    height = Math.min(height + overflow, MAX_CAPTURE_HEIGHT);
+    await page.setViewportSize({ width: viewport.width, height });
+  }
+  return 0;
+}
+
+/**
  * Captures every route at every viewport on the given page, resizing the
- * viewport between passes (one page per context keeps the session — and for
+ * viewport between routes (one page per context keeps the session — and for
  * admin, the login — intact across viewports).
  *
  * @param {import("@playwright/test").Page} page
@@ -128,27 +194,34 @@ async function waitForImages(page) {
  */
 async function captureRoutes(page, entries, failures) {
   for (const viewport of VIEWPORTS) {
-    await page.setViewportSize({
-      width: viewport.width,
-      height: viewport.height,
-    });
     for (const entry of entries) {
       const file = path.join(OUTPUT_DIR, `${entry.name}.${viewport.name}.png`);
       try {
+        // Start at the real device size so the page lays out exactly as a
+        // visitor first sees it, then grow the viewport for the capture.
+        await page.setViewportSize({
+          width: viewport.width,
+          height: viewport.height,
+        });
         await page.goto(`${baseUrl}${entry.route}`, {
           waitUntil: "networkidle",
           timeout: 60_000,
         });
         await waitForImages(page);
-        // Let entrance animations (.fade-in) finish so text isn't captured
-        // mid-transition at partial opacity.
-        await page
-          .evaluate(() =>
-            Promise.all(document.getAnimations().map((a) => a.finished)),
-          )
-          .catch(() => {});
+        const hidden = await expandViewportToContent(page, viewport);
+        // Growing the viewport can reveal images that only start loading
+        // once visible, and can retrigger transitions — settle both again.
+        await waitForImages(page);
+        await waitForAnimations(page);
         await page.screenshot({ path: file, fullPage: true });
         console.log(`captured ${path.relative(process.cwd(), file)}`);
+        if (hidden > 0) {
+          console.warn(
+            `  warning: ${entry.route} (${viewport.name}) is taller than ` +
+              `the ${MAX_CAPTURE_HEIGHT}px capture cap — the last ` +
+              `~${hidden}px of content are not in the screenshot`,
+          );
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         failures.push(`${entry.route} (${viewport.name}): ${message}`);
