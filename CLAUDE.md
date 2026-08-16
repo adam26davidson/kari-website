@@ -88,6 +88,13 @@ address or explicitly dismiss them, but the job never blocks a merge.
 - Caveat: GitHub only creates closing references for PRs based on `main`, so
   for a stacked PR keep the label manual until the PR retargets to `main`
   (retargeting fires the workflow, which takes over from there).
+- File issues for what you find along the way instead of letting it
+  evaporate or silently expanding the current PR's scope:
+  - Any difficulty in the dev environment (broken or confusing scripts,
+    flaky tooling, missing setup steps) — capture the problem and whatever
+    workaround you used.
+  - Natural next steps, unrelated problems noticed mid-task, and tech debt
+    exposed by the work.
 
 ## Parallel Sessions / Multiple Open PRs
 - If two issues need edits to the same files, work them in ONE branch/PR
