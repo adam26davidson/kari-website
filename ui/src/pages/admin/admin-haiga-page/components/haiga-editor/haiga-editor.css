@@ -3,3 +3,13 @@
   flex-direction: column;
   gap: 15px;
 }
+
+/* Narrow viewports: without an explicit width this wrapper shrink-fits
+   to the 400px global input width and pushes the publisher input past
+   the card; full width lets the input's max-width: 100% clamp work. */
+@media (max-width: 767.98px) {
+  .haiga-editor {
+    width: 100%;
+    min-width: 0;
+  }
+}

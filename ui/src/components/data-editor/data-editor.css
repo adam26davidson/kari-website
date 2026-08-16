@@ -41,3 +41,56 @@
   align-items: center;
   justify-content: flex-end;
 }
+
+/* Narrow viewports: the 550px minimum would push the form (and the
+   save/close controls) off-screen, so the card takes the full width.
+   Keep this block after the base rules — it overrides them at equal
+   specificity, so it must come later in the cascade. */
+@media (max-width: 767.98px) {
+  /* The desktop design bounds the card to the viewport and scrolls the
+     image list inside it, but the percentage max-height chain
+     (.data-editor height 100% -> card calc(100% - 40px) -> inputs 100%)
+     misresolves at mobile and content pours out of the card's bottom
+     edge once it is taller than the viewport (clearest in the
+     photography editor, whose image rows grow when the caption wraps
+     under the picker). Drop the viewport bound instead: the card grows
+     with its content and .admin-content (overflow-y: auto) scrolls the
+     whole editor, like the admin list pages. min-height keeps short
+     editors vertically centered. */
+  .data-editor {
+    height: auto;
+    min-height: 100%;
+  }
+
+  .data-editor-content {
+    box-sizing: border-box;
+    min-width: 0;
+    width: calc(100% - 16px);
+    max-height: none;
+  }
+
+  .data-list-item-inputs {
+    width: 100%;
+    min-width: 0;
+    max-height: none;
+  }
+
+  /* The inputs' max-width: 100% (admin.css) is useless when a wrapper
+     between the card and the input is shrink-to-fit: the wrapper inflates
+     to the 400px global input width and the percentage resolves against
+     the inflated wrapper. Clamp every wrapper to the card as well. */
+  .data-list-item-inputs > * {
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  /* On desktop the save/close buttons float in the card's top-right
+     corner beside the (narrower) fields; here the fields span the full
+     card, so keep the buttons in flow on their own row above the form
+     instead of overlapping it. */
+  .data-editor-item-controls {
+    position: static;
+    align-self: flex-end;
+  }
+}
