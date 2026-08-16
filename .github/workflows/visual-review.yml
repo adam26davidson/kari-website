@@ -23,6 +23,8 @@ on:
       - "ui/package-lock.json"
       - "ui/e2e/screenshots.mjs"
       - ".github/workflows/visual-review.yml"
+      # The hermetic-stack setup lives in this shared composite action.
+      - ".github/actions/e2e-stack/**"
 
 concurrency:
   group: visual-review-${{ github.ref }}
@@ -54,73 +56,13 @@ jobs:
       - uses: actions/checkout@v4
         if: steps.check.outputs.enabled == 'true'
 
-      - name: Setup Node
+      # Same hermetic stack as the frontend-e2e job in ci.yml (Node +
+      # npm ci, Rust + cargo cache, MinIO seeded with fixture content,
+      # the API health-polled on localhost:3000, Playwright's chromium);
+      # the test-mode bundle is then previewed locally below.
+      - name: Stand up hermetic e2e stack
         if: steps.check.outputs.enabled == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22.23.2'
-          cache: npm
-          cache-dependency-path: ui/package-lock.json
-
-      - name: Install dependencies
-        if: steps.check.outputs.enabled == 'true'
-        working-directory: ui
-        run: npm ci
-
-      - name: Setup Rust
-        if: steps.check.outputs.enabled == 'true'
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo build
-        if: steps.check.outputs.enabled == 'true'
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: api
-
-      # Same hermetic stack as the frontend-e2e job in ci.yml: throwaway
-      # MinIO seeded with fixture content, real API against it, test-mode
-      # bundle previewed locally.
-      - name: Start local S3 (MinIO)
-        if: steps.check.outputs.enabled == 'true'
-        run: docker compose up -d --wait minio
-
-      - name: Seed local S3
-        if: steps.check.outputs.enabled == 'true'
-        working-directory: ui
-        run: node e2e/seed.mjs
-
-      - name: Build API
-        if: steps.check.outputs.enabled == 'true'
-        working-directory: api
-        run: cargo build
-
-      - name: Start API
-        if: steps.check.outputs.enabled == 'true'
-        working-directory: api
-        env:
-          BUCKET_NAME: kari-e2e
-          AWS_ENDPOINT_URL: http://localhost:9000
-          AWS_REGION: us-east-1
-          # Local MinIO credentials (match docker-compose.yml) — not secrets.
-          AWS_ACCESS_KEY_ID: kari-e2e
-          AWS_SECRET_ACCESS_KEY: kari-e2e-secret
-        run: |
-          PORT=3000 nohup cargo run > api.log 2>&1 &
-          for i in $(seq 1 60); do
-            if curl -sf http://localhost:3000/health > /dev/null; then
-              echo "API is healthy"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "API never became healthy" >&2
-          cat api.log >&2
-          exit 1
-
-      - name: Install Playwright browsers
-        if: steps.check.outputs.enabled == 'true'
-        working-directory: ui
-        run: npx playwright install --with-deps chromium
+        uses: ./.github/actions/e2e-stack
 
       - name: Build and preview test-mode bundle
         if: steps.check.outputs.enabled == 'true'
