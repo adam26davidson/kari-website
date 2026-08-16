@@ -67,10 +67,10 @@ opening a PR:
 CI runs the same check on PRs touching `ui/**`
 (`.github/workflows/visual-review.yml`): it captures the same screenshots
 against the seeded e2e stack and Claude reviews them, posting an advisory
-sticky PR comment (needs a `CLAUDE_CODE_OAUTH_TOKEN` repo secret — Claude
-Pro/Max subscription, preferred — or `ANTHROPIC_API_KEY`; skips with a
-notice when neither exists). Advisory means treat findings as a reviewer's
-notes —
+sticky PR comment (needs the `CLAUDE_CODE_OAUTH_TOKEN` repo secret, from
+`claude setup-token` — usage draws from the Claude Pro/Max subscription,
+deliberately never API credits; skips with a notice when absent). Advisory
+means treat findings as a reviewer's notes —
 address or explicitly dismiss them, but the job never blocks a merge.
 
 ## Working on GitHub Issues
