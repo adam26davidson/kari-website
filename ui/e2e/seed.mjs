@@ -38,6 +38,15 @@ const PHOTO_PNG = makeSolidPng(1600, 1200);
 
 const SEED_BLOG_ID = "seed-blog-1";
 
+const SEED_BLOG_LIST = JSON.stringify([
+  {
+    id: SEED_BLOG_ID,
+    title: "Seeded published post",
+    date: "2026-01-01T00:00:00.000Z",
+    isPublished: true,
+  },
+]);
+
 /** Objects the public pages read straight from S3 (see ui/src/services). */
 const SEED_OBJECTS = [
   {
@@ -86,14 +95,16 @@ const SEED_OBJECTS = [
   },
   {
     key: "blog-posts.json",
-    body: JSON.stringify([
-      {
-        id: SEED_BLOG_ID,
-        title: "Seeded published post",
-        date: "2026-01-01T00:00:00.000Z",
-        isPublished: true,
-      },
-    ]),
+    body: SEED_BLOG_LIST,
+    type: "application/json",
+  },
+  {
+    // The public Other works page reads blog-posts.json (published only),
+    // but the admin list reads blog-posts-all.json (drafts included) via
+    // the API — seed both so the admin other-works list and editor render
+    // the fixture post too.
+    key: "blog-posts-all.json",
+    body: SEED_BLOG_LIST,
     type: "application/json",
   },
   {
