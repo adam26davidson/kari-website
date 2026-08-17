@@ -47,9 +47,12 @@
 }
 
 .header-title {
-  font-size: 40px;
-  margin: 0px 20px 0px 40px;
+  /* Fluid: shrinks through tablet widths (768-1100px) so the desktop
+     header fits without horizontal overflow; 40px from ~1100px up. */
+  font-size: clamp(30px, 3.6vw, 40px);
+  margin: 0px 20px 0px clamp(16px, 2.5vw, 40px);
   color: white;
+  white-space: nowrap;
 }
 
 .admin-header-title {
@@ -82,19 +85,24 @@
   flex-direction: row;
   justify-content: flex-start;
   align-items: center;
+  flex-wrap: wrap;
   flex: 1;
-  margin: 0px 40px 0px 40px;
-  font-size: 20px;
+  /* Fluid spacing and type: fixed 60px inter-link margins made the nav
+     ~666px wide, overflowing viewports between the 768px desktop
+     breakpoint and ~948px. gap/margins/font-size now scale with the
+     viewport and reach the old spacing on wide screens. */
+  gap: clamp(14px, 3.5vw, 60px);
+  margin: 0px clamp(16px, 2.5vw, 40px);
+  font-size: clamp(17px, 2.2vw, 20px);
 }
 
 .pages a {
   text-decoration: none;
-  margin: 0px 30px 2px 30px;
+  margin: 0px 0px 2px 0px;
   color: white;
   transition: opacity 0.5s;
-  /* min-width: 90px; */
   text-align: center;
-  /* border-radius: 3px; */
+  white-space: nowrap;
 }
 
 .pages .active {
