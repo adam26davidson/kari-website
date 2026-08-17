@@ -24,6 +24,14 @@ The pieces can still be run by hand if needed: `docker compose up -d --wait
 minio`, `node e2e/seed.mjs` (in `ui/`), `cargo run` (in `api/`, whose `.env`
 targets the local MinIO), and `npm run dev` (in `ui/`).
 
+## Deployment
+
+Merges to `main` (after CI passes) deploy automatically to the test
+environment at test.karidavidson.com. Production deploys only after the
+`production` GitHub Environment is approved on the Deploy workflow run —
+doable from the GitHub mobile app. The approved deploy ships the same commit
+that was reviewed on test. One-time setup: `docs/test-deployment-setup.md`.
+
 ## to sync prod s3 to test
 
 ```
