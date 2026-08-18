@@ -3,48 +3,27 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DataList } from "./data-list";
 
-function renderList(isAdmin: boolean, onNewItem = vi.fn()) {
-  const utils = render(
-    <DataList isAdmin={isAdmin} onNewItem={onNewItem}>
+function renderList() {
+  return render(
+    <DataList>
       {[<span key="a">first</span>, <span key="b">second</span>]}
     </DataList>,
   );
-  return { ...utils, onNewItem };
 }
 
 describe("DataList", () => {
   it("renders all children", () => {
-    renderList(false);
+    renderList();
     expect(screen.getByText("first")).toBeInTheDocument();
     expect(screen.getByText("second")).toBeInTheDocument();
   });
 
-  it("shows an add button in admin mode that fires onNewItem", async () => {
-    const { onNewItem } = renderList(true);
-
-    const addButton = screen.getByRole("button", { name: "Add item" });
-    await userEvent.click(addButton);
-    expect(onNewItem).toHaveBeenCalledOnce();
-  });
-
-  it("hides the add button outside admin mode", () => {
-    renderList(false);
-    expect(
-      screen.queryByRole("button", { name: "Add item" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("separates items in the public view but not after the last", () => {
-    const { container } = renderList(false);
+  it("separates items but not after the last", () => {
+    const { container } = renderList();
     const separators = container.querySelectorAll(
       ".data-list-item-separator",
     );
     expect(separators).toHaveLength(1);
-  });
-
-  it("omits separators in admin mode", () => {
-    const { container } = renderList(true);
-    expect(container.querySelector(".data-list-item-separator")).toBeNull();
   });
 
   it("lets a child's key govern reconciliation across reorders", async () => {
@@ -52,19 +31,11 @@ describe("DataList", () => {
       order.map((id) => (
         <input key={id} aria-label={`input-${id}`} defaultValue="" />
       ));
-    const { rerender } = render(
-      <DataList isAdmin={false} onNewItem={vi.fn()}>
-        {items(["a", "b"])}
-      </DataList>,
-    );
+    const { rerender } = render(<DataList>{items(["a", "b"])}</DataList>);
 
     await userEvent.type(screen.getByLabelText("input-a"), "typed into a");
 
-    rerender(
-      <DataList isAdmin={false} onNewItem={vi.fn()}>
-        {items(["b", "a"])}
-      </DataList>,
-    );
+    rerender(<DataList>{items(["b", "a"])}</DataList>);
 
     // The uncontrolled input's DOM state travels with the keyed child
     // instead of sticking to its list position.
@@ -81,7 +52,7 @@ describe("DataList", () => {
       .mockImplementation(() => {});
     try {
       render(
-        <DataList isAdmin={false} onNewItem={vi.fn()}>
+        <DataList>
           {[<span>unkeyed first</span>, <span>unkeyed second</span>]}
         </DataList>,
       );
@@ -93,11 +64,7 @@ describe("DataList", () => {
   });
 
   it("falls back to index keys for non-element children", () => {
-    render(
-      <DataList isAdmin={false} onNewItem={vi.fn()}>
-        {["plain text one", "plain text two"]}
-      </DataList>,
-    );
+    render(<DataList>{["plain text one", "plain text two"]}</DataList>);
     expect(screen.getByText(/plain text one/)).toBeInTheDocument();
     expect(screen.getByText(/plain text two/)).toBeInTheDocument();
   });

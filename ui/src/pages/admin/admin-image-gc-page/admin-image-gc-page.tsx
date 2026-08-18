@@ -3,7 +3,7 @@ import "./admin-image-gc-page.css";
 import "../admin.css";
 import { useAdminToken } from "../../../hooks/use-admin-token";
 import { GcReport, ImageService } from "../../../services/images";
-import { AdminButton } from "../../../components/admin-button/admin-button";
+import { AdminButton } from "../components/admin-button/admin-button";
 import { useAdminUi } from "../admin-ui-context";
 
 function KeyList({ title, keys }: { title: string; keys: Array<string> }) {

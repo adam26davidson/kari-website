@@ -8,7 +8,7 @@ import { AdminOtherWorksPage } from "./admin-other-works-page/admin-other-works-
 import { AdminPhotographyPage } from "./admin-photography-page/admin-photography-page";
 import { AdminImageGcPage } from "./admin-image-gc-page/admin-image-gc-page";
 import { AdminBackgroundPage } from "./admin-background-page/admin-background-page";
-import { AdminButton } from "../../components/admin-button/admin-button";
+import { AdminButton } from "./components/admin-button/admin-button";
 import { AdminUiProvider } from "./admin-ui-provider";
 
 // Single source of truth for the admin menu: ids (also the URL segment

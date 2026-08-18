@@ -1,6 +1,6 @@
 import { Haiga } from "../../../../../models";
-import { DataEditor } from "../../../../../components/data-editor/data-editor";
-import { PhotoPicker } from "../../../../../components/photo-picker/photo-picker";
+import { DataEditor } from "../../../components/data-editor/data-editor";
+import { PhotoPicker } from "../../../components/photo-picker/photo-picker";
 import "./haiga-editor.css";
 
 export function HaigaEditor({

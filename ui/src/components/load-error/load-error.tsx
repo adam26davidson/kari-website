@@ -1,5 +1,5 @@
 import "./load-error.css";
-import { AdminButton } from "../admin-button/admin-button";
+import { SiteButton } from "../site-button/site-button";
 
 interface LoadErrorProps {
   message: string;
@@ -12,14 +12,13 @@ interface LoadErrorProps {
  * must never start from unloaded data, or a save would overwrite the real
  * content. On public pages it replaces the content so a fetch failure is
  * never mistaken for an empty page. The neutral card styling (and
- * AdminButton, which is a plain styled button despite its name) suits
- * both contexts.
+ * SiteButton, a plain styled button) suits both contexts.
  */
 export function LoadError({ message, onRetry }: LoadErrorProps) {
   return (
     <div className="load-error">
       <p>{message}</p>
-      <AdminButton onClick={onRetry}>Retry</AdminButton>
+      <SiteButton onClick={onRetry}>Retry</SiteButton>
     </div>
   );
 }

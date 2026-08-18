@@ -9,7 +9,7 @@ import { HaikuService } from "../../../services/haiku";
 import { moveItemByOne } from "../../../utils/data-list-helpers";
 import { HaikuEditor } from "./components/haiku-editor/haiku-editor";
 import { LoadError } from "../../../components/load-error/load-error";
-import { AdminItemList } from "../../../components/admin-item-list/admin-item-list";
+import { AdminItemList } from "../components/admin-item-list/admin-item-list";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
 import { useUnsavedChanges } from "../use-unsaved-changes";

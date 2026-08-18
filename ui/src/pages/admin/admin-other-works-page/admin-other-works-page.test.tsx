@@ -35,7 +35,7 @@ vi.mock("../../../hooks/use-admin-token", () => ({
 // button does: hand the picked file to onAddImage under a fresh id and
 // insert an img whose title carries that id (the base64 src is what the
 // real editor shows before upload).
-vi.mock("../../../components/tiptap/tiptap", () => ({
+vi.mock("../components/tiptap/tiptap", () => ({
   Tiptap: ({
     content,
     setContent,

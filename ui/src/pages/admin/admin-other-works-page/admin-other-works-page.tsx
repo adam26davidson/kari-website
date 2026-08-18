@@ -12,7 +12,7 @@ import { ImageService } from "../../../services/images";
 import { getImageFileName } from "../../../utils/image-management-helpers";
 import { HttpError } from "../../../services/http-error";
 import { LoadError } from "../../../components/load-error/load-error";
-import { AdminItemList } from "../../../components/admin-item-list/admin-item-list";
+import { AdminItemList } from "../components/admin-item-list/admin-item-list";
 import { useAdminToken } from "../../../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";

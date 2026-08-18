@@ -9,7 +9,7 @@ import { HaigaEditor } from "./components/haiga-editor/haiga-editor";
 import { moveItemByOne } from "../../../utils/data-list-helpers";
 import { HaigaContent } from "../../../components/haiga-content/haiga-content";
 import { LoadError } from "../../../components/load-error/load-error";
-import { AdminItemList } from "../../../components/admin-item-list/admin-item-list";
+import { AdminItemList } from "../components/admin-item-list/admin-item-list";
 import { useAdminToken } from "../../../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";

@@ -13,7 +13,7 @@ import {
 } from "./components/photography-post-editor/editor-image";
 import { PhotographyPostSummary } from "./components/photography-post-summary/photography-post-summary";
 import { LoadError } from "../../../components/load-error/load-error";
-import { AdminItemList } from "../../../components/admin-item-list/admin-item-list";
+import { AdminItemList } from "../components/admin-item-list/admin-item-list";
 import { useAdminToken } from "../../../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";

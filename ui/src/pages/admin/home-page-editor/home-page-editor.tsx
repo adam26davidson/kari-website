@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { Card } from "../../../components/card/card";
+import { Card } from "../components/card/card";
 import "./home-page-editor.css";
 import { useAdminToken } from "../../../hooks/use-admin-token";
 import { HomePageData } from "../../../models";
-import { PhotoPicker } from "../../../components/photo-picker/photo-picker";
+import { PhotoPicker } from "../components/photo-picker/photo-picker";
 import { ImageService } from "../../../services/images";
 import { HomePageService } from "../../../services/home-page";
-import { AdminButton } from "../../../components/admin-button/admin-button";
+import { AdminButton } from "../components/admin-button/admin-button";
 import { LoadError } from "../../../components/load-error/load-error";
 import { useAdminUi } from "../admin-ui-context";
 import { useUnsavedChanges } from "../use-unsaved-changes";

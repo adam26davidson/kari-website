@@ -7,16 +7,6 @@
   overflow-y: auto;
 }
 
-.admin-data-list {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
-  width: 100%;
-  max-width: 800px;
-  padding: 8px 0px;
-}
-
 .data-list {
   background-color: rgba(226, 226, 226, 0.8);
   backdrop-filter: blur(10px);
