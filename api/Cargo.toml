@@ -20,10 +20,10 @@ serde_json = "1.0.151"
 serde = { version = "1.0.229", features = ["derive"] }
 hyper = "0.14.32"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-aws-config = "1.5.8"
-aws-sdk-s3 = "1.57.0"
-aws-smithy-types = "1.2.8"
-aws-smithy-http = "0.60.11"
+aws-config = "1.10.1"
+aws-sdk-s3 = "1.142.0"
+aws-smithy-types = "1.6.2"
+aws-smithy-http = "0.64.0"
 aws-sig-auth = "0.60.3"
 async-trait = "0.1.92"
 mime_guess = "2.0.5"
@@ -35,6 +35,6 @@ tower-test = "0.4.0"
 http-body-util = "0.1.5"
 jsonwebtoken = "9.3.1"
 serde = { version = "1.0.229", features = ["derive"] }
-aws-sdk-s3 = { version = "1.57.0", features = ["test-util"] }
-aws-smithy-mocks = "0.1"
-aws-smithy-runtime-api = "1"
+aws-sdk-s3 = { version = "1.142.0", features = ["test-util"] }
+aws-smithy-mocks = "0.3.0"
+aws-smithy-runtime-api = "1.14.0"
