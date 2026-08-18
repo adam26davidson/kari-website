@@ -50,12 +50,35 @@ cleanup() {
 }
 trap cleanup INT TERM EXIT
 
+# `docker compose up` fails with a name conflict when a container already
+# holds the fixed `container_name` from docker-compose.yml but compose won't
+# reuse it: it belongs to another compose project (a worktree with a
+# different directory name), or it exited (invisible to plain `docker ps`,
+# still holding the name). It's a throwaway seeded MinIO, so removing it is
+# always safe; only this project's own running container is left for compose.
+remove_stale_container() {
+  local name=$1 cid state owner project
+  cid=$(docker ps -aq --filter "name=^${name}\$")
+  [ -n "$cid" ] || return 0
+  state=$(docker inspect -f '{{.State.Status}}' "$cid")
+  owner=$(docker inspect -f \
+    '{{index .Config.Labels "com.docker.compose.project"}}' "$cid")
+  project=${COMPOSE_PROJECT_NAME:-$(basename "$PWD" | tr '[:upper:]' '[:lower:]')}
+  if [ "$state" = running ] && [ "$owner" = "$project" ]; then
+    return 0
+  fi
+  echo "Removing stale $name container ($state, compose project:" \
+    "${owner:-none}) so docker compose can recreate it"
+  docker rm -f "$cid" > /dev/null
+}
+
 ui_args=()
 if [ "$mode" = minio ]; then
   command -v docker > /dev/null || {
     echo "docker is required for local MinIO mode" >&2
     exit 1
   }
+  remove_stale_container kari-e2e-s3
   docker compose up -d --wait minio
   (cd ui && node e2e/seed.mjs)
   # Mirror api/.env; exported here because the API runs from the repo root
