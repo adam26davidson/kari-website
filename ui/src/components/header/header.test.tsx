@@ -131,6 +131,16 @@ describe("Header on /admin", () => {
     });
   });
 
+  it("shows the admin header on nested admin routes", () => {
+    mockAuth0({
+      user: { name: "Kari" },
+      isAuthenticated: true,
+    });
+    renderHeader("/admin/haiku/h1");
+    expect(screen.getByText("Kari Davidson - Admin")).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
   it("shows a logging-in message while Auth0 is loading", () => {
     mockAuth0({ isLoading: true });
     renderHeader("/admin");
