@@ -74,6 +74,7 @@ const ADMIN_ROUTES = [
   },
   { route: "/admin/other-works", name: "admin-other-works-list" },
   { route: "/admin/other-works/seed-blog-1", name: "admin-other-works-editor" },
+  { route: "/admin/background", name: "admin-background" },
   { route: "/admin/image-cleanup", name: "admin-image-cleanup" },
 ];
 

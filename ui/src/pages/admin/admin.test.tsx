@@ -28,6 +28,9 @@ vi.mock("./admin-photography-page/admin-photography-page", () => ({
 vi.mock("./admin-image-gc-page/admin-image-gc-page", () => ({
   AdminImageGcPage: () => <div>image-gc-page-stub</div>,
 }));
+vi.mock("./admin-background-page/admin-background-page", () => ({
+  AdminBackgroundPage: () => <div>background-page-stub</div>,
+}));
 
 const loginWithRedirect = vi.fn();
 
@@ -88,6 +91,7 @@ describe("Admin menu", () => {
       "Haiga",
       "Photography",
       "Other works",
+      "Background",
       "Image cleanup",
     ]);
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
@@ -96,6 +100,7 @@ describe("Admin menu", () => {
       "/admin/haiga",
       "/admin/photography",
       "/admin/other-works",
+      "/admin/background",
       "/admin/image-cleanup",
     ]);
   });
@@ -111,6 +116,7 @@ describe("Admin menu", () => {
     ["Haiga", "haiga-page-stub"],
     ["Photography", "photography-page-stub"],
     ["Other works", "other-works-page-stub"],
+    ["Background", "background-page-stub"],
     ["Image cleanup", "image-gc-page-stub"],
   ])("switches to %s on click", (label, stub) => {
     renderAdmin();

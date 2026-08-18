@@ -98,6 +98,32 @@ describe("ImageService.upload", () => {
   });
 });
 
+describe("ImageService.list", () => {
+  it("GETs the image names with auth and returns them", async () => {
+    const fetchMock = mockFetchOnce({
+      ok: true,
+      json: async () => ({ images: ["new.webp", "old.jpg"] }),
+    });
+
+    const result = await ImageService.list(getToken);
+
+    expect(result).toEqual(["new.webp", "old.jpg"]);
+    expect(fetchMock).toHaveBeenCalledWith(API_IMAGES_URL, {
+      headers: { Authorization: "Bearer test-token" },
+    });
+  });
+
+  it("throws an HttpError when the listing fails", async () => {
+    mockFetchOnce({ ok: false, status: 500, json: async () => ({}) });
+    const failure = ImageService.list(getToken);
+    await expect(failure).rejects.toThrow("Failed to list images (HTTP 500)");
+    await expect(failure).rejects.toMatchObject({
+      name: "HttpError",
+      status: 500,
+    });
+  });
+});
+
 describe("ImageService.delete", () => {
   it("DELETEs the image by filename with auth", async () => {
     const fetchMock = mockFetchOnce({ ok: true, json: async () => ({}) });

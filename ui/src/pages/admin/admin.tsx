@@ -7,6 +7,7 @@ import { HomePageEditor } from "./home-page-editor/home-page-editor";
 import { AdminOtherWorksPage } from "./admin-other-works-page/admin-other-works-page";
 import { AdminPhotographyPage } from "./admin-photography-page/admin-photography-page";
 import { AdminImageGcPage } from "./admin-image-gc-page/admin-image-gc-page";
+import { AdminBackgroundPage } from "./admin-background-page/admin-background-page";
 import { AdminButton } from "../../components/admin-button/admin-button";
 import { AdminUiProvider } from "./admin-ui-provider";
 
@@ -18,6 +19,7 @@ const ADMIN_PAGES = [
   { id: "haiga", label: "Haiga" },
   { id: "photography", label: "Photography" },
   { id: "other-works", label: "Other works" },
+  { id: "background", label: "Background" },
   { id: "image-cleanup", label: "Image cleanup" },
 ] as const;
 
@@ -58,6 +60,7 @@ export function Admin() {
                   path="other-works/:id?"
                   element={<AdminOtherWorksPage />}
                 />
+                <Route path="background" element={<AdminBackgroundPage />} />
                 <Route path="image-cleanup" element={<AdminImageGcPage />} />
                 <Route
                   path="*"
