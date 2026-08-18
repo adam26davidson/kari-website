@@ -5,6 +5,7 @@ pub mod health;
 pub mod home;
 pub mod images;
 pub mod photography;
+pub mod site_settings;
 
 use axum::{
     extract::DefaultBodyLimit,
@@ -25,7 +26,12 @@ pub fn create_router(state: AppState) -> Router {
         .route("/photography", put(photography::update_photography_handler))
         .route("/photography", get(photography::get_photography_handler))
         .route("/home-page", put(home::update_home_page_handler))
+        .route(
+            "/site-settings",
+            put(site_settings::update_site_settings_handler),
+        )
         .route("/images", post(images::upload_image_handler))
+        .route("/images", get(images::list_images_handler))
         .route("/images/gc", post(images::gc_images_handler))
         .route("/images/:filename", delete(images::delete_image_handler))
         .route(
@@ -48,7 +54,11 @@ pub fn create_router(state: AppState) -> Router {
         .route("/images/:filename", get(images::get_image_handler))
         .route("/haiku", get(haiku::get_haiku_handler))
         .route("/haiga", get(haiga::get_haiga_handler))
-        .route("/home-page", get(home::get_home_page_handler));
+        .route("/home-page", get(home::get_home_page_handler))
+        .route(
+            "/site-settings",
+            get(site_settings::get_site_settings_handler),
+        );
 
     Router::new()
         .merge(secure_routes)

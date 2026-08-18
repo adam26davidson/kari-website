@@ -19,7 +19,7 @@ use std::collections::{BTreeSet, HashSet};
 use std::error::Error;
 use std::fmt;
 
-use crate::models::{BlogPost, Haiga, HomePageData, PhotographyPost};
+use crate::models::{BlogPost, Haiga, HomePageData, PhotographyPost, SiteSettings};
 use crate::services::object_store::ObjectStore;
 use crate::services::s3::S3Error;
 
@@ -138,8 +138,9 @@ fn parse_manifest<T: serde::de::DeserializeOwned>(key: &str, data: &[u8]) -> Res
 }
 
 /// Build the full set of image file names referenced by any content the site
-/// serves: `haiga.json`, `home-page.json`, `photography.json`, and the HTML
-/// of every blog post listed in `blog-posts-all.json` / `blog-posts.json`.
+/// serves: `haiga.json`, `home-page.json`, `site-settings.json` (the site
+/// background photo), `photography.json`, and the HTML of every blog post
+/// listed in `blog-posts-all.json` / `blog-posts.json`.
 ///
 /// Errors on ANY fetch or parse failure — see the module docs for why that
 /// must abort the sweep.
@@ -158,6 +159,13 @@ pub async fn collect_referenced_images(
     if let Some(data) = fetch_optional(store, "home-page.json").await? {
         let home_page: HomePageData = parse_manifest("home-page.json", &data)?;
         add_reference(&home_page.photo, &mut refs);
+    }
+
+    // The site background selected in the admin settings is served straight
+    // from S3 by every public page; it must never look orphaned.
+    if let Some(data) = fetch_optional(store, "site-settings.json").await? {
+        let settings: SiteSettings = parse_manifest("site-settings.json", &data)?;
+        add_reference(&settings.background_photo, &mut refs);
     }
 
     if let Some(data) = fetch_optional(store, "photography.json").await? {

@@ -21,6 +21,17 @@ pub struct HomePageData {
     pub blurb: String,
 }
 
+/// Site-wide settings stored as `site-settings.json`. `background_photo` is
+/// the `images/` file name the public site uses as its page background; an
+/// empty string means "use the built-in default background". The field
+/// defaults so a future settings object written without it still parses —
+/// important because the image GC treats a parse failure as fatal.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SiteSettings {
+    #[serde(rename = "backgroundPhoto", default)]
+    pub background_photo: String,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BlogPost {
     pub id: String,
