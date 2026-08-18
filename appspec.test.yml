@@ -1,20 +1,16 @@
 version: 0.0
 os: linux
 
-# Bundle layout (assembled by the GitHub Actions workflow):
-#   appspec.yml
-#   dist/                 -> built frontend (Vite)
-#   kari-website-api      -> cross-compiled aarch64 API binary
-#   scripts/deploy/*.sh   -> lifecycle hooks
-#
-# This is the PROD appspec (deployment group kari-website-cd). The test
-# environment uses appspec.test.yml, which differs only in file
-# destinations — keep the hooks sections in sync.
+# Test-environment variant of appspec.yml — the deploy workflow copies this
+# file to the TEST bundle root as `appspec.yml` (CodeDeploy requires that
+# name). Only the file destinations differ from prod; the lifecycle scripts
+# are shared and pick the right service/port from DEPLOYMENT_GROUP_NAME
+# (see scripts/deploy/env.sh). Keep hooks in sync with appspec.yml.
 files:
   - source: dist
-    destination: /home/ubuntu/static-sites/kari-website
+    destination: /home/ubuntu/static-sites/kari-website-test
   - source: kari-website-api
-    destination: /home/ubuntu/kari-api
+    destination: /home/ubuntu/kari-api-test
 
 hooks:
   # Stop the API before overwriting its binary (avoids "text file busy").

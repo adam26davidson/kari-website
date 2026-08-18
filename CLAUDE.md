@@ -142,6 +142,12 @@ address or explicitly dismiss them, but the job never blocks a merge.
 - Error handling: Proper type checking and error handling
 
 ## AWS Integration
+- Deploys (`.github/workflows/deploy.yml`): every CI-green merge to `main`
+  auto-deploys to the test environment (test.karidavidson.com); the prod
+  deploy job then waits on the `production` GitHub Environment's required
+  reviewer. Both bundles are built up front from the CI-validated commit, so
+  approval promotes exactly what was reviewed on test. One-time
+  infrastructure setup: `docs/test-deployment-setup.md`.
 - Login: `aws sso login` before running API locally
 - S3 sync: `./scripts/sync_s3_prod_to_test.sh` to sync production S3 to test
 - Image GC: `POST /images/gc` (admin JWT) sweeps orphaned `images/` objects.

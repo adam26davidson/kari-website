@@ -1,8 +1,14 @@
-name: Deploy to EC2
+name: Deploy
 
-# Deploys only after the CI workflow succeeds on main (or manually via
-# workflow_dispatch). The workflow_run branches filter matches CI runs whose
-# head branch is main, i.e. push-to-main runs, not PR runs.
+# Two-stage pipeline: every CI-green merge to main deploys automatically to
+# the test environment (test.karidavidson.com); production only deploys after
+# a required reviewer approves the `production` GitHub Environment (works
+# from the GitHub mobile app). Both bundles are built up front from the exact
+# commit CI validated (workflow_run.head_sha), so approving a run promotes
+# byte-for-byte the same commit that was reviewed on test — never
+# whatever main happens to be at approval time.
+#
+# One-time AWS/GitHub/Auth0 setup lives in docs/test-deployment-setup.md.
 on:
   workflow_run:
     workflows: [CI]
@@ -14,12 +20,8 @@ permissions:
   id-token: write   # required for AWS OIDC
   contents: read
 
-concurrency:
-  group: deploy-main
-  cancel-in-progress: false
-
 jobs:
-  build-and-deploy:
+  build:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
@@ -36,10 +38,14 @@ jobs:
           cache: npm
           cache-dependency-path: ui/package-lock.json
 
-      - name: Build frontend
+      # Vite bakes VITE_* vars in at build time, so the test and prod
+      # environments need separate frontend builds of the same commit.
+      - name: Build frontend (staging + production)
         working-directory: ui
         run: |
           npm ci
+          npm run build:staging
+          mv dist dist-staging
           npm run build
 
       - name: Setup Rust
@@ -54,13 +60,46 @@ jobs:
         working-directory: api
         run: cross build --release --target aarch64-unknown-linux-gnu
 
-      - name: Assemble deploy bundle
+      # The API binary and lifecycle scripts are identical in both bundles;
+      # only the appspec (file destinations) and the frontend build differ.
+      - name: Assemble deploy bundles
         run: |
-          rm -rf bundle && mkdir -p bundle/scripts
-          cp appspec.yml bundle/
-          cp -r scripts/deploy bundle/scripts/deploy
-          cp -r ui/dist bundle/dist
-          cp api/target/aarch64-unknown-linux-gnu/release/kari-website-api bundle/kari-website-api
+          for env in test prod; do
+            rm -rf "bundle-$env" && mkdir -p "bundle-$env/scripts"
+            cp -r scripts/deploy "bundle-$env/scripts/deploy"
+            cp api/target/aarch64-unknown-linux-gnu/release/kari-website-api "bundle-$env/kari-website-api"
+          done
+          cp appspec.test.yml bundle-test/appspec.yml
+          cp -r ui/dist-staging bundle-test/dist
+          cp appspec.yml bundle-prod/appspec.yml
+          cp -r ui/dist bundle-prod/dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-test
+          path: bundle-test
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-prod
+          path: bundle-prod
+          retention-days: 30
+
+  deploy-test:
+    needs: build
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-test
+      cancel-in-progress: false
+    environment:
+      name: test
+      url: https://test.karidavidson.com
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: bundle-test
+          path: bundle
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -68,8 +107,54 @@ jobs:
           role-to-assume: arn:aws:iam::336231940806:role/kari-website-ci
           aws-region: us-east-2
 
-      - name: Upload bundle and create deployment
+      - name: Upload bundle and create test deployment
         run: |
+          # upload/download-artifact drops file modes; CodeDeploy executes the
+          # hook scripts directly, so restore the executable bit first.
+          chmod +x bundle/scripts/deploy/*.sh
+          KEY="kari-website/test/${GITHUB_SHA}.zip"
+          aws deploy push \
+            --application-name kari-website \
+            --s3-location "s3://kari-website-deploy-336231940806/${KEY}" \
+            --source bundle
+          DID=$(aws deploy create-deployment \
+            --application-name kari-website \
+            --deployment-group-name kari-website-test \
+            --s3-location "bucket=kari-website-deploy-336231940806,key=${KEY},bundleType=zip" \
+            --file-exists-behavior OVERWRITE \
+            --description "GHA test ${GITHUB_SHA}" \
+            --query deploymentId --output text)
+          echo "Deployment: $DID"
+          aws deploy wait deployment-successful --deployment-id "$DID"
+          echo "Test deploy succeeded: $DID"
+
+  # Held by the `production` environment's required-reviewer rule until
+  # approved (see docs/test-deployment-setup.md). Deploys the prod bundle
+  # already built by the `build` job from the reviewed commit.
+  deploy-prod:
+    needs: deploy-test
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
+    environment:
+      name: production
+      url: https://karidavidson.com
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: bundle-prod
+          path: bundle
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::336231940806:role/kari-website-ci
+          aws-region: us-east-2
+
+      - name: Upload bundle and create prod deployment
+        run: |
+          chmod +x bundle/scripts/deploy/*.sh
           KEY="kari-website/${GITHUB_SHA}.zip"
           aws deploy push \
             --application-name kari-website \
@@ -84,4 +169,4 @@ jobs:
             --query deploymentId --output text)
           echo "Deployment: $DID"
           aws deploy wait deployment-successful --deployment-id "$DID"
-          echo "Deploy succeeded: $DID"
+          echo "Prod deploy succeeded: $DID"
