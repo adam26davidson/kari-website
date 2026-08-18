@@ -128,8 +128,13 @@ address or explicitly dismiss them, but the job never blocks a merge.
 - CI retriggers: the GitHub App used by Claude sessions cannot call the
   Actions re-run API (403). To re-run CI (e.g. after a GitHub outage), push
   an empty commit to the PR branch. Before debugging a "failed" run, check
-  whether every job died in "Set up job" — that's GitHub infrastructure,
-  not the PR.
+  whether every job died in "Set up job" — that's not the PR. It's either
+  GitHub infrastructure OR an Actions billing block (spending cap hit /
+  failed payment); the two look identical in `gh run view` (failure in
+  seconds, zero steps executed). The job's annotation states the real
+  reason (`gh api repos/<owner>/<repo>/check-runs/<job-id>/annotations`) —
+  read it before re-triggering, since re-runs are pointless until a billing
+  block is cleared.
 
 ## Code Style Guidelines
 - TypeScript: Use strict typing with interfaces (see models.ts)
