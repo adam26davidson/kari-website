@@ -6,11 +6,10 @@ The repo side of the test→prod pipeline (issue #227) is in place:
 `production` GitHub Environment. This document is the **one-time
 AWS/GitHub/Auth0 setup** that has to exist before the first run succeeds.
 
-> **Status (2026-08-18):** executed. Steps 1–7 are done (deployment group
+> **Status (2026-08-18):** executed, steps 1–8 (deployment group
 > `kari-website-test` created; IAM and bucket config already covered test;
-> DNS, instance config, TLS, and the `production` GitHub environment are
-> live). Step 8 (Auth0 origins) remained manual — the local `auth0` CLI
-> token had expired. Step 9 runs after this PR merges.
+> DNS, instance config, TLS, the `production` GitHub environment, and the
+> Auth0 origins are live). Step 9 runs after this PR merges.
 
 It is written to be executed by a Claude session on a machine with:
 
