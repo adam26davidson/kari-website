@@ -37,6 +37,12 @@ permissions:
 jobs:
   visual-review:
     name: Screenshot + Claude review
+    # Skip bot PRs (Renovate lockfile bumps): the Claude review action
+    # refuses non-human actors, leaving a failed check that blocks
+    # Renovate's auto-merge — and reviewing a dependency bump's
+    # screenshots adds little anyway. Skipped counts as neutral, so
+    # auto-merge proceeds.
+    if: github.event.pull_request.user.type != 'Bot'
     runs-on: ubuntu-latest
     env:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
