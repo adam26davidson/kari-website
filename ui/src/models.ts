@@ -16,6 +16,15 @@ export interface HomePageData {
   blurb: string;
 }
 
+/**
+ * Site-wide settings stored as site-settings.json. backgroundPhoto is the
+ * uploaded image file name used as the public site's page background; ""
+ * means "use the built-in default background".
+ */
+export interface SiteSettings {
+  backgroundPhoto: string;
+}
+
 export interface BlogPost {
   id: string;
   title: string;

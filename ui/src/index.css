@@ -31,6 +31,14 @@ body::before {
   }
 }
 
+/* Admin-selected background: useSiteBackground sets the attribute and the
+   --site-background variable when site-settings.json names a custom photo.
+   The attribute selector outweighs both default rules above (media query
+   included), so this single rule overrides desktop and mobile alike. */
+body[data-custom-background]::before {
+  background-image: var(--site-background);
+}
+
 .whole-page {
   display: flex;
   flex-direction: column;

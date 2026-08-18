@@ -103,6 +103,7 @@ fn seeded_store() -> InMemoryStore {
     InMemoryStore::default()
         .with_object("haiga.json", json!([{"id": "h1", "lines": [], "publisher": "p", "image": "haiga.jpg"}]).to_string())
         .with_object("home-page.json", json!({"photo": "home.jpg", "blurb": "b"}).to_string())
+        .with_object("site-settings.json", json!({"backgroundPhoto": "background.jpg"}).to_string())
         .with_object(
             "photography.json",
             json!([{"id": "p1", "title": "t", "subtitle": "s", "blurb": "b",
@@ -137,6 +138,7 @@ async fn collects_references_from_every_manifest_and_blog_content() {
     for name in [
         "haiga.jpg",
         "home.jpg",
+        "background.jpg",
         "photo1.jpg",
         "photo2.jpg",
         "blog-draft.png",
@@ -306,6 +308,7 @@ async fn gc_protects_references_from_all_manifest_sources() {
     let store = seeded_store()
         .with_object("images/haiga.jpg", "x")
         .with_object("images/home.jpg", "x")
+        .with_object("images/background.jpg", "x")
         .with_object("images/photo1.jpg", "x")
         .with_object("images/photo2.jpg", "x")
         .with_object("images/blog-draft.png", "x")
@@ -319,6 +322,7 @@ async fn gc_protects_references_from_all_manifest_sources() {
     for key in [
         "images/haiga.jpg",
         "images/home.jpg",
+        "images/background.jpg",
         "images/photo1.jpg",
         "images/photo2.jpg",
         "images/blog-draft.png",
@@ -326,6 +330,56 @@ async fn gc_protects_references_from_all_manifest_sources() {
     ] {
         assert!(store.contains(key), "{key} must survive");
     }
+}
+
+#[tokio::test]
+async fn gc_never_deletes_the_site_background_photo() {
+    // The background photo is referenced ONLY by site-settings.json (no
+    // other manifest mentions it); a real sweep must still keep it while
+    // deleting a genuine orphan of the same age.
+    let store = InMemoryStore::default()
+        .with_object(
+            "site-settings.json",
+            json!({"backgroundPhoto": "bg.webp"}).to_string(),
+        )
+        .with_object("images/bg.webp", "background bytes")
+        .with_object("images/orphan.jpg", "orphan bytes");
+    let (store, app) = setup_with(store);
+
+    let (status, body) = send(app, gc_request(Some(false), true)).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(keys(&body, "referenced"), vec!["images/bg.webp"]);
+    assert_eq!(keys(&body, "deleted"), vec!["images/orphan.jpg"]);
+    assert!(
+        store.contains("images/bg.webp"),
+        "the site background must never be treated as an orphan"
+    );
+}
+
+#[tokio::test]
+async fn gc_aborts_when_site_settings_are_corrupt() {
+    let store = store_with_orphan().with_object("site-settings.json", "{not json");
+    let (store, app) = setup_with(store);
+
+    let (status, _) = send(app, gc_request(Some(false), true)).await;
+
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(
+        store.contains("images/orphan.jpg"),
+        "an aborted sweep must not have deleted anything"
+    );
+}
+
+#[tokio::test]
+async fn gc_aborts_when_site_settings_are_unreadable() {
+    let (store, app) = setup_with(store_with_orphan());
+    store.set_failing_get_for("site-settings.json");
+
+    let (status, _) = send(app, gc_request(Some(false), true)).await;
+
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(store.contains("images/orphan.jpg"));
 }
 
 #[tokio::test]

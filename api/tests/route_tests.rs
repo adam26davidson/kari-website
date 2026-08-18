@@ -63,6 +63,27 @@ async fn secure_route_with_valid_token_passes_auth() {
 }
 
 #[tokio::test]
+async fn site_settings_update_without_token_is_unauthorized() {
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/site-settings")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(r#"{"backgroundPhoto": ""}"#))
+        .unwrap();
+    assert_eq!(status_of(req).await, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn image_listing_without_token_is_unauthorized() {
+    // The listing includes unpublished images, so it must be admin-only.
+    let req = Request::builder()
+        .uri("/images")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(status_of(req).await, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
 async fn unknown_route_is_not_found() {
     let req = Request::builder()
         .uri("/definitely-not-a-route")
@@ -77,6 +98,16 @@ async fn public_route_does_not_require_auth() {
     // token (it may fail later against the dummy S3 client, which is fine).
     let req = Request::builder()
         .uri("/home-page")
+        .body(Body::empty())
+        .unwrap();
+    assert_ne!(status_of(req).await, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn site_settings_get_does_not_require_auth() {
+    // The public site reads the settings (background photo) without a token.
+    let req = Request::builder()
+        .uri("/site-settings")
         .body(Body::empty())
         .unwrap();
     assert_ne!(status_of(req).await, StatusCode::UNAUTHORIZED);

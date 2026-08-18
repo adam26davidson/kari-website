@@ -338,6 +338,116 @@ async fn update_home_page_store_outage_is_500() {
     assert_eq!(body, json!({"error": "Failed to update home page data"}));
 }
 
+// ---------------------------------------------------------------- site settings
+
+#[tokio::test]
+async fn get_site_settings_is_default_when_absent() {
+    let (_, app) = setup();
+    assert_eq!(
+        send(app, get("/site-settings")).await,
+        (StatusCode::OK, json!({"backgroundPhoto": ""}))
+    );
+}
+
+#[tokio::test]
+async fn site_settings_round_trip_through_store() {
+    let (store, app) = setup();
+    let data = json!({"backgroundPhoto": "bg.webp"});
+    let (status, body) = send(app.clone(), put_json("/site-settings", data.clone())).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!({"message": "Site settings updated"}));
+    // The public site fetches site-settings.json straight from S3, so the
+    // object must be stored public.
+    assert!(store.get("site-settings.json").expect("stored").public);
+    assert_eq!(
+        send(app, get("/site-settings")).await,
+        (StatusCode::OK, data)
+    );
+}
+
+#[tokio::test]
+async fn get_site_settings_tolerates_missing_background_field() {
+    // A future settings object written without backgroundPhoto must still
+    // parse (the field defaults) — a 500 here would also brick the GC sweep.
+    let (_, app) = setup_with(InMemoryStore::default().with_object("site-settings.json", "{}"));
+    assert_eq!(
+        send(app, get("/site-settings")).await,
+        (StatusCode::OK, json!({"backgroundPhoto": ""}))
+    );
+}
+
+#[tokio::test]
+async fn get_site_settings_corrupt_data_is_500() {
+    let (_, app) = setup_with(InMemoryStore::default().with_object("site-settings.json", "nope"));
+    let (status, body) = send(app, get("/site-settings")).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(body, json!({"error": "Stored site settings are invalid"}));
+}
+
+#[tokio::test]
+async fn get_site_settings_store_outage_is_500() {
+    let (store, app) = setup();
+    store.set_failing(true);
+    let (status, body) = send(app, get("/site-settings")).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(body, json!({"error": "Failed to fetch site settings"}));
+}
+
+#[tokio::test]
+async fn update_site_settings_store_outage_is_500() {
+    let (store, app) = setup();
+    store.set_failing(true);
+    let (status, body) = send(
+        app,
+        put_json("/site-settings", json!({"backgroundPhoto": ""})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(body, json!({"error": "Failed to update site settings"}));
+}
+
+// ---------------------------------------------------------------- image list
+
+#[tokio::test]
+async fn list_images_returns_names_newest_first_without_folder_marker() {
+    use std::time::{Duration, SystemTime};
+    let now = SystemTime::now();
+    let store = InMemoryStore::default()
+        .with_object_modified_at("images/older.jpg", "x", now - Duration::from_secs(300))
+        .with_object_modified_at("images/newest.webp", "x", now)
+        .with_object_modified_at("images/oldest.png", "x", now - Duration::from_secs(600))
+        // The bare folder marker and non-image objects must not appear.
+        .with_object("images/", "")
+        .with_object("home-page.json", "{}");
+    let (_, app) = setup_with(store);
+
+    let (status, body) = send(app, get_auth("/images")).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body,
+        json!({"images": ["newest.webp", "older.jpg", "oldest.png"]})
+    );
+}
+
+#[tokio::test]
+async fn list_images_is_empty_when_none_uploaded() {
+    let (_, app) = setup();
+    assert_eq!(
+        send(app, get_auth("/images")).await,
+        (StatusCode::OK, json!({"images": []}))
+    );
+}
+
+#[tokio::test]
+async fn list_images_store_outage_is_500() {
+    let (store, app) = setup();
+    store.set_failing(true);
+    let (status, body) = send(app, get_auth("/images")).await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(body, json!({"error": "Failed to list images"}));
+}
+
 // ---------------------------------------------------------------- blog
 
 fn sample_blog_posts() -> Value {

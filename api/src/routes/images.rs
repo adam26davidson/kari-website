@@ -133,6 +133,37 @@ pub async fn upload_image_handler(
     })))
 }
 
+/// `GET /images` — list the file names of every uploaded image, newest
+/// first, so the admin UI can offer already-uploaded images for reuse
+/// (e.g. picking a site background). Admin-only: the listing includes
+/// unpublished images.
+pub async fn list_images_handler(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let mut objects = state
+        .s3_service
+        .list_objects("images/")
+        .await
+        .map_err(|e| AppError::internal("Failed to list images", e))?;
+
+    // Newest first (the picker surfaces recent uploads); name as a
+    // tie-breaker so the order is deterministic.
+    objects.sort_by(|a, b| {
+        b.last_modified
+            .cmp(&a.last_modified)
+            .then_with(|| a.key.cmp(&b.key))
+    });
+
+    let images: Vec<&str> = objects
+        .iter()
+        .filter_map(|object| object.key.strip_prefix("images/"))
+        // The bare "images/" folder marker some S3 tools create.
+        .filter(|name| !name.is_empty())
+        .collect();
+
+    Ok(Json(serde_json::json!({ "images": images })))
+}
+
 pub async fn set_image_published_handler(
     State(state): State<AppState>,
     Path(filename): Path<String>,

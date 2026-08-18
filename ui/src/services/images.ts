@@ -59,6 +59,23 @@ export class ImageService {
     return data?.fileName ?? fileName;
   }
 
+  /**
+   * File names of every uploaded image, newest first — the "pick an
+   * already-uploaded image" source. Admin-only: the listing includes
+   * unpublished images.
+   */
+  static async list(
+    getAccessTokenSilently: TokenGetter,
+  ): Promise<Array<string>> {
+    const response = await authorizedFetch(
+      API_IMAGES_URL,
+      getAccessTokenSilently,
+    );
+    ensureOk(response, "Failed to list images");
+    const data: { images: Array<string> } = await response.json();
+    return data.images;
+  }
+
   static async delete(fileName: string, getAccessTokenSilently: TokenGetter) {
     const response = await authorizedFetch(
       `${API_IMAGES_URL}/${fileName}`,

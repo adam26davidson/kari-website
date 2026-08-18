@@ -2,6 +2,7 @@ import { Header } from "./components/header/header";
 import "./app.css";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useIsMobile } from "./hooks/use-is-mobile";
+import { useSiteBackground } from "./hooks/use-site-background";
 import { MobileMenu } from "./components/mobile-menu/mobile-menu";
 import { Suspense, useState } from "react";
 import { RouteErrorBoundary } from "./components/error-boundary/error-boundary";
@@ -55,6 +56,7 @@ function RouteFallback() {
 export function App() {
   const [showingMobileMenu, setShowingMobileMenu] = useState(false);
   const isMobile = useIsMobile();
+  useSiteBackground();
   return (
     <div className="whole-page">
       <Header
