@@ -3,9 +3,10 @@ import { S3_BUCKET, TEST_S3_URL, createS3Client } from "./config.mjs";
 
 // Snapshot/restore for the home page. Unlike every other admin section, the
 // home page is a single shared document (home-page.json) plus one referenced
-// photo, not an append-only list — and the editor's save flow DELETES the old
-// photo object before uploading a replacement, so a journey that touches it
-// destroys the seeded state with no way to undo through the UI.
+// photo, not an append-only list — the editor's save overwrites that shared
+// document (uploading any replacement photo under a fresh name), so a
+// journey that touches it replaces the seeded state with no way to undo
+// through the UI.
 //
 // These helpers capture the S3-visible state before the journey and put it
 // back afterwards, talking to the e2e object store directly through the

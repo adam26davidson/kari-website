@@ -1,10 +1,13 @@
 //! Garbage collection of orphaned `images/` objects.
 //!
 //! The upload-first save ordering (see #53 / #71) deliberately orphans an
-//! uploaded image when the subsequent manifest save fails, and best-effort
-//! deletes can leave orphans too. This module builds the set of image file
-//! names still referenced by any published content so the GC endpoint can
-//! delete everything else.
+//! uploaded image when the subsequent manifest save fails, and the editors
+//! deliberately leave replaced or removed images in place — one object can
+//! be referenced by several pieces of content (e.g. a haiga image doubling
+//! as the site background), so no per-content flow can safely delete it.
+//! This sweep is therefore the ONLY path that deletes `images/` objects: it
+//! builds the set of image file names still referenced by any published
+//! content so the GC endpoint can delete everything else.
 //!
 //! Safety model (the invariants the sweep must never break):
 //! - A referenced file is NEVER deleted. The reference set is built

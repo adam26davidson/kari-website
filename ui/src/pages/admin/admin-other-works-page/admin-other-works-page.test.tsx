@@ -20,7 +20,6 @@ vi.mock("../../../services/blog", () => ({
 vi.mock("../../../services/images", () => ({
   ImageService: {
     upload: vi.fn(),
-    delete: vi.fn(),
     setPublished: vi.fn(),
   },
 }));
@@ -118,7 +117,6 @@ beforeEach(() => {
   vi.mocked(BlogService.getContent).mockResolvedValue(savedContent);
   vi.mocked(BlogService.updateContent).mockResolvedValue(undefined);
   vi.mocked(BlogService.deleteContent).mockResolvedValue(undefined);
-  vi.mocked(ImageService.delete).mockResolvedValue(undefined);
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -137,8 +135,6 @@ describe("AdminOtherWorksPage image removal on save", () => {
         "error",
       ),
     );
-    // The still-referenced image must never be deleted on a failed save.
-    expect(ImageService.delete).not.toHaveBeenCalled();
     // Content-first ordering: the content had already been written when
     // the list save failed.
     expect(BlogService.updateContent).toHaveBeenCalledOnce();
@@ -161,16 +157,9 @@ describe("AdminOtherWorksPage image removal on save", () => {
         "error",
       ),
     );
-    // The stored content still references the image, so it must survive.
-    expect(ImageService.delete).not.toHaveBeenCalled();
   });
 
-  it("skips removed images whose src has no file name", async () => {
-    // A trailing-slash src has no extractable file name; removing it must
-    // not attempt a delete (there is nothing to delete it by).
-    vi.mocked(BlogService.getContent).mockResolvedValue(
-      savedContent + '<img src="https://api.test.local/images/">',
-    );
+  it("saves content then list, leaving the removed image in storage", async () => {
     const { container, notify } = await openEditorAndRemoveImage();
 
     fireEvent.click(iconButton(container, "floppy-disk"));
@@ -178,40 +167,12 @@ describe("AdminOtherWorksPage image removal on save", () => {
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Other works item saved"),
     );
-    // Only the image with a real file name is deleted.
-    await waitFor(() =>
-      expect(ImageService.delete).toHaveBeenCalledWith(
-        "old.png",
-        expect.any(Function),
-      ),
-    );
-    expect(ImageService.delete).toHaveBeenCalledOnce();
-  });
-
-  it("deletes the removed image only after the content save succeeds", async () => {
-    const { container, notify } = await openEditorAndRemoveImage();
-
-    fireEvent.click(iconButton(container, "floppy-disk"));
-
-    await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith("Other works item saved"),
-    );
-    await waitFor(() =>
-      expect(ImageService.delete).toHaveBeenCalledWith(
-        "old.png",
-        expect.any(Function),
-      ),
-    );
-    expect(ImageService.delete).toHaveBeenCalledOnce();
-    // Content save -> list save -> image delete, strictly in that order.
-    const listOrder =
-      vi.mocked(BlogService.updateList).mock.invocationCallOrder[0];
-    const contentOrder =
-      vi.mocked(BlogService.updateContent).mock.invocationCallOrder[0];
-    const deleteOrder =
-      vi.mocked(ImageService.delete).mock.invocationCallOrder[0];
-    expect(contentOrder).toBeLessThan(listOrder);
-    expect(listOrder).toBeLessThan(deleteOrder);
+    // The removed image's object is left for the image-cleanup sweep —
+    // it may still be referenced elsewhere (e.g. as the site
+    // background). Content save strictly before the list save.
+    expect(
+      vi.mocked(BlogService.updateContent).mock.invocationCallOrder[0],
+    ).toBeLessThan(vi.mocked(BlogService.updateList).mock.invocationCallOrder[0]);
   });
 });
 
@@ -255,8 +216,6 @@ describe("AdminOtherWorksPage pending image files", () => {
       false,
       expect.any(Function),
     );
-    // Nothing was removed from the content, so nothing is deleted.
-    expect(ImageService.delete).not.toHaveBeenCalled();
   });
 });
 
@@ -301,8 +260,6 @@ describe("AdminOtherWorksPage content serialization on save", () => {
       false,
       expect.any(Function),
     );
-    // Nothing changed, so no image is deleted either.
-    expect(ImageService.delete).not.toHaveBeenCalled();
   });
 
   it("strips wrappers from legacy content stored as a full document", async () => {
@@ -324,7 +281,6 @@ describe("AdminOtherWorksPage content serialization on save", () => {
       false,
       expect.any(Function),
     );
-    expect(ImageService.delete).not.toHaveBeenCalled();
   });
 });
 
@@ -607,7 +563,6 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       );
       expect(BlogService.updateContent).not.toHaveBeenCalled();
       expect(ImageService.setPublished).not.toHaveBeenCalled();
-      expect(ImageService.delete).not.toHaveBeenCalled();
     });
 
     it("restores the published list when the content save fails", async () => {
@@ -744,7 +699,6 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
           expect.any(Function),
         ],
       ]);
-      expect(ImageService.delete).not.toHaveBeenCalled();
     });
   });
 
@@ -768,7 +722,6 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       // list is never written and nothing else is touched.
       expect(BlogService.updateList).not.toHaveBeenCalled();
       expect(ImageService.setPublished).not.toHaveBeenCalled();
-      expect(ImageService.delete).not.toHaveBeenCalled();
     });
   });
 });
@@ -783,7 +736,7 @@ describe("AdminOtherWorksPage deletion", () => {
     return { notify };
   }
 
-  it("keeps content and images when saving the shortened list fails", async () => {
+  it("keeps the content when saving the shortened list fails", async () => {
     vi.mocked(BlogService.updateList).mockRejectedValue(
       new Error("PUT failed"),
     );
@@ -795,53 +748,11 @@ describe("AdminOtherWorksPage deletion", () => {
         "error",
       ),
     );
-    // Still-referenced content and images must never be deleted on a
-    // failed save.
-    expect(ImageService.delete).not.toHaveBeenCalled();
+    // Still-referenced content must never be deleted on a failed save.
     expect(BlogService.deleteContent).not.toHaveBeenCalled();
   });
 
-  it("aborts before touching the list when fetching the content fails", async () => {
-    vi.mocked(BlogService.getContent).mockRejectedValue(
-      new Error("fetch failed"),
-    );
-    const { notify } = await confirmDelete();
-
-    await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to delete other works item",
-        "error",
-      ),
-    );
-    expect(BlogService.updateList).not.toHaveBeenCalled();
-    expect(ImageService.delete).not.toHaveBeenCalled();
-    expect(BlogService.deleteContent).not.toHaveBeenCalled();
-  });
-
-  it("skips images whose src has no file name when deleting", async () => {
-    vi.mocked(BlogService.getContent).mockResolvedValue(
-      savedContent + '<img src="https://api.test.local/images/">',
-    );
-    const { notify } = await confirmDelete();
-
-    await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith("Other works item deleted"),
-    );
-    await waitFor(() =>
-      expect(BlogService.deleteContent).toHaveBeenCalledWith(
-        "b1",
-        expect.any(Function),
-      ),
-    );
-    // Only the image with a real file name is deleted.
-    expect(ImageService.delete).toHaveBeenCalledWith(
-      "old.png",
-      expect.any(Function),
-    );
-    expect(ImageService.delete).toHaveBeenCalledOnce();
-  });
-
-  it("deletes content and images only after the shortened list is saved", async () => {
+  it("deletes the content only after the shortened list is saved", async () => {
     const { notify } = await confirmDelete();
 
     await waitFor(() =>
@@ -857,18 +768,12 @@ describe("AdminOtherWorksPage deletion", () => {
         expect.any(Function),
       ),
     );
-    expect(ImageService.delete).toHaveBeenCalledWith(
-      "old.png",
-      expect.any(Function),
-    );
-    expect(ImageService.delete).toHaveBeenCalledOnce();
-    // List save strictly before any S3 object deletion.
-    const listOrder =
-      vi.mocked(BlogService.updateList).mock.invocationCallOrder[0];
-    expect(listOrder).toBeLessThan(
-      vi.mocked(ImageService.delete).mock.invocationCallOrder[0],
-    );
-    expect(listOrder).toBeLessThan(
+    // List save strictly before the content deletion. The item's image
+    // objects are left for the image-cleanup sweep — they may still be
+    // referenced elsewhere (e.g. as the site background).
+    expect(
+      vi.mocked(BlogService.updateList).mock.invocationCallOrder[0],
+    ).toBeLessThan(
       vi.mocked(BlogService.deleteContent).mock.invocationCallOrder[0],
     );
   });
@@ -1200,6 +1105,5 @@ describe("AdminOtherWorksPage image upload on save", () => {
     // Nothing was saved or deleted for a post whose upload failed.
     expect(BlogService.updateContent).not.toHaveBeenCalled();
     expect(BlogService.updateList).not.toHaveBeenCalled();
-    expect(ImageService.delete).not.toHaveBeenCalled();
   });
 });

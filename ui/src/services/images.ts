@@ -76,15 +76,6 @@ export class ImageService {
     return data.images;
   }
 
-  static async delete(fileName: string, getAccessTokenSilently: TokenGetter) {
-    const response = await authorizedFetch(
-      `${API_IMAGES_URL}/${fileName}`,
-      getAccessTokenSilently,
-      { method: "DELETE" },
-    );
-    ensureOk(response, `Failed to delete image: ${fileName}`);
-  }
-
   static async setPublished(
     fileName: string,
     isPublished: boolean,

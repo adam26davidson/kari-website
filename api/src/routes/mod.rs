@@ -33,7 +33,6 @@ pub fn create_router(state: AppState) -> Router {
         .route("/images", post(images::upload_image_handler))
         .route("/images", get(images::list_images_handler))
         .route("/images/gc", post(images::gc_images_handler))
-        .route("/images/:filename", delete(images::delete_image_handler))
         .route(
             "/images/:filename/set-published",
             put(images::set_image_published_handler),

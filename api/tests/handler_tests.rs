@@ -926,32 +926,10 @@ async fn set_image_published_store_outage_is_500() {
     );
 }
 
-#[tokio::test]
-async fn delete_image_removes_object() {
-    let (store, app) = setup_with(InMemoryStore::default().with_object("images/photo.png", "PNG"));
-    let (status, body) = send(app, delete_auth("/images/photo.png")).await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(body, json!({"message": "Image deleted successfully"}));
-    assert!(!store.contains("images/photo.png"));
-}
-
-#[tokio::test]
-async fn delete_image_is_idempotent_for_missing_object() {
-    // S3 deletes never report NotFound, so a missing image still deletes OK.
-    let (_store, app) = setup();
-    let (status, body) = send(app, delete_auth("/images/never-existed.png")).await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(body, json!({"message": "Image deleted successfully"}));
-}
-
-#[tokio::test]
-async fn delete_image_store_outage_is_500() {
-    let (store, app) = setup();
-    store.set_failing(true);
-    let (status, body) = send(app, delete_auth("/images/photo.png")).await;
-    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-    assert_eq!(body, json!({"error": "Failed to delete image"}));
-}
+// There is deliberately no DELETE /images/:filename endpoint: per-image
+// deletion cannot know what still references an image (the same object can
+// back a haiga, a post, AND the site background), so the reference-checked
+// GC sweep (POST /images/gc) is the only way image objects are removed.
 
 // ---------------------------------------------------------------- health
 

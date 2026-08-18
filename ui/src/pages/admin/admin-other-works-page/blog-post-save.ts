@@ -35,8 +35,6 @@ export interface BlogPostSaveDeps {
     isPublished: boolean,
     getToken: TokenGetter,
   ) => Promise<string | null>;
-  /** `ImageService.delete`. */
-  deleteImage: (fileName: string, getToken: TokenGetter) => Promise<void>;
   /** `ImageService.setPublished`. */
   setImagePublished: (
     fileName: string,
@@ -69,13 +67,6 @@ export type PublishFlip = "publishing" | "unpublishing" | "none";
  */
 export interface ContentSavePlan {
   /**
-   * Images in the original content but not in the new; they become
-   * unreferenced once the save succeeds and are only deleted after the
-   * content save has succeeded, so a failure at any step leaves the
-   * published content intact.
-   */
-  removedImageFileNames: Array<string>;
-  /**
    * Images present in both contents, srcs rewritten in `doc` when
    * flipping. In-memory only — the actual visibility flips happen during
    * the transaction, at the safe point for each direction.
@@ -94,10 +85,12 @@ export interface ContentSavePlan {
 }
 
 /**
- * The three DOM-diffing passes of a save, pure and side-effect free:
- * removed images (in original, not in new), kept images (in both; srcs
- * rewritten when the save publishes or unpublishes), and added images
- * (in new, not in original).
+ * The two DOM-diffing passes of a save, pure and side-effect free:
+ * kept images (in original and new; srcs rewritten when the save
+ * publishes or unpublishes) and added images (in new, not in original).
+ * Images dropped from the content are simply no longer referenced —
+ * their objects are left for the image-cleanup sweep, since they may
+ * still be referenced by other content (e.g. as the site background).
  *
  * when a post is published, image URLs use the S3 URL
  * when a post is not published, image URLs use the API URL
@@ -123,8 +116,7 @@ export function planContentSave(
 
   // Index the new imgs by src once. The per-src lists are consumed
   // (shifted) by the kept-image pass below so same-src duplicates pair up
-  // one-to-one in content order; the removed-image pass runs first and
-  // only peeks.
+  // one-to-one in content order.
   const newImagesBySrc = new Map<string, Array<HTMLImageElement>>();
   for (const newImage of newImages) {
     const sameSrc = newImagesBySrc.get(newImage.src);
@@ -137,23 +129,6 @@ export function planContentSave(
   // The original imgs are never mutated, so a plain src set suffices for
   // the added-image pass.
   const originalImageSrcs = new Set(originalImages.map((img) => img.src));
-
-  // Images in the original content but not in the new become unreferenced
-  // once the save succeeds. Collect them now, before any src rewriting
-  // below.
-  const removedImageFileNames: Array<string> = [];
-  for (const originalImage of originalImages) {
-    if (newImagesBySrc.has(originalImage.src)) continue;
-    // image is in original but not in new
-    const fileName = getImageFileName(originalImage.src);
-    if (!fileName) {
-      console.error(
-        `File name not found for image to delete: ${originalImage.src}`,
-      );
-      continue;
-    }
-    removedImageFileNames.push(fileName);
-  }
 
   // Rewrite the kept images' srcs to the destination host and collect
   // their file names.
@@ -179,7 +154,6 @@ export function planContentSave(
   );
 
   return {
-    removedImageFileNames,
     keptImageFileNames,
     addedImages,
     doc: newHtmlDoc,
@@ -503,10 +477,12 @@ export interface SaveBlogPostArgs {
 }
 
 /**
- * The whole save: plan the image diff, upload pending files, run the
- * publish/unpublish/no-flip transaction, then delete newly unreferenced
- * images. Owns every toast except saveList's own; never throws. The
- * caller closes the editor only on a "saved" outcome.
+ * The whole save: plan the image diff, upload pending files, then run
+ * the publish/unpublish/no-flip transaction. Images removed from the
+ * content are left in storage for the image-cleanup sweep — they may
+ * still be referenced by other content (e.g. as the site background).
+ * Owns every toast except saveList's own; never throws. The caller
+ * closes the editor only on a "saved" outcome.
  */
 export async function saveBlogPost(
   args: SaveBlogPostArgs,
@@ -522,10 +498,8 @@ export async function saveBlogPost(
   const originalHtml = args.originalContent || "";
 
   let result: TransactionResult;
-  let removedImageFileNames: Array<string>;
   try {
     const plan = planContentSave(originalHtml, args.newContent || "", flip);
-    removedImageFileNames = plan.removedImageFileNames;
 
     // Upload images in new that are not in original, before anything
     // existing is touched.
@@ -591,13 +565,6 @@ export async function saveBlogPost(
       outcome: "rolledBack",
       rollbackIncomplete: result.rollbackIncomplete,
     };
-  }
-
-  // The saved content no longer references the removed images; a failed
-  // delete just leaves an orphan for later cleanup.
-  deps.showLoading("Deleting images...");
-  for (const fileName of removedImageFileNames) {
-    await deps.deleteImage(fileName, deps.getToken).catch(console.error);
   }
 
   deps.notify("Other works item saved");

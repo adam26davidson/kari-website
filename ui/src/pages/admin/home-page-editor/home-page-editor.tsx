@@ -61,11 +61,10 @@ export function HomePageEditor() {
     showLoading("Updating home page data...");
     try {
       const newHomePageData = { ...homePageData };
-      const previousPhoto = homePageData.photo;
       if (imageFile) {
-        // Upload the replacement first — the old photo is only deleted
-        // after the JSON save has succeeded, so a failure at any step
-        // leaves the published home page intact.
+        // Upload the replacement first — the JSON is only written after
+        // the upload has succeeded, so a failure at any step leaves the
+        // published home page intact.
         const newFileName = await ImageService.upload(
           imageFile,
           true,
@@ -77,17 +76,13 @@ export function HomePageEditor() {
         newHomePageData.photo = newFileName;
       }
 
+      // The replaced photo is deliberately NOT deleted: it may still be
+      // referenced by other content (e.g. as the site background), and if
+      // not, the image-cleanup sweep collects it later.
       await HomePageService.update(newHomePageData, getAccessTokenSilently);
       setHomePageData(newHomePageData);
       setSavedHomePageData(newHomePageData);
       setImageFile(null);
-      // The save succeeded, so nothing references the old photo anymore;
-      // a failed delete just leaves an orphan for later cleanup.
-      if (previousPhoto && previousPhoto !== newHomePageData.photo) {
-        await ImageService.delete(previousPhoto, getAccessTokenSilently).catch(
-          console.error,
-        );
-      }
       notify("Home page saved");
     } catch (error) {
       console.error(error);

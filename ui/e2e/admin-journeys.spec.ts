@@ -250,7 +250,7 @@ test.describe("haiga", () => {
     expect(imageSrc).toContain(`${TEST_S3_URL}/images/`);
     expect((await page.request.get(imageSrc!)).status()).toBe(200);
 
-    // Delete (also removes the uploaded image)
+    // Delete (the uploaded image object stays for the cleanup sweep)
     await openAdminSection(page, "Haiga");
     await iconButton(adminListItem(page, marker), "trash").click();
     await confirmDialog(page, "Yes");
@@ -372,7 +372,8 @@ test.describe("blog (other works)", () => {
     const imageResponse = await page.request.get(imageSrc!);
     expect(imageResponse.status()).toBe(200);
 
-    // Delete (also removes the content document and its images).
+    // Delete (also removes the content document; image objects stay
+    // for the cleanup sweep).
     await openAdminSection(page, "Other works");
     await iconButton(adminListItem(page, marker), "trash").click();
     await confirmDialog(page, "Yes");
@@ -464,7 +465,7 @@ test.describe("photography", () => {
     const publicSrc = await publicImage.getAttribute("src");
     expect((await page.request.get(publicSrc!)).status()).toBe(200);
 
-    // Delete (removes the post and its uploaded images).
+    // Delete (the uploaded image objects stay for the cleanup sweep).
     await openAdminSection(page, "Photography");
     await iconButton(adminListItem(page, marker), "trash").click();
     await confirmDialog(page, "Yes");
@@ -482,11 +483,11 @@ test.describe("photography", () => {
 
 test.describe("home page", () => {
   // The home page is a single shared document (home-page.json + one photo),
-  // not an append-only list, and saving a replacement photo deletes the old
-  // image object — so nothing done through the UI can undo a run. Instead
-  // the S3-visible state is snapshotted before each attempt and restored in
-  // afterEach (see e2e/home-page-state.ts), which runs even when the test
-  // fails midway and does not depend on the page still being alive.
+  // not an append-only list — saving overwrites the shared document, so
+  // nothing done through the UI can undo a run. Instead the S3-visible
+  // state is snapshotted before each attempt and restored in afterEach
+  // (see e2e/home-page-state.ts), which runs even when the test fails
+  // midway and does not depend on the page still being alive.
   let marker: string;
   let snapshot: HomePageSnapshot | undefined;
 

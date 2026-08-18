@@ -124,34 +124,6 @@ describe("ImageService.list", () => {
   });
 });
 
-describe("ImageService.delete", () => {
-  it("DELETEs the image by filename with auth", async () => {
-    const fetchMock = mockFetchOnce({ ok: true, json: async () => ({}) });
-
-    await ImageService.delete("fixed-uuid.png", getToken);
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      `${API_IMAGES_URL}/fixed-uuid.png`,
-      {
-        method: "DELETE",
-        headers: { Authorization: "Bearer test-token" },
-      },
-    );
-  });
-
-  it("throws an HttpError when the delete fails so callers can surface the error", async () => {
-    mockFetchOnce({ ok: false, status: 500, json: async () => ({}) });
-    const failure = ImageService.delete("fixed-uuid.png", getToken);
-    await expect(failure).rejects.toThrow(
-      "Failed to delete image: fixed-uuid.png (HTTP 500)",
-    );
-    await expect(failure).rejects.toMatchObject({
-      name: "HttpError",
-      status: 500,
-    });
-  });
-});
-
 describe("ImageService.setPublished", () => {
   it("PUTs the publish flag via the query param only, with no body", async () => {
     const fetchMock = mockFetchOnce({ ok: true, json: async () => ({}) });
