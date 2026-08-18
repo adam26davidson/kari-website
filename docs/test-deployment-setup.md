@@ -10,6 +10,10 @@ AWS/GitHub/Auth0 setup** that has to exist before the first run succeeds.
 > `kari-website-test` created; IAM and bucket config already covered test;
 > DNS, instance config, TLS, the `production` GitHub environment, and the
 > Auth0 origins are live). Step 9 runs after this PR merges.
+>
+> **Update:** the first deploy after merging failed at "Configure AWS
+> credentials (OIDC)" — step 3b below was missing from the original doc
+> and still needs to be executed.
 
 It is written to be executed by a Claude session on a machine with:
 
@@ -95,6 +99,50 @@ aws iam list-role-policies --role-name kari-website-ci
 # then aws iam get-policy-version / get-role-policy on what you find,
 # and aws iam put-role-policy / create-policy-version if it needs the new ARN.
 ```
+
+## 3b. Allow environment-scoped OIDC subjects on the CI role (REQUIRED)
+
+When a workflow job references a GitHub Environment — as `deploy-test`
+(`test`) and `deploy-prod` (`production`) now do — GitHub changes the OIDC
+token's `sub` claim from `repo:<owner>/<repo>:ref:refs/heads/main` to
+`repo:<owner>/<repo>:environment:<name>`. If the `kari-website-ci` trust
+policy only trusts the `ref:` form, both deploy jobs fail with
+`Not authorized to perform sts:AssumeRoleWithWebIdentity` before doing
+anything (this is exactly how the first deploy failed).
+
+Inspect the current trust policy:
+
+```bash
+aws iam get-role --role-name kari-website-ci \
+  --query 'Role.AssumeRolePolicyDocument'
+```
+
+Keep the document as-is but make the `sub` condition a list that also
+accepts the two environment subjects (use `StringLike` if it already is;
+values are exact either way):
+
+```json
+"Condition": {
+  "StringEquals": { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
+  "StringLike": {
+    "token.actions.githubusercontent.com:sub": [
+      "repo:adam26davidson/kari-website:ref:refs/heads/main",
+      "repo:adam26davidson/kari-website:environment:test",
+      "repo:adam26davidson/kari-website:environment:production"
+    ]
+  }
+}
+```
+
+Apply it (full document, edited copy of what `get-role` returned):
+
+```bash
+aws iam update-assume-role-policy --role-name kari-website-ci \
+  --policy-document file:///tmp/kari-website-ci-trust.json
+```
+
+Keep the `ref:refs/heads/main` entry — the `build` job carries no
+`environment:` and any future non-environment job would use it.
 
 ## 4. Check the instance role can read/write the test bucket
 
