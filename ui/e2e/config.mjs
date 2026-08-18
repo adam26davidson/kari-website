@@ -109,10 +109,7 @@ export function makeSolidPng(width, height) {
 
 /** How to start the throwaway MinIO instance the suite expects. */
 export const MINIO_START_COMMAND =
-  "  docker run -d --rm --name kari-e2e-s3 -p 9000:9000 \\\n" +
-  "    -e MINIO_ROOT_USER=kari-e2e " +
-  "-e MINIO_ROOT_PASSWORD=kari-e2e-secret \\\n" +
-  "    minio/minio server /data";
+  "  docker compose up -d --wait minio   (from the repo root)";
 
 /**
  * An S3 client targeting the local e2e store. Constructing it opens no
