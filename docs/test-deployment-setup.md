@@ -6,6 +6,12 @@ The repo side of the test→prod pipeline (issue #227) is in place:
 `production` GitHub Environment. This document is the **one-time
 AWS/GitHub/Auth0 setup** that has to exist before the first run succeeds.
 
+> **Status (2026-08-18):** executed. Steps 1–7 are done (deployment group
+> `kari-website-test` created; IAM and bucket config already covered test;
+> DNS, instance config, TLS, and the `production` GitHub environment are
+> live). Step 8 (Auth0 origins) remained manual — the local `auth0` CLI
+> token had expired. Step 9 runs after this PR merges.
+
 It is written to be executed by a Claude session on a machine with:
 
 - AWS CLI authenticated (`aws sso login`), account `336231940806`,
@@ -126,11 +132,22 @@ aws route53 change-resource-record-sets --hosted-zone-id "$ZONE_ID" \
 (If prod's A record is an alias or the IP isn't an Elastic IP, mirror
 whatever prod's record does instead.)
 
-## 6. Instance-side setup (via SSM or SSH)
+## 6. Instance-side setup (via EC2 Instance Connect)
 
-Run these ON the instance — e.g. `aws ssm start-session --target
-"$INSTANCE_ID"`, or `aws ssm send-command --document-name AWS-RunShellScript
---instance-ids "$INSTANCE_ID" --parameters commands=...` for each block.
+The instance is NOT registered with SSM, and no private key for it exists
+on the dev machine. What works is EC2 Instance Connect: push a throwaway
+public key (valid 60 seconds — re-push before every ssh), then ssh as
+`ubuntu`:
+
+```bash
+ssh-keygen -t ed25519 -f /tmp/eic_key -N '' -q
+aws ec2-instance-connect send-ssh-public-key \
+  --instance-id "$INSTANCE_ID" \
+  --availability-zone "$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
+      --query 'Reservations[0].Instances[0].Placement.AvailabilityZone' --output text)" \
+  --instance-os-user ubuntu --ssh-public-key file:///tmp/eic_key.pub
+ssh -i /tmp/eic_key ubuntu@"$PUBLIC_IP"
+```
 
 First, inspect prod's config so the test copies mirror reality:
 
@@ -163,14 +180,25 @@ sudo systemctl enable kari-api-test.service
 #    and the /api proxy_pass upstream port to 3001. Keep the SPA
 #    try_files fallback and any other directives identical to prod.
 sudo cp /etc/nginx/sites-available/<prod vhost> /etc/nginx/sites-available/test.karidavidson.com
-sudo ${EDITOR:-vi} /etc/nginx/sites-available/test.karidavidson.com   # strip prod's ssl_* / certbot lines; certbot re-adds them
+sudo ${EDITOR:-vi} /etc/nginx/sites-available/test.karidavidson.com   # point ssl_certificate* at the step-d cert paths
 sudo ln -s /etc/nginx/sites-available/test.karidavidson.com /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
 
-# d) TLS (assumes prod cert is certbot/Let's Encrypt — check
-#    `sudo certbot certificates` first; needs the DNS record from step 5
-#    to have propagated)
-sudo certbot --nginx -d test.karidavidson.com
+# d) TLS. certbot's nginx plugin is NOT installed on the instance; prod's
+#    cert uses the dns-route53 authenticator (the instance role carries the
+#    kari-certbot-dns-route53 policy), so mirror that — it also needs no
+#    propagated A record:
+sudo certbot certonly --dns-route53 -d test.karidavidson.com -n
+#    Cert lands in /etc/letsencrypt/live/test.karidavidson.com/; the vhost
+#    from (c) references it. certbot renews via certbot.timer but nothing
+#    reloaded nginx afterwards, so add the standard deploy hook (covers
+#    prod's cert too):
+sudo tee /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh <<'EOF'
+#!/bin/bash
+systemctl reload nginx
+EOF
+sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
+
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
 ## 7. GitHub: `production` environment with required reviewer
