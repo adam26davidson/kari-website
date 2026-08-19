@@ -1,8 +1,12 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working
+with code in this repository.
 
 ## Build Commands
+- `./scripts/setup-worktree.sh` - One-time setup for a fresh worktree (UI
+  dependencies + the Playwright browser the visual check needs). Idempotent
+  and cheap to re-run; see Parallel Sessions below.
 - `./scripts/dev.sh` - Start the whole dev stack (MinIO + seed + API + UI);
   `--aws` targets the real test bucket via SSO instead of local MinIO.
   Stacks are per-worktree: compose's directory-based project naming keeps
@@ -46,7 +50,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   happens to be in a real bucket
 - API: `cargo test` - Run Rust integration tests
 - API: `cargo llvm-cov --summary-only` - Coverage report (needs cargo-llvm-cov)
-- API: `cargo clippy --all-targets -- -D warnings` - Lint (CI enforces no warnings)
+- API: `cargo clippy --all-targets -- -D warnings` - Lint (CI enforces no
+  warnings)
 - API: `cargo fmt --check` - Formatting check
 
 CI (`.github/workflows/ci.yml`) runs all of the above on every pull request,
@@ -66,20 +71,18 @@ image overflowed its card or text was illegible against the background. So
 after ANY change that can affect how the UI looks (components, CSS, layout,
 `index.html`, UI dependency bumps), before claiming the work is done or
 opening a PR:
-1. In a freshly created worktree, do the one-time setup first: `npm ci` in
-   `ui/`, then `npx playwright install chromium` (details under Parallel
-   Sessions below) — neither is shared from the main clone, and the capture
-   script fails without them. Then, with the dev stack running
-   (`./scripts/dev.sh`), run `node e2e/screenshots.mjs` in `ui/` (add
-   `--routes /,/haiku` to limit to affected pages; `--base-url` to target a
-   non-default server). Full-page
-   desktop + tablet + mobile PNGs land in `ui/e2e/screenshots/`, and the
-   script asserts no horizontal overflow at each captured width plus a few
-   assert-only widths (exits non-zero, naming the widest element, if a
-   page overflows). Admin pages (lists,
-   editors, image cleanup) are captured too when `E2E_AUTH0_USERNAME` /
-   `E2E_AUTH0_PASSWORD` are set (as they are in CI); without them the script
-   captures the public pages only and says so.
+1. In a freshly created worktree, run `./scripts/setup-worktree.sh` first —
+   nothing installable is shared from the main clone, and the capture script
+   fails without it (details under Parallel Sessions below). Then, with the
+   dev stack running (`./scripts/dev.sh`), run `node e2e/screenshots.mjs` in
+   `ui/` (add `--routes /,/haiku` to limit to affected pages; `--base-url`
+   to target a non-default server). Full-page desktop + tablet + mobile PNGs
+   land in `ui/e2e/screenshots/`, and the script asserts no horizontal
+   overflow at each captured width plus a few assert-only widths (exits
+   non-zero, naming the widest element, if a page overflows). Admin pages
+   (lists, editors, image cleanup) are captured too when
+   `E2E_AUTH0_USERNAME` / `E2E_AUTH0_PASSWORD` are set (as they are in CI);
+   without them the script captures the public pages only and says so.
 2. Actually LOOK at each screenshot (Read the PNG files) and check for:
    content overflowing its container, clipped/squashed/stretched images,
    text that is hard to read against its actual rendered background,
@@ -109,14 +112,15 @@ address or create github issues for them, but the job never blocks a merge.
 - Caveat: GitHub only creates closing references for PRs based on `main`, so
   for a stacked PR keep the label manual until the PR retargets to `main`
   (retargeting fires the workflow, which takes over from there).
-- IMPORTANT: File new issues for what you find along the way instead of letting it
-  evaporate or silently expanding the current PR's scope:
+- IMPORTANT: File new issues for what you find along the way instead of
+  letting it evaporate or silently expanding the current PR's scope:
   - Any difficulty in the dev environment (broken or confusing scripts,
     flaky tooling, missing setup steps) — capture the problem and whatever
     workaround you used.
   - Natural next steps, unrelated problems noticed mid-task, and tech debt
     exposed by the work.
-  - Issues with the current design, even things requiring a larger rewrite are good to    capture and we can triage them later.
+  - Issues with the current design, even things requiring a larger rewrite
+    are good to capture and we can triage them later.
 
 ## Parallel Sessions / Multiple Open PRs
 - If two issues need edits to the same files, work them in ONE branch/PR
@@ -135,15 +139,17 @@ address or create github issues for them, but the job never blocks a merge.
   worktrees inside the repo; harness-managed ones under `.claude/worktrees/`
   are the exception — leave those to the tooling that created them.
 - Fresh worktree setup (do this first, it is not shared from the main
-  clone): a new worktree has no `ui/node_modules`, so run `npm ci` in `ui/`
-  — takes about a minute on a cold npm cache — before ANY UI command.
-  Without it tests and lint die with `command not found` and
+  clone): run `./scripts/setup-worktree.sh` before ANY UI command. It
+  installs `ui/node_modules` (`npm ci`, up to a minute on a cold npm cache)
+  and the Playwright chromium build the visual check needs. Without it,
+  tests and lint die with `command not found`, and
   `node e2e/screenshots.mjs` with `ERR_MODULE_NOT_FOUND`, before any of them
-  do real work. Then, for the visual check, run
-  `npx playwright install chromium`: Playwright's browsers live in a shared
-  cache outside `node_modules` (`~/.cache/ms-playwright`), so it is a quick
-  no-op when a matching build is already there, and the needed download
-  otherwise (fresh machine, or after a Playwright version bump).
+  do real work. Re-running is cheap and safe: it skips `npm ci` when
+  `ui/node_modules` already matches the lockfile, and Playwright's browsers
+  live in a cache outside `node_modules` (`~/.cache/ms-playwright`), so that
+  step is a quick no-op unless the machine is fresh or Playwright was
+  bumped. Pass `--force` to reinstall dependencies regardless. Changing the
+  script? Re-run its tests: `bash scripts/setup-worktree-test.sh`.
 - Commit only explicitly listed paths (`git add <paths>`, never `git add -A`
   in a shared tree); treat any file outside your issue's scope as owned by
   another session.
@@ -172,7 +178,7 @@ address or create github issues for them, but the job never blocks a merge.
 - Directory naming: kebab-case for component directories and files
 - Exports: named exports only (no default exports)
 - Error handling: Proper type checking and error handling
-- keept things DRY (important) 
+- keep things DRY (important)
 
 ## AWS Integration
 - Deploys (`.github/workflows/deploy.yml`): every CI-green merge to `main`
