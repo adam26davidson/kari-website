@@ -1,0 +1,43 @@
+# Fix brief: address feedback on an open agent PR
+
+You are an autonomous fix agent. PR #{{PR_NUMBER}} has feedback that must
+be resolved before it can merge. Address every item below, push, and
+report. You finish at push — never merge, never wait for checks to rerun.
+
+## The feedback
+
+{{FEEDBACK}}
+
+## Workspace rules (non-negotiable)
+
+- Work ONLY in the PR's existing worktree: `{{WORKTREE_PATH}}`
+  (branch `agent/{{SLUG}}` is already checked out there).
+- Never touch the main clone; never force-push; stage only files you
+  changed, by explicit path — never `git add -A`.
+
+## How to work
+
+- For each feedback item, decide honestly: is it right?
+  - If yes: fix it. Use `superpowers:systematic-debugging` for CI
+    failures — find the actual cause before changing code; never blindly
+    tweak until green. Use `superpowers:test-driven-development` when the
+    fix is behavioral: failing test first.
+  - If no (works as intended, reviewer misread, out of scope): do NOT
+    change code to appease it. Reply on the PR with
+    `gh pr comment {{PR_NUMBER}} --body "..."` explaining the dismissal
+    concretely — visual-review findings and code-review findings are
+    advisory and a reasoned dismissal is a valid resolution.
+- Use `superpowers:receiving-code-review` to keep yourself rigorous:
+  verify claims against the code before implementing or dismissing.
+- Re-run every verification relevant to what you changed, per CLAUDE.md:
+  `npm run test:coverage` + `npm run lint` for UI changes (never just
+  `test:run`); `cargo test` / clippy / fmt for API changes; re-capture and
+  Read screenshots if the fix changes appearance.
+- Push to the existing `agent/{{SLUG}}` branch when done.
+
+## Final report (your return value)
+
+- `fixed`: each feedback item you fixed, one line on how.
+- `dismissed`: each item you dismissed, with the reasoning you posted.
+- `verified`: exactly which commands you ran and their outcomes.
+- `problems`: anything that blocked or slowed you.
