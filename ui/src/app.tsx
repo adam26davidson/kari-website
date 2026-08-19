@@ -48,7 +48,6 @@ const Admin = lazyWithRetry(() =>
     default: m.Admin,
   })),
 );
-
 function RouteFallback() {
   return <div className="route-loading">Loading...</div>;
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { Admin } from "./admin";
@@ -31,6 +31,9 @@ vi.mock("./admin-image-gc-page/admin-image-gc-page", () => ({
 vi.mock("./admin-background-page/admin-background-page", () => ({
   AdminBackgroundPage: () => <div>background-page-stub</div>,
 }));
+vi.mock("./admin-whats-on-test-page/admin-whats-on-test-page", () => ({
+  AdminWhatsOnTestPage: () => <div>whats-on-test-page-stub</div>,
+}));
 
 const loginWithRedirect = vi.fn();
 
@@ -60,6 +63,10 @@ beforeEach(() => {
   mockAuth();
 });
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("Admin authentication gating", () => {
   it("offers login when unauthenticated", () => {
     mockAuth({ isAuthenticated: false });
@@ -82,6 +89,9 @@ describe("Admin authentication gating", () => {
 
 describe("Admin menu", () => {
   it("lists every admin section as a link to its route, in order", () => {
+    // Stub the staging flag off so this pins the production menu; the
+    // staging-only section has its own describe block below.
+    vi.stubEnv("VITE_SHOW_TEST_STATUS", "");
     renderAdmin();
 
     const links = screen.getAllByRole("link");
@@ -141,6 +151,32 @@ describe("Admin menu", () => {
 
   it("redirects unknown sections to home", () => {
     renderAdmin("/admin/nonsense");
+    expect(screen.getByText("home-page-stub")).toBeInTheDocument();
+  });
+});
+
+describe("Admin what's-on-test section (staging-only)", () => {
+  // Vitest runs in mode "test", whose .env.test sets the flag (so the
+  // e2e bundle shows the section); stub it off to exercise the prod build.
+  it("adds the menu entry and route when the staging flag is set", async () => {
+    vi.stubEnv("VITE_SHOW_TEST_STATUS", "true");
+    renderAdmin("/admin/whats-on-test");
+
+    expect(
+      await screen.findByText("whats-on-test-page-stub"),
+    ).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: "What's on test" });
+    expect(link).toHaveAttribute("href", "/admin/whats-on-test");
+    expect(link).toHaveClass("selected");
+  });
+
+  it("has neither the menu entry nor the route without the staging flag", () => {
+    vi.stubEnv("VITE_SHOW_TEST_STATUS", "");
+    renderAdmin("/admin/whats-on-test");
+
+    expect(screen.queryByRole("link", { name: "What's on test" })).toBeNull();
+    expect(screen.queryByText("whats-on-test-page-stub")).toBeNull();
+    // The unknown section falls through to the home redirect.
     expect(screen.getByText("home-page-stub")).toBeInTheDocument();
   });
 });
