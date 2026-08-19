@@ -41,11 +41,19 @@ const setLink = (editor: Editor) => {
     return;
   }
 
-  // update link
-  try {
-    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
-  } catch (e) {
-    console.error("Error setting link:", e);
+  // update link. setLink reports failure by returning false rather than
+  // throwing: the Link extension refuses any protocol outside its
+  // allow-list (javascript:, data:, ...), which would otherwise be a
+  // silent no-op for the author.
+  const applied = editor
+    .chain()
+    .focus()
+    .extendMarkRange("link")
+    .setLink({ href: url })
+    .run();
+
+  if (!applied) {
+    console.error("Could not set link:", url);
   }
 };
 
@@ -225,6 +233,11 @@ const MenuBar = ({
           }}
           value={headingValue}
         >
+          {/* Blocks that are neither a heading nor a paragraph (a code
+              block, say) select nothing. Without a blank option to land
+              on, the select would fall back to its first option and
+              mislabel such a block as "Heading 1". */}
+          <option value="" disabled hidden></option>
           <option value="h1">Heading 1</option>
           <option value="h2">Heading 2</option>
           <option value="h3">Heading 3</option>

@@ -32,9 +32,9 @@ export default defineConfig({
       // in the same PR (see CLAUDE.md). Floors, not targets — keep a small
       // margin below actuals to absorb V8 line-accounting drift.
       thresholds: {
-        lines: 97.5,
-        functions: 96,
-        branches: 94.5,
+        lines: 98,
+        functions: 97,
+        branches: 95.2,
       },
     },
   },
