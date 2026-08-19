@@ -1,7 +1,7 @@
 ---
 name: issue-pipeline
 enabled: true
-every: 1h
+every: 30m
 model: fable
 fallback: opus   # keep orchestrating on Opus when the Fable limit is hit
 ---
