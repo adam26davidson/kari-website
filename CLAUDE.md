@@ -87,9 +87,10 @@ sticky PR comment (needs the `CLAUDE_CODE_OAUTH_TOKEN` repo secret, from
 `claude setup-token` — usage draws from the Claude Pro/Max subscription,
 deliberately never API credits; skips with a notice when absent). Advisory
 means treat findings as a reviewer's notes —
-address or explicitly dismiss them, but the job never blocks a merge.
+address or create github issues for them, but the job never blocks a merge.
 
 ## Working on GitHub Issues
+- If a github issue doesn't exist yet for what you are working on, create one.
 - Before starting work on an issue, add the `in progress` label and leave a
   comment naming your branch, so parallel sessions don't pick up the same
   issue. Skip issues already labeled `in progress`.
@@ -101,13 +102,14 @@ address or explicitly dismiss them, but the job never blocks a merge.
 - Caveat: GitHub only creates closing references for PRs based on `main`, so
   for a stacked PR keep the label manual until the PR retargets to `main`
   (retargeting fires the workflow, which takes over from there).
-- File issues for what you find along the way instead of letting it
+- IMPORTANT: File new issues for what you find along the way instead of letting it
   evaporate or silently expanding the current PR's scope:
   - Any difficulty in the dev environment (broken or confusing scripts,
     flaky tooling, missing setup steps) — capture the problem and whatever
     workaround you used.
   - Natural next steps, unrelated problems noticed mid-task, and tech debt
     exposed by the work.
+  - Issues with the current design, even things requiring a larger rewrite are good to    capture and we can triage them later.
 
 ## Parallel Sessions / Multiple Open PRs
 - If two issues need edits to the same files, work them in ONE branch/PR
@@ -153,6 +155,7 @@ address or explicitly dismiss them, but the job never blocks a merge.
 - Directory naming: kebab-case for component directories and files
 - Exports: named exports only (no default exports)
 - Error handling: Proper type checking and error handling
+- keept things DRY (important) 
 
 ## AWS Integration
 - Deploys (`.github/workflows/deploy.yml`): every CI-green merge to `main`
