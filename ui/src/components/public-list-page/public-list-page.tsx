@@ -38,16 +38,9 @@ export function PublicListPage<T extends { id: string }>({
       {loadFailed ? (
         <LoadError message={errorMessage} onRetry={load} />
       ) : (
-        <DataList isAdmin={false}>
-          {items.map((item, idx) => (
-            <DataListItem
-              key={item.id}
-              isAdmin={false}
-              isLast={idx === items.length - 1}
-              isFirst={idx === 0}
-            >
-              {renderItem(item)}
-            </DataListItem>
+        <DataList>
+          {items.map((item) => (
+            <DataListItem key={item.id}>{renderItem(item)}</DataListItem>
           ))}
         </DataList>
       )}

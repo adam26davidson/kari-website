@@ -48,38 +48,6 @@ body[data-custom-background]::before {
   width: 100%;
 }
 
-input[type="text"],
-input[type="email"],
-input[type="password"],
-input[type="number"],
-input[type="date"],
-textarea {
-  width: 400px;
-}
-
-input,
-textarea {
-  padding: 5px;
-  border-radius: 3px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  background-color: rgba(0, 0, 0, 0.1);
-  font-family: "Courier New", Courier, monospace;
-  font-size: 14px;
-}
-
-input:focus,
-input:active,
-textarea:focus,
-textarea:active {
-  border: 1px solid rgba(0, 0, 0, 0.3);
-  outline: none;
-}
-
-textarea {
-  height: 100px;
-  resize: none;
-}
-
 /* Shared styles used across several components. These used to live in
    component CSS files and worked everywhere only because Vite bundles all
    CSS globally; they belong here where the sharing is explicit. */

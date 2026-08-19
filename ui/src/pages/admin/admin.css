@@ -63,6 +63,41 @@
   overflow-y: auto;
 }
 
+/* Base input/textarea styling for the admin editors. Every raw <input> /
+   <textarea> in the app is on the admin side, so these rules (formerly
+   globals in index.css) live with the admin bundle. */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+textarea {
+  width: 400px;
+}
+
+input,
+textarea {
+  padding: 5px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background-color: rgba(0, 0, 0, 0.1);
+  font-family: "Courier New", Courier, monospace;
+  font-size: 14px;
+}
+
+input:focus,
+input:active,
+textarea:focus,
+textarea:active {
+  border: 1px solid rgba(0, 0, 0, 0.3);
+  outline: none;
+}
+
+textarea {
+  height: 100px;
+  resize: none;
+}
+
 /* Narrow viewports: the fixed-width sidebar would leave too little room
    for the content (~230px on a 390px phone), so it collapses into a
    wrapping top bar and the content takes the full width. The breakpoint
@@ -96,8 +131,8 @@
     min-height: 0;
   }
 
-  /* The global 400px input/textarea width (index.css) overflows narrow
-     screens; cap it to the containing editor card. */
+  /* The 400px input/textarea width above overflows narrow screens; cap
+     it to the containing editor card. */
   .admin-content input,
   .admin-content textarea {
     max-width: 100%;

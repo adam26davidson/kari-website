@@ -5,7 +5,6 @@
 }
 
 .data-list-item {
-  /* background-color: rgba(226, 226, 226, 0.8); */
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -14,56 +13,4 @@
   padding: 18px;
   margin: 12px;
   border-radius: 3px;
-}
-
-.admin-data-list-item {
-  background-color: rgba(226, 226, 226, 0.8);
-  display: flex;
-  flex-direction: row;
-  gap: 10px;
-  align-items: center;
-  justify-content: space-between;
-  width: calc(100% - 52px);
-  padding: 18px;
-  margin: 8px;
-  border-radius: 3px;
-}
-
-.data-list-item-controls {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Compact variant: tighter spacing, controls in a row so the
-   item height is set by the content rather than the button stack */
-.admin-data-list-item.compact {
-  padding: 8px 14px;
-  margin: 4px 8px;
-  width: calc(100% - 44px);
-}
-
-.admin-data-list-item.compact .data-list-item-controls {
-  flex-direction: row;
-}
-
-/* Narrow viewports: let the content shrink and the control buttons wrap
-   onto their own line instead of pushing past the right edge. Admin rows
-   only — the public .data-list-item is untouched. */
-@media (max-width: 767.98px) {
-  .admin-data-list-item {
-    flex-wrap: wrap;
-  }
-
-  .admin-data-list-item .data-list-item-content {
-    min-width: 0;
-  }
-
-  .admin-data-list-item .data-list-item-controls {
-    flex-grow: 1;
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
 }

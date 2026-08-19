@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "./admin.css";
-import { AdminButton } from "../../components/admin-button/admin-button";
+import { AdminButton } from "./components/admin-button/admin-button";
 import { AdminUi, AdminUiContext, Notify } from "./admin-ui-context";
 
 interface Loading {

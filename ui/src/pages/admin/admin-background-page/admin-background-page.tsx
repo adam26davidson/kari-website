@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import "./admin-background-page.css";
-import { Card } from "../../../components/card/card";
+import { Card } from "../components/card/card";
 import { useAdminToken } from "../../../hooks/use-admin-token";
 import { SiteSettings } from "../../../models";
-import { PhotoPicker } from "../../../components/photo-picker/photo-picker";
+import { PhotoPicker } from "../components/photo-picker/photo-picker";
 import { ImageService } from "../../../services/images";
 import { SiteSettingsService } from "../../../services/site-settings";
-import { AdminButton } from "../../../components/admin-button/admin-button";
+import { AdminButton } from "../components/admin-button/admin-button";
 import { LoadError } from "../../../components/load-error/load-error";
 import { useAdminUi } from "../admin-ui-context";
 import { useUnsavedChanges } from "../use-unsaved-changes";

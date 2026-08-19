@@ -6,7 +6,7 @@ import { BlogPost } from "../../../../../models";
 
 // The rich-text editor pulls in the whole tiptap stack; stub it with a
 // plain textarea so the tests exercise only BlogPostEditor's own logic.
-vi.mock("../../../../../components/tiptap/tiptap", () => ({
+vi.mock("../../../components/tiptap/tiptap", () => ({
   Tiptap: ({
     content,
     setContent,

@@ -1,6 +1,6 @@
 import { BlogPost } from "../../../../../models";
-import { DataEditor } from "../../../../../components/data-editor/data-editor";
-import { Tiptap } from "../../../../../components/tiptap/tiptap";
+import { DataEditor } from "../../../components/data-editor/data-editor";
+import { Tiptap } from "../../../components/tiptap/tiptap";
 import "./blog-post-editor.css";
 
 // The yyyy-mm-dd value the date input needs, or "" when the stored date

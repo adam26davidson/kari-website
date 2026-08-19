@@ -1,4 +1,4 @@
-import { DataEditor } from "../../../../../components/data-editor/data-editor";
+import { DataEditor } from "../../../components/data-editor/data-editor";
 import { Haiku } from "../../../../../models";
 
 export function HaikuEditor({

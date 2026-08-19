@@ -1,7 +1,7 @@
 import { PhotographyPost } from "../../../../../models";
-import { AdminItemList } from "../../../../../components/admin-item-list/admin-item-list";
-import { DataEditor } from "../../../../../components/data-editor/data-editor";
-import { PhotoPicker } from "../../../../../components/photo-picker/photo-picker";
+import { AdminItemList } from "../../../components/admin-item-list/admin-item-list";
+import { DataEditor } from "../../../components/data-editor/data-editor";
+import { PhotoPicker } from "../../../components/photo-picker/photo-picker";
 import { moveItemByOne } from "../../../../../utils/data-list-helpers";
 import { EditorImage, newEditorImage } from "./editor-image";
 import "./photography-post-editor.css";
