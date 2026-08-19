@@ -4,8 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build Commands
 - `./scripts/dev.sh` - Start the whole dev stack (MinIO + seed + API + UI);
-  `--aws` targets the real test bucket via SSO instead of local MinIO
-- UI: `npm run dev` - Start development server
+  `--aws` targets the real test bucket via SSO instead of local MinIO.
+  Stacks are per-worktree: compose's directory-based project naming keeps
+  each worktree's MinIO container separate, and dev.sh uses the default
+  ports (MinIO 9000, API 3000) when free but picks free ports otherwise
+  (override with `KARI_MINIO_PORT` / `KARI_API_PORT`; `KARI_MINIO_PORT=0`
+  means ephemeral). It prints the chosen URLs at startup and wires them
+  into the UI/API via env vars, so N stacks can run in parallel and
+  `docker compose down` in one worktree never touches another's stack.
+- UI: `npm run dev` - Start development server (like the rest of the local
+  toolchain it targets the local MinIO + localhost:3000 API from
+  `.env.development`; the real AWS test bucket is opt-in via
+  `./scripts/dev.sh --aws` — no vite mode silently reads AWS)
 - UI: `npm run build` - Build production UI
 - UI: `npm run build:test` - Build UI for test environment
 - UI: `npm run lint` - Lint TypeScript code
@@ -21,13 +31,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   journeys additionally run when `E2E_AUTH0_USERNAME` / `E2E_AUTH0_PASSWORD`
   are set, as they are in CI). The stack is fully local and hermetic — no
   AWS account or shared bucket. Two things must be running:
-  1. a throwaway MinIO standing in for S3:
-     `docker compose up -d --wait minio` (defined in `docker-compose.yml`;
-     `./scripts/dev.sh` starts this too, so a running dev stack already
-     satisfies both prerequisites)
+  1. a throwaway MinIO standing in for S3, on host port 9000 (the default):
+     `docker compose up -d --wait minio` (defined in `docker-compose.yml`)
   2. the API on localhost:3000: `cargo run` in `api/` (its `.env` already
      targets the local MinIO; run `node e2e/seed.mjs` in `ui/` first so the
      bucket exists for the API's health probe)
+  A dev stack started by `./scripts/dev.sh` satisfies both prerequisites
+  when it got the default ports (it prints which ports it chose). Against a
+  stack on non-default ports, export `VITE_S3_URL` / `VITE_API_URL` when
+  running `test:e2e` — env vars override `.env.test` for the seeds, specs,
+  and the built bundle alike.
   CI starts both itself; `ui/e2e/seed.mjs` (re-run on every `test:e2e`)
   seeds deterministic fixture content, so results never depend on what
   happens to be in a real bucket
