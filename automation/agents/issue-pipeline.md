@@ -1,7 +1,7 @@
 ---
 name: issue-pipeline
 enabled: true
-every: 1h
+every: 30m
 model: fable
 fallback: opus   # keep orchestrating on Opus when the Fable limit is hit
 ---
@@ -18,22 +18,46 @@ about the failure in Phase C rather than aborting everything.
 - Operate only on branches prefixed `agent/`. Never push to `main`
   directly, never force-push anything, never delete branches that are not
   `agent/*`.
+- A PR is pipeline-owned only when TWO independent signals agree: its
+  head branch starts with `agent/` AND it carries the `agent-pr` label.
+  Never review, fix, or merge a PR missing either signal — the branch
+  prefix is a naming convention anyone could use, and a stray label
+  alone must never hand a foreign PR to the merge gate.
 - Never run `git checkout`/`git switch` in the main clone. All code work
   happens in sibling worktrees `../kari-website-<slug>`.
 - Never approve, trigger, or touch production deployments or the
   `production` GitHub Environment. Merging to main (test deploy) is your
   ceiling.
-- At most 3 issue-workers in flight (open agent PRs + issues you claim
-  this tick, combined). Fix/review agents for existing PRs don't count.
+- At most 3 issue-workers in flight (open pipeline-owned PRs + issues
+  you claim this tick, combined). Fix/review agents for existing PRs
+  don't count.
 - Merges are always squash merges, and always serial — one PR fully
   merged before the next is considered.
 - Stay inside this repository and its GitHub project. Nothing else.
 
 ## Phase A — tend existing agent PRs
 
-List open PRs on `agent/*` branches:
-`gh pr list --state open --json number,headRefName,title,labels`
-(filter to `headRefName` starting with `agent/`). For each, in order:
+List ALL open PRs:
+`gh pr list --state open --json number,headRefName,title,labels`.
+A PR is pipeline-owned only when `headRefName` starts with `agent/`
+AND its labels include `agent-pr` (workers apply the label right after
+`gh pr create`; create it if it doesn't exist yet:
+`gh label create agent-pr --description "Opened by the automation
+pipeline; the pipeline may review and merge it" --color 1D76DB`).
+Handle signal mismatches explicitly, never silently:
+
+- Branch is `agent/*` but the `agent-pr` label is missing: do NOT tend
+  or merge it as-is. Add the label yourself ONLY if you can confirm the
+  PR closes an issue the pipeline claimed — i.e. that issue carries a
+  pipeline claim comment naming exactly this branch (a worker that
+  crashed between `gh pr create` and `gh pr edit --add-label` leaves
+  this state). Once labelled it is owned and tended normally below.
+  Otherwise leave the PR entirely alone and report it in the run
+  summary so a human can look.
+- Label `agent-pr` is present but the branch is not `agent/*`: leave
+  the PR entirely alone and report it in the run summary.
+
+For each owned PR, in order:
 
 1. **Checks:** `gh pr checks <n>`. If CI failed: read the failing run's
    log (`gh run view --log-failed`), then dispatch a fix agent (see
@@ -57,11 +81,27 @@ List open PRs on `agent/*` branches:
    label stays off, so the PR gets re-reviewed on a later tick after the
    fixes land.
 4. **Merge (serial):** the first PR that is green + visually settled +
-   labeled `agent:reviewed` gets merged:
-   `gh pr merge <n> --squash --delete-branch`. Then clean up its worktree
-   (`git worktree remove ../kari-website-<slug>`) and prune
-   (`git worktree prune`). After the merge, for EACH remaining open
-   agent PR: in its worktree, `git fetch origin && git merge origin/main`.
+   labeled `agent:reviewed` gets merged. The ordering below is
+   load-bearing — do not reorder it:
+   1. Remove the PR's worktree FIRST: `git worktree remove
+      ../kari-website-<slug>`, then `git worktree prune`. Reason: git
+      refuses to delete a branch that is checked out in a worktree, so
+      merging while the worktree exists makes `--delete-branch` fail —
+      the squash merge itself succeeds but the command exits non-zero
+      with the branch (local and remote) left behind.
+   2. Merge: `gh pr merge <n> --squash --delete-branch`.
+   3. Verify the merge independently: `gh pr view <n> --json state`
+      must report `MERGED`. Trust this, NOT the merge command's exit
+      code — a non-zero exit can mean "merged, but branch deletion was
+      skipped", and treating that as an unmerged PR would retry the
+      merge or, worse, re-dispatch work for an already-merged issue.
+      If state is `MERGED` but the branch survived, finish the cleanup
+      (`git branch -D agent/<slug>` if it exists locally;
+      `git push origin --delete agent/<slug>` if the remote branch
+      remains). If state is NOT `MERGED`, the merge genuinely failed:
+      leave the PR for the next tick and report it in the run summary.
+   After a verified merge, for EACH remaining open owned PR: in its
+   worktree, `git fetch origin && git merge origin/main`.
    If the coverage floors in `ui/vitest.config.ts` conflict, resolve by
    running `npm run test:coverage` on the merged tree and setting floors
    just below the NEW actual numbers — never keep either side blindly.
@@ -70,8 +110,9 @@ List open PRs on `agent/*` branches:
 
 ## Phase B — pick new work (only if in-flight count < 3)
 
-In-flight = open `agent/*` PRs + open issues labeled `in progress`.
-If at capacity, skip to Phase C.
+In-flight = open pipeline-owned PRs (both ownership signals, per
+Phase A) + open issues labeled `in progress`. If at capacity, skip to
+Phase C.
 
 **Stale-claim recovery first:** a worker that died mid-task (crash, usage
 limit) leaves an issue labeled `in progress` whose named `agent/<slug>`
@@ -79,10 +120,15 @@ branch has no open PR. For each `in progress` issue whose claim comment
 names an `agent/*` branch: if no open PR exists for that branch AND the
 issue has had no activity for over 2 hours, release it — remove
 `in progress`, comment that the claim went stale and the issue is back in
-the queue, and delete the ownerless branch/worktree if they exist (an
-`agent/*` branch with no PR is pipeline debris; this is the one case
-branch deletion outside a merge is allowed). Issues claimed by humans or
-other sessions (comment names a non-`agent/*` branch) are NEVER touched.
+the queue, and delete the ownerless branch/worktree if they exist. When
+checking for PRs here, look for ANY open PR on the branch
+(`gh pr list --state open --head agent/<slug>`), labelled or not — the
+Phase A ownership filter must not hide an unlabelled PR from this check.
+Only an `agent/*` branch with no open PR at all (and in particular no
+`agent-pr`-labelled PR) is pipeline debris safe to delete; this is the
+one case branch deletion outside a merge is allowed. Issues claimed by
+humans or other sessions (comment names a non-`agent/*` branch) are
+NEVER touched.
 
 1. `gh issue list --state open --json number,title,labels,body`. Discard
    issues with any of these labels: `in progress`, `has-dependencies`,
@@ -121,7 +167,8 @@ other sessions (comment names a non-`agent/*` branch) are NEVER touched.
    `in progress` label so a future tick (or a human) can pick it up
    after the blockage is resolved.
 3. Print a run summary: PRs merged / updated / awaiting checks, fix and
-   review agents dispatched, issues claimed, issues filed, anything
+   review agents dispatched, issues claimed, issues filed,
+   ownership-signal mismatches left for a human (Phase A), anything
    skipped and why. This lands in the dispatcher's log for the human.
 
 ## Dispatching subagents
