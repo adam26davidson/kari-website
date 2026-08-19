@@ -51,9 +51,9 @@ CI or reviews; the orchestrator handles everything after the PR exists.
   UI deps): the visual check is REQUIRED. Start a dev stack in YOUR
   worktree (`./scripts/dev.sh` — it picks free ports and prints them),
   run `node e2e/screenshots.mjs` in `ui/` (pass `--base-url` for
-  non-default ports; a fresh worktree may first need
-  `npx playwright install chromium`), then actually Read every PNG and fix what looks
-  wrong before proceeding. Without `E2E_AUTH0_*` env vars you can only
+  non-default ports; a fresh worktree needs `./scripts/setup-worktree.sh`
+  first), then actually Read every PNG and fix what looks wrong before
+  proceeding. Without `E2E_AUTH0_*` env vars you can only
   capture public pages — note in the PR that admin pages rely on CI's
   visual review.
 - If you changed conditional logic in the UI, coverage may drop below
