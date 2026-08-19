@@ -151,10 +151,18 @@ next one a whole poll later, and the offset accumulates — an `every: 1h`
 agent creeps towards running every 75 minutes (#276).
 
 So an agent counts as due once `now - last >= every - tolerance`, with
-the tolerance defaulting to 120s (a little under one poll period,
-override with `KARI_AUTOMATION_DUE_TOLERANCE`; clamped so a tolerance
-wider than the interval simply means "every poll"). Phase is held rather
-than drifting; a run may start up to the tolerance early.
+the tolerance defaulting to 120s (override with
+`KARI_AUTOMATION_DUE_TOLERANCE`; clamped so a tolerance wider than the
+interval simply means "every poll"). Phase is held rather than drifting;
+a run may start up to the tolerance early.
+
+Sizing it: the tolerance only needs to exceed the per-cycle start lag —
+the delay between a poll firing and `last-run` being stamped, observed
+at ~37s — so 120s covers it with room to spare. It is deliberately far
+below the 15-minute poll period, and retuning it (say, after changing
+the cron cadence) should track that start lag rather than the cadence: a
+tolerance near the poll period would let an `every: 1h` agent
+legitimately start up to ~14 minutes early.
 
 ## Usage limits
 

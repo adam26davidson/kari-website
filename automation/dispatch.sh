@@ -24,7 +24,11 @@ CLAUDE_BIN="${KARI_AUTOMATION_CLAUDE_BIN:-claude}"
 # grid (cron every 15m) while last-run is stamped at the moment a run
 # starts, so without slack each cycle's start creeps later into the
 # polling window and an `every: 1h` agent drifts towards running every
-# 75m. A tolerance a little under one poll period absorbs that offset:
+# 75m. The tolerance only has to cover that per-cycle start lag — the
+# poll-to-stamp delay, observed at ~37s — not a whole poll period, so
+# 120s absorbs it with headroom while capping how early a run may start.
+# Size it against the start lag, not the cron cadence: a tolerance near
+# the poll period would let an `every: 1h` agent fire ~14m early. Result:
 # "about every N", with the phase held instead of accumulating drift.
 DUE_TOLERANCE="${KARI_AUTOMATION_DUE_TOLERANCE:-120}"
 
