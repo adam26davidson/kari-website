@@ -14,7 +14,13 @@ CI or reviews; the orchestrator handles everything after the PR exists.
 ## Workspace rules (non-negotiable)
 
 - Create a sibling worktree and do ALL work there:
-  `git worktree add ../kari-website-{{SLUG}} -b agent/{{SLUG}} origin/main`
+  `git fetch origin && git worktree add ../kari-website-{{SLUG}} -b agent/{{SLUG}} origin/main`
+  Any worktree of the repo can create another — run this from your
+  current repo directory, not via `git -C <main clone>` (the harness may
+  refuse commands targeting directories outside your workspace). If your
+  working directory is nested (e.g. under `.claude/worktrees/`), use the
+  absolute sibling path `/home/adamd/Projects/kari-website-{{SLUG}}`
+  instead of `../` so the worktree lands beside the main clone.
 - Never run `git checkout` or `git switch` in the main clone — other
   sessions share it.
 - Stage only files you changed for this issue, by explicit path. Never
@@ -45,7 +51,8 @@ CI or reviews; the orchestrator handles everything after the PR exists.
   UI deps): the visual check is REQUIRED. Start a dev stack in YOUR
   worktree (`./scripts/dev.sh` — it picks free ports and prints them),
   run `node e2e/screenshots.mjs` in `ui/` (pass `--base-url` for
-  non-default ports), then actually Read every PNG and fix what looks
+  non-default ports; a fresh worktree may first need
+  `npx playwright install chromium`), then actually Read every PNG and fix what looks
   wrong before proceeding. Without `E2E_AUTH0_*` env vars you can only
   capture public pages — note in the PR that admin pages rely on CI's
   visual review.
