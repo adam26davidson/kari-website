@@ -66,9 +66,13 @@ image overflowed its card or text was illegible against the background. So
 after ANY change that can affect how the UI looks (components, CSS, layout,
 `index.html`, UI dependency bumps), before claiming the work is done or
 opening a PR:
-1. With the dev stack running (`./scripts/dev.sh`), run
-   `node e2e/screenshots.mjs` in `ui/` (add `--routes /,/haiku` to limit to
-   affected pages; `--base-url` to target a non-default server). Full-page
+1. In a freshly created worktree, do the one-time setup first: `npm ci` in
+   `ui/`, then `npx playwright install chromium` (details under Parallel
+   Sessions below) — neither is shared from the main clone, and the capture
+   script fails without them. Then, with the dev stack running
+   (`./scripts/dev.sh`), run `node e2e/screenshots.mjs` in `ui/` (add
+   `--routes /,/haiku` to limit to affected pages; `--base-url` to target a
+   non-default server). Full-page
    desktop + tablet + mobile PNGs land in `ui/e2e/screenshots/`, and the
    script asserts no horizontal overflow at each captured width plus a few
    assert-only widths (exits non-zero, naming the widest element, if a
@@ -130,6 +134,16 @@ address or create github issues for them, but the job never blocks a merge.
   the repo tree (`grep -r`, test globs, docker build contexts). Don't put
   worktrees inside the repo; harness-managed ones under `.claude/worktrees/`
   are the exception — leave those to the tooling that created them.
+- Fresh worktree setup (do this first, it is not shared from the main
+  clone): a new worktree has no `ui/node_modules`, so run `npm ci` in `ui/`
+  — takes about a minute on a cold npm cache — before ANY UI command.
+  Without it tests and lint die with `command not found` and
+  `node e2e/screenshots.mjs` with `ERR_MODULE_NOT_FOUND`, before any of them
+  do real work. Then, for the visual check, run
+  `npx playwright install chromium`: Playwright's browsers live in a shared
+  cache outside `node_modules` (`~/.cache/ms-playwright`), so it is a quick
+  no-op when a matching build is already there, and the needed download
+  otherwise (fresh machine, or after a Playwright version bump).
 - Commit only explicitly listed paths (`git add <paths>`, never `git add -A`
   in a shared tree); treat any file outside your issue's scope as owned by
   another session.
