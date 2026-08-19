@@ -175,7 +175,9 @@ rate limit (60/hr/IP) dwarfs personal use.
 - Runtime: local cron + headless sessions (chosen over a long-running
   /loop session and manual kick-off) — stateless, crash-proof, survives
   reboots.
-- Throughput: hourly ticks, ≤3 workers in flight.
+- Throughput: hourly ticks, ≤3 workers in flight. (Raised to 30-minute
+  ticks on 2026-08-19 after the first live ticks showed the backlog
+  growing faster than the pipeline drained it.)
 - Test-vs-prod visibility: an in-app, staging-only page (chosen over a
   repo script, hosted dashboard, or pinned issue).
 - Worker model split: Opus for straightforward tasks, Fable for complex
