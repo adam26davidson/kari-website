@@ -21,7 +21,9 @@ export function Header({
   const location = useLocation();
   const isMobile = useIsMobile();
   const { user, isAuthenticated, isLoading, logout } = useAuth0();
-  const isAdminPage = location.pathname === "/admin";
+  const isAdminPage =
+    location.pathname === "/admin" ||
+    location.pathname.startsWith("/admin/");
 
   return (
     <div className={isAdminPage ? "admin-header" : "header"}>
