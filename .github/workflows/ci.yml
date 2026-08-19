@@ -14,10 +14,17 @@ concurrency:
 permissions:
   contents: read
 
+# Every job sets timeout-minutes. Without one a hung step (a stalled apt/npm/
+# docker fetch inside the e2e stack, say) runs toward GitHub's 6-hour default,
+# burning runner minutes and blocking anything that waits on the checks. The
+# values are observed p90 plus generous headroom — see each job — so a real
+# hang fails within minutes and an empty-commit retrigger recovers it.
 jobs:
   frontend:
     name: Frontend (lint, build, unit tests)
     runs-on: ubuntu-latest
+    # Observed: ~1 min (max 1.3).
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: ui
@@ -52,6 +59,11 @@ jobs:
   frontend-e2e:
     name: Frontend (Playwright e2e)
     runs-on: ubuntu-latest
+    # Observed: median ~2.5 min, p90 ~8.5, and a long tail entirely from
+    # runner-side network stalls in the stack setup (apt/docker/cargo fetches
+    # crawling). 20 min clears every non-pathological run; the rare run that
+    # trips it was already stalled and is better retriggered than waited on.
+    timeout-minutes: 20
     permissions:
       contents: read
     defaults:
@@ -91,6 +103,9 @@ jobs:
   coverage:
     name: Coverage report
     runs-on: ubuntu-latest
+    # Observed: ~2 min with a warm cargo cache; a cold instrumented build is
+    # much slower, hence the wide margin.
+    timeout-minutes: 20
     permissions:
       contents: read
       pull-requests: write
@@ -174,6 +189,8 @@ jobs:
   api:
     name: API (fmt, clippy, tests)
     runs-on: ubuntu-latest
+    # Observed: ~1 min with a warm cargo cache; a cold build needs the margin.
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: api

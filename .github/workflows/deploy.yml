@@ -20,10 +20,16 @@ permissions:
   id-token: write   # required for AWS OIDC
   contents: read
 
+# Deploy jobs get deliberately generous timeout-minutes: the point is only to
+# stop a wedged step from running toward GitHub's 6-hour default, never to
+# race a slow-but-healthy release. (The environment-approval wait happens
+# before a job starts, so it does not count against these.)
 jobs:
   build:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    # Observed: ~5 min (two frontend builds + an aarch64 cross-compile).
+    timeout-minutes: 30
     steps:
       # Pin to the exact commit CI validated (falls back to the default branch
       # head for manual dispatches).
@@ -94,6 +100,9 @@ jobs:
   deploy-test:
     needs: build
     runs-on: ubuntu-latest
+    # Observed: well under a minute, but it blocks on `aws deploy wait
+    # deployment-successful`, whose duration is CodeDeploy's to decide.
+    timeout-minutes: 30
     concurrency:
       group: deploy-test
       cancel-in-progress: false
@@ -139,6 +148,9 @@ jobs:
   deploy-prod:
     needs: deploy-test
     runs-on: ubuntu-latest
+    # As deploy-test: the clock starts once a reviewer approves, so this
+    # bounds only the CodeDeploy push and wait.
+    timeout-minutes: 30
     concurrency:
       group: deploy-prod
       cancel-in-progress: false
