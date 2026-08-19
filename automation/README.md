@@ -157,7 +157,8 @@ interval simply means "every poll"). Phase is held rather than drifting;
 a run may start up to the tolerance early.
 
 The override is whole seconds — a bare `120`, *not* the `Nm`/`Nh`
-syntax `every` takes. Anything else is reported on stderr and the
+syntax `every` takes, and without leading zeros (bash arithmetic would
+read `0120` as octal 80). Anything else is reported on stderr and the
 default is used, so a typo can't take the fleet down.
 
 Sizing it: the tolerance only needs to exceed the per-cycle start lag —

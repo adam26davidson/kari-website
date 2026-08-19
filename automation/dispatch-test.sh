@@ -162,13 +162,19 @@ expect_contains "$w/out" "WOULD RUN fast-agent" \
   "tolerance larger than the interval clamps instead of underflowing"
 expect_eq "$(cat "$w/exit-code")" 0 "oversized tolerance exits 0"
 
-# 4e. A non-integer tolerance (e.g. the Nm/Nh duration syntax `every`
-#     uses) must not take the fleet down silently: warn, fall back to the
-#     120s default, and keep dispatching.
-for bad_tolerance in 120s 2m "" abc -60; do
+# 4e. A tolerance that isn't a plain decimal integer (e.g. the Nm/Nh
+#     duration syntax `every` uses, or a leading-zero value bash would
+#     read as octal) must not take the fleet down silently: warn, fall
+#     back to the 120s default, and keep dispatching.
+#     The agent last ran "interval - 100s" ago, which is inside the 120s
+#     default but outside octal readings of the leading-zero values (090
+#     is a base error, 0120 is 80s), so a value that slipped through
+#     validation shows up here as a missing launch rather than passing by
+#     luck.
+for bad_tolerance in 120s 2m "" abc -60 090 0120; do
   w="$(new_work)"
   write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
-  ran_ago "$w" issue-pipeline $((3600 - 60))
+  ran_ago "$w" issue-pipeline $((3600 - 100))
   DUE_TOLERANCE="$bad_tolerance" run_dispatch "$w" --dry-run
   expect_contains "$w/out" "WOULD RUN issue-pipeline" \
     "tolerance '$bad_tolerance' falls back to the default instead of skipping"

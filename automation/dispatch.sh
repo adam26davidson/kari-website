@@ -37,9 +37,13 @@ DUE_TOLERANCE="${KARI_AUTOMATION_DUE_TOLERANCE:-120}"
 # under `set -e` that aborts the loop wholesale. Every agent would be
 # skipped while the script still exited 0, so cron would see success and
 # a dead fleet would stay invisible. Warn and fall back instead.
-if ! [[ "$DUE_TOLERANCE" =~ ^[0-9]+$ ]]; then
+# Leading zeros are rejected too, because bash arithmetic reads them as
+# octal: `090` is a "value too great for base" error — the same silent
+# fleet death this check exists to prevent — and `0120` is a quieter
+# version of it, applying 80s while the operator reads 120.
+if ! [[ "$DUE_TOLERANCE" =~ ^(0|[1-9][0-9]*)$ ]]; then
   echo "unusable KARI_AUTOMATION_DUE_TOLERANCE '$DUE_TOLERANCE'" \
-    "(want whole seconds, e.g. 120); using 120" >&2
+    "(want whole seconds, no leading zeros, e.g. 120); using 120" >&2
   DUE_TOLERANCE=120
 fi
 
