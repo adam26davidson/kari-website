@@ -68,6 +68,13 @@ CI or reviews; the orchestrator handles everything after the PR exists.
   verified (including whether the visual check ran and what it covered).
 - End the body with:
   🤖 Generated with [Claude Code](https://claude.com/claude-code)
+- Immediately after opening the PR, mark it pipeline-owned:
+  `gh pr edit <n> --add-label agent-pr`. If the label doesn't exist
+  yet, create it first:
+  `gh label create agent-pr --description "Opened by the automation
+  pipeline; the pipeline may review and merge it" --color 1D76DB`.
+  The orchestrator only shepherds and merges PRs carrying this label —
+  without it your PR sits unowned until a human intervenes.
 - Leave the worktree in place — follow-up fix agents reuse it. Do not
   merge, do not enable auto-merge, do not wait for checks.
 
