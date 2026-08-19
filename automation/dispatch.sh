@@ -12,6 +12,7 @@
 #   KARI_AUTOMATION_AGENTS_DIR  default <repo>/automation/agents
 #   KARI_AUTOMATION_PAUSE_FILE  default <repo>/automation/PAUSE
 #   KARI_AUTOMATION_CLAUDE_BIN  default claude
+#   KARI_AUTOMATION_DUE_TOLERANCE  default 120 (seconds); see DUE_TOLERANCE
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -19,6 +20,13 @@ AGENTS_DIR="${KARI_AUTOMATION_AGENTS_DIR:-$REPO_ROOT/automation/agents}"
 STATE_DIR="${KARI_AUTOMATION_STATE_DIR:-$HOME/.local/state/kari-website-automation}"
 PAUSE_FILE="${KARI_AUTOMATION_PAUSE_FILE:-$REPO_ROOT/automation/PAUSE}"
 CLAUDE_BIN="${KARI_AUTOMATION_CLAUDE_BIN:-claude}"
+# Slack on the "has the interval elapsed?" test. Polls happen on a coarse
+# grid (cron every 15m) while last-run is stamped at the moment a run
+# starts, so without slack each cycle's start creeps later into the
+# polling window and an `every: 1h` agent drifts towards running every
+# 75m. A tolerance a little under one poll period absorbs that offset:
+# "about every N", with the phase held instead of accumulating drift.
+DUE_TOLERANCE="${KARI_AUTOMATION_DUE_TOLERANCE:-120}"
 
 DRY_RUN=false
 [ "${1:-}" = "--dry-run" ] && DRY_RUN=true
@@ -107,8 +115,12 @@ for agent_file in "$AGENTS_DIR"/*.md; do
   now="$(date +%s)"
   last=0
   [ -f "$STATE_DIR/$name.last-run" ] && last="$(cat "$STATE_DIR/$name.last-run")"
-  if [ $((now - last)) -lt "$secs" ]; then
-    echo "skip $name: not due ($((secs - (now - last)))s remaining)"
+  # Clamped so a tolerance wider than the interval just means "every poll"
+  # rather than a negative threshold.
+  due_after=$((secs - DUE_TOLERANCE))
+  [ "$due_after" -lt 0 ] && due_after=0
+  if [ $((now - last)) -lt "$due_after" ]; then
+    echo "skip $name: not due ($((due_after - (now - last)))s remaining)"
     continue
   fi
 
