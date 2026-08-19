@@ -21,8 +21,17 @@
 //   node e2e/screenshots.mjs [--base-url http://localhost:5173] [--routes /,/haiku]
 //   SCREENSHOT_BASE_URL also sets the base URL (flag wins).
 //
-// Each route is captured at desktop (1280px) and mobile (390px) widths.
-// Animations are disabled and images awaited, so captures are stable.
+// Each route is captured at desktop (1280px), tablet (834px), and mobile
+// (390px) widths. Animations are disabled and images awaited, so captures
+// are stable.
+//
+// Horizontal overflow — the page being wider than the viewport — is also
+// asserted programmatically at every captured width, plus a few extra
+// assert-only widths (no PNGs) chosen to sweep the tablet danger band.
+// The check runs at the real device size, BEFORE the viewport growth
+// described below, and a failure names the route, the width, and the
+// widest offending element. Any overflow makes the script exit non-zero
+// (after all captures are written).
 //
 // The app is a fixed-viewport layout (`.whole-page` is 100vh) whose content
 // scrolls inside inner containers, so Playwright's `fullPage: true` alone
@@ -80,9 +89,23 @@ const ADMIN_ROUTES = [
 
 const DEFAULT_ROUTES = [...PUBLIC_ROUTES, ...ADMIN_ROUTES];
 
+/**
+ * @typedef {{ name: string, width: number, height: number,
+ *   assertOnly?: boolean }} Viewport
+ *   `assertOnly` viewports run the horizontal-overflow assertion but write
+ *   no PNGs — cheap sweeps of widths between the captured device sizes.
+ */
+
+/** @type {Viewport[]} */
 const VIEWPORTS = [
   { name: "desktop", width: 1280, height: 800 },
+  { name: "tablet", width: 834, height: 1112 }, // iPad Air portrait
   { name: "mobile", width: 390, height: 844 },
+  // Assert-only sweep of the 768–948px band where the header once
+  // overflowed (#221) — neither 1280 nor 390 could see it.
+  { name: "assert-768", width: 768, height: 1024, assertOnly: true },
+  { name: "assert-850", width: 850, height: 1024, assertOnly: true },
+  { name: "assert-950", width: 950, height: 1024, assertOnly: true },
 ];
 
 /** @param {string} flag @returns {string | undefined} */
@@ -145,6 +168,58 @@ async function waitForAnimations(page) {
       Promise.all(document.getAnimations().map((a) => a.finished)),
     )
     .catch(() => {});
+}
+
+/**
+ * Slack allowed before horizontal overflow counts as a failure, in px —
+ * subpixel layout rounding can leave scrollWidth a hair past innerWidth
+ * on perfectly healthy pages.
+ */
+const OVERFLOW_TOLERANCE = 2;
+
+/**
+ * Checks the page for horizontal overflow at the CURRENT viewport size.
+ * Must run before expandViewportToContent — the assertion is about the
+ * layout a visitor actually sees at the device size, not the grown
+ * capture viewport.
+ *
+ * @param {import("@playwright/test").Page} page
+ * @returns {Promise<string | null>} a human-readable description of the
+ *   overflow (widest element included), or null when the page fits
+ */
+async function checkHorizontalOverflow(page) {
+  return page.evaluate((tolerance) => {
+    const viewportWidth = window.innerWidth;
+    const scrollWidth = document.documentElement.scrollWidth;
+    if (scrollWidth <= viewportWidth + tolerance) return null;
+    // Name the culprit: the element whose rect reaches furthest past the
+    // right edge of the viewport.
+    /** @type {Element | null} */
+    let widest = null;
+    let widestRight = viewportWidth;
+    for (const el of document.querySelectorAll("*")) {
+      const { right } = el.getBoundingClientRect();
+      if (right > widestRight) {
+        widestRight = right;
+        widest = el;
+      }
+    }
+    /** @param {Element | null} el */
+    const describe = (el) => {
+      if (!el) return "no single element found past the viewport edge";
+      const id = el.id ? `#${el.id}` : "";
+      const classes =
+        typeof el.className === "string" && el.className.trim() !== ""
+          ? `.${el.className.trim().split(/\s+/).join(".")}`
+          : "";
+      return `<${el.tagName.toLowerCase()}${id}${classes}>`;
+    };
+    return (
+      `page is ${scrollWidth}px wide in a ${viewportWidth}px viewport; ` +
+      `widest element ${describe(widest)} extends to ` +
+      `${Math.round(widestRight)}px`
+    );
+  }, OVERFLOW_TOLERANCE);
 }
 
 /**
@@ -247,8 +322,9 @@ async function captureTiles(page, viewport, height, stem) {
  * @param {import("@playwright/test").Page} page
  * @param {RouteEntry[]} entries
  * @param {string[]} failures
+ * @param {string[]} overflows horizontal-overflow findings, appended to
  */
-async function captureRoutes(page, entries, failures) {
+async function captureRoutes(page, entries, failures, overflows) {
   for (const viewport of VIEWPORTS) {
     for (const entry of entries) {
       const stem = path.join(OUTPUT_DIR, `${entry.name}.${viewport.name}`);
@@ -264,6 +340,28 @@ async function captureRoutes(page, entries, failures) {
           timeout: 60_000,
         });
         await waitForImages(page);
+        await waitForAnimations(page);
+        // Assert no horizontal overflow while still at the device size —
+        // growing the viewport below changes the layout under test.
+        const overflow = await checkHorizontalOverflow(page);
+        if (overflow) {
+          overflows.push(
+            `${entry.route} at ${viewport.width}px (${viewport.name}): ` +
+              overflow,
+          );
+          console.error(
+            `  OVERFLOW ${entry.route} at ${viewport.width}px ` +
+              `(${viewport.name}): ${overflow}`,
+          );
+        }
+        if (viewport.assertOnly) {
+          if (!overflow) {
+            console.log(
+              `checked ${entry.route} at ${viewport.width}px — no overflow`,
+            );
+          }
+          continue;
+        }
         const { height, hidden } = await expandViewportToContent(
           page,
           viewport,
@@ -324,11 +422,13 @@ async function main() {
   const browser = await chromium.launch();
   /** @type {string[]} */
   const failures = [];
+  /** @type {string[]} */
+  const overflows = [];
   try {
     if (publicEntries.length > 0) {
       const context = await browser.newContext({ reducedMotion: "reduce" });
       const page = await context.newPage();
-      await captureRoutes(page, publicEntries, failures);
+      await captureRoutes(page, publicEntries, failures, overflows);
       await context.close();
     }
     if (adminEntries.length > 0 && username && password) {
@@ -337,7 +437,7 @@ async function main() {
       const context = await browser.newContext({ reducedMotion: "reduce" });
       const page = await context.newPage();
       await loginAsAdmin(page, { baseUrl, username, password });
-      await captureRoutes(page, adminEntries, failures);
+      await captureRoutes(page, adminEntries, failures, overflows);
       await context.close();
     }
   } finally {
@@ -347,9 +447,18 @@ async function main() {
   if (failures.length > 0) {
     console.error(`\nFailed to capture ${failures.length} screenshot(s):`);
     for (const failure of failures) console.error(`  - ${failure}`);
-    process.exit(1);
   }
-  console.log(`\nAll screenshots written to ${OUTPUT_DIR}`);
+  if (overflows.length > 0) {
+    console.error(
+      `\nHorizontal overflow on ${overflows.length} route/width ` +
+        "combination(s) — the page is wider than the viewport:",
+    );
+    for (const overflow of overflows) console.error(`  - ${overflow}`);
+  }
+  if (failures.length > 0 || overflows.length > 0) process.exit(1);
+  console.log(
+    `\nAll screenshots written to ${OUTPUT_DIR} (no horizontal overflow)`,
+  );
 }
 
 await main();
