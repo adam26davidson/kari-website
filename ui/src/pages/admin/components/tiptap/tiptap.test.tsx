@@ -1,7 +1,27 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Tiptap } from "./tiptap";
+
+// useEditor returns null until the editor instance exists. That never
+// happens in these tests, so the toolbar's null guard is only reachable by
+// forcing the hook to withhold the editor for one test.
+const editorState = vi.hoisted(() => ({ withheld: false }));
+
+vi.mock("@tiptap/react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tiptap/react")>();
+  return {
+    ...actual,
+    useEditor: ((...args: Parameters<typeof actual.useEditor>) => {
+      const editor = actual.useEditor(...args);
+      return editorState.withheld ? null : editor;
+    }) as typeof actual.useEditor,
+  };
+});
+
+afterEach(() => {
+  editorState.withheld = false;
+});
 
 // Toolbar buttons carry aria-labels from their config names, so they can
 // be looked up through their accessible name.
@@ -38,6 +58,24 @@ describe("Tiptap toolbar", () => {
     expect(container.querySelectorAll(".button-group button")).toHaveLength(12);
   });
 
+  it("omits the toolbar entirely until the editor exists", () => {
+    editorState.withheld = true;
+    const { container } = renderTiptap();
+
+    expect(container.querySelector(".control-group")).toBeNull();
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    // the editor slot still renders, so the toolbar can appear beside it
+    expect(container.querySelector(".tiptap-container")).toBeInTheDocument();
+  });
+
+  it("leaves the text-style select blank on a block it cannot name", () => {
+    // a code block is neither a heading nor a paragraph, so neither option
+    // matches and the select falls back to no selection
+    renderTiptap("<pre><code>const x = 1;</code></pre>");
+
+    expect(screen.getByRole("combobox", { name: "text style" })).toHaveValue("");
+  });
+
   it("labels every toolbar button and the block-style select", () => {
     const { container } = renderTiptap();
 
@@ -61,17 +99,20 @@ describe("Tiptap toolbar", () => {
     ).toEqual([]);
   });
 
-  it("marks the bold button active once toggled", async () => {
-    const user = userEvent.setup();
-    renderTiptap();
-    const bold = getButton("bold");
+  it.each(["bold", "italic", "strike"])(
+    "marks the %s button active once toggled",
+    async (mark) => {
+      const user = userEvent.setup();
+      renderTiptap();
+      const button = getButton(mark);
 
-    expect(bold.className).not.toContain("is-active");
-    await user.click(bold);
-    expect(bold.className).toContain("is-active");
-    await user.click(bold);
-    expect(bold.className).not.toContain("is-active");
-  });
+      expect(button.className).not.toContain("is-active");
+      await user.click(button);
+      expect(button.className).toContain("is-active");
+      await user.click(button);
+      expect(button.className).not.toContain("is-active");
+    }
+  );
 
   it("tracks the active text alignment across the alignment buttons", async () => {
     const user = userEvent.setup();
@@ -172,6 +213,23 @@ describe("Tiptap toolbar", () => {
     await user.click(getButton("link"));
     // unsetLink on a linkless cursor leaves the document unchanged
     expect(setContent).not.toHaveBeenCalled();
+  });
+
+  it("reports a url the link extension refuses instead of failing silently", async () => {
+    const user = userEvent.setup();
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    // Tiptap's Link extension rejects any protocol outside its allow-list.
+    vi.spyOn(window, "prompt").mockReturnValue("javascript:alert(1)");
+    const { setContent } = renderTiptap();
+
+    await user.click(getButton("link"));
+
+    expect(setContent).not.toHaveBeenCalled();
+    expect(getButton("link").className).not.toContain("is-active");
+    expect(error).toHaveBeenCalledWith(
+      "Could not set link:",
+      "javascript:alert(1)"
+    );
   });
 
   it("inserts the picked image with its uuid as the title", async () => {
