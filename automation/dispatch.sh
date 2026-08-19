@@ -31,6 +31,17 @@ CLAUDE_BIN="${KARI_AUTOMATION_CLAUDE_BIN:-claude}"
 # the poll period would let an `every: 1h` agent fire ~14m early. Result:
 # "about every N", with the phase held instead of accumulating drift.
 DUE_TOLERANCE="${KARI_AUTOMATION_DUE_TOLERANCE:-120}"
+# Validated up front, the way `every` is (see interval_seconds): a
+# non-integer here — say `2m`, borrowing the duration syntax `every`
+# uses — would blow up the arithmetic inside the dispatch loop, and
+# under `set -e` that aborts the loop wholesale. Every agent would be
+# skipped while the script still exited 0, so cron would see success and
+# a dead fleet would stay invisible. Warn and fall back instead.
+if ! [[ "$DUE_TOLERANCE" =~ ^[0-9]+$ ]]; then
+  echo "unusable KARI_AUTOMATION_DUE_TOLERANCE '$DUE_TOLERANCE'" \
+    "(want whole seconds, e.g. 120); using 120" >&2
+  DUE_TOLERANCE=120
+fi
 
 DRY_RUN=false
 [ "${1:-}" = "--dry-run" ] && DRY_RUN=true

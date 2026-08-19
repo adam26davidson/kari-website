@@ -156,6 +156,10 @@ the tolerance defaulting to 120s (override with
 interval simply means "every poll"). Phase is held rather than drifting;
 a run may start up to the tolerance early.
 
+The override is whole seconds — a bare `120`, *not* the `Nm`/`Nh`
+syntax `every` takes. Anything else is reported on stderr and the
+default is used, so a typo can't take the fleet down.
+
 Sizing it: the tolerance only needs to exceed the per-cycle start lag —
 the delay between a poll firing and `last-run` being stamped, observed
 at ~37s — so 120s covers it with room to spare. It is deliberately far

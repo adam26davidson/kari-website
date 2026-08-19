@@ -162,6 +162,26 @@ expect_contains "$w/out" "WOULD RUN fast-agent" \
   "tolerance larger than the interval clamps instead of underflowing"
 expect_eq "$(cat "$w/exit-code")" 0 "oversized tolerance exits 0"
 
+# 4e. A non-integer tolerance (e.g. the Nm/Nh duration syntax `every`
+#     uses) must not take the fleet down silently: warn, fall back to the
+#     120s default, and keep dispatching.
+for bad_tolerance in 120s 2m "" abc -60; do
+  w="$(new_work)"
+  write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+  ran_ago "$w" issue-pipeline $((3600 - 60))
+  DUE_TOLERANCE="$bad_tolerance" run_dispatch "$w" --dry-run
+  expect_contains "$w/out" "WOULD RUN issue-pipeline" \
+    "tolerance '$bad_tolerance' falls back to the default instead of skipping"
+  expect_eq "$(cat "$w/exit-code")" 0 "tolerance '$bad_tolerance' exits 0"
+done
+# The bogus value is named on stderr so the misconfiguration is visible.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+ran_ago "$w" issue-pipeline $((3600 - 60))
+DUE_TOLERANCE=120s run_dispatch "$w" --dry-run
+expect_contains "$w/out" "KARI_AUTOMATION_DUE_TOLERANCE" \
+  "bad tolerance is reported"
+
 # 5. PAUSE file halts the whole fleet.
 w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
