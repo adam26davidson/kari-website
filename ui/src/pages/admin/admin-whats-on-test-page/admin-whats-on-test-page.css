@@ -1,0 +1,83 @@
+/* Staging-only deployment-status admin section. Same translucent card
+   treatment as the other admin pages (see admin-image-gc-page.css) so the
+   text doesn't sit directly on the photo background. */
+.admin-whats-on-test-page {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  width: calc(100% - 24px);
+  max-width: 700px;
+  box-sizing: border-box;
+  margin: 12px auto;
+  padding: 24px;
+  border-radius: 3px;
+  background-color: rgba(226, 226, 226, 0.8);
+  backdrop-filter: blur(10px);
+  font-family: "Roboto", sans-serif;
+  color: #181818;
+}
+
+.admin-whats-on-test-page h2 {
+  margin: 0;
+  font-weight: 300;
+}
+
+.whats-on-test-explanation {
+  margin: 0;
+  font-weight: 300;
+  color: #4a4a4a;
+}
+
+.whats-on-test-note {
+  margin: 0;
+}
+
+.whats-on-test-warning {
+  width: calc(100% - 32px);
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 6px;
+  background-color: #a33327;
+  color: white;
+  overflow-wrap: anywhere;
+}
+
+.whats-on-test-list {
+  list-style: none;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.whats-on-test-commit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #bbb;
+}
+
+.whats-on-test-subject {
+  font-weight: 600;
+}
+
+.whats-on-test-pr-link {
+  color: #2a5d8f;
+}
+
+.whats-on-test-meta {
+  margin-left: auto;
+  display: flex;
+  column-gap: 8px;
+  font-size: 0.85rem;
+  color: #444;
+  white-space: nowrap;
+}
+
+.whats-on-test-shas {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #444;
+}

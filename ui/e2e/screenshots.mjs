@@ -76,6 +76,10 @@ const ADMIN_ROUTES = [
   { route: "/admin/other-works/seed-blog-1", name: "admin-other-works-editor" },
   { route: "/admin/background", name: "admin-background" },
   { route: "/admin/image-cleanup", name: "admin-image-cleanup" },
+  // Staging-only section; the test-mode bundle sets VITE_SHOW_TEST_STATUS
+  // so it renders here (with its deterministic "unknown build" fallback,
+  // since VITE_COMMIT_SHA is unset in test builds).
+  { route: "/admin/whats-on-test", name: "admin-whats-on-test" },
 ];
 
 const DEFAULT_ROUTES = [...PUBLIC_ROUTES, ...ADMIN_ROUTES];

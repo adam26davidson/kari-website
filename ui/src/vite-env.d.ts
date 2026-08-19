@@ -14,7 +14,8 @@ interface ImportMetaEnv {
   readonly VITE_COMMIT_SHA?: string;
   /**
    * "true" only in staging/test builds (.env.staging, .env.test): gates
-   * the /whats-on-test route so the prod bundle never registers it.
+   * the admin "What's on test" section (/admin/whats-on-test) so the
+   * prod bundle never registers its route or menu entry.
    */
   readonly VITE_SHOW_TEST_STATUS?: string;
 }

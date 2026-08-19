@@ -30,10 +30,6 @@ vi.mock("./pages/photography-page/photography-page", () => ({
 vi.mock("./pages/admin/admin", () => ({
   Admin: () => <div>Admin page stub</div>,
 }));
-vi.mock("./pages/whats-on-test/whats-on-test-page", () => ({
-  WhatsOnTestPage: () => <div>Whats-on-test page stub</div>,
-}));
-
 vi.mock("./hooks/use-is-mobile", () => ({
   useIsMobile: vi.fn(),
 }));
@@ -87,22 +83,11 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
-  it("registers the whats-on-test route when the staging flag is set", async () => {
-    vi.stubEnv("VITE_SHOW_TEST_STATUS", "true");
+  it("does not register whats-on-test as a public route (it lives under /admin)", () => {
     renderApp("/whats-on-test");
-    expect(
-      await screen.findByText("Whats-on-test page stub"),
-    ).toBeInTheDocument();
-  });
-
-  it("does not register the whats-on-test route without the staging flag", () => {
-    // Vitest runs in mode "test", whose .env.test sets the flag (so the
-    // e2e bundle shows the page); stub it off to exercise the prod build.
-    vi.stubEnv("VITE_SHOW_TEST_STATUS", "");
-    renderApp("/whats-on-test");
-    expect(screen.queryByText("Whats-on-test page stub")).toBeNull();
     // The shell still renders; the unmatched route just shows nothing.
     expect(screen.getByText("Kari Davidson")).toBeInTheDocument();
+    expect(screen.queryByText(/whats-on-test/i)).toBeNull();
   });
 
   it("shows the mobile menu instead of the route when opened, and closes on selection", async () => {

@@ -44,7 +44,7 @@ jobs:
         working-directory: ui
         env:
           # Baked into both bundles so the app knows which commit it runs
-          # (the staging build's /whats-on-test page compares it against
+          # (the staging build's /admin/whats-on-test page compares it against
           # the latest successful production deployment).
           VITE_COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |

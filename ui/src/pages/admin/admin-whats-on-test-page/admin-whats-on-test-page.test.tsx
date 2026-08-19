@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { WhatsOnTestPage } from "./whats-on-test-page";
-import { DeployStatusService } from "../../services/deploy-status";
-import type { PendingCommit } from "../../services/deploy-status";
+import { AdminWhatsOnTestPage } from "./admin-whats-on-test-page";
+import { DeployStatusService } from "../../../services/deploy-status";
+import type { PendingCommit } from "../../../services/deploy-status";
 
-vi.mock("../../services/deploy-status", () => ({
+vi.mock("../../../services/deploy-status", () => ({
+  DEPLOYMENTS_SCAN_LIMIT: 20,
   DeployStatusService: {
-    getLatestProdSha: vi.fn(),
+    getLatestProdDeploy: vi.fn(),
     getPendingCommits: vi.fn(),
   },
 }));
@@ -32,15 +33,17 @@ const pendingCommits: Array<PendingCommit> = [
   },
 ];
 
-describe("WhatsOnTestPage", () => {
+describe("AdminWhatsOnTestPage", () => {
   beforeEach(() => {
     vi.stubEnv("VITE_COMMIT_SHA", HEAD_SHA);
-    vi.mocked(DeployStatusService.getLatestProdSha).mockResolvedValue(
-      PROD_SHA,
-    );
-    vi.mocked(DeployStatusService.getPendingCommits).mockResolvedValue(
-      pendingCommits,
-    );
+    vi.mocked(DeployStatusService.getLatestProdDeploy).mockResolvedValue({
+      kind: "found",
+      sha: PROD_SHA,
+    });
+    vi.mocked(DeployStatusService.getPendingCommits).mockResolvedValue({
+      commits: pendingCommits,
+      totalCommits: pendingCommits.length,
+    });
     // The failure paths log via console.error; keep test output clean.
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
@@ -49,20 +52,28 @@ describe("WhatsOnTestPage", () => {
     vi.unstubAllEnvs();
   });
 
+  it("renders as an admin section with its heading", async () => {
+    render(<AdminWhatsOnTestPage />);
+
+    expect(
+      screen.getByRole("heading", { level: 2, name: "What's on test" }),
+    ).toBeInTheDocument();
+  });
+
   it("shows the unknown-build fallback and skips fetching when the build sha is absent", async () => {
     vi.unstubAllEnvs();
 
-    render(<WhatsOnTestPage />);
+    render(<AdminWhatsOnTestPage />);
 
     expect(
       await screen.findByText(/unknown build — comparison unavailable/i),
     ).toBeInTheDocument();
-    expect(DeployStatusService.getLatestProdSha).not.toHaveBeenCalled();
+    expect(DeployStatusService.getLatestProdDeploy).not.toHaveBeenCalled();
     expect(DeployStatusService.getPendingCommits).not.toHaveBeenCalled();
   });
 
   it("renders the pending commits newest first with PR link, date, and short sha", async () => {
-    render(<WhatsOnTestPage />);
+    render(<AdminWhatsOnTestPage />);
 
     expect(
       await screen.findByText("Change background photo"),
@@ -86,7 +97,7 @@ describe("WhatsOnTestPage", () => {
   });
 
   it("shows which shas test and production are on", async () => {
-    render(<WhatsOnTestPage />);
+    render(<AdminWhatsOnTestPage />);
 
     // The sentence wraps its shas in <code>, so match on the paragraph's
     // combined text rather than a single text node.
@@ -100,11 +111,12 @@ describe("WhatsOnTestPage", () => {
   });
 
   it("shows the empty state without comparing when test and prod are on the same sha", async () => {
-    vi.mocked(DeployStatusService.getLatestProdSha).mockResolvedValue(
-      HEAD_SHA,
-    );
+    vi.mocked(DeployStatusService.getLatestProdDeploy).mockResolvedValue({
+      kind: "found",
+      sha: HEAD_SHA,
+    });
 
-    render(<WhatsOnTestPage />);
+    render(<AdminWhatsOnTestPage />);
 
     expect(
       await screen.findByText("test == prod — nothing awaiting promotion."),
@@ -113,9 +125,12 @@ describe("WhatsOnTestPage", () => {
   });
 
   it("shows the empty state when the comparison finds no pending commits", async () => {
-    vi.mocked(DeployStatusService.getPendingCommits).mockResolvedValue([]);
+    vi.mocked(DeployStatusService.getPendingCommits).mockResolvedValue({
+      commits: [],
+      totalCommits: 0,
+    });
 
-    render(<WhatsOnTestPage />);
+    render(<AdminWhatsOnTestPage />);
 
     expect(
       await screen.findByText("test == prod — nothing awaiting promotion."),
@@ -123,9 +138,11 @@ describe("WhatsOnTestPage", () => {
   });
 
   it("says so when no successful production deployment exists", async () => {
-    vi.mocked(DeployStatusService.getLatestProdSha).mockResolvedValue(null);
+    vi.mocked(DeployStatusService.getLatestProdDeploy).mockResolvedValue({
+      kind: "none",
+    });
 
-    render(<WhatsOnTestPage />);
+    render(<AdminWhatsOnTestPage />);
 
     expect(
       await screen.findByText(/no successful production deployment/i),
@@ -133,12 +150,51 @@ describe("WhatsOnTestPage", () => {
     expect(DeployStatusService.getPendingCommits).not.toHaveBeenCalled();
   });
 
+  it("distinguishes an indeterminate scan from no-success-exists", async () => {
+    vi.mocked(DeployStatusService.getLatestProdDeploy).mockResolvedValue({
+      kind: "indeterminate",
+    });
+
+    render(<AdminWhatsOnTestPage />);
+
+    expect(
+      await screen.findByText(/couldn't determine what production is running/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/no successful production deployment/i),
+    ).toBeNull();
+    expect(DeployStatusService.getPendingCommits).not.toHaveBeenCalled();
+  });
+
+  it("warns that the newest merges are missing when GitHub truncated the comparison", async () => {
+    vi.mocked(DeployStatusService.getPendingCommits).mockResolvedValue({
+      commits: pendingCommits,
+      totalCommits: 715,
+    });
+
+    render(<AdminWhatsOnTestPage />);
+
+    const warning = await screen.findByText(
+      /715 commits are pending, but GitHub's comparison returned only the oldest 2/i,
+    );
+    expect(warning).toHaveTextContent(/most recent merges are not listed/i);
+    // The (incomplete) list still renders below the warning.
+    expect(screen.getByText("Change background photo")).toBeInTheDocument();
+  });
+
+  it("does not warn about truncation when the list is complete", async () => {
+    render(<AdminWhatsOnTestPage />);
+
+    await screen.findByText("Change background photo");
+    expect(screen.queryByText(/comparison returned only/i)).toBeNull();
+  });
+
   it("shows an error state with retry when the GitHub API fails", async () => {
-    vi.mocked(DeployStatusService.getLatestProdSha).mockRejectedValueOnce(
+    vi.mocked(DeployStatusService.getLatestProdDeploy).mockRejectedValueOnce(
       new Error("rate limited"),
     );
 
-    render(<WhatsOnTestPage />);
+    render(<AdminWhatsOnTestPage />);
 
     expect(
       await screen.findByText("Failed to load deployment status."),

@@ -3,16 +3,27 @@ import { ensureOk } from "./http";
 /**
  * Reads deployment state from the public, unauthenticated GitHub API to
  * answer "which merged changes are on test but not yet promoted to
- * production?" (the staging-only /whats-on-test page). The repo is
- * public, so no token is needed; the unauthenticated rate limit
- * (60 req/hr/IP) comfortably covers the page's 2-3 requests per load.
+ * production?" (the staging-only /admin/whats-on-test page). The repo is
+ * public, so no token is needed, but every request counts against the
+ * unauthenticated rate limit (60 req/hr/IP) — hence the deliberate scan
+ * cap below.
  */
 
 const GITHUB_REPO_URL =
   "https://api.github.com/repos/adam26davidson/kari-website";
 
-/** How many recent production deployments to scan for a success status. */
-const DEPLOYMENTS_PAGE_SIZE = 10;
+/**
+ * How many recent production deployments to scan for a success status.
+ * Every merge to main creates one production deployment record, and
+ * unapproved ones pile up as `waiting`/`error` — so the last success sits
+ * one past the pending backlog. Each scanned deployment costs one
+ * statuses request, so the cap bounds a page load at SCAN_LIMIT + 2
+ * requests worst case against the 60/hr/IP unauthenticated limit. A
+ * backlog deeper than the cap yields the honest `indeterminate` result
+ * instead of more requests (or the old bug: falsely reporting that no
+ * success exists).
+ */
+export const DEPLOYMENTS_SCAN_LIMIT = 20;
 
 /** A merged change deployed to test but not yet promoted to production. */
 export interface PendingCommit {
@@ -24,6 +35,32 @@ export interface PendingCommit {
   prNumber: number | null;
   /** ISO timestamp of the merge (committer date). */
   date: string;
+}
+
+/** Outcome of looking for the deployment production currently runs. */
+export type ProdDeployLookup =
+  /** The newest production deployment that reached `success`. */
+  | { kind: "found"; sha: string }
+  /** Scanned every production deployment; none ever succeeded. */
+  | { kind: "none" }
+  /**
+   * No success among the newest DEPLOYMENTS_SCAN_LIMIT deployments, but
+   * older unscanned ones exist — whether a success exists is unknown.
+   */
+  | { kind: "indeterminate" };
+
+/** The pending-commit list plus the true size of the compared range. */
+export interface PendingCommits {
+  /** Newest first. */
+  commits: Array<PendingCommit>;
+  /**
+   * Total commits in the range. GitHub caps the compare response's
+   * commit list at 250, oldest first — so when totalCommits exceeds
+   * commits.length, the NEWEST merges are the ones missing and callers
+   * must surface the truncation rather than present the list as
+   * complete.
+   */
+  totalCommits: number;
 }
 
 interface GithubDeployment {
@@ -45,6 +82,7 @@ interface GithubCompareCommit {
 }
 
 interface GithubCompare {
+  total_commits: number;
   commits: Array<GithubCompareCommit>;
 }
 
@@ -66,12 +104,13 @@ export class DeployStatusService {
   /**
    * The commit currently on production: the sha of the newest deployment
    * to the `production` GitHub Environment that reached a `success`
-   * status. Returns null when no scanned deployment ever succeeded.
+   * status, scanning at most the newest DEPLOYMENTS_SCAN_LIMIT
+   * deployments (see the cap's doc comment for the request budget).
    */
-  static async getLatestProdSha(): Promise<string | null> {
+  static async getLatestProdDeploy(): Promise<ProdDeployLookup> {
     const response = await fetch(
       `${GITHUB_REPO_URL}/deployments` +
-        `?environment=production&per_page=${DEPLOYMENTS_PAGE_SIZE}`,
+        `?environment=production&per_page=${DEPLOYMENTS_SCAN_LIMIT}`,
     );
     ensureOk(response, "Failed to fetch production deployments");
     const deployments: Array<GithubDeployment> = await response.json();
@@ -83,20 +122,28 @@ export class DeployStatusService {
       const statuses: Array<GithubDeploymentStatus> =
         await statusesResponse.json();
       if (statuses.some((status) => status.state === "success")) {
-        return deployment.sha;
+        return { kind: "found", sha: deployment.sha };
       }
     }
-    return null;
+    // A partial page means GitHub had nothing older to return, so the
+    // scan covered every production deployment and none ever succeeded.
+    // A full page means older, unscanned deployments exist — one of them
+    // may well be the last success, so claiming "none" would be wrong.
+    return deployments.length < DEPLOYMENTS_SCAN_LIMIT
+      ? { kind: "none" }
+      : { kind: "indeterminate" };
   }
 
   /**
    * The merged commits on test (`headSha`) but not yet on production
-   * (`prodSha`), newest first. Empty when the two are identical.
+   * (`prodSha`), newest first, plus the range's true total (which
+   * exceeds the list length when GitHub truncated the compare at 250
+   * commits). Empty when the two are identical.
    */
   static async getPendingCommits(
     prodSha: string,
     headSha: string,
-  ): Promise<Array<PendingCommit>> {
+  ): Promise<PendingCommits> {
     const response = await fetch(
       `${GITHUB_REPO_URL}/compare/${prodSha}...${headSha}`,
     );
@@ -104,6 +151,9 @@ export class DeployStatusService {
     const comparison: GithubCompare = await response.json();
     // The compare API lists commits oldest first; the page shows the
     // most recent merge on top.
-    return comparison.commits.map(toPendingCommit).reverse();
+    return {
+      commits: comparison.commits.map(toPendingCommit).reverse(),
+      totalCommits: comparison.total_commits,
+    };
   }
 }
