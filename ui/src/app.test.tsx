@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -30,6 +30,9 @@ vi.mock("./pages/photography-page/photography-page", () => ({
 vi.mock("./pages/admin/admin", () => ({
   Admin: () => <div>Admin page stub</div>,
 }));
+vi.mock("./pages/whats-on-test/whats-on-test-page", () => ({
+  WhatsOnTestPage: () => <div>Whats-on-test page stub</div>,
+}));
 
 vi.mock("./hooks/use-is-mobile", () => ({
   useIsMobile: vi.fn(),
@@ -56,6 +59,10 @@ beforeEach(() => {
   vi.mocked(useIsMobile).mockReturnValue(false);
 });
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("App", () => {
   it("renders the header and the home route", async () => {
     renderApp("/");
@@ -78,6 +85,24 @@ describe("App", () => {
     expect(
       await screen.findByText("Other works page stub"),
     ).toBeInTheDocument();
+  });
+
+  it("registers the whats-on-test route when the staging flag is set", async () => {
+    vi.stubEnv("VITE_SHOW_TEST_STATUS", "true");
+    renderApp("/whats-on-test");
+    expect(
+      await screen.findByText("Whats-on-test page stub"),
+    ).toBeInTheDocument();
+  });
+
+  it("does not register the whats-on-test route without the staging flag", () => {
+    // Vitest runs in mode "test", whose .env.test sets the flag (so the
+    // e2e bundle shows the page); stub it off to exercise the prod build.
+    vi.stubEnv("VITE_SHOW_TEST_STATUS", "");
+    renderApp("/whats-on-test");
+    expect(screen.queryByText("Whats-on-test page stub")).toBeNull();
+    // The shell still renders; the unmatched route just shows nothing.
+    expect(screen.getByText("Kari Davidson")).toBeInTheDocument();
   });
 
   it("shows the mobile menu instead of the route when opened, and closes on selection", async () => {

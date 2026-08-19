@@ -1,0 +1,70 @@
+/* Staging-only deployment status page. Utilitarian internal UI, but it
+   renders over the site's background photo, so it reuses the translucent
+   card treatment the public pages use for legibility. */
+.whats-on-test-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  width: 100%;
+  overflow-y: auto;
+}
+
+.whats-on-test-card {
+  background-color: rgba(226, 226, 226, 0.9);
+  backdrop-filter: blur(10px);
+  box-sizing: border-box;
+  width: calc(80% - 16px);
+  max-width: 700px;
+  padding: 30px;
+  margin: 24px 8px;
+  border-radius: 3px;
+  color: black;
+}
+
+.whats-on-test-card h1 {
+  margin: 0 0 16px;
+  font-size: 1.4rem;
+}
+
+.whats-on-test-note {
+  margin: 0;
+}
+
+.whats-on-test-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.whats-on-test-commit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #bbb;
+}
+
+.whats-on-test-subject {
+  font-weight: 600;
+}
+
+.whats-on-test-pr-link {
+  color: #2a5d8f;
+}
+
+.whats-on-test-meta {
+  margin-left: auto;
+  display: flex;
+  column-gap: 8px;
+  font-size: 0.85rem;
+  color: #444;
+  white-space: nowrap;
+}
+
+.whats-on-test-shas {
+  margin: 16px 0 0;
+  font-size: 0.85rem;
+  color: #444;
+}

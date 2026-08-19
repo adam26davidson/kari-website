@@ -48,6 +48,11 @@ const Admin = lazyWithRetry(() =>
     default: m.Admin,
   })),
 );
+const WhatsOnTestPage = lazyWithRetry(() =>
+  import("./pages/whats-on-test/whats-on-test-page").then((m) => ({
+    default: m.WhatsOnTestPage,
+  })),
+);
 
 function RouteFallback() {
   return <div className="route-loading">Loading...</div>;
@@ -82,6 +87,12 @@ export function App() {
                 <Route path="blog/:id" element={<BlogPostPage />} />
                 <Route path="admin/*" element={<Admin />} />
                 <Route path="photography" element={<PhotographyPage />} />
+                {/* Staging-only deployment status page: the flag is set in
+                    .env.staging and .env.test but never .env.production,
+                    so the prod bundle statically drops this route. */}
+                {import.meta.env.VITE_SHOW_TEST_STATUS === "true" && (
+                  <Route path="whats-on-test" element={<WhatsOnTestPage />} />
+                )}
               </Routes>
             </Suspense>
           </RouteErrorBoundary>
