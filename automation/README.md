@@ -35,6 +35,9 @@ name: my-agent        # required; used for state/lock/log filenames
 enabled: true         # anything else disables the agent
 every: 1h             # required; Nm / Nh / Nd since last *started* run
 model: opus           # optional; passed to claude --model
+fallback: sonnet      # optional; passed to claude --fallback-model, so a
+                      # tick can continue on a smaller model when the
+                      # primary's usage limit is hit
 ---
 The agent's full prompt.
 ```
@@ -59,13 +62,18 @@ machine tracks *when last*.
 
 ## Cron installation
 
-Not yet installed — the pipeline first gets a supervised manual run
-(see the spec's Rollout section), and `issue-pipeline` ships
-`enabled: false` until that passes. Then:
-
 ```
 */15 * * * * /home/adamd/Projects/kari-website/automation/dispatch.sh
 ```
 
 (`crontab -e`, one line. The 15-minute cadence is the dispatcher's
 polling resolution; each agent's own `every` decides how often it runs.)
+
+## Usage limits
+
+A tick or subagent that hits a model usage limit simply dies; state
+lives in GitHub, so the next due tick recovers — the playbook releases
+stale issue claims (`in progress` with no PR after 2h) and re-shepherds
+open PRs statelessly. The `fallback` model keeps orchestration running
+through a Fable outage, and the playbook postpones Fable-tier subagent
+work (never silently downgrades it) until the limit window resets.

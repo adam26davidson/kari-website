@@ -61,8 +61,8 @@ interval_seconds() { # interval_seconds <Nm|Nh|Nd>
   esac
 }
 
-launch() { # launch <name> <model> <agent-file> — backgrounded, never blocks
-  local name="$1" model="$2" agent_file="$3"
+launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
+  local name="$1" model="$2" fallback="$3" agent_file="$4"
   local log
   log="$STATE_DIR/logs/$name-$(date +%Y%m%dT%H%M%S).log"
   (
@@ -73,11 +73,12 @@ launch() { # launch <name> <model> <agent-file> — backgrounded, never blocks
     date +%s >"$STATE_DIR/$name.last-run"
     echo "run $name -> $log"
     cd "$REPO_ROOT"
-    # Unquoted ${model:+...} is deliberate: no flag at all when unset.
+    # Unquoted ${var:+...} is deliberate: no flag at all when unset.
     # shellcheck disable=SC2086
     prompt_body "$agent_file" |
       "$CLAUDE_BIN" -p --dangerously-skip-permissions \
-        ${model:+--model "$model"} >"$log" 2>&1
+        ${model:+--model "$model"} \
+        ${fallback:+--fallback-model "$fallback"} >"$log" 2>&1
   ) 9>"$STATE_DIR/$name.lock" &
   disown
 }
@@ -88,6 +89,7 @@ for agent_file in "$AGENTS_DIR"/*.md; do
   enabled="$(frontmatter "$agent_file" enabled)"
   every="$(frontmatter "$agent_file" every)"
   model="$(frontmatter "$agent_file" model)"
+  fallback="$(frontmatter "$agent_file" fallback)"
 
   if [ -z "$name" ] || [ -z "$every" ]; then
     echo "SKIP $(basename "$agent_file"): missing name/every frontmatter" >&2
@@ -114,7 +116,7 @@ for agent_file in "$AGENTS_DIR"/*.md; do
     echo "WOULD RUN $name (model=${model:-default}, every=$every)"
     continue
   fi
-  launch "$name" "$model" "$agent_file"
+  launch "$name" "$model" "$fallback" "$agent_file"
 done
 
 find "$STATE_DIR/logs" -type f -mtime +30 -delete 2>/dev/null || true

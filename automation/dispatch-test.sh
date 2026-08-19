@@ -174,6 +174,38 @@ expect_eq \
 run_dispatch "$w" --dry-run
 expect_contains "$w/out" "not due" "agent not due right after a run"
 
+# 9. Optional fallback frontmatter becomes --fallback-model; absent when unset.
+w="$(new_work)"
+cat >"$w/agents/issue-pipeline.md" <<'EOF'
+---
+name: issue-pipeline
+enabled: true
+every: 1h
+model: fable
+fallback: opus
+---
+This is the issue-pipeline prompt body.
+EOF
+export STUB_OUT="$w/stub-out"
+STUB_CLAUDE="$STUB_DIR/claude-stub" run_dispatch "$w"
+for _ in $(seq 50); do
+  [ -s "$w/stub-out" ] && break
+  sleep 0.1
+done
+expect_contains "$w/stub-out" "--fallback-model opus" \
+  "launch passes the fallback model when configured"
+
+w="$(new_work)"
+write_agent "$w" no-fallback.md no-fallback true 1h opus
+export STUB_OUT="$w/stub-out"
+STUB_CLAUDE="$STUB_DIR/claude-stub" run_dispatch "$w"
+for _ in $(seq 50); do
+  [ -s "$w/stub-out" ] && break
+  sleep 0.1
+done
+expect_not_contains "$w/stub-out" "--fallback-model" \
+  "no fallback flag when frontmatter omits it"
+
 echo
 if [ "$FAILURES" -gt 0 ]; then
   echo "$FAILURES test(s) FAILED"
