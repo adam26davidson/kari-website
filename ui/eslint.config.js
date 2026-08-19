@@ -6,7 +6,11 @@ import jsxA11y from 'eslint-plugin-jsx-a11y'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['dist'] },
+  // Generated output, not source: `dist` from `npm run build`, `coverage`
+  // from `npm run test:coverage`. The coverage reporter emits vendored
+  // scripts with `/* eslint-disable */` headers that
+  // --report-unused-disable-directives flags as errors.
+  { ignores: ['dist', 'coverage'] },
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
