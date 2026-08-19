@@ -67,23 +67,12 @@ export function AdminHaigaPage() {
   );
 
   const deleteHaiga = async (idx: number) => {
-    const haigaToDelete = haigaList[idx];
-    if (!haigaToDelete) {
-      console.error("Haiga not found");
-      return;
-    }
-    const imageToDelete = haigaToDelete.image;
     const newDataList = haigaList.slice();
     newDataList.splice(idx, 1);
-    // Save the shortened list first — if this fails the haiga stays
-    // fully intact and referenced.
-    if (await saveList(newDataList, "Haiga deleted")) {
-      // The saved list no longer references the image; a failed delete
-      // just leaves an orphan for later cleanup.
-      if (imageToDelete) {
-        await deleteImage(imageToDelete).catch(console.error);
-      }
-    }
+    // The image object is deliberately NOT deleted: it may still be
+    // referenced by other content (e.g. as the site background), and if
+    // not, the image-cleanup sweep collects it later.
+    await saveList(newDataList, "Haiga deleted");
   };
 
   // List display functions ---------------------------------------------------
@@ -134,24 +123,14 @@ export function AdminHaigaPage() {
     }
   };
 
-  const deleteImage = async (fileName: string) => {
-    showLoading("Deleting image...");
-    try {
-      await ImageService.delete(fileName, getAccessTokenSilently);
-    } finally {
-      hideLoading();
-    }
-  };
-
   const saveOpenHaiga = async () => {
     if (!openHaiga) return;
-    const previousFileName = openHaiga.image;
-    let fileName = previousFileName;
+    let fileName = openHaiga.image;
     if (imageFile) {
       try {
-        // Upload the replacement first — the old image is only deleted
-        // after the whole save has succeeded, so a failure at any step
-        // leaves the published haiga intact.
+        // Upload the replacement first — the list is only written after
+        // the upload has succeeded, so a failure at any step leaves the
+        // published haiga intact.
         const newFileName = await uploadImage(imageFile);
         if (!newFileName) {
           throw new Error("Failed to upload image");
@@ -171,14 +150,12 @@ export function AdminHaigaPage() {
       return;
     }
     newDataList[idx] = editedHaiga;
+    // The replaced image is deliberately NOT deleted: it may still be
+    // referenced by other content (e.g. as the site background), and if
+    // not, the image-cleanup sweep collects it later.
     if (await saveList(newDataList, "Haiga saved")) {
       setOpenHaiga(editedHaiga);
       setImageFile(null);
-      // The save succeeded, so nothing references the old image anymore;
-      // a failed delete just leaves an orphan for later cleanup.
-      if (previousFileName && previousFileName !== fileName) {
-        await deleteImage(previousFileName).catch(console.error);
-      }
     }
   };
 

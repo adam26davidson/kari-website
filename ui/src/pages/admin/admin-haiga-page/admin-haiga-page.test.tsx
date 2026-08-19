@@ -21,7 +21,6 @@ vi.mock("../../../services/haiga", () => ({
 vi.mock("../../../services/images", () => ({
   ImageService: {
     upload: vi.fn(),
-    delete: vi.fn(),
   },
 }));
 
@@ -60,7 +59,6 @@ describe("AdminHaigaPage image replacement", () => {
     vi.mocked(HaigaService.getListFromApi).mockResolvedValue([savedHaiga]);
     vi.mocked(HaigaService.updateList).mockResolvedValue(undefined);
     vi.mocked(ImageService.upload).mockResolvedValue("new.png");
-    vi.mocked(ImageService.delete).mockResolvedValue(undefined);
     // PhotoPicker needs an object URL for the preview of the freshly picked
     // file; spy on the setup.ts polyfill so restoreAllMocks undoes this.
     vi.spyOn(window.URL, "createObjectURL").mockReturnValue("blob:preview");
@@ -81,8 +79,6 @@ describe("AdminHaigaPage image replacement", () => {
         "error",
       ),
     );
-    // The still-referenced image must never be deleted on a failed save.
-    expect(ImageService.delete).not.toHaveBeenCalled();
     // The replacement was uploaded before the list save was attempted.
     expect(ImageService.upload).toHaveBeenCalledOnce();
     expect(
@@ -107,7 +103,6 @@ describe("AdminHaigaPage image replacement", () => {
       ),
     );
     expect(HaigaService.updateList).not.toHaveBeenCalled();
-    expect(ImageService.delete).not.toHaveBeenCalled();
     expect(savedHaiga.image).toBe("old.png");
   });
 
@@ -125,38 +120,28 @@ describe("AdminHaigaPage image replacement", () => {
         "error",
       ),
     );
-    expect(ImageService.delete).not.toHaveBeenCalled();
     expect(HaigaService.updateList).not.toHaveBeenCalled();
     expect(savedHaiga.image).toBe("old.png");
   });
 
-  it("deletes the old image only after the save succeeds", async () => {
+  it("saves the new image and leaves the replaced object in storage", async () => {
     const { notify } = await openEditorAndPickImage();
 
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => expect(notify).toHaveBeenCalledWith("Haiga saved"));
-    // Saved list references the new upload.
+    // Saved list references the new upload, uploaded before the list save.
     expect(HaigaService.updateList).toHaveBeenCalledWith(
       [{ ...savedHaiga, image: "new.png" }],
       expect.any(Function),
     );
-    // Old image deleted exactly once, and only after upload + list save.
-    await waitFor(() =>
-      expect(ImageService.delete).toHaveBeenCalledWith(
-        "old.png",
-        expect.any(Function),
-      ),
+    expect(
+      vi.mocked(ImageService.upload).mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      vi.mocked(HaigaService.updateList).mock.invocationCallOrder[0],
     );
-    expect(ImageService.delete).toHaveBeenCalledOnce();
-    const uploadOrder =
-      vi.mocked(ImageService.upload).mock.invocationCallOrder[0];
-    const saveOrder =
-      vi.mocked(HaigaService.updateList).mock.invocationCallOrder[0];
-    const deleteOrder =
-      vi.mocked(ImageService.delete).mock.invocationCallOrder[0];
-    expect(uploadOrder).toBeLessThan(saveOrder);
-    expect(saveOrder).toBeLessThan(deleteOrder);
+    // The replaced image object is left for the cleanup sweep — it may
+    // still be referenced elsewhere (e.g. as the site background).
     // The list entry itself was replaced, never mutated in place.
     expect(savedHaiga.image).toBe("old.png");
   });
@@ -172,7 +157,6 @@ describe("AdminHaigaPage deletion", () => {
     };
     vi.mocked(HaigaService.getListFromApi).mockResolvedValue([savedHaiga]);
     vi.mocked(HaigaService.updateList).mockResolvedValue(undefined);
-    vi.mocked(ImageService.delete).mockResolvedValue(undefined);
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
@@ -186,7 +170,7 @@ describe("AdminHaigaPage deletion", () => {
     return { notify };
   }
 
-  it("keeps the image when saving the shortened list fails", async () => {
+  it("keeps the list intact when saving the shortened list fails", async () => {
     vi.mocked(HaigaService.updateList).mockRejectedValue(
       new Error("PUT failed"),
     );
@@ -198,11 +182,10 @@ describe("AdminHaigaPage deletion", () => {
         "error",
       ),
     );
-    // The still-referenced image must never be deleted on a failed save.
-    expect(ImageService.delete).not.toHaveBeenCalled();
+    expect(await screen.findByRole("button", { name: "Edit" })).toBeInTheDocument();
   });
 
-  it("deletes the image only after the shortened list is saved", async () => {
+  it("saves the shortened list and leaves the image object in storage", async () => {
     const { notify } = await confirmDelete();
 
     await waitFor(() => expect(notify).toHaveBeenCalledWith("Haiga deleted"));
@@ -210,17 +193,8 @@ describe("AdminHaigaPage deletion", () => {
       [],
       expect.any(Function),
     );
-    await waitFor(() =>
-      expect(ImageService.delete).toHaveBeenCalledWith(
-        "old.png",
-        expect.any(Function),
-      ),
-    );
-    expect(ImageService.delete).toHaveBeenCalledOnce();
-    // List save strictly before the image delete.
-    expect(
-      vi.mocked(HaigaService.updateList).mock.invocationCallOrder[0],
-    ).toBeLessThan(vi.mocked(ImageService.delete).mock.invocationCallOrder[0]);
+    // The image object is left for the cleanup sweep — it may still be
+    // referenced elsewhere (e.g. as the site background).
   });
 });
 

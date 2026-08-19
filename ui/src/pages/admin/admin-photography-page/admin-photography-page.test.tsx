@@ -17,7 +17,6 @@ vi.mock("../../../services/photography", () => ({
 vi.mock("../../../services/images", () => ({
   ImageService: {
     upload: vi.fn(),
-    delete: vi.fn(),
   },
 }));
 
@@ -77,7 +76,6 @@ beforeEach(() => {
   vi.mocked(PhotographyService.getListFromApi).mockResolvedValue([savedPost]);
   vi.mocked(PhotographyService.updateList).mockResolvedValue(undefined);
   vi.mocked(ImageService.upload).mockResolvedValue("new.png");
-  vi.mocked(ImageService.delete).mockResolvedValue(undefined);
   // The central polyfill in test/setup.ts provides createObjectURL; spy on
   // it (auto-restored between tests) so PhotoPicker gets a stable preview
   // URL for the freshly picked file.
@@ -100,8 +98,6 @@ describe("AdminPhotographyPage image replacement", () => {
         "error",
       ),
     );
-    // The still-referenced image must never be deleted on a failed save.
-    expect(ImageService.delete).not.toHaveBeenCalled();
     // The replacement was uploaded before the list save was attempted.
     expect(ImageService.upload).toHaveBeenCalledOnce();
     expect(
@@ -126,7 +122,6 @@ describe("AdminPhotographyPage image replacement", () => {
       ),
     );
     expect(PhotographyService.updateList).not.toHaveBeenCalled();
-    expect(ImageService.delete).not.toHaveBeenCalled();
     expect(savedPost.images).toEqual([{ image: "old.png", blurb: "a photo" }]);
   });
 
@@ -144,12 +139,11 @@ describe("AdminPhotographyPage image replacement", () => {
         "error",
       ),
     );
-    expect(ImageService.delete).not.toHaveBeenCalled();
     expect(PhotographyService.updateList).not.toHaveBeenCalled();
     expect(savedPost.images).toEqual([{ image: "old.png", blurb: "a photo" }]);
   });
 
-  it("deletes the old image only after the save succeeds", async () => {
+  it("saves the new image and leaves the replaced object in storage", async () => {
     const { container, notify } = await openEditorAndReplaceImage();
 
     fireEvent.click(iconButton(container, "floppy-disk"));
@@ -157,28 +151,20 @@ describe("AdminPhotographyPage image replacement", () => {
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Photography post saved"),
     );
-    // Saved list references the new upload and keeps the blurb.
+    // Saved list references the new upload (uploaded before the list
+    // save) and keeps the blurb. The replaced image object is left for
+    // the cleanup sweep — it may still be referenced elsewhere (e.g. as
+    // the site background).
     const [savedList] = vi.mocked(PhotographyService.updateList).mock
       .calls[0] as [Array<PhotographyPost>, TokenGetter];
     expect(savedList[0].images).toEqual([
       { image: "new.png", blurb: "a photo" },
     ]);
-    // Old image deleted exactly once, and only after upload + list save.
-    await waitFor(() =>
-      expect(ImageService.delete).toHaveBeenCalledWith(
-        "old.png",
-        expect.any(Function),
-      ),
+    expect(
+      vi.mocked(ImageService.upload).mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      vi.mocked(PhotographyService.updateList).mock.invocationCallOrder[0],
     );
-    expect(ImageService.delete).toHaveBeenCalledOnce();
-    const uploadOrder = vi.mocked(ImageService.upload).mock
-      .invocationCallOrder[0];
-    const saveOrder = vi.mocked(PhotographyService.updateList).mock
-      .invocationCallOrder[0];
-    const deleteOrder = vi.mocked(ImageService.delete).mock
-      .invocationCallOrder[0];
-    expect(uploadOrder).toBeLessThan(saveOrder);
-    expect(saveOrder).toBeLessThan(deleteOrder);
     // The published list entry itself was replaced, never mutated in place.
     expect(savedPost.images).toEqual([{ image: "old.png", blurb: "a photo" }]);
   });
@@ -221,22 +207,11 @@ describe("AdminPhotographyPage reordering in the editor", () => {
       { image: "old2.png", blurb: "second" },
       { image: "new.png", blurb: "first" },
     ]);
-    // Only the replaced image is deleted, and only after the list save.
-    await waitFor(() =>
-      expect(ImageService.delete).toHaveBeenCalledWith(
-        "old1.png",
-        expect.any(Function),
-      ),
+    expect(
+      vi.mocked(ImageService.upload).mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      vi.mocked(PhotographyService.updateList).mock.invocationCallOrder[0],
     );
-    expect(ImageService.delete).toHaveBeenCalledOnce();
-    const uploadOrder = vi.mocked(ImageService.upload).mock
-      .invocationCallOrder[0];
-    const saveOrder = vi.mocked(PhotographyService.updateList).mock
-      .invocationCallOrder[0];
-    const deleteOrder = vi.mocked(ImageService.delete).mock
-      .invocationCallOrder[0];
-    expect(uploadOrder).toBeLessThan(saveOrder);
-    expect(saveOrder).toBeLessThan(deleteOrder);
   });
 });
 
@@ -250,7 +225,7 @@ describe("AdminPhotographyPage deletion", () => {
     return { notify };
   }
 
-  it("keeps the images when saving the shortened list fails", async () => {
+  it("keeps the list intact when saving the shortened list fails", async () => {
     vi.mocked(PhotographyService.updateList).mockRejectedValue(
       new Error("PUT failed"),
     );
@@ -262,11 +237,9 @@ describe("AdminPhotographyPage deletion", () => {
         "error",
       ),
     );
-    // Still-referenced images must never be deleted on a failed save.
-    expect(ImageService.delete).not.toHaveBeenCalled();
   });
 
-  it("deletes the post images only after the shortened list is saved", async () => {
+  it("saves the shortened list and leaves the image objects in storage", async () => {
     const { notify } = await confirmDelete();
 
     await waitFor(() =>
@@ -276,17 +249,8 @@ describe("AdminPhotographyPage deletion", () => {
       [],
       expect.any(Function),
     );
-    await waitFor(() =>
-      expect(ImageService.delete).toHaveBeenCalledWith(
-        "old.png",
-        expect.any(Function),
-      ),
-    );
-    expect(ImageService.delete).toHaveBeenCalledOnce();
-    // List save strictly before the image delete.
-    expect(
-      vi.mocked(PhotographyService.updateList).mock.invocationCallOrder[0],
-    ).toBeLessThan(vi.mocked(ImageService.delete).mock.invocationCallOrder[0]);
+    // The post's image objects are left for the cleanup sweep — they may
+    // still be referenced elsewhere (e.g. as the site background).
   });
 });
 

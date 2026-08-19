@@ -13,7 +13,6 @@ import {
 vi.mock("../../../services/images", () => ({
   ImageService: {
     upload: vi.fn(),
-    delete: vi.fn(),
   },
 }));
 
@@ -58,7 +57,6 @@ beforeEach(() => {
   });
   vi.mocked(HomePageService.update).mockResolvedValue(undefined);
   vi.mocked(ImageService.upload).mockResolvedValue("new.png");
-  vi.mocked(ImageService.delete).mockResolvedValue(undefined);
   // PhotoPicker needs an object URL for the preview of the freshly picked
   // file; spy on the setup.ts polyfill so restoreAllMocks undoes this.
   vi.spyOn(window.URL, "createObjectURL").mockReturnValue("blob:preview");
@@ -109,8 +107,6 @@ describe("HomePageEditor photo replacement", () => {
         "error",
       ),
     );
-    // The still-referenced photo must never be deleted on a failed save.
-    expect(ImageService.delete).not.toHaveBeenCalled();
     // The upload happened first and the attempted save referenced it.
     expect(ImageService.upload).toHaveBeenCalledOnce();
     expect(HomePageService.update).toHaveBeenCalledWith(
@@ -133,32 +129,27 @@ describe("HomePageEditor photo replacement", () => {
         "error",
       ),
     );
-    expect(ImageService.delete).not.toHaveBeenCalled();
     expect(HomePageService.update).not.toHaveBeenCalled();
   });
 
-  it("deletes the old photo only after the save succeeds", async () => {
+  it("saves the new photo and leaves the replaced object in storage", async () => {
     const { notify } = await renderAndPickImage();
 
     fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() => expect(notify).toHaveBeenCalledWith("Home page saved"));
-    await waitFor(() =>
-      expect(ImageService.delete).toHaveBeenCalledWith(
-        "old.png",
-        expect.any(Function),
-      ),
+    // The saved JSON references the upload, which happened first. The
+    // replaced photo object is left for the cleanup sweep — it may still
+    // be referenced elsewhere (e.g. as the site background).
+    expect(HomePageService.update).toHaveBeenCalledWith(
+      { photo: "new.png", blurb: "hello" },
+      expect.any(Function),
     );
-    expect(ImageService.delete).toHaveBeenCalledOnce();
-    // upload -> save -> delete, strictly in that order.
-    const uploadOrder =
-      vi.mocked(ImageService.upload).mock.invocationCallOrder[0];
-    const saveOrder =
-      vi.mocked(HomePageService.update).mock.invocationCallOrder[0];
-    const deleteOrder =
-      vi.mocked(ImageService.delete).mock.invocationCallOrder[0];
-    expect(uploadOrder).toBeLessThan(saveOrder);
-    expect(saveOrder).toBeLessThan(deleteOrder);
+    expect(
+      vi.mocked(ImageService.upload).mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      vi.mocked(HomePageService.update).mock.invocationCallOrder[0],
+    );
   });
 });
 

@@ -99,21 +99,12 @@ export function AdminPhotographyPage() {
       return;
     }
 
-    // Save the shortened list first — if this fails the post stays
-    // fully intact and referenced.
+    // The post's image objects are deliberately NOT deleted: they may
+    // still be referenced by other content (e.g. as the site background),
+    // and if not, the image-cleanup sweep collects them later.
     const newList = postList.slice();
     newList.splice(idx, 1);
-    if (!(await saveList(newList, "Photography post deleted"))) return;
-
-    // The saved list no longer references these images; a failed delete
-    // just leaves an orphan for later cleanup.
-    showLoading("Deleting post images...");
-    for (const image of postToDelete.images) {
-      await ImageService.delete(image.image, getAccessTokenSilently).catch(
-        console.error,
-      );
-    }
-    hideLoading();
+    await saveList(newList, "Photography post deleted");
   };
 
   // List display functions ---------------------------------------------------
@@ -172,9 +163,9 @@ export function AdminPhotographyPage() {
 
     // Upload images in the new post that are not in the original,
     // building fresh image objects instead of mutating the open post's
-    // React state in place. Nothing is deleted yet — images removed from
-    // the post are only deleted after the list save has succeeded, so a
-    // failure at any step leaves the published post intact.
+    // React state in place. The list is only written after the uploads
+    // have succeeded, so a failure at any step leaves the published post
+    // intact.
     const editedPost = copyPost(openPost);
     try {
       showLoading("Uploading images...");
@@ -205,28 +196,15 @@ export function AdminPhotographyPage() {
       return;
     }
 
-    // save the post list
+    // save the post list. Images removed from the post are deliberately
+    // NOT deleted from storage: they may still be referenced by other
+    // content (e.g. as the site background), and if not, the
+    // image-cleanup sweep collects them later.
     newPostList[idx] = editedPost;
     if (!(await saveList(newPostList, "Photography post saved"))) return;
     // The dirty flag still reflects the pre-save state until the next
     // render, so close the editor via the guard bypass.
     navigateWithoutGuard(LIST_PATH);
-
-    // The saved list no longer references images that were removed from
-    // the post; a failed delete just leaves an orphan for later cleanup.
-    showLoading("Deleting images...");
-    for (const originalImage of originalPost.images) {
-      const stillReferenced = editedPost.images.some((img) => {
-        return img.image === originalImage.image;
-      });
-      if (originalImage.image && !stillReferenced) {
-        await ImageService.delete(
-          originalImage.image,
-          getAccessTokenSilently,
-        ).catch(console.error);
-      }
-    }
-    hideLoading();
   };
 
   const closeOpenPost = () => {

@@ -18,7 +18,7 @@ beforeEach(() => {
 });
 
 describe("planContentSave image diffing", () => {
-  it("classifies removed, kept, and added images", () => {
+  it("classifies kept and added images", () => {
     const original = img(apiImg("removed.png")) + img(apiImg("kept.png"));
     const added = "data:image/png;base64,AAAA";
     const plan = planContentSave(
@@ -27,8 +27,9 @@ describe("planContentSave image diffing", () => {
       "none",
     );
 
-    expect(plan.removedImageFileNames).toEqual(["removed.png"]);
-    // No flip: kept images need no visibility work and no rewrite.
+    // No flip: kept images need no visibility work and no rewrite. The
+    // dropped image simply falls out of the plan — its object is left
+    // for the image-cleanup sweep.
     expect(plan.keptImageFileNames).toEqual([]);
     expect(plan.addedImages.map((i) => i.src)).toEqual([added]);
     expect(plan.doc.body.innerHTML).toBe(
@@ -45,7 +46,6 @@ describe("planContentSave image diffing", () => {
       "none",
     );
 
-    expect(plan.removedImageFileNames).toEqual([]);
     expect(plan.addedImages).toHaveLength(1);
     expect(plan.addedImages[0].title).toBe("pending-1");
     // Patching the added img (as the upload pass does) lands the new src
@@ -53,21 +53,6 @@ describe("planContentSave image diffing", () => {
     plan.addedImages[0].src = apiImg("uploaded.png");
     expect(plan.doc.body.innerHTML).toBe(
       img(apiImg("uploaded.png"), "pending-1") + img(apiImg("kept.png")),
-    );
-  });
-
-  it("skips a removed image whose src has no file name", () => {
-    const plan = planContentSave(
-      img(apiImg("old.png")) + img(apiImg("")),
-      "<p>empty</p>",
-      "none",
-    );
-
-    // The trailing-slash src has nothing to delete by; only the real
-    // file name is collected.
-    expect(plan.removedImageFileNames).toEqual(["old.png"]);
-    expect(console.error).toHaveBeenCalledWith(
-      `File name not found for image to delete: ${apiImg("")}`,
     );
   });
 
@@ -79,7 +64,6 @@ describe("planContentSave image diffing", () => {
     expect(plan.doc.body.innerHTML).toBe(
       img(s3Img("a.png")) + img(s3Img("b.png")),
     );
-    expect(plan.removedImageFileNames).toEqual([]);
   });
 
   it("rewrites kept images to API urls when unpublishing", () => {
@@ -110,9 +94,8 @@ describe("planContentSave image diffing", () => {
       "publishing",
     );
 
-    // The removed image is only ever a deletion candidate — it must not
-    // join the kept flips.
-    expect(plan.removedImageFileNames).toEqual(["removed.png"]);
+    // The dropped image is no longer referenced — it must not join the
+    // kept flips.
     expect(plan.keptImageFileNames).toEqual(["kept.png"]);
     expect(plan.doc.body.innerHTML).toBe(img(s3Img("kept.png")));
   });
@@ -138,7 +121,6 @@ describe("saveBlogPost transaction outcomes", () => {
       getToken: async () => "token",
       updateContent: vi.fn().mockResolvedValue(undefined),
       uploadImage: vi.fn().mockResolvedValue("uploaded.png"),
-      deleteImage: vi.fn().mockResolvedValue(undefined),
       setImagePublished: vi.fn().mockResolvedValue(undefined),
       saveList: vi.fn().mockResolvedValue(true),
       restoreList: vi.fn().mockResolvedValue(undefined),
@@ -178,12 +160,15 @@ describe("saveBlogPost transaction outcomes", () => {
   });
 
   describe("no-flip saves", () => {
-    it("saves content then list and deletes removed images last", async () => {
+    it("saves content then list, leaving removed images in storage", async () => {
       const deps = makeDeps();
       const result = await saveBlogPost(
         makeArgs(deps, { originalContent: img(apiImg("old.png")) }),
       );
 
+      // The dropped image's object is left for the image-cleanup sweep —
+      // it may still be referenced elsewhere (e.g. as the site
+      // background).
       expect(result).toEqual({ outcome: "saved", rollbackIncomplete: false });
       expect(deps.updateContent).toHaveBeenCalledWith(
         "b1",
@@ -192,14 +177,9 @@ describe("saveBlogPost transaction outcomes", () => {
         deps.getToken,
       );
       expect(deps.saveList).toHaveBeenCalledWith([post]);
-      expect(deps.deleteImage).toHaveBeenCalledWith("old.png", deps.getToken);
-      const contentOrder = vi.mocked(deps.updateContent).mock
-        .invocationCallOrder[0];
-      const listOrder = vi.mocked(deps.saveList).mock.invocationCallOrder[0];
-      const deleteOrder = vi.mocked(deps.deleteImage).mock
-        .invocationCallOrder[0];
-      expect(contentOrder).toBeLessThan(listOrder);
-      expect(listOrder).toBeLessThan(deleteOrder);
+      expect(
+        vi.mocked(deps.updateContent).mock.invocationCallOrder[0],
+      ).toBeLessThan(vi.mocked(deps.saveList).mock.invocationCallOrder[0]);
       expect(deps.notify).toHaveBeenCalledWith("Other works item saved");
     });
 
@@ -214,19 +194,6 @@ describe("saveBlogPost transaction outcomes", () => {
         false,
         deps.getToken,
       );
-    });
-
-    it("still reports saved when deleting a removed image fails", async () => {
-      const deps = makeDeps();
-      vi.mocked(deps.deleteImage).mockRejectedValue(new Error("delete failed"));
-      const result = await saveBlogPost(
-        makeArgs(deps, { originalContent: img(apiImg("old.png")) }),
-      );
-
-      // The content no longer references the image; a failed delete just
-      // leaves an orphan for later cleanup.
-      expect(result).toEqual({ outcome: "saved", rollbackIncomplete: false });
-      expect(deps.notify).toHaveBeenCalledWith("Other works item saved");
     });
 
     it("fails without touching the list when the content save fails", async () => {
@@ -253,7 +220,6 @@ describe("saveBlogPost transaction outcomes", () => {
         rollbackIncomplete: false,
       });
       expect(deps.notify).not.toHaveBeenCalled();
-      expect(deps.deleteImage).not.toHaveBeenCalled();
     });
   });
 

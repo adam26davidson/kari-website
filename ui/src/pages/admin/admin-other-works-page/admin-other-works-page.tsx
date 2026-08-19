@@ -9,8 +9,6 @@ import { BlogService } from "../../../services/blog";
 import { BlogPostSummary } from "../../../components/blog-post-summary/blog-post-summary";
 import { BlogPostEditor } from "./components/blog-post-editor/blog-post-editor";
 import { ImageService } from "../../../services/images";
-import { getImageFileName } from "../../../utils/image-management-helpers";
-import { HttpError } from "../../../services/http-error";
 import { LoadError } from "../../../components/load-error/load-error";
 import { AdminItemList } from "../components/admin-item-list/admin-item-list";
 import { useAdminToken } from "../../../hooks/use-admin-token";
@@ -125,49 +123,18 @@ export function AdminOtherWorksPage() {
       console.error("Post not found");
       return;
     }
-    showLoading("Deleting other works item...");
-
-    // First get the content of the post so its images can be cleaned up
-    // once the delete has succeeded; content that was never created (404)
-    // is fine to delete, any other fetch failure aborts the delete.
-    let content = "";
-    try {
-      content = await BlogService.getContent(
-        postToDelete.id,
-        getAccessTokenSilently,
-      );
-    } catch (error) {
-      if (!(error instanceof HttpError) || error.status !== 404) {
-        console.error(error);
-        notify("Failed to delete other works item", "error");
-        hideLoading();
-        return;
-      }
-    }
-
     // Save the shortened list first — if this fails the item stays fully
     // intact and referenced.
     const newList = postList.slice();
     newList.splice(idx, 1);
     if (!(await savePostList(newList, "Other works item deleted"))) return;
 
-    // The saved list no longer references the item, so its content and
-    // images can go; a failed delete just leaves orphans for later
-    // cleanup.
-    showLoading("Deleting other works item images...");
-    const htmlDoc = new DOMParser().parseFromString(content, "text/html");
-    const images = htmlDoc.querySelectorAll("img");
-    for (let i = 0; i < images.length; i++) {
-      const image = images[i];
-      const fileName = getImageFileName(image.src);
-      if (!fileName) {
-        console.error(`File name not found for image: ${image.src}`);
-        continue;
-      }
-      await ImageService.delete(fileName, getAccessTokenSilently).catch(
-        console.error,
-      );
-    }
+    // The saved list no longer references the item, so its content
+    // document can go; a failed delete just leaves an orphan. The item's
+    // image objects are deliberately NOT deleted: they may still be
+    // referenced by other content (e.g. as the site background), and if
+    // not, the image-cleanup sweep collects them later.
+    showLoading("Deleting other works item content...");
     await BlogService.deleteContent(
       postToDelete.id,
       getAccessTokenSilently,
@@ -257,7 +224,6 @@ export function AdminOtherWorksPage() {
           getToken: getAccessTokenSilently,
           updateContent: BlogService.updateContent,
           uploadImage: ImageService.upload,
-          deleteImage: ImageService.delete,
           setImagePublished: ImageService.setPublished,
           saveList: savePostList,
           restoreList: async () => {
