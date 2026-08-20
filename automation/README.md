@@ -169,21 +169,83 @@ the cron cadence) should track that start lag rather than the cadence: a
 tolerance near the poll period would let an `every: 1h` agent
 legitimately start up to ~14 minutes early.
 
-## Suspend and sleep
+## Suspend and sleep (host power settings)
 
-Each tick runs under a `systemd-inhibit --what=sleep:idle --mode=block`
-lock, so the machine cannot suspend while an agent is working. This is
-damage control, not a scheduler: it protects a *running* tick, but the
-host still sleeps when idle *between* ticks, and a sleeping laptop runs
-no ticks at all. For overnight work the host must be kept awake — on
-KDE, System Settings → Power Management → uncheck the automatic suspend
-for "On AC Power" (battery profiles are deliberately left alone) and keep
-the machine plugged in. Note the lid is not the trigger: idle-suspend
-fires with the lid open.
+A sleeping laptop runs no ticks, and a suspend mid-tick severs the
+agent's in-flight API request. Both happened on 2026-08-19: the fleet
+merged four PRs, then the host idle-suspended at 20:32 (that tick's log
+contains only `Request timed out`), slept 21:44–07:45, and suspended
+again three minutes after waking. Two independent defences are needed —
+the repo covers one, the host must cover the other.
 
-Symptoms of a tick killed by suspend: a log containing only
-`Request timed out`, or a zero-byte log with a `last-run` stamp; the
-kernel journal shows `PM: suspend entry` between the two.
+**Handled in-repo:** every tick runs under
+`systemd-inhibit --what=sleep:idle --mode=block`, so the host cannot
+suspend while an agent is working. Confirm a live tick holds it with
+`systemd-inhibit --list | grep kari`. This protects a *running* tick and
+nothing else — it cannot make ticks happen while the host is asleep.
+
+**Must be configured on the host:** disabling idle-suspend so ticks fire
+overnight. The trigger is *inactivity*, not the lid, so leaving the lid
+open does not help by itself.
+
+### KDE Plasma 6.7
+
+The setting moved in 6.7 — older guides (and the KDE docs' "Suspend
+Session" section) describe a layout that no longer matches. The current
+profile group is `SuspendAndShutdown`, and `AutoSuspendAction` takes a
+`PowerButtonAction` value where `0` is `NoAction`
+(`daemon/powerdevilenums.h`, `PowerDevilProfileSettings.kcfg`):
+
+```bash
+# Disable automatic suspend on AC only, then reload PowerDevil.
+kwriteconfig6 --file powerdevilrc \
+  --group AC --group SuspendAndShutdown --key AutoSuspendAction 0
+systemctl --user restart plasma-powerdevil.service
+
+# Verify (expect: 0)
+kreadconfig6 --file powerdevilrc \
+  --group AC --group SuspendAndShutdown --key AutoSuspendAction
+```
+
+Revert by setting the value to `1` (Sleep) and restarting the service.
+
+The **Battery** and **LowBattery** profiles are deliberately left
+untouched: an unplugged laptop should still sleep rather than drain
+flat, which also means overnight runs require the charger. KDE's battery
+profile is far more aggressive than AC — a three-minute idle suspend was
+observed on battery.
+
+**Stale-config caveat:** settings written by an older Plasma live under
+the previous group name (e.g. `[AC][SuspendAndPowerButton]` with
+`lidAction`) and are silently inert under 6.7, which reads
+`[AC][SuspendAndShutdown]` / `LidAction`. A power preference that
+"should already be set" may not be in effect — check the new group
+before concluding anything.
+
+### Diagnosing a suspend-killed tick
+
+- Log contains only `Request timed out` — suspended mid-tick; the
+  agent's in-flight API connection died.
+- Zero-byte log with a fresh `last-run` stamp — the tick started, then
+  the host suspended before it wrote anything.
+- No log at all for expected slots — the host was asleep when the timer
+  should have fired.
+
+Confirm against the kernel journal, which is authoritative:
+
+```bash
+journalctl --since "yesterday 20:00" | grep -E "PM: suspend (entry|exit)"
+```
+
+Note the timer uses `Persistent=false`, so slots missed while asleep are
+not replayed; on resume systemd fires the overdue timer once, and the
+schedule continues from there.
+
+### Running while logged out
+
+User timers only run while the user has a session unless lingering is
+enabled: `loginctl enable-linger`. This is orthogonal to suspend — it
+covers logout and pre-login boot, and does nothing for a sleeping host.
 
 ## Usage limits
 
