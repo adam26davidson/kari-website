@@ -129,26 +129,32 @@ by issue-comment age: a healthy worker on a long combined branch can go
 hours without commenting, while a dead one can look "active" because its
 claim comment is recent. Workers must push WIP commits to their branch at
 least every 45 minutes (the worker brief says so), and every worker
-lives inside the `claude -p` process of the tick that dispatched it, so
+lives inside the Claude process of the tick that dispatched it, so
 liveness is observable:
 
 - **Provably dead — release now, no waiting period.** No open PR on the
-  branch AND no tick process is running that predates the claim:
-  `ps -eo pid,etimes,args | grep '[c]laude -p'` — if every listed
-  process is younger than the claim comment (or none is listed), the
-  dispatching tick is gone and so is its worker. Corroborate when you
-  can: the dispatching tick's log
-  (`~/.local/state/kari-website-automation/logs/issue-pipeline-*.log`,
-  the one whose timestamp precedes the claim) ends in an error, a usage/
-  spend-limit message, or mid-sentence. An orphaned dev server or MinIO
-  from the worktree, reparented to PID 1 / the user manager, means its
-  spawner is gone — it is evidence of death, not of life.
-- **Alive — leave alone.** A tick process older than the claim is still
-  running, OR `git fetch origin && git log -1 --format=%cI
-  origin/agent/<slug>` shows a commit pushed within the last 2 hours.
-- **Cannot tell** (no `ps` access, ambiguous logs): fall back to
-  silence — release only when the newest of (latest pushed commit on the
-  branch, claim comment) is older than 2 hours.
+  branch AND either of:
+  - no Claude process that predates the claim is running:
+    `ps -eo pid,etimes,args | grep '[c]laude'` — if every listed process
+    is younger than the claim comment (or none is listed), the
+    dispatching tick is gone and so is its worker; or
+  - the dispatching tick's log (`$STATE/logs/issue-pipeline-*.log`,
+    where `STATE=~/.local/state/kari-website-automation`; the log whose
+    timestamp precedes the claim) ends in an error, a usage/spend-limit
+    message, or mid-sentence — a tick only writes its last line on the
+    way out, so its worker subagent died with it.
+  An orphaned dev server or MinIO from the worktree, reparented to PID 1
+  / the user manager, means its spawner is gone — it is evidence of
+  death, not of life.
+- **Alive — leave alone.** `git fetch origin && git log -1 --format=%cI
+  origin/agent/<slug>` shows a commit pushed within the last 2 hours, OR
+  a dispatcher tick process (`claude -p`, the form `dispatch.sh` runs)
+  older than the claim is still running — ticks are serialised by a
+  lock, so that is the tick that dispatched it.
+- **Cannot tell** (an older interactive `claude` session exists but no
+  tick log settles it; no `ps` access): fall back to silence — release
+  only when the newest of (latest pushed commit on the branch, claim
+  comment) is older than 2 hours.
 
 Compare timestamps in one zone (`date -u`; `git log %cI` and `gh` output
 carry explicit offsets; `ls`/`stat` print local time) — a local-vs-UTC
@@ -158,7 +164,7 @@ commit timestamps and process ages over mtimes.
 To release: if the worktree `../kari-website-<slug>` exists and
 `git -C ../kari-website-<slug> status --porcelain` shows uncommitted
 changes, save them before anything is deleted —
-`git -C ../kari-website-<slug> diff > ~/.local/state/kari-website-automation/wip/<slug>-$(date -u +%Y%m%dT%H%MZ).patch`
+`git -C ../kari-website-<slug> diff > $STATE/wip/<slug>-<UTC stamp>.patch`
 (`mkdir -p` the directory; list untracked files in the run summary) —
 and hand the patch path to the next worker on that slug in its brief as
 unverified starting material. Then remove `in progress` from EVERY issue
