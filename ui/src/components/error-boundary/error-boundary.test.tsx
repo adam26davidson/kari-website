@@ -56,6 +56,27 @@ describe("ErrorBoundary", () => {
     ).toBeInTheDocument();
   });
 
+  it("reloads the page when the visitor clicks Reload", async () => {
+    const user = userEvent.setup();
+    const reload = vi.fn();
+    // jsdom marks location.reload non-configurable, so spying on it
+    // directly throws "Cannot redefine property". Stub the whole
+    // location getter instead; restoreAllMocks() puts it back.
+    vi.spyOn(window, "location", "get").mockReturnValue({
+      ...window.location,
+      reload,
+    } as unknown as Location);
+
+    render(
+      <ErrorBoundary>
+        <Boom />
+      </ErrorBoundary>,
+    );
+    await user.click(screen.getByRole("button", { name: "Reload" }));
+
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
   it("shows redeploy-specific copy for chunk-load errors", () => {
     render(
       <ErrorBoundary>
