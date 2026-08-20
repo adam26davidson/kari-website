@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Test harness for scripts/lint-workflows.sh. Local-only (not wired into
-# CI, which runs the real lint instead); run it whenever the script
-# changes:
+# Test harness for scripts/lint-workflows.sh. CI runs it in the shell-lint
+# job alongside the real lint; run it locally whenever the script changes:
 #   bash scripts/lint-workflows-test.sh
 #
 # Each case builds a throwaway "repo" holding only .github/workflows and the
 # script, then runs the real script against stub `yq`/`docker`/`actionlint`
-# on PATH. The stubs log what the script invoked and — for the YAML→JSON
-# step — do a real conversion with python3, so the assertions are about the
-# script's own logic: which tool it reaches for, and which jobs it flags.
-# No image pulls, no network.
+# on a PATH holding only those stubs. The stubs log what the script invoked
+# and — for the YAML→JSON step — do a real conversion, so the assertions are
+# about the script's own logic: which tool it reaches for, and which jobs it
+# flags. No image pulls, no network. Needs jq plus one YAML→JSON backend
+# (python3 + PyYAML, or a real mikefarah yq); see the probe below.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -32,14 +32,94 @@ cleanup() {
 }
 trap cleanup EXIT
 
-for cmd in python3 jq; do
-  command -v "$cmd" > /dev/null || {
+# The lint script chooses each tool with `command -v`, so anything the
+# ambient PATH happens to carry would quietly replace a stub — and the tools
+# whose docker fallback the cases below assert on (yq, shellcheck) are
+# exactly the ones a GitHub runner preinstalls. So the script runs with a
+# PATH holding the case's stub dir and this: symlinks to the handful of
+# utilities the script and the stubs call, and nothing else. `jq` is here
+# rather than in every stub dir because only one case wants a broken one,
+# and its stub dir comes first. Built first of all: the YAML→JSON probe
+# below runs under this same PATH.
+CORE_BIN="$(mktemp -d)"
+WORKDIRS+=("$CORE_BIN")
+for cmd in bash dirname find grep jq sed sort; do
+  cmd_path="$(command -v "$cmd")" || {
     echo "this harness needs $cmd on PATH" >&2
     exit 1
   }
+  ln -s "$cmd_path" "$CORE_BIN/$cmd"
 done
-python3 -c 'import yaml' 2> /dev/null || {
-  echo "this harness needs PyYAML (python3 -c 'import yaml')" >&2
+
+# --- YAML→JSON, for the stubs ----------------------------------------------
+# The stubs standing in for yq do a real conversion, so the assertions stay
+# about the script's logic rather than a canned fixture. Two backends can
+# do it, and either is enough: python3 + PyYAML (the usual local answer) or
+# a real mikefarah yq (what GitHub runners preinstall — where PyYAML is not
+# guaranteed, which is what kept this harness out of CI). Each is probed by
+# actually converting a sample rather than by its version string, because
+# `yq` is also the name of an unrelated jq wrapper taking different flags,
+# and under $CORE_BIN — the same stripped PATH run_lint hands the script, so
+# that a backend which only works under the ambient PATH is rejected here
+# rather than dying inside every stub. The backend is baked in by absolute
+# path, with shims resolved to the tool behind them.
+HELPER_DIR="$(mktemp -d)"
+WORKDIRS+=("$HELPER_DIR")
+YAML2JSON="$HELPER_DIR/yaml2json" # <file>, or YAML on stdin
+export YAML2JSON
+
+write_backend() { # <python3|yq> — the converter, or 1 if the tool is absent
+  local tool
+  tool="$(command -v "$1")" || return 1
+  case "$1" in
+    python3)
+      # pyenv/asdf/nix install a wrapper script under this name that
+      # consults other PATH entries before exec'ing the interpreter; baking
+      # the wrapper's path in would break it under the stripped PATH.
+      # sys.executable is the interpreter the wrapper leads to, so the
+      # PyYAML the probe below finds is the one that will be imported.
+      tool="$("$tool" -c 'import sys; print(sys.executable)' 2> /dev/null)"
+      [ -n "$tool" ] || return 1
+      cat > "$YAML2JSON" <<EOF
+#!/usr/bin/env bash
+"$tool" -c 'import json,sys,yaml
+json.dump(yaml.safe_load(open(sys.argv[1]) if len(sys.argv) > 1
+                         else sys.stdin), sys.stdout)' "\$@"
+EOF
+      ;;
+    yq)
+      cat > "$YAML2JSON" <<EOF
+#!/usr/bin/env bash
+"$tool" -o=json '.' "\${1:--}"
+EOF
+      ;;
+  esac
+}
+
+backend_works() { # both call shapes have to work: the yq stub is handed a
+  # file, the docker stub is piped stdin. Run under $CORE_BIN, exactly as
+  # the stubs will: a backend that resolves only under the ambient PATH
+  # fails here and falls through to the next one, or to the error below,
+  # instead of turning every case into a bogus "could not be parsed as YAML".
+  local sample="$HELPER_DIR/probe.yml" want='{"jobs":{"a":{"t":3}}}' got
+  printf 'jobs:\n  a:\n    t: 3\n' > "$sample"
+  got="$(PATH="$CORE_BIN" "$YAML2JSON" "$sample" 2> /dev/null \
+    | jq -cS . 2> /dev/null)"
+  [ "$got" = "$want" ] || return 1
+  got="$(PATH="$CORE_BIN" "$YAML2JSON" < "$sample" 2> /dev/null \
+    | jq -cS . 2> /dev/null)"
+  [ "$got" = "$want" ]
+}
+
+for backend in python3 yq; do
+  rm -f "$YAML2JSON"
+  write_backend "$backend" || continue
+  chmod +x "$YAML2JSON"
+  backend_works && break
+done
+backend_works || {
+  echo "this harness needs a YAML→JSON converter: either python3 with" \
+    "PyYAML (python3 -c 'import yaml') or mikefarah yq v4 on PATH" >&2
   exit 1
 }
 
@@ -53,16 +133,14 @@ WORKDIRS+=("$STUB_BIN")
 cat > "$STUB_BIN/yq" <<'EOF'
 #!/usr/bin/env bash
 echo "yq $*" >> "$STUB_LOG"
-python3 -c 'import json,sys,yaml
-json.dump(yaml.safe_load(open(sys.argv[1])), sys.stdout)' "${@: -1}"
+"$YAML2JSON" "${@: -1}"
 EOF
 cat > "$STUB_BIN/docker" <<'EOF'
 #!/usr/bin/env bash
 echo "docker $*" >> "$STUB_LOG"
 case "$*" in
   *mikefarah/yq*)
-    python3 -c 'import json,sys,yaml
-json.dump(yaml.safe_load(sys.stdin), sys.stdout)'
+    "$YAML2JSON"
     ;;
   *actionlint*)
     exit "${STUB_ACTIONLINT_EXIT:-0}"
@@ -124,7 +202,7 @@ new_repo() {
 run_lint() { # <repo> [args...] — stdout+stderr in <repo>/out
   local repo="$1"
   shift
-  STUB_LOG="$repo/stub.log" PATH="${STUB_PATH:-$NO_ACTIONLINT_BIN}:$PATH" \
+  STUB_LOG="$repo/stub.log" PATH="${STUB_PATH:-$NO_ACTIONLINT_BIN}:$CORE_BIN" \
     bash "$repo/scripts/lint-workflows.sh" "$@" > "$repo/out" 2>&1
   echo $? > "$repo/exit-code"
 }
@@ -419,6 +497,10 @@ expect_contains "$r/stub.log" "shellcheck " \
   "a local shellcheck is used directly"
 expect_not_contains "$r/stub.log" "koalaman/shellcheck" \
   "a local shellcheck skips the docker image"
+# The -x case above only covers the image invocation; the two flag lists
+# are written out separately, so each needs its own assertion.
+expect_contains "$r/stub.log" " -x " \
+  "a local shellcheck also follows sourced files"
 
 # 21. No severity filter. shellcheck's `info` tier holds SC2086 and friends,
 #     so a `--severity` floor would trade real bugs for quiet — including

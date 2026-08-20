@@ -69,10 +69,11 @@ with code in this repository.
   customManager keys off (without it the pin is invisible to Renovate).
   Nothing to install — actionlint, shellcheck and yq each fall back to a
   pinned docker image when the binary is missing. CI runs this same script,
-  and alongside it the shell test harnesses `automation/dispatch-test.sh`
-  and `scripts/setup-worktree-test.sh`. Changing the lint script? Re-run
-  its tests: `bash scripts/lint-workflows-test.sh` (needs python3 +
-  PyYAML, which is why CI does not yet run this one)
+  and alongside it the shell test harnesses `automation/dispatch-test.sh`,
+  `scripts/setup-worktree-test.sh` and `scripts/lint-workflows-test.sh`.
+  Changing the lint script? Re-run its tests:
+  `bash scripts/lint-workflows-test.sh` (needs jq plus either python3 +
+  PyYAML or a real mikefarah yq, whichever the machine has)
 
 CI (`.github/workflows/ci.yml`) runs all of the above on every pull request,
 and a `coverage` job posts a whole-codebase coverage comment on each PR

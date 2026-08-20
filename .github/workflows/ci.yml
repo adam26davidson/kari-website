@@ -41,14 +41,22 @@ jobs:
 
       # The shell test harnesses. They were local-only until #291, which
       # meant a regression in the dispatcher (#276) or in the setup script
-      # every worktree runs first only showed up in use. Both are stubbed,
-      # hermetic and take seconds, so they run on every PR rather than
-      # behind a path filter.
+      # every worktree runs first only showed up in use. All three are
+      # stubbed, hermetic and take seconds, so they run on every PR rather
+      # than behind a path filter.
       - name: Dispatcher tests
         run: bash automation/dispatch-test.sh
 
       - name: Worktree setup tests
         run: bash scripts/setup-worktree-test.sh
+
+      # The lint above only proves this repo is clean; this proves the lint
+      # would still catch a repo that is not (#337). It needs jq plus one
+      # YAML→JSON backend, and takes whichever of python3 + PyYAML or the
+      # runner's yq works — no install step, and no assumption about which
+      # of the two a future runner image keeps.
+      - name: Workflow lint tests
+        run: bash scripts/lint-workflows-test.sh
 
   frontend:
     name: Frontend (lint, build, unit tests)
