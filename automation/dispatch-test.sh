@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Test harness for automation/dispatch.sh. Local-only (not wired into CI);
-# run it whenever dispatch.sh changes:
+# Test harness for automation/dispatch.sh. Runs in CI (the shell-lint job)
+# and locally; run it whenever dispatch.sh changes:
 #   bash automation/dispatch-test.sh
 set -uo pipefail
 
@@ -44,8 +44,18 @@ run_dispatch() { # <workdir> [args...] — output in <workdir>/out
   KARI_AUTOMATION_PAUSE_FILE="$work/PAUSE" \
   KARI_AUTOMATION_CLAUDE_BIN="${STUB_CLAUDE:-claude}" \
   KARI_AUTOMATION_DUE_TOLERANCE="${DUE_TOLERANCE:-}" \
+  KARI_AUTOMATION_INHIBIT_BIN="${KARI_AUTOMATION_INHIBIT_BIN:-/nonexistent/systemd-inhibit}" \
     bash "$DISPATCH" "$@" >"$work/out" 2>&1
   echo $? >"$work/exit-code"
+}
+
+# Launches are backgrounded, so give the stub a moment to write its record.
+wait_for_stub() { # <workdir>
+  local _
+  for _ in $(seq 50); do
+    [ -s "$1/stub-out" ] && return
+    sleep 0.1
+  done
 }
 
 ran_ago() { # <workdir> <name> <seconds-ago>
@@ -62,8 +72,13 @@ expect_contains() { # <file> <needle> <test-name>
   fi
 }
 
+# A missing file is a failure, not an absence: without this, every
+# expect_not_contains would pass for free on a launch that never happened.
 expect_not_contains() { # <file> <needle> <test-name>
-  if grep -qF -- "$2" "$1" 2>/dev/null; then
+  if [ ! -e "$1" ]; then
+    echo "FAIL: $3 — expected file $1 (cannot assert '$2' is absent)"
+    FAILURES=$((FAILURES + 1))
+  elif grep -qF -- "$2" "$1" 2>/dev/null; then
     echo "FAIL: $3 — unexpected '$2' in $1"
     FAILURES=$((FAILURES + 1))
   else
@@ -229,10 +244,7 @@ w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
 export STUB_OUT="$w/stub-out"
 STUB_CLAUDE="$STUB_DIR/claude-stub" run_dispatch "$w"
-for _ in $(seq 50); do
-  [ -s "$w/stub-out" ] && break
-  sleep 0.1
-done
+wait_for_stub "$w"
 expect_contains "$w/stub-out" "--dangerously-skip-permissions" \
   "launch passes --dangerously-skip-permissions"
 expect_contains "$w/stub-out" "--model fable" "launch passes the model"
@@ -263,10 +275,7 @@ This is the issue-pipeline prompt body.
 EOF
 export STUB_OUT="$w/stub-out"
 STUB_CLAUDE="$STUB_DIR/claude-stub" run_dispatch "$w"
-for _ in $(seq 50); do
-  [ -s "$w/stub-out" ] && break
-  sleep 0.1
-done
+wait_for_stub "$w"
 expect_contains "$w/stub-out" "--fallback-model opus" \
   "launch passes the fallback model when configured"
 
@@ -274,10 +283,7 @@ w="$(new_work)"
 write_agent "$w" no-fallback.md no-fallback true 1h opus
 export STUB_OUT="$w/stub-out"
 STUB_CLAUDE="$STUB_DIR/claude-stub" run_dispatch "$w"
-for _ in $(seq 50); do
-  [ -s "$w/stub-out" ] && break
-  sleep 0.1
-done
+wait_for_stub "$w"
 expect_not_contains "$w/stub-out" "--fallback-model" \
   "no fallback flag when frontmatter omits it"
 
@@ -304,10 +310,7 @@ write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
 export STUB_OUT="$w/stub-out"
 KARI_AUTOMATION_INHIBIT_BIN="$STUB_INHIBIT" STUB_CLAUDE="$STUB_DIR/claude-stub" \
   run_dispatch "$w"
-for _ in $(seq 50); do
-  [ -s "$w/stub-out" ] && break
-  sleep 0.1
-done
+wait_for_stub "$w"
 expect_contains "$w/stub-out.inhibit" "--what=sleep:idle" \
   "launch runs under a sleep+idle inhibitor"
 expect_contains "$w/stub-out.inhibit" "--mode=block" \
@@ -321,12 +324,31 @@ write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
 export STUB_OUT="$w/stub-out"
 KARI_AUTOMATION_INHIBIT_BIN="/nonexistent/systemd-inhibit" \
   STUB_CLAUDE="$STUB_DIR/claude-stub" run_dispatch "$w"
-for _ in $(seq 50); do
-  [ -s "$w/stub-out" ] && break
-  sleep 0.1
-done
+wait_for_stub "$w"
 expect_contains "$w/stub-out" "This is the issue-pipeline prompt body." \
   "agent still launches when no inhibitor binary exists"
+
+# ...and "optional" has to mean present-but-unusable too. systemd-inhibit
+# exists on any systemd host, including headless ones and CI runners, but
+# exits non-zero when there is no logind/D-Bus session to take the lock
+# from. Wrapping the launch in it unconditionally would then kill the tick
+# outright — losing the run to protect it from a suspend that cannot happen.
+STUB_BROKEN_INHIBIT="$STUB_DIR/inhibit-broken-stub"
+cat >"$STUB_BROKEN_INHIBIT" <<'EOF'
+#!/usr/bin/env bash
+echo "Failed to connect to bus: No medium found" >&2
+exit 1
+EOF
+chmod +x "$STUB_BROKEN_INHIBIT"
+
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+KARI_AUTOMATION_INHIBIT_BIN="$STUB_BROKEN_INHIBIT" \
+  STUB_CLAUDE="$STUB_DIR/claude-stub" run_dispatch "$w"
+wait_for_stub "$w"
+expect_contains "$w/stub-out" "This is the issue-pipeline prompt body." \
+  "agent still launches when the inhibitor cannot take a lock"
 
 echo
 if [ "$FAILURES" -gt 0 ]; then
