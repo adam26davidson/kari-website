@@ -39,8 +39,9 @@ python3 -c 'import yaml' 2> /dev/null || {
 
 # Stubs. `yq` converts the file it is handed; `docker` logs its argv and,
 # when it is standing in for yq, converts stdin the same way; `actionlint`
-# is a no-op that can be told to fail. STUB_ACTIONLINT_EXIT controls the
-# exit code of whichever actionlint the script picked.
+# and `shellcheck` are no-ops that can be told to fail.
+# STUB_ACTIONLINT_EXIT / STUB_SHELLCHECK_EXIT control the exit code of
+# whichever actionlint/shellcheck the script picked.
 STUB_BIN="$(mktemp -d)"
 WORKDIRS+=("$STUB_BIN")
 cat > "$STUB_BIN/yq" <<'EOF'
@@ -60,6 +61,9 @@ json.dump(yaml.safe_load(sys.stdin), sys.stdout)'
   *actionlint*)
     exit "${STUB_ACTIONLINT_EXIT:-0}"
     ;;
+  *koalaman/shellcheck*)
+    exit "${STUB_SHELLCHECK_EXIT:-0}"
+    ;;
 esac
 EOF
 cat > "$STUB_BIN/actionlint" <<'EOF'
@@ -67,10 +71,17 @@ cat > "$STUB_BIN/actionlint" <<'EOF'
 echo "actionlint $*" >> "$STUB_LOG"
 exit "${STUB_ACTIONLINT_EXIT:-0}"
 EOF
-chmod +x "$STUB_BIN/yq" "$STUB_BIN/docker" "$STUB_BIN/actionlint"
+cat > "$STUB_BIN/shellcheck" <<'EOF'
+#!/usr/bin/env bash
+echo "shellcheck $*" >> "$STUB_LOG"
+exit "${STUB_SHELLCHECK_EXIT:-0}"
+EOF
+chmod +x "$STUB_BIN/yq" "$STUB_BIN/docker" "$STUB_BIN/actionlint" \
+  "$STUB_BIN/shellcheck"
 
 # A stub dir without `yq`, to exercise the docker fallback for the parse,
-# and one without a local `actionlint`, which is the normal case.
+# and one without a local `actionlint`/`shellcheck`, which is the normal
+# case: neither is packaged for most machines.
 NO_YQ_BIN="$(mktemp -d)"
 WORKDIRS+=("$NO_YQ_BIN")
 cp "$STUB_BIN/docker" "$STUB_BIN/actionlint" "$NO_YQ_BIN/"
@@ -348,6 +359,122 @@ run_lint "$r" --wat
 expect_contains "$r/out" "unknown option" "unknown option is reported"
 expect_not_contains "$r/exit-code" "0" "unknown option exits non-zero"
 expect_eq "$(wc -c < "$r/stub.log")" 0 "unknown option runs no tools"
+
+# --- shellcheck over the repo's shell scripts (#291) -----------------------
+
+# A shell script that is not the linter itself, so discovery has something
+# to find beyond scripts/lint-workflows.sh.
+extra_script() { # <repo> <relative path> [body]
+  mkdir -p "$(dirname "$1/$2")"
+  cat > "$1/$2" <<EOF
+#!/usr/bin/env bash
+${3:-echo hello}
+EOF
+}
+
+# 16. The clean run announces the shellcheck pass and hands it every shell
+#     script in the tree, the linter itself included.
+r="$(new_repo)"
+good_workflow "$r" ci
+extra_script "$r" automation/dispatch.sh
+run_lint "$r"
+expect_eq "$(cat "$r/exit-code")" 0 "a shellcheck-clean tree exits 0"
+expect_contains "$r/out" "shellcheck" "the clean run names the shellcheck check"
+expect_contains "$r/stub.log" "automation/dispatch.sh" \
+  "shellcheck is handed scripts outside scripts/"
+expect_contains "$r/stub.log" "scripts/lint-workflows.sh" \
+  "shellcheck is handed the linter itself"
+
+# 17. shellcheck's findings fail the script, like actionlint's do.
+r="$(new_repo)"
+good_workflow "$r" ci
+STUB_SHELLCHECK_EXIT=1 run_lint "$r"
+expect_not_contains "$r/exit-code" "0" "a shellcheck finding fails the script"
+
+# 18. Sourced files are followed (-x), so a hook that sources a shared
+#     env.sh is not reported as an unfollowable source.
+r="$(new_repo)"
+good_workflow "$r" ci
+run_lint "$r"
+expect_contains "$r/stub.log" " -x " "shellcheck follows sourced files"
+
+# 19. shellcheck runs from its pinned docker image when not installed.
+r="$(new_repo)"
+good_workflow "$r" ci
+run_lint "$r"
+expect_contains "$r/stub.log" "koalaman/shellcheck:" \
+  "shellcheck falls back to its pinned docker image"
+
+# 20. A locally installed shellcheck is preferred over the image.
+r="$(new_repo)"
+good_workflow "$r" ci
+STUB_PATH="$STUB_BIN" run_lint "$r"
+expect_contains "$r/stub.log" "shellcheck " \
+  "a local shellcheck is used directly"
+expect_not_contains "$r/stub.log" "koalaman/shellcheck" \
+  "a local shellcheck skips the docker image"
+
+# 21. Dependency and build trees are not ours to lint — thousands of vendored
+#     scripts would drown the real findings (and slow the check to a crawl).
+r="$(new_repo)"
+good_workflow "$r" ci
+extra_script "$r" ui/node_modules/some-pkg/install.sh
+extra_script "$r" api/target/debug/build/gen.sh
+extra_script "$r" .claude/worktrees/other/scripts/dev.sh
+run_lint "$r"
+expect_not_contains "$r/stub.log" "node_modules" \
+  "node_modules is not shellchecked"
+expect_not_contains "$r/stub.log" "api/target" \
+  "build output is not shellchecked"
+expect_not_contains "$r/stub.log" ".claude" \
+  "worktrees parked under .claude are not shellchecked"
+
+# --- annotated docker-image pins (#327) ------------------------------------
+
+# Held in a variable rather than written inline: the pin check is line-based
+# and would otherwise flag this harness's own fixture text.
+pin='PINNED_IMAGE="busybox:1.36"'
+
+# 22. A pinned image with no `# renovate:` annotation above it is invisible
+#     to renovate and would rot silently, so the lint rejects it.
+r="$(new_repo)"
+good_workflow "$r" ci
+extra_script "$r" scripts/thing.sh "$pin"
+run_lint "$r"
+expect_not_contains "$r/exit-code" "0" "an unannotated image pin exits non-zero"
+expect_contains "$r/out" "scripts/thing.sh" \
+  "an unannotated image pin names the file"
+expect_contains "$r/out" "renovate" \
+  "an unannotated image pin says what is missing"
+
+# 23. With the annotation renovate needs, the same pin is fine.
+r="$(new_repo)"
+good_workflow "$r" ci
+extra_script "$r" scripts/thing.sh "# renovate: datasource=docker
+$pin"
+run_lint "$r"
+expect_eq "$(cat "$r/exit-code")" 0 "an annotated image pin is accepted"
+
+# 24. The annotation has to be the renovate one — an ordinary comment above
+#     the pin must not satisfy the check.
+r="$(new_repo)"
+good_workflow "$r" ci
+extra_script "$r" scripts/thing.sh "# pinned deliberately
+$pin"
+run_lint "$r"
+expect_not_contains "$r/exit-code" "0" \
+  "an ordinary comment does not satisfy the annotation check"
+
+# 25. An assignment with no pinned tag (an image chosen at runtime) has
+#     nothing for renovate to track, so it must not be flagged.
+r="$(new_repo)"
+good_workflow "$r" ci
+# The fixture is a literal line of a generated script, not an expansion.
+# shellcheck disable=SC2016
+extra_script "$r" scripts/thing.sh 'RUNTIME_IMAGE="$1"'
+run_lint "$r"
+expect_eq "$(cat "$r/exit-code")" 0 \
+  "an unpinned image assignment is not flagged"
 
 echo
 if [ "$FAILURES" -eq 0 ]; then

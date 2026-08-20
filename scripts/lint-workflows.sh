@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Lint the GitHub Actions workflows under .github/ (issue #313).
+# Lint the repo's CI surface: the GitHub Actions workflows under .github/
+# (issue #313) and the shell scripts CI and developers run (issue #291).
 #
 #   scripts/lint-workflows.sh
 #
-# Two checks, both of which CI runs through this same script:
+# Four checks, all of which CI runs through this same script:
 #
 #   1. actionlint — workflow schema, action inputs, ${{ }} expressions, and
 #      a shellcheck pass over each embedded `run:` script.
@@ -12,19 +13,33 @@
 #      6-hour default (see the comment at the top of ci.yml). Jobs that call
 #      a reusable workflow (`uses:` at the job level) are exempt: Actions
 #      rejects timeout-minutes on those.
+#   3. shellcheck over every *.sh in the repo (scripts/, automation/, the
+#      CodeDeploy hooks). actionlint only sees the shell embedded in
+#      workflows; these are the scripts that shell calls out to.
+#   4. Annotated image pins — every pinned docker image in those scripts
+#      needs a `# renovate: datasource=docker` comment above it, which is
+#      what renovate.json's customManager keys off. Without one the pin is
+#      invisible to renovate and rots silently (issue #327).
 #
 # Nothing has to be installed locally: whenever a binary is missing from
-# PATH, actionlint runs from the rhysd/actionlint image and the YAML parse
-# from mikefarah/yq's. GitHub runners ship yq, so CI pulls only the
-# actionlint image.
+# PATH, actionlint/shellcheck run from their images and the YAML parse from
+# mikefarah/yq's. GitHub runners ship yq and shellcheck, so CI pulls only
+# the actionlint image — which does mean CI's shellcheck is the runner's
+# version rather than the pin below. That skew only ever costs findings
+# (the runner's is the older release), never a spurious red.
 #
 # Tests: scripts/lint-workflows-test.sh
 set -uo pipefail
 
-# Pinned so a new actionlint release cannot turn a green PR red on its own;
-# bump deliberately (there is no renovate manager for images named here).
+# Pinned so a new release cannot turn a green PR red on its own. The
+# annotations are how renovate finds these (customManagers in
+# renovate.json) — check 4 below fails the lint if a pin loses one.
+# renovate: datasource=docker
 ACTIONLINT_IMAGE="${ACTIONLINT_IMAGE:-rhysd/actionlint:1.7.12}"
+# renovate: datasource=docker
+SHELLCHECK_IMAGE="${SHELLCHECK_IMAGE:-koalaman/shellcheck:v0.11.0}"
 # Only a YAML→JSON converter, so the floating major tag is fine.
+# renovate: datasource=docker
 YQ_IMAGE="${YQ_IMAGE:-mikefarah/yq:4}"
 
 usage() { echo "usage: scripts/lint-workflows.sh [--help]"; }
@@ -142,9 +157,65 @@ for wf in "${workflows[@]}"; do
   fi
 done
 
-if [ "$status" -eq 0 ]; then
-  echo "OK: actionlint clean, $checked jobs all set a job-level timeout."
+# --- 3. shellcheck over the repo's own shell scripts -----------------------
+# Dependency and build trees are excluded: they are not ours to fix, and
+# their vendored scripts would bury the findings that are. So is .claude,
+# where the harness parks whole worktrees of this repo.
+shell_scripts=()
+while IFS= read -r script; do
+  shell_scripts+=("$script")
+done < <(
+  find . \
+    \( -name .git -o -name .claude -o -name node_modules -o -name target \
+    -o -name dist -o -name coverage -o -name playwright-report \) -prune -o \
+    -name '*.sh' -print | sort
+)
+
+echo "==> shellcheck (${#shell_scripts[@]} shell scripts)"
+if [ ${#shell_scripts[@]} -eq 0 ]; then
+  # Unreachable while this file exists, so it means the search itself broke
+  # — and a check that silently examines nothing reads exactly like a pass.
+  echo "no shell scripts found — the shellcheck pass would be vacuous" >&2
+  status=1
 else
-  echo "Workflow lint failed — see the findings above." >&2
+  # -x follows sourced files, so the CodeDeploy hooks' `. env.sh` resolves
+  # instead of being reported as an unfollowable source.
+  if command -v shellcheck > /dev/null; then
+    shellcheck -x "${shell_scripts[@]}" || status=1
+  else
+    require docker
+    docker run --rm -v "$PWD:/repo:ro" -w /repo "$SHELLCHECK_IMAGE" \
+      -x "${shell_scripts[@]}" || status=1
+  fi
+fi
+
+# --- 4. annotated docker-image pins ----------------------------------------
+# A pin is any `*IMAGE=` assignment carrying a literal `:tag`; that skips
+# assignments from arguments or other variables, which have nothing to
+# track. Renovate reads the comment on the line above, so that is where the
+# annotation has to be.
+echo "==> annotated docker-image pins"
+for script in "${shell_scripts[@]}"; do
+  while IFS=: read -r lineno _; do
+    [ -n "$lineno" ] || continue
+    previous=""
+    [ "$lineno" -gt 1 ] && previous="$(sed -n "$((lineno - 1))p" "$script")"
+    case "$previous" in
+      *"# renovate:"*) ;;
+      *)
+        echo "$script:$lineno: pinned image is invisible to renovate —" \
+          "add a '# renovate: datasource=docker' comment directly above" \
+          "this line" >&2
+        status=1
+        ;;
+    esac
+  done < <(grep -n '^[[:space:]]*[A-Za-z_]*IMAGE=.*:[A-Za-z0-9]' "$script")
+done
+
+if [ "$status" -eq 0 ]; then
+  echo "OK: actionlint and shellcheck clean, $checked jobs all set a" \
+    "job-level timeout, every image pin annotated for renovate."
+else
+  echo "Lint failed — see the findings above." >&2
 fi
 exit "$status"
