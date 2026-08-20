@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
 import { Auth0Provider } from "@auth0/auth0-react";
+import type { RouteObject } from "react-router-dom";
 import { RouterProvider } from "react-router-dom";
 
 // main.tsx is the entry point: importing it mounts the app. Stub the DOM
@@ -81,8 +82,7 @@ describe("main entry point", () => {
     const provider = (await bootApp()).props.children;
     const routerProvider = provider.props.children;
     expect(routerProvider.type).toBe(RouterProvider);
-    expect(routerProvider.props.router.routes.map((r) => r.path)).toEqual([
-      "*",
-    ]);
+    const routes: RouteObject[] = routerProvider.props.router.routes;
+    expect(routes.map((r) => r.path)).toEqual(["*"]);
   });
 });
