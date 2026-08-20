@@ -5,7 +5,13 @@
 # from the repo root, and records last-run/locks/logs in a laptop-local
 # state dir. See automation/README.md.
 #
-#   dispatch.sh [--dry-run]     # --dry-run: report decisions, launch nothing
+#   dispatch.sh            # a tick: launch whatever is due, in the background
+#   dispatch.sh --dry-run  # one "<decision>\t<name>\t<detail>" line per agent
+#                          # (run | not-due | disabled | invalid | paused),
+#                          # launching nothing — stable for scripts and tests
+#   dispatch.sh --status   # per agent: last run, next due (tolerance
+#                          # included), lock state, observed inter-run gaps
+#   dispatch.sh --wait     # a tick that blocks until its launches finish
 #
 # Env overrides (used by dispatch-test.sh):
 #   KARI_AUTOMATION_STATE_DIR   default ~/.local/state/kari-website-automation
@@ -49,15 +55,120 @@ if ! [[ "$DUE_TOLERANCE" =~ ^(0|[1-9][0-9]*)$ ]]; then
   DUE_TOLERANCE=120
 fi
 
-DRY_RUN=false
-[ "${1:-}" = "--dry-run" ] && DRY_RUN=true
+MODE=run
+WAIT=false
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run) MODE=dry-run ;;
+    --status) MODE=status ;;
+    --wait) WAIT=true ;;
+    *)
+      echo "usage: $(basename "$0") [--dry-run | --status] [--wait]" >&2
+      exit 2
+      ;;
+  esac
+done
 
-if [ -e "$PAUSE_FILE" ]; then
-  echo "fleet paused ($PAUSE_FILE exists) — remove it to resume"
-  exit 0
-fi
+# One line per agent in --dry-run: tab-separated so scripts (and
+# dispatch-test.sh) can read the decision column without depending on the
+# human-readable wording the other modes use.
+decision() { # decision <decision> <name> [detail]
+  printf '%s\t%s\t%s\n' "$1" "$2" "${3:-}"
+}
 
-mkdir -p "$STATE_DIR/logs"
+STATUS_GAPS_SHOWN=12
+
+fmt_time() { date -d "@$1" '+%Y-%m-%d %H:%M:%S'; }
+
+fmt_duration() { # fmt_duration <seconds> -> 2d04h | 1h03m | 5m07s | 42s
+  local s="$1"
+  if [ "$s" -ge 86400 ]; then
+    printf '%dd%02dh' $((s / 86400)) $((s % 86400 / 3600))
+  elif [ "$s" -ge 3600 ]; then
+    printf '%dh%02dm' $((s / 3600)) $((s % 3600 / 60))
+  elif [ "$s" -ge 60 ]; then
+    printf '%dm%02ds' $((s / 60)) $((s % 60))
+  else
+    printf '%ds' "$s"
+  fi
+}
+
+# Start times (epoch seconds, ascending) of every logged run: each run
+# writes logs/<name>-<YYYYmmddTHHMMSS>.log, so the log dir is already a
+# 30-day run history. The [0-9] right after "<name>-" keeps an agent from
+# claiming the logs of another whose name extends its own.
+run_starts() { # run_starts <name>
+  local f ts
+  for f in "$STATE_DIR/logs/$1-"[0-9]*T[0-9]*.log; do
+    [ -e "$f" ] || continue
+    ts="${f##*/}"
+    ts="${ts#"$1-"}"
+    ts="${ts%.log}"
+    date -d "${ts:0:4}-${ts:4:2}-${ts:6:2} ${ts:9:2}:${ts:11:2}:${ts:13:2}" +%s
+  done | sort -n
+}
+
+# "1h00m 1h15m (3 runs logged, mean 1h07m)" — gaps oldest first, so drift
+# reads left to right; only the newest few are listed (the mean covers all
+# of them) because 30 days of an `every: 30m` agent is over a thousand.
+# Drift shows up as gaps creeping past `every`; a stuck agent as a
+# next-due far in the past (see status_report).
+observed_gaps() { # observed_gaps <name>
+  local starts=() prev="" gaps=() total=0 t
+  mapfile -t starts < <(run_starts "$1")
+  if [ "${#starts[@]}" -eq 0 ]; then
+    echo "(no runs logged)"
+    return
+  fi
+  for t in "${starts[@]}"; do
+    if [ -n "$prev" ]; then
+      gaps+=("$(fmt_duration $((t - prev)))")
+      total=$((total + t - prev))
+    fi
+    prev="$t"
+  done
+  if [ "${#gaps[@]}" -eq 0 ]; then
+    echo "(1 run logged, no gaps yet)"
+    return
+  fi
+  # (A negative slice past the array start yields nothing, hence the clamp.)
+  local first=0 note=""
+  if [ "${#gaps[@]}" -gt "$STATUS_GAPS_SHOWN" ]; then
+    first=$((${#gaps[@]} - STATUS_GAPS_SHOWN))
+    note=" showing last $STATUS_GAPS_SHOWN,"
+  fi
+  local shown=("${gaps[@]:first}")
+  echo "${shown[*]} (${#starts[@]} runs logged,$note" \
+    "mean $(fmt_duration $((total / ${#gaps[@]}))))"
+}
+
+status_report() { # <name> <enabled> <every> <model> <last> <due_at> <now>
+  local name="$1" enabled="$2" every="$3" model="$4" last="$5" due_at="$6"
+  local now="$7" lock="$STATE_DIR/$name.lock" lock_state=free
+  echo "$name  every=$every  model=${model:-default}"
+  if [ "$last" -eq 0 ]; then
+    echo "  last-run: never"
+  else
+    echo "  last-run: $(fmt_time "$last") ($(fmt_duration $((now - last))) ago)"
+  fi
+  if [ "$enabled" != "true" ]; then
+    echo "  next-due: n/a (disabled)"
+  elif [ "$last" -eq 0 ]; then
+    echo "  next-due: now"
+  elif [ "$due_at" -gt "$now" ]; then
+    echo "  next-due: $(fmt_time "$due_at")" \
+      "(in $(fmt_duration $((due_at - now))); tolerance ${DUE_TOLERANCE}s)"
+  else
+    echo "  next-due: $(fmt_time "$due_at")" \
+      "(overdue by $(fmt_duration $((now - due_at))))"
+  fi
+  # A read-only open so --status never creates lock files as a side effect.
+  if [ -e "$lock" ] && ! (flock -n 9) 9<"$lock"; then
+    lock_state="held (run in progress)"
+  fi
+  echo "  lock:     $lock_state"
+  echo "  gaps:     $(observed_gaps "$name")"
+}
 
 # First "key: value" between the first two --- lines of an agent file.
 frontmatter() { # frontmatter <file> <key>
@@ -133,8 +244,29 @@ launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
         ${model:+--model "$model"} \
         ${fallback:+--fallback-model "$fallback"} >"$log" 2>&1
   ) 9>"$STATE_DIR/$name.lock" &
-  disown
+  if $WAIT; then
+    LAUNCHED+=("$!")
+  else
+    disown
+  fi
 }
+LAUNCHED=()
+
+if [ -e "$PAUSE_FILE" ]; then
+  case "$MODE" in
+    status) echo "fleet paused ($PAUSE_FILE exists) — nothing will launch" ;;
+    dry-run)
+      decision paused '*' "$PAUSE_FILE"
+      exit 0
+      ;;
+    *)
+      echo "fleet paused ($PAUSE_FILE exists) — remove it to resume"
+      exit 0
+      ;;
+  esac
+fi
+
+mkdir -p "$STATE_DIR/logs"
 
 for agent_file in "$AGENTS_DIR"/*.md; do
   [ -e "$agent_file" ] || continue
@@ -146,14 +278,13 @@ for agent_file in "$AGENTS_DIR"/*.md; do
 
   if [ -z "$name" ] || [ -z "$every" ]; then
     echo "SKIP $(basename "$agent_file"): missing name/every frontmatter" >&2
-    continue
-  fi
-  if [ "$enabled" != "true" ]; then
-    echo "skip $name: disabled"
+    [ "$MODE" = dry-run ] &&
+      decision invalid "$(basename "$agent_file")" "missing name/every"
     continue
   fi
   if ! secs="$(interval_seconds "$every")"; then
     echo "SKIP $name: bad interval" >&2
+    [ "$MODE" = dry-run ] && decision invalid "$name" "bad interval '$every'"
     continue
   fi
 
@@ -164,16 +295,40 @@ for agent_file in "$AGENTS_DIR"/*.md; do
   # rather than a negative threshold.
   due_after=$((secs - DUE_TOLERANCE))
   [ "$due_after" -lt 0 ] && due_after=0
-  if [ $((now - last)) -lt "$due_after" ]; then
-    echo "skip $name: not due ($((due_after - (now - last)))s remaining)"
+  due_at=$((last + due_after))
+
+  if [ "$MODE" = status ]; then
+    status_report "$name" "$enabled" "$every" "$model" "$last" "$due_at" "$now"
+    continue
+  fi
+  if [ "$enabled" != "true" ]; then
+    case "$MODE" in
+      dry-run) decision disabled "$name" ;;
+      *) echo "skip $name: disabled" ;;
+    esac
+    continue
+  fi
+  if [ "$now" -lt "$due_at" ]; then
+    case "$MODE" in
+      dry-run) decision not-due "$name" "remaining=$((due_at - now))s" ;;
+      *) echo "skip $name: not due ($((due_at - now))s remaining)" ;;
+    esac
     continue
   fi
 
-  if $DRY_RUN; then
-    echo "WOULD RUN $name (model=${model:-default}, every=$every)"
+  if [ "$MODE" = dry-run ]; then
+    decision run "$name" "model=${model:-default} every=$every"
     continue
   fi
   launch "$name" "$model" "$fallback" "$agent_file"
 done
 
 find "$STATE_DIR/logs" -type f -mtime +30 -delete 2>/dev/null || true
+
+# --wait: block on every launch (and fail if any did), for manual ticks and
+# the test harness; a timer-driven tick exits as soon as they are forked.
+status=0
+for pid in "${LAUNCHED[@]}"; do
+  wait "$pid" || status=1
+done
+exit "$status"
