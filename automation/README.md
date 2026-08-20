@@ -74,8 +74,9 @@ When the two signals disagree, the pipeline never merges:
 
 `~/.local/state/kari-website-automation/` (override:
 `KARI_AUTOMATION_STATE_DIR`): `<name>.last-run` timestamps,
-`<name>.lock` flock files, and `logs/<name>-<timestamp>.log` per run
-(pruned after 30 days). The repo defines *what and how often*; the
+`<name>.lock` flock files, `logs/<name>-<timestamp>.log` per run
+(pruned after 30 days), and `wip/<slug>-<timestamp>.patch` diffs rescued
+from dead workers' worktrees (see Usage limits). The repo defines *what and how often*; the
 machine tracks *when last*.
 
 ## Pausing
@@ -251,7 +252,11 @@ covers logout and pre-login boot, and does nothing for a sleeping host.
 
 A tick or subagent that hits a model usage limit simply dies; state
 lives in GitHub, so the next due tick recovers — the playbook releases
-stale issue claims (`in progress` with no PR after 2h) and re-shepherds
-open PRs statelessly. The `fallback` model keeps orchestration running
+stale issue claims (`in progress` with no PR, once the worker is
+provably dead: no tick process predating the claim and no recent pushed
+commit on its `agent/*` branch; after 2h of silence if it cannot tell)
+and re-shepherds open PRs statelessly. Uncommitted work in a dead
+worker's worktree is saved to `wip/<slug>-<timestamp>.patch` in the
+state directory before the worktree is removed. The `fallback` model keeps orchestration running
 through a Fable outage, and the playbook postpones Fable-tier subagent
 work (never silently downgrades it) until the limit window resets.

@@ -107,6 +107,12 @@ address or create github issues for them, but the job never blocks a merge.
 - Before starting work on an issue, add the `in progress` label and leave a
   comment naming your branch, so parallel sessions don't pick up the same
   issue. Skip issues already labeled `in progress`.
+- Readiness labels: `has-dependencies` marks an issue that needs another
+  open issue resolved first; `needs-clarification` / `blocked` mark issues
+  waiting on a human. There is deliberately no positive "safe to work"
+  label — whether two issues collide is a property of the pair and of
+  what has merged since, so judge file overlap per batch (see Parallel
+  Sessions below), never from a label.
 - Put `Closes #N` in the PR body. From PR-open onward the issue-lifecycle
   workflow (`.github/workflows/issue-lifecycle.yml`) owns the label: it
   re-adds `in progress` on PR open and removes it when the PR merges or is

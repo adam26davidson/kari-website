@@ -27,9 +27,45 @@ CI or reviews; the orchestrator handles everything after the PR exists.
   `git add -A`. Treat any file outside your issue's scope as owned by
   someone else.
 
+## Before you implement: check the issue's premise
+
+- Issues age between filing and pickup. Before changing anything,
+  re-verify the factual claims the issue rests on against the CURRENT
+  tree: named file paths (`git ls-files <path>` — files move), quoted
+  coverage numbers (re-measure), reproduction steps (reproduce). Note any
+  discrepancy in the PR body. For a coverage-driven issue whose target
+  already meets the bar, or a bug that no longer reproduces, do not
+  implement: comment the fresh measurement on the issue, close it, and
+  report that instead of a PR.
+- Security / dependency-bump issues: version pins and advisory lists in
+  the issue text are a starting hypothesis, not the spec — newer
+  advisories may have landed since filing and the suggested version may
+  itself be vulnerable by now. Re-derive the fix version at execution
+  time from the live data (`npm audit` / `cargo audit` / the GitHub
+  advisory), and verify the resolved tree clears ALL open advisories for
+  the package, not just the one that prompted the issue. Say in the PR
+  body which advisories the final versions clear.
+
 ## How to work
 
 - Follow CLAUDE.md (you have it in context) — all of it applies.
+- Show you are alive: commit and push work-in-progress to
+  `agent/{{SLUG}}` (`git push -u origin agent/{{SLUG}}`) as soon as you
+  have any change and at least every 45 minutes after that — before any
+  long-running step (dependency install, e2e run, visual check) rather
+  than after it. The orchestrator judges whether a worker is still
+  running from the branch's latest pushed commit and from its own
+  process table; workers that keep everything local have been mistaken
+  for dead and released, and workers killed by a host suspend or a usage
+  limit have lost hours of unpushed work. PRs are squash-merged, so WIP
+  commit messages are fine.
+- Combined assignments (several issues on this one branch): claim every
+  issue up front if the orchestrator has not already — `in progress`
+  label plus a comment naming `agent/{{SLUG}}` on each. If one item turns
+  out to be contentious or larger than it looked, drop it rather than
+  stall the rest: leave its files untouched, remove its `in progress`
+  label, comment on it why, and omit its `Closes #N` from the PR body;
+  say so in the PR body and your report. The remaining items still ship.
 - Use the superpowers skills explicitly:
   - `superpowers:test-driven-development` for every feature or fix.
   - `superpowers:systematic-debugging` before proposing any fix to a bug
