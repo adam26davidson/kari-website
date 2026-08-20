@@ -445,18 +445,34 @@ hands over the kept branch and/or patch.
    are all closed (shipped by another PR, or closed by a human) nothing
    would ever look at it again. List remote pipeline branches without
    an open PR: `git ls-remote --heads origin 'agent/*'` minus the heads
-   of `gh pr list --state open --json headRefName`. For each, find the
-   open issues that name it (`gh issue list --state open --search
-   "agent/<slug> in:comments"`). A branch named by an open `in
-   progress` claim or an open released issue is in play — leave it. A
-   branch named by NO open issue is an orphan: if
-   `git rev-list --count origin/main..origin/agent/<slug>` is zero,
-   delete it (`git push origin --delete agent/<slug>`) — it is debris
-   of the same kind Phase B deletes; if it is ahead of `main`, do not
-   delete it — report it in the run summary with its tip SHA and the
-   closed issues it came from, so a human decides, and report it again
-   each tick until it is gone. Never delete or report a non-`agent/*`
-   branch.
+   of `gh pr list --state open --json headRefName`. Then build the
+   in-play set from what this tick already read, NOT from a search:
+   every branch named by a claim comment on an open `in progress`
+   issue (the grouping from stale-claim recovery), every branch named
+   by a `Claim released:` comment read in Phase B (step 2 or 6),
+   every slug released this tick, and every slug dispatched this tick.
+   Any branch in that set is in play — leave it, whatever its commit
+   count. Workers dispatched this tick may still be running while you
+   do this, and a worker may `git push -u` its branch before its first
+   commit, so a dispatched slug with zero commits ahead of `main` is a
+   live worker, not debris. Only for a branch outside that set ask
+   GitHub: `gh issue list --state open --search "agent/<slug>
+   in:comments"`. A hit is a keep-signal (leave the branch); a miss is
+   never evidence on its own — the search index lags fresh comments by
+   minutes and tokenises slugs loosely — it only confirms what the
+   in-play set already said. (Branch age is no help either: a
+   just-pushed empty branch's tip IS `origin/main`, whose commit date
+   can be days old.) A branch outside the in-play set AND unnamed by
+   the search is an orphan: if `git rev-list --count
+   origin/main..origin/agent/<slug>` is zero, delete it (`git push
+   origin --delete agent/<slug>`) — it is debris of the same kind
+   Phase B deletes; if it is ahead of `main`, do not delete it —
+   report it in the run summary with its tip SHA and the closed issues
+   it came from, so a human decides, and report it again each tick
+   until it is gone. As in Phase B, every signal here is positive-only
+   evidence of life: a branch that was alive by ANY of them is never
+   deleted, and a one-tick delay on a true orphan costs nothing. Never
+   delete or report a non-`agent/*` branch.
 3. A worker that reported a blockage instead of a PR: remove the issue's
    `in progress` label so a future tick (or a human) can pick it up
    after the blockage is resolved. A combined-branch worker that dropped
