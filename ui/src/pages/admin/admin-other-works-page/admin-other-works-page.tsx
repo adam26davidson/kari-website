@@ -8,6 +8,7 @@ import {
   moveItemByIdByOne,
   removeItemById,
 } from "../../../utils/data-list-helpers";
+import { formatPostDate } from "../../../utils/date-helpers";
 import { BlogService } from "../../../services/blog";
 import { BlogPostSummary } from "../../../components/blog-post-summary/blog-post-summary";
 import { BlogPostEditor } from "./components/blog-post-editor/blog-post-editor";
@@ -277,7 +278,7 @@ export function AdminOtherWorksPage() {
       noun="other works"
       getSearchText={(post) =>
         // Both the stored ISO date and the localized form the list shows.
-        `${post.title} ${post.date} ${new Date(post.date).toLocaleDateString()}`
+        `${post.title} ${post.date} ${formatPostDate(post.date)}`
       }
       onNewItem={onNewItem}
       onEdit={onEdit}
