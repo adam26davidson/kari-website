@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Test harness for scripts/setup-worktree.sh and for the delegation to it
-# in scripts/dev.sh. Local-only (not wired into CI); run it whenever either
-# script changes:
+# in scripts/dev.sh. Runs in CI (the shell-lint job) and locally; run it
+# whenever either script changes:
 #   bash scripts/setup-worktree-test.sh
 #
 # Each case builds a throwaway "repo" (scripts/ + ui/ with a lockfile) and

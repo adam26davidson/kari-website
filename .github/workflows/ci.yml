@@ -19,11 +19,11 @@ permissions:
 # burning runner minutes and blocking anything that waits on the checks. The
 # values are observed p90 plus generous headroom — see each job — so a real
 # hang fails within minutes and an empty-commit retrigger recovers it.
-# The workflow-lint job enforces this on every workflow in the repo, so a
+# The shell-lint job enforces this on every workflow in the repo, so a
 # new job cannot ship without one.
 jobs:
-  workflow-lint:
-    name: Workflows (actionlint, job timeouts)
+  shell-lint:
+    name: Shell and workflows (lint, script tests)
     runs-on: ubuntu-latest
     # Observed: seconds. Nearly all of it is the actionlint image pull.
     timeout-minutes: 10
@@ -33,11 +33,22 @@ jobs:
       # The same script anyone can run locally (see CLAUDE.md): actionlint
       # over .github/ — including shellcheck on every embedded `run:` —
       # plus the assertion that every job sets a job-level timeout-minutes,
-      # so the paragraph above cannot quietly stop being true.
-      # Shell linting beyond the workflows (automation/*.sh, #291) belongs
-      # in this job too — extend the script, not the matrix of jobs.
-      - name: Lint workflows
+      # so the paragraph above cannot quietly stop being true, shellcheck
+      # over every *.sh in the repo, and the check that each pinned docker
+      # image in them carries its renovate annotation.
+      - name: Lint workflows and shell scripts
         run: ./scripts/lint-workflows.sh
+
+      # The shell test harnesses. They were local-only until #291, which
+      # meant a regression in the dispatcher (#276) or in the setup script
+      # every worktree runs first only showed up in use. Both are stubbed,
+      # hermetic and take seconds, so they run on every PR rather than
+      # behind a path filter.
+      - name: Dispatcher tests
+        run: bash automation/dispatch-test.sh
+
+      - name: Worktree setup tests
+        run: bash scripts/setup-worktree-test.sh
 
   frontend:
     name: Frontend (lint, build, unit tests)

@@ -107,10 +107,24 @@ launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
     # run dies part-done (observed 2026-08-19: a tick suspended two minutes
     # in and came back only to fail with "Request timed out"). Optional by
     # design: on a host without systemd-inhibit the tick still runs.
+    # "Optional" has to cover present-but-unusable, not just absent —
+    # systemd-inhibit ships with systemd but exits non-zero when there is no
+    # logind/D-Bus session to take a lock from (headless hosts, containers,
+    # CI runners). Wrapping the launch in it regardless would abort the tick
+    # before claude ever starts, losing the run to protect it from a suspend
+    # that cannot happen. So probe it on a no-op first and drop it if it
+    # can't hold a lock.
     local inhibit=()
     if command -v "$INHIBIT_BIN" >/dev/null 2>&1; then
-      inhibit=("$INHIBIT_BIN" --what=sleep:idle --mode=block
-        --who="kari-automation" --why="agent tick: $name")
+      if "$INHIBIT_BIN" --what=sleep:idle --mode=block \
+        --who="kari-automation" --why="inhibitor probe" true >/dev/null 2>&1
+      then
+        inhibit=("$INHIBIT_BIN" --what=sleep:idle --mode=block
+          --who="kari-automation" --why="agent tick: $name")
+      else
+        echo "warn: $INHIBIT_BIN cannot take a lock;" \
+          "running $name without sleep inhibition" >&2
+      fi
     fi
     # Unquoted ${var:+...} is deliberate: no flag at all when unset.
     # shellcheck disable=SC2086

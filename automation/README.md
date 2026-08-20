@@ -184,7 +184,10 @@ the repo covers one, the host must cover the other.
 `systemd-inhibit --what=sleep:idle --mode=block`, so the host cannot
 suspend while an agent is working. Confirm a live tick holds it with
 `systemd-inhibit --list | grep kari`. This protects a *running* tick and
-nothing else — it cannot make ticks happen while the host is asleep.
+nothing else — it cannot make ticks happen while the host is asleep. It is
+also best-effort: where `systemd-inhibit` is missing, or present but unable
+to reach logind (headless hosts, containers, CI runners), the dispatcher
+warns and runs the tick un-inhibited rather than dropping it.
 
 **Must be configured on the host:** disabling idle-suspend so ticks fire
 overnight. The trigger is *inactivity*, not the lid, so leaving the lid

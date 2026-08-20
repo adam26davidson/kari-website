@@ -10,6 +10,24 @@
   "labels": ["dependencies"],
   "prConcurrentLimit": 5,
   "rangeStrategy": "bump",
+  "customManagers": [
+    {
+      "description": [
+        "Track the docker images pinned in shell scripts (issue #327).",
+        "No built-in manager reads shell scripts, so pins like",
+        "ACTIONLINT_IMAGE=\"${ACTIONLINT_IMAGE:-rhysd/actionlint:1.7.12}\"",
+        "would rot while everything else auto-updates. The",
+        "'# renovate: datasource=docker' comment on the line above is what",
+        "this matches; scripts/lint-workflows.sh fails the build if a pin",
+        "is missing one, so a new pin cannot silently escape this manager."
+      ],
+      "customType": "regex",
+      "managerFilePatterns": ["/^scripts/.*\\.sh$/", "/^automation/.*\\.sh$/"],
+      "matchStrings": [
+        "#\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s*\\n\\s*\\w+=\"?\\$?\\{?(?:\\w+:-)?(?<depName>[^:\"\\s}]+):(?<currentValue>[^\"\\s}]+)\\}?\"?"
+      ]
+    }
+  ],
   "lockFileMaintenance": {
     "enabled": true,
     "automerge": true,
