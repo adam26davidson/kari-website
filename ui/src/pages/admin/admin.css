@@ -174,7 +174,9 @@ textarea {
   padding: 0;
   font: inherit;
   color: inherit;
-  background-color: #6d3513b5;
+  /* Opaque, like .admin-button: a translucent fill reads washed out over
+     a light card or photo (#278, #321). */
+  background-color: #6d3513;
   border: none;
   border-radius: 50%;
   transition: background-color 0.2s;
@@ -184,14 +186,14 @@ textarea {
 .admin-icon-button.disabled:hover,
 .admin-icon-button:disabled,
 .admin-icon-button:disabled:hover {
-  background-color: #675347b5;
-  color: #a5a5a5b5;
+  background-color: #a89a91;
+  color: #e9e3de;
   cursor: not-allowed;
 }
 
 .admin-icon-button:hover,
 .admin-image-upload:hover {
-  background-color: #6d3513ee;
+  background-color: #552a0f;
   cursor: pointer;
 }
 
