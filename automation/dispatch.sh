@@ -12,6 +12,7 @@
 #   KARI_AUTOMATION_AGENTS_DIR  default <repo>/automation/agents
 #   KARI_AUTOMATION_PAUSE_FILE  default <repo>/automation/PAUSE
 #   KARI_AUTOMATION_CLAUDE_BIN  default claude
+#   KARI_AUTOMATION_DUE_TOLERANCE  default 120 (seconds); see DUE_TOLERANCE
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -19,6 +20,32 @@ AGENTS_DIR="${KARI_AUTOMATION_AGENTS_DIR:-$REPO_ROOT/automation/agents}"
 STATE_DIR="${KARI_AUTOMATION_STATE_DIR:-$HOME/.local/state/kari-website-automation}"
 PAUSE_FILE="${KARI_AUTOMATION_PAUSE_FILE:-$REPO_ROOT/automation/PAUSE}"
 CLAUDE_BIN="${KARI_AUTOMATION_CLAUDE_BIN:-claude}"
+# Slack on the "has the interval elapsed?" test. Polls happen on a coarse
+# grid (cron every 15m) while last-run is stamped at the moment a run
+# starts, so without slack each cycle's start creeps later into the
+# polling window and an `every: 1h` agent drifts towards running every
+# 75m. The tolerance only has to cover that per-cycle start lag — the
+# poll-to-stamp delay, observed at ~37s — not a whole poll period, so
+# 120s absorbs it with headroom while capping how early a run may start.
+# Size it against the start lag, not the cron cadence: a tolerance near
+# the poll period would let an `every: 1h` agent fire ~14m early. Result:
+# "about every N", with the phase held instead of accumulating drift.
+DUE_TOLERANCE="${KARI_AUTOMATION_DUE_TOLERANCE:-120}"
+# Validated up front, the way `every` is (see interval_seconds): a
+# non-integer here — say `2m`, borrowing the duration syntax `every`
+# uses — would blow up the arithmetic inside the dispatch loop, and
+# under `set -e` that aborts the loop wholesale. Every agent would be
+# skipped while the script still exited 0, so cron would see success and
+# a dead fleet would stay invisible. Warn and fall back instead.
+# Leading zeros are rejected too, because bash arithmetic reads them as
+# octal: `090` is a "value too great for base" error — the same silent
+# fleet death this check exists to prevent — and `0120` is a quieter
+# version of it, applying 80s while the operator reads 120.
+if ! [[ "$DUE_TOLERANCE" =~ ^(0|[1-9][0-9]*)$ ]]; then
+  echo "unusable KARI_AUTOMATION_DUE_TOLERANCE '$DUE_TOLERANCE'" \
+    "(want whole seconds, no leading zeros, e.g. 120); using 120" >&2
+  DUE_TOLERANCE=120
+fi
 
 DRY_RUN=false
 [ "${1:-}" = "--dry-run" ] && DRY_RUN=true
@@ -107,8 +134,12 @@ for agent_file in "$AGENTS_DIR"/*.md; do
   now="$(date +%s)"
   last=0
   [ -f "$STATE_DIR/$name.last-run" ] && last="$(cat "$STATE_DIR/$name.last-run")"
-  if [ $((now - last)) -lt "$secs" ]; then
-    echo "skip $name: not due ($((secs - (now - last)))s remaining)"
+  # Clamped so a tolerance wider than the interval just means "every poll"
+  # rather than a negative threshold.
+  due_after=$((secs - DUE_TOLERANCE))
+  [ "$due_after" -lt 0 ] && due_after=0
+  if [ $((now - last)) -lt "$due_after" ]; then
+    echo "skip $name: not due ($((due_after - (now - last)))s remaining)"
     continue
   fi
 

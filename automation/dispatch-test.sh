@@ -43,8 +43,13 @@ run_dispatch() { # <workdir> [args...] — output in <workdir>/out
   KARI_AUTOMATION_AGENTS_DIR="$work/agents" \
   KARI_AUTOMATION_PAUSE_FILE="$work/PAUSE" \
   KARI_AUTOMATION_CLAUDE_BIN="${STUB_CLAUDE:-claude}" \
+  KARI_AUTOMATION_DUE_TOLERANCE="${DUE_TOLERANCE:-}" \
     bash "$DISPATCH" "$@" >"$work/out" 2>&1
   echo $? >"$work/exit-code"
+}
+
+ran_ago() { # <workdir> <name> <seconds-ago>
+  echo "$(($(date +%s) - $3))" >"$1/state/$2.last-run"
 }
 
 expect_contains() { # <file> <needle> <test-name>
@@ -100,7 +105,7 @@ expect_contains "$w/out" "skip demo-agent: disabled" "disabled agent skipped"
 # 3. Agent that ran 60s ago with every: 1h is not due.
 w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
-echo "$(($(date +%s) - 60))" >"$w/state/issue-pipeline.last-run"
+ran_ago "$w" issue-pipeline 60
 run_dispatch "$w" --dry-run
 expect_contains "$w/out" "not due" "recently-run agent is not due"
 expect_not_contains "$w/out" "WOULD RUN" "recently-run agent not launched"
@@ -108,10 +113,80 @@ expect_not_contains "$w/out" "WOULD RUN" "recently-run agent not launched"
 # 4. Agent that ran 2h ago with every: 1h is due again.
 w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
-echo "$(($(date +%s) - 7200))" >"$w/state/issue-pipeline.last-run"
+ran_ago "$w" issue-pipeline 7200
 run_dispatch "$w" --dry-run
 expect_contains "$w/out" "WOULD RUN issue-pipeline" \
   "agent past its interval is due"
+
+# 4a. Drift guard (#276): a run that started slightly inside the polling
+#     window must not push the next run a whole poll later. With the
+#     default 120s tolerance, "interval - 60s" counts as due...
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+ran_ago "$w" issue-pipeline $((3600 - 60))
+run_dispatch "$w" --dry-run
+expect_contains "$w/out" "WOULD RUN issue-pipeline" \
+  "agent within the due tolerance is due"
+
+# 4b. ...while "interval - (tolerance + 60s)" is still not due.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+ran_ago "$w" issue-pipeline $((3600 - (120 + 60)))
+run_dispatch "$w" --dry-run
+expect_contains "$w/out" "not due" "agent outside the due tolerance is not due"
+expect_not_contains "$w/out" "WOULD RUN" \
+  "agent outside the due tolerance not launched"
+
+# 4c. The tolerance is configurable: a widened one makes an agent due
+#     that the default tolerance would have skipped.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+ran_ago "$w" issue-pipeline 1800
+run_dispatch "$w" --dry-run
+expect_contains "$w/out" "not due" "half-elapsed agent not due by default"
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+ran_ago "$w" issue-pipeline 1800
+DUE_TOLERANCE=2400 run_dispatch "$w" --dry-run
+expect_contains "$w/out" "WOULD RUN issue-pipeline" \
+  "due tolerance is configurable"
+
+# 4d. A tolerance wider than the interval never makes an agent overdue
+#     forever: an agent that just ran with every: 5m is still due (the
+#     tolerance clamps to the interval), not an error.
+w="$(new_work)"
+write_agent "$w" fast-agent.md fast-agent true 5m opus
+ran_ago "$w" fast-agent 1
+DUE_TOLERANCE=3600 run_dispatch "$w" --dry-run
+expect_contains "$w/out" "WOULD RUN fast-agent" \
+  "tolerance larger than the interval clamps instead of underflowing"
+expect_eq "$(cat "$w/exit-code")" 0 "oversized tolerance exits 0"
+
+# 4e. A tolerance that isn't a plain decimal integer (e.g. the Nm/Nh
+#     duration syntax `every` uses, or a leading-zero value bash would
+#     read as octal) must not take the fleet down silently: warn, fall
+#     back to the 120s default, and keep dispatching.
+#     The agent last ran "interval - 100s" ago, which is inside the 120s
+#     default but outside octal readings of the leading-zero values (090
+#     is a base error, 0120 is 80s), so a value that slipped through
+#     validation shows up here as a missing launch rather than passing by
+#     luck.
+for bad_tolerance in 120s 2m "" abc -60 090 0120; do
+  w="$(new_work)"
+  write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+  ran_ago "$w" issue-pipeline $((3600 - 100))
+  DUE_TOLERANCE="$bad_tolerance" run_dispatch "$w" --dry-run
+  expect_contains "$w/out" "WOULD RUN issue-pipeline" \
+    "tolerance '$bad_tolerance' falls back to the default instead of skipping"
+  expect_eq "$(cat "$w/exit-code")" 0 "tolerance '$bad_tolerance' exits 0"
+done
+# The bogus value is named on stderr so the misconfiguration is visible.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+ran_ago "$w" issue-pipeline $((3600 - 60))
+DUE_TOLERANCE=120s run_dispatch "$w" --dry-run
+expect_contains "$w/out" "KARI_AUTOMATION_DUE_TOLERANCE" \
+  "bad tolerance is reported"
 
 # 5. PAUSE file halts the whole fleet.
 w="$(new_work)"
