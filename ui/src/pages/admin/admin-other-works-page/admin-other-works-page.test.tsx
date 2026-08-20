@@ -904,6 +904,22 @@ describe("AdminOtherWorksPage search", () => {
     expect(screen.getByText("A Post")).toBeInTheDocument();
     expect(screen.queryByText("B Post")).toBeNull();
   });
+
+  it("opens the post whose title is clicked in a filtered list", async () => {
+    const { router } = await renderPage();
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Search other works" }),
+      { target: { value: "b post" } },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "B Post" }));
+    await screen.findByPlaceholderText("post content");
+
+    // The clicked title addresses its post by id, so filtering the list
+    // down to a single row still opens that row's post and not the first
+    // post of the unfiltered list.
+    expect(router.state.location.pathname).toBe("/admin/other-works/b2");
+  });
 });
 
 describe("AdminOtherWorksPage list reordering", () => {

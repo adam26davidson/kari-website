@@ -388,6 +388,22 @@ describe("AdminPhotographyPage search", () => {
     expect(screen.getByText("A Post")).toBeInTheDocument();
     expect(screen.queryByText("B Post")).toBeNull();
   });
+
+  it("opens the post whose title is clicked in a filtered list", async () => {
+    const { router } = await renderPage();
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Search photography posts" }),
+      { target: { value: "b post" } },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "B Post" }));
+    await screen.findByLabelText("Title");
+
+    // The clicked title addresses its post by id, so filtering the list
+    // down to a single row still opens that row's post and not the first
+    // post of the unfiltered list.
+    expect(router.state.location.pathname).toBe("/admin/photography/p2");
+  });
 });
 
 describe("AdminPhotographyPage load failure", () => {
