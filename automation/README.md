@@ -17,10 +17,11 @@ Design and decisions:
   never overlap themselves.
 - `agents/*.md` — one file per agent: YAML frontmatter (config) + body
   (the agent's prompt). Current fleet:
-  - `issue-pipeline` — picks ready GitHub issues, implements them via
-    parallel worker subagents, shepherds the PRs through CI, the visual
-    review, and an automated code-review gate, then squash-merges them
-    serially into `main` (which auto-deploys to test).
+  - `issue-pipeline` — picks one ready GitHub issue at a time,
+    implements it via a worker subagent, shepherds the PR through CI,
+    the visual review, and an automated code-review gate, then
+    squash-merges it into `main` (which auto-deploys to test). Runs
+    hourly with at most one worker in flight — see Throughput below.
 - `templates/*.md` — subagent prompt templates the issue-pipeline fills
   in (`{{PLACEHOLDER}}` slots): `worker-brief.md`, `fix-brief.md`,
   `review-brief.md`.
@@ -246,6 +247,28 @@ schedule continues from there.
 User timers only run while the user has a session unless lingering is
 enabled: `loginctl enable-linger`. This is orthogonal to suspend — it
 covers logout and pre-login boot, and does nothing for a sleeping host.
+
+## Throughput (and the usage it costs)
+
+Two knobs, both in `agents/issue-pipeline.md`, bound how much model
+usage the fleet can burn:
+
+- `every` in the frontmatter — how often a tick may start. Every tick
+  costs orchestration tokens even when it finds nothing to do.
+- the in-flight worker cap in the "Safety rails" section — how many
+  issue-workers may be open at once. Workers (and the fix/review agents
+  that tend their PRs) are where most of the usage goes.
+
+Current setting: hourly ticks, one worker in flight. That is the
+deliberate low-usage configuration — halving the tick rate and cutting
+the cap from 3 to 1 (2026-08-20) drops the ceiling on worker starts per
+hour by 6x, and the steady-state usage by roughly 3x: orchestration
+halves with the tick rate, while worker and fix/review usage scales with
+the cap rather than the cadence, since a PR normally takes several ticks
+to go green, get reviewed, and merge.
+
+Turning either knob back up multiplies usage in the same way, so raise
+them only deliberately — a backlog is not a reason on its own.
 
 ## Usage limits
 

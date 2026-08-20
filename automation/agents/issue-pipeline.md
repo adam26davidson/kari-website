@@ -1,7 +1,7 @@
 ---
 name: issue-pipeline
 enabled: true
-every: 30m
+every: 1h
 model: fable
 fallback: opus   # keep orchestrating on Opus when the Fable limit is hit
 ---
@@ -28,9 +28,11 @@ about the failure in Phase C rather than aborting everything.
 - Never approve, trigger, or touch production deployments or the
   `production` GitHub Environment. Merging to main (test deploy) is your
   ceiling.
-- At most 3 issue-workers in flight (open pipeline-owned PRs + issues
-  you claim this tick, combined). Fix/review agents for existing PRs
-  don't count.
+- At most 1 issue-worker in flight (open pipeline-owned PRs + issues
+  you claim this tick, combined) — so a tick claims new work only when
+  the pipeline has no open PR of its own. This cap is a usage budget,
+  not a coordination limit: never raise it to drain a backlog faster.
+  Fix/review agents for existing PRs don't count.
 - Merges are always squash merges, and always serial — one PR fully
   merged before the next is considered.
 - Stay inside this repository and its GitHub project. Nothing else.
@@ -108,11 +110,11 @@ For each owned PR, in order:
    Push, and let CI re-run; those PRs merge on a later tick, not this
    one. Merge at most one PR per tick.
 
-## Phase B — pick new work (only if in-flight count < 3)
+## Phase B — pick new work (only if nothing is in flight)
 
 In-flight = open pipeline-owned PRs (both ownership signals, per
-Phase A) + open issues labeled `in progress`. If at capacity, skip to
-Phase C.
+Phase A) + open issues labeled `in progress`. If anything is in flight,
+skip to Phase C.
 
 **Stale-claim recovery first:** a worker that died mid-task (crash, usage
 limit) leaves an issue labeled `in progress` whose named `agent/<slug>`
@@ -140,18 +142,19 @@ NEVER touched.
    `needs-clarification` label (create it if missing:
    `gh label create needs-clarification --description "agent pipeline
    needs answers before working this" --color D93F0B`). Move on.
-3. From the ready issues, select up to (3 − in-flight), preferring
-   `parallel-safe`-labeled and oldest first. Estimate which files each
-   touches; issues that plausibly overlap go in ONE combined
-   branch/worker (multiple `Closes #N` lines), per CLAUDE.md — or defer
-   all but one. Anything overlapping an in-flight PR's files waits.
-4. For each selection: add the `in progress` label and comment
+3. From the ready issues, select exactly ONE — oldest first, preferring
+   `parallel-safe`-labeled. If it plausibly overlaps another ready issue
+   in the files it touches, the two go in ONE combined branch/worker
+   (multiple `Closes #N` lines), per CLAUDE.md — that is one worker, not
+   two, so it stays inside the cap. Everything else waits for a later
+   tick.
+4. For the selection: add the `in progress` label and comment
    `Working on this in branch agent/<slug>` on the issue (slug:
    kebab-case, short, from the title). Classify the work:
    - **opus** — scoped, well-specified, few files, established patterns.
    - **fable** — cross-cutting, architectural, gnarly async/CSS/state,
      vague-but-ready specs, or anything touching both API and UI.
-5. Dispatch all selected workers in parallel with
+5. Dispatch the worker with
    `automation/templates/worker-brief.md`: ISSUE_LIST = full issue
    number(s), title(s), body/bodies, and relevant comments; SLUG = the
    slug; MODEL_NOTE = one line saying which model tier it got and why.
