@@ -36,6 +36,7 @@ Commit one file, `agents/<name>.md`:
 name: my-agent        # required; used for state/lock/log filenames
 enabled: true         # anything else disables the agent
 every: 1h             # required; Nm / Nh / Nd since last *started* run
+                      # (approximate — see "Timing" below)
 model: opus           # optional; passed to claude --model
 fallback: sonnet      # optional; passed to claude --fallback-model, so a
                       # tick can continue on a smaller model when the
@@ -139,6 +140,34 @@ Alternative for machines that have cron — a single crontab line
 
 Either way, the 15-minute cadence is the dispatcher's polling
 resolution; each agent's own `every` decides how often it runs.
+
+## Timing
+
+`every` means *about* every N, not exactly. `<name>.last-run` is stamped
+when a run **starts** (deliberately: a long run must not re-trigger the
+moment it finishes), while polls land on cron's coarse grid. Without
+slack, a run that starts a few seconds after a poll boundary pushes the
+next one a whole poll later, and the offset accumulates — an `every: 1h`
+agent creeps towards running every 75 minutes (#276).
+
+So an agent counts as due once `now - last >= every - tolerance`, with
+the tolerance defaulting to 120s (override with
+`KARI_AUTOMATION_DUE_TOLERANCE`; clamped so a tolerance wider than the
+interval simply means "every poll"). Phase is held rather than drifting;
+a run may start up to the tolerance early.
+
+The override is whole seconds — a bare `120`, *not* the `Nm`/`Nh`
+syntax `every` takes, and without leading zeros (bash arithmetic would
+read `0120` as octal 80). Anything else is reported on stderr and the
+default is used, so a typo can't take the fleet down.
+
+Sizing it: the tolerance only needs to exceed the per-cycle start lag —
+the delay between a poll firing and `last-run` being stamped, observed
+at ~37s — so 120s covers it with room to spare. It is deliberately far
+below the 15-minute poll period, and retuning it (say, after changing
+the cron cadence) should track that start lag rather than the cadence: a
+tolerance near the poll period would let an `every: 1h` agent
+legitimately start up to ~14 minutes early.
 
 ## Usage limits
 
