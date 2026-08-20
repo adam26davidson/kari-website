@@ -81,7 +81,7 @@ jobs:
         run: |
           npm run build:test
           nohup npm run preview -- --port 4173 --strictPort > preview.log 2>&1 &
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             if curl -sf http://localhost:4173 > /dev/null; then
               echo "Preview is up"
               exit 0
