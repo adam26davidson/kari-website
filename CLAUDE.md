@@ -56,6 +56,14 @@ with code in this repository.
 - API: `cargo clippy --all-targets -- -D warnings` - Lint (CI enforces no
   warnings)
 - API: `cargo fmt --check` - Formatting check
+- Workflows: `./scripts/lint-workflows.sh` - lints `.github/`: actionlint
+  (schema, action inputs, `${{ }}` expressions, shellcheck over every
+  embedded `run:` script) plus an assertion that every job sets a job-level
+  `timeout-minutes`. Nothing to install — neither actionlint nor yq is
+  packaged for most machines, so the script runs them from the
+  `rhysd/actionlint` / `mikefarah/yq` docker images when the binaries are
+  missing. CI runs this same script. Changing it? Re-run its tests:
+  `bash scripts/lint-workflows-test.sh`
 
 CI (`.github/workflows/ci.yml`) runs all of the above on every pull request,
 and a `coverage` job posts a whole-codebase coverage comment on each PR
