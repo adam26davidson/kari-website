@@ -99,12 +99,15 @@ are below the cap):
 
 - List open issues; skip ones labeled `in progress`, `has-dependencies`,
   `needs-clarification`, `idea`, or `blocked`.
-- Read the candidates. Underspecified issue → post a clarifying comment,
-  add `needs-clarification`, move on. `parallel-safe` label is a strong
-  readiness signal but the orchestrator still checks for file overlap
-  with in-flight work.
-- Issues that plausibly touch the same files are combined into one
-  branch/PR (per CLAUDE.md), not worked in parallel.
+- Read the candidates. Underspecified issue, or one whose premise the
+  current tree contradicts → post a clarifying comment, add
+  `needs-clarification`, move on. There is no positive readiness label;
+  readiness is judged per issue and the orchestrator checks for file
+  overlap with in-flight work.
+- Issues that plausibly touch the same files, and clusters of small
+  mechanical issues in the same area, are combined into one branch/PR
+  (per CLAUDE.md) — one worker, one in-flight slot — not worked in
+  parallel.
 - For each selection: add `in progress`, comment the branch name
   (`agent/<slug>`), classify complexity — straightforward/scoped issues
   go straight to a worker; complex/cross-cutting/tricky ones get a

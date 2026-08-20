@@ -16,7 +16,10 @@ review here ships bugs to main (and auto-deploys them to test).
      the wrong result, crash, or corrupt data. Race conditions, unhandled
      error paths, off-by-ones, broken invariants in surrounding code.
   2. **Does it actually close the issue** — compare the diff against what
-     the issue asked for; flag silent scope-narrowing.
+     the issue asked for; flag silent scope-narrowing. A combined PR
+     (several `Closes #N`) is judged per issue: an item the worker
+     explicitly dropped (no `Closes` line, explained in the body) is not
+     a finding; an item listed as closed but not actually delivered is.
   3. **Test adequacy** — do the new tests pin the behavior that changed?
      Would they fail if the fix were reverted? Conditional logic without
      branch tests will also trip the CI coverage ratchet.
