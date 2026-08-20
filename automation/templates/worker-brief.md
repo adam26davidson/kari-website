@@ -49,16 +49,16 @@ CI or reviews; the orchestrator handles everything after the PR exists.
 ## How to work
 
 - Follow CLAUDE.md (you have it in context) — all of it applies.
-- Show you are alive: commit and push work-in-progress to
+- Keep your work off this machine: commit and push work-in-progress to
   `agent/{{SLUG}}` (`git push -u origin agent/{{SLUG}}`) as soon as you
   have any change and at least every 45 minutes after that — before any
   long-running step (dependency install, e2e run, visual check) rather
-  than after it. The orchestrator judges whether a worker is still
-  running from the branch's latest pushed commit and from its own
-  process table; workers that keep everything local have been mistaken
-  for dead and released, and workers killed by a host suspend or a usage
-  limit have lost hours of unpushed work. PRs are squash-merged, so WIP
-  commit messages are fine.
+  than after it. You live inside the orchestrator's process; if it is
+  killed by a host suspend or a usage limit, so are you, and the next
+  tick releases your claim and removes your worktree (saving uncommitted
+  changes as a patch, but a pushed branch is the reliable record).
+  Workers that kept everything local have lost hours of work. PRs are
+  squash-merged, so WIP commit messages are fine.
 - Combined assignments (several issues on this one branch): claim every
   issue up front if the orchestrator has not already — `in progress`
   label plus a comment naming `agent/{{SLUG}}` on each. If one item turns

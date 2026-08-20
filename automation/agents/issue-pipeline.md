@@ -125,51 +125,46 @@ named `agent/<slug>` branch has no open PR. Group `in progress` issues by
 the branch their claim comment names (a combined branch is judged once,
 and released or kept as a unit). For each `agent/*` branch with no open
 PR, decide whether its worker is alive — by **worker liveness**, never
-by issue-comment age: a healthy worker on a long combined branch can go
-hours without commenting, while a dead one can look "active" because its
-claim comment is recent. Workers must push WIP commits to their branch at
-least every 45 minutes (the worker brief says so), and every worker
-lives inside the Claude process of the tick that dispatched it, so
-liveness is observable:
+by issue-comment age or branch activity: a healthy worker on a long
+combined branch can go hours without commenting, while a dead one can
+look "active" because its claim comment or last WIP push is recent.
 
-- **Provably dead — release now, no waiting period.** No open PR on the
-  branch AND either of:
-  - no Claude process that predates the claim is running:
-    `ps -eo pid,etimes,args | grep '[c]laude'` — if every listed process
-    is younger than the claim comment (or none is listed), the
-    dispatching tick is gone and so is its worker; or
-  - the dispatching tick's log (`$STATE/logs/issue-pipeline-*.log`,
-    where `STATE=~/.local/state/kari-website-automation`; the log whose
-    timestamp precedes the claim) ends in an error, a usage/spend-limit
-    message, or mid-sentence — a tick only writes its last line on the
-    way out, so its worker subagent died with it.
-  An orphaned dev server or MinIO from the worktree, reparented to PID 1
-  / the user manager, means its spawner is gone — it is evidence of
-  death, not of life.
-- **Alive — leave alone.** `git fetch origin && git log -1 --format=%cI
-  origin/agent/<slug>` shows a commit pushed within the last 2 hours, OR
-  a dispatcher tick process (`claude -p`, the form `dispatch.sh` runs)
-  older than the claim is still running — ticks are serialised by a
-  lock, so that is the tick that dispatched it.
-- **Cannot tell** (an older interactive `claude` session exists but no
-  tick log settles it; no `ps` access): fall back to silence — release
-  only when the newest of (latest pushed commit on the branch, claim
-  comment) is older than 2 hours.
+Liveness is a matter of construction, not heuristics. Every worker is a
+subagent living inside the Claude process of the tick that dispatched
+it, and `dispatch.sh` holds a per-agent `flock` for the life of a tick,
+so while this tick runs no earlier issue-pipeline tick — and therefore
+none of its workers — can still be alive. Hence:
 
-Compare timestamps in one zone (`date -u`; `git log %cI` and `gh` output
-carry explicit offsets; `ls`/`stat` print local time) — a local-vs-UTC
-misread of worktree mtimes has already mis-judged liveness once; prefer
-commit timestamps and process ages over mtimes.
+- **Alive:** only workers dispatched by THIS tick. Leave them alone.
+- **Dead — release now, no waiting period:** every `agent/*` branch with
+  no open PR that this tick did not dispatch. A WIP commit pushed
+  minutes ago proves only past liveness (the #322 sequence: push at
+  10:00, tick killed by the spend limit at 10:05, branch still pushed
+  "recently" at the 10:15 tick) and never overrides this; neither does a
+  `claude` process older than the claim (another agent's tick, or an
+  interactive session — the lock rules out its being the dispatcher).
+  The corroborating traces are usually there too — the dispatching
+  tick's log (`$STATE/logs/issue-pipeline-*.log`, where
+  `STATE=~/.local/state/kari-website-automation`) ending in an error, a
+  usage/spend-limit message, or mid-sentence; an orphaned dev server or
+  MinIO from the worktree reparented to PID 1 — but none is required to
+  release.
 
 To release: if the worktree `../kari-website-<slug>` exists and
-`git -C ../kari-website-<slug> status --porcelain` shows uncommitted
-changes, save them before anything is deleted —
-`git -C ../kari-website-<slug> diff > $STATE/wip/<slug>-<UTC stamp>.patch`
-(`mkdir -p` the directory; list untracked files in the run summary) —
-and hand the patch path to the next worker on that slug in its brief as
-unverified starting material. Then remove `in progress` from EVERY issue
-claimed on the branch, comment on each that the claim went stale and the
-issue is back in the queue, and delete the ownerless branch/worktree.
+`git -C ../kari-website-<slug> status --porcelain` shows ANY uncommitted
+change — modified or untracked — save all of it before anything is
+deleted: `git -C ../kari-website-<slug> add -A -N &&
+git -C ../kari-website-<slug> diff > $STATE/wip/<slug>-<UTC stamp>.patch`
+(`mkdir -p` the directory; `add -N` makes untracked new files — the
+usual TDD case, a fresh test or component — part of the diff instead of
+a casualty of the removal). Confirm the patch is non-empty and mentions
+every path from `status --porcelain` before removing the worktree; if
+it does not, leave the worktree in place and flag it in the run
+summary. Hand the patch path to the next worker on that slug in its
+brief as unverified starting material. Then remove `in progress` from
+EVERY issue claimed on the branch, comment on each that the claim went
+stale and the issue is back in the queue, and delete the ownerless
+branch/worktree.
 When checking for PRs here, look for ANY open PR on the branch
 (`gh pr list --state open --head agent/<slug>`), labelled or not — the
 Phase A ownership filter must not hide an unlabelled PR from this check.
