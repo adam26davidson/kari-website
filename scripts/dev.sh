@@ -16,6 +16,10 @@
 # stack only.
 #
 # Ctrl-C tears everything down (API, UI, and the MinIO container).
+#
+# UI dependencies are installed by scripts/setup-worktree.sh, which this
+# script runs first; tests for that delegation live in
+# scripts/setup-worktree-test.sh.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -42,10 +46,12 @@ for cmd in cargo node npm; do
   }
 done
 
-if [ ! -d ui/node_modules ]; then
-  echo "Installing UI dependencies..."
-  (cd ui && npm install)
-fi
+# Dependencies come from the canonical setup script instead of a second
+# copy of the install logic (issue #298): it installs from the lockfile with
+# `npm ci` — no silent lockfile drift — and adds the Playwright browser the
+# visual check needs. Its own skip check keeps a re-run down to about a
+# second, so a warm stack starts as fast as it used to.
+scripts/setup-worktree.sh
 
 pids=()
 cleanup() {
