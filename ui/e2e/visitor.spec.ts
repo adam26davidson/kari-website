@@ -88,6 +88,36 @@ test("haiga page renders at least one seeded haiga image", async ({
     .toBeGreaterThan(0);
 });
 
+// The seeded haiga is portrait at real-artwork dimensions (900x1200, see
+// seed.mjs). Sizing the artwork by a fixed height rather than by the card
+// width shrank it to ~150px inside a card twice that wide at mobile
+// (issue #309), so assert the artwork fills the card it sits in — while
+// still staying inside it.
+test("haiga artwork fills the width of its card (mobile)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/haiga");
+  const image = page.locator(".haiga-list-item-image").first();
+  await expect(image).toBeVisible();
+  await expect
+    .poll(() => image.evaluate((img: HTMLImageElement) => img.naturalWidth), {
+      timeout: 30_000,
+    })
+    .toBeGreaterThan(0);
+  const imageBox = await image.boundingBox();
+  const contentBox = await page
+    .locator(".data-list-item-content")
+    .first()
+    .boundingBox();
+  if (!imageBox || !contentBox)
+    throw new Error("haiga card elements not rendered");
+  // Nearly the full content width, not a fraction of it.
+  expect(imageBox.width).toBeGreaterThanOrEqual(contentBox.width * 0.9);
+  // ...and no wider than the card content box.
+  expect(imageBox.width).toBeLessThanOrEqual(contentBox.width + 1);
+});
+
 test("other works (blog) page renders at least one published post", async ({
   page,
 }) => {

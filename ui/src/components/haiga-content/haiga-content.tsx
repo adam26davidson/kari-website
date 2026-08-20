@@ -1,4 +1,3 @@
-import { useIsMobile } from "../../hooks/use-is-mobile";
 import { Haiga } from "../../models";
 import { s3ImageUrl } from "../../utils/image-management-helpers";
 import "./haiga-content.css";
@@ -10,7 +9,6 @@ export function HaigaContent({
   haiga: Haiga;
   compact?: boolean;
 }) {
-  const isMobile = useIsMobile();
   // The haiku lines are part of the artwork itself, so they are never
   // rendered as text — the lines field only feeds the image alt when an
   // older haiga happens to have it filled in.
@@ -30,20 +28,8 @@ export function HaigaContent({
     );
   }
   return (
-    <div
-      className={
-        isMobile
-          ? "haiga-list-item-content-mobile"
-          : "haiga-list-item-content"
-      }
-    >
-      <div
-        className={
-          isMobile
-            ? "haiga-list-item-image-box-mobile"
-            : "haiga-list-item-image-box"
-        }
-      >
+    <div className="haiga-list-item-content">
+      <div className="haiga-list-item-image-box">
         <img
           src={s3ImageUrl(haiga.image)}
           alt={altText}

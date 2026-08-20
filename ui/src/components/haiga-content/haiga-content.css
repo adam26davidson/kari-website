@@ -6,27 +6,19 @@
   width: 100%;
 }
 
-.haiga-list-item-content-mobile {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-}
-
-.haiga-list-item-image-box-mobile {
-  height: 200px;
-  margin-bottom: 20px;
-}
-
+/* The artwork is sized by the card's width at every viewport, capped so it
+   doesn't grow unreasonably large on wide screens. It used to be sized by a
+   fixed 200px height on mobile, which rendered a portrait haiga at roughly
+   150px inside a card twice that wide (#309). */
 .haiga-list-item-image-box {
+  width: 100%;
   max-width: 500px;
 }
 
 .haiga-list-item-image {
-  height: 100%;
-  max-width: 100%;
-  object-fit: cover;
+  display: block;
+  width: 100%;
+  height: auto;
   border-radius: 3px;
 }
 
