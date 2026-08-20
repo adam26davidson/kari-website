@@ -17,11 +17,11 @@ Design and decisions:
   never overlap themselves.
 - `agents/*.md` — one file per agent: YAML frontmatter (config) + body
   (the agent's prompt). Current fleet:
-  - `issue-pipeline` — picks one ready GitHub issue at a time,
-    implements it via a worker subagent, shepherds the PR through CI,
-    the visual review, and an automated code-review gate, then
-    squash-merges it into `main` (which auto-deploys to test). Runs
-    hourly with at most one worker in flight — see Throughput below.
+  - `issue-pipeline` — picks ready GitHub issues, implements them via
+    worker subagents, shepherds the PRs through CI, the visual review,
+    and an automated code-review gate, then squash-merges them serially
+    into `main` (which auto-deploys to test). How fast it does that is
+    tuned by the two values in its agent file — see Throughput below.
 - `templates/*.md` — subagent prompt templates the issue-pipeline fills
   in (`{{PLACEHOLDER}}` slots): `worker-brief.md`, `fix-brief.md`,
   `review-brief.md`.
@@ -250,25 +250,33 @@ covers logout and pre-login boot, and does nothing for a sleeping host.
 
 ## Throughput (and the usage it costs)
 
-Two knobs, both in `agents/issue-pipeline.md`, bound how much model
-usage the fleet can burn:
+Two values bound how much model usage an agent can burn, and each is
+written down in exactly one place — retune by editing them there and
+nothing else. For `issue-pipeline`:
 
-- `every` in the frontmatter — how often a tick may start. Every tick
-  costs orchestration tokens even when it finds nothing to do.
-- the in-flight worker cap in the "Safety rails" section — how many
-  issue-workers may be open at once. Workers (and the fix/review agents
-  that tend their PRs) are where most of the usage goes.
+- **Tick cadence** — `every:` in the frontmatter of
+  `agents/issue-pipeline.md`. Every tick costs orchestration tokens even
+  when it finds nothing to do.
+- **In-flight worker cap** — `MAX_IN_FLIGHT` in that file's Budget
+  section, referred to by name everywhere else in the playbook. Workers,
+  and the fix/review agents tending their PRs, are where most of the
+  usage goes.
 
-Current setting: hourly ticks, one worker in flight. That is the
-deliberate low-usage configuration — halving the tick rate and cutting
-the cap from 3 to 1 (2026-08-20) drops the ceiling on worker starts per
-hour by 6x, and the steady-state usage by roughly 3x: orchestration
-halves with the tick rate, while worker and fix/review usage scales with
-the cap rather than the cadence, since a PR normally takes several ticks
-to go green, get reviewed, and merge.
+Read the current values there; this file deliberately doesn't repeat
+them. What they do:
 
-Turning either knob back up multiplies usage in the same way, so raise
-them only deliberately — a backlog is not a reason on its own.
+- The ceiling on worker starts per hour is `ticks/hour × MAX_IN_FLIGHT`,
+  so the two multiply — halving the cadence *and* halving the cap is a
+  4x cut to the ceiling.
+- Steady-state usage tracks the cap more than the cadence. A PR normally
+  needs several ticks to go green, get reviewed, and merge, so the fleet
+  rarely reaches that ceiling; what it actually spends is roughly
+  proportional to how many PRs are open at once. Cadence mostly sets the
+  orchestration floor and how promptly a finished PR gets noticed.
+
+So: cut the cap to spend less, cut the cadence to spend less *often*.
+Raising either multiplies usage the same way — a backlog is not on its
+own a reason to.
 
 ## Usage limits
 

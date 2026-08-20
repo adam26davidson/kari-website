@@ -35,7 +35,7 @@ cron (one entry, every 15 min)
             └─ issue-pipeline agent (orchestrator)
                  ├─ tends existing agent PRs (fix agents, review agent)
                  ├─ merges ready PRs serially
-                 └─ spawns ≤1 issue worker (opus or fable)
+                 └─ spawns issue workers up to the in-flight cap
 ```
 
 ### Agent definition format
@@ -94,8 +94,8 @@ comments), so any tick can crash and the next recovers. Each run:
   re-measuring on the merged tree per CLAUDE.md — push, and let their CI
   re-run; they merge on a later tick.
 
-**Phase B — pick new work** (only if no agent PR/claimed issue is in
-flight):
+**Phase B — pick new work** (only if agent PRs/claimed issues in flight
+are below the cap):
 
 - List open issues; skip ones labeled `in progress`, `has-dependencies`,
   `needs-clarification`, `idea`, or `blocked`.
@@ -107,7 +107,7 @@ flight):
   branch/PR (per CLAUDE.md), not worked in parallel.
 - For each selection: add `in progress`, comment the branch name
   (`agent/<slug>`), classify complexity — straightforward/scoped → Opus,
-  complex/cross-cutting/tricky → Fable — and spawn the worker.
+  complex/cross-cutting/tricky → Fable — and spawn workers in parallel.
 
 **Phase C — housekeeping**: file GitHub issues for everything workers
 reported (next steps, tech debt, tooling friction) and anything the
@@ -140,8 +140,9 @@ Prompt templates the orchestrator fills in and passes to subagents:
 ### Safety rails (encoded in the playbook)
 
 - Only `agent/*` branches; never force-push; never `git checkout` in the
-  main clone; never touch prod or approve deployments; ≤1 worker in
-  flight (fix agents don't count); merges always squash and serial.
+  main clone; never touch prod or approve deployments; no more than
+  `MAX_IN_FLIGHT` workers in flight (fix agents don't count); merges
+  always squash and serial.
 - Headless runs bypass permission prompts by necessity
   (`--dangerously-skip-permissions`); the playbook is the constraint and
   is written defensively. Accepted risk, noted here deliberately.
@@ -175,11 +176,12 @@ rate limit (60/hr/IP) dwarfs personal use.
 - Runtime: local cron + headless sessions (chosen over a long-running
   /loop session and manual kick-off) — stateless, crash-proof, survives
   reboots.
-- Throughput: hourly ticks, ≤3 workers in flight. (Raised to 30-minute
-  ticks on 2026-08-19 after the first live ticks showed the backlog
-  growing faster than the pipeline drained it. Cut back on 2026-08-20 to
-  hourly ticks with ≤1 worker in flight — the 30m/3-worker throughput
-  cost more usage than the backlog was worth.)
+- Throughput: two tunables rather than a fixed decision — the tick
+  cadence (`every:`) and the in-flight worker cap (`MAX_IN_FLIGHT`),
+  both living in `automation/agents/issue-pipeline.md` and explained in
+  `automation/README.md`. They have been retuned in both directions
+  since (backlog pressure up, usage cost down); read the agent file for
+  what they are now.
 - Test-vs-prod visibility: an in-app, staging-only page (chosen over a
   repo script, hosted dashboard, or pinned issue).
 - Worker model split: Opus for straightforward tasks, Fable for complex
