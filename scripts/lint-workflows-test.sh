@@ -32,10 +32,24 @@ cleanup() {
 }
 trap cleanup EXIT
 
-command -v jq > /dev/null || {
-  echo "this harness needs jq on PATH" >&2
-  exit 1
-}
+# The lint script chooses each tool with `command -v`, so anything the
+# ambient PATH happens to carry would quietly replace a stub — and the tools
+# whose docker fallback the cases below assert on (yq, shellcheck) are
+# exactly the ones a GitHub runner preinstalls. So the script runs with a
+# PATH holding the case's stub dir and this: symlinks to the handful of
+# utilities the script and the stubs call, and nothing else. `jq` is here
+# rather than in every stub dir because only one case wants a broken one,
+# and its stub dir comes first. Built first of all: the YAML→JSON probe
+# below runs under this same PATH.
+CORE_BIN="$(mktemp -d)"
+WORKDIRS+=("$CORE_BIN")
+for cmd in bash dirname find grep jq sed sort; do
+  cmd_path="$(command -v "$cmd")" || {
+    echo "this harness needs $cmd on PATH" >&2
+    exit 1
+  }
+  ln -s "$cmd_path" "$CORE_BIN/$cmd"
+done
 
 # --- YAML→JSON, for the stubs ----------------------------------------------
 # The stubs standing in for yq do a real conversion, so the assertions stay
@@ -44,9 +58,11 @@ command -v jq > /dev/null || {
 # a real mikefarah yq (what GitHub runners preinstall — where PyYAML is not
 # guaranteed, which is what kept this harness out of CI). Each is probed by
 # actually converting a sample rather than by its version string, because
-# `yq` is also the name of an unrelated jq wrapper taking different flags.
-# The backend is baked in by absolute path: run_lint hands the script a PATH
-# with nothing on it but stubs.
+# `yq` is also the name of an unrelated jq wrapper taking different flags,
+# and under $CORE_BIN — the same stripped PATH run_lint hands the script, so
+# that a backend which only works under the ambient PATH is rejected here
+# rather than dying inside every stub. The backend is baked in by absolute
+# path, with shims resolved to the tool behind them.
 HELPER_DIR="$(mktemp -d)"
 WORKDIRS+=("$HELPER_DIR")
 YAML2JSON="$HELPER_DIR/yaml2json" # <file>, or YAML on stdin
@@ -57,6 +73,13 @@ write_backend() { # <python3|yq> — the converter, or 1 if the tool is absent
   tool="$(command -v "$1")" || return 1
   case "$1" in
     python3)
+      # pyenv/asdf/nix install a wrapper script under this name that
+      # consults other PATH entries before exec'ing the interpreter; baking
+      # the wrapper's path in would break it under the stripped PATH.
+      # sys.executable is the interpreter the wrapper leads to, so the
+      # PyYAML the probe below finds is the one that will be imported.
+      tool="$("$tool" -c 'import sys; print(sys.executable)' 2> /dev/null)"
+      [ -n "$tool" ] || return 1
       cat > "$YAML2JSON" <<EOF
 #!/usr/bin/env bash
 "$tool" -c 'import json,sys,yaml
@@ -74,12 +97,17 @@ EOF
 }
 
 backend_works() { # both call shapes have to work: the yq stub is handed a
-  # file, the docker stub is piped stdin
+  # file, the docker stub is piped stdin. Run under $CORE_BIN, exactly as
+  # the stubs will: a backend that resolves only under the ambient PATH
+  # fails here and falls through to the next one, or to the error below,
+  # instead of turning every case into a bogus "could not be parsed as YAML".
   local sample="$HELPER_DIR/probe.yml" want='{"jobs":{"a":{"t":3}}}' got
   printf 'jobs:\n  a:\n    t: 3\n' > "$sample"
-  got="$("$YAML2JSON" "$sample" 2> /dev/null | jq -cS . 2> /dev/null)"
+  got="$(PATH="$CORE_BIN" "$YAML2JSON" "$sample" 2> /dev/null \
+    | jq -cS . 2> /dev/null)"
   [ "$got" = "$want" ] || return 1
-  got="$("$YAML2JSON" < "$sample" 2> /dev/null | jq -cS . 2> /dev/null)"
+  got="$(PATH="$CORE_BIN" "$YAML2JSON" < "$sample" 2> /dev/null \
+    | jq -cS . 2> /dev/null)"
   [ "$got" = "$want" ]
 }
 
@@ -159,24 +187,6 @@ NO_ACTIONLINT_BIN="$(mktemp -d)"
 WORKDIRS+=("$NO_ACTIONLINT_BIN")
 cp "$STUB_BIN/docker" "$STUB_BIN/yq" "$NO_ACTIONLINT_BIN/"
 chmod +x "$NO_ACTIONLINT_BIN/docker" "$NO_ACTIONLINT_BIN/yq"
-
-# The lint script chooses each tool with `command -v`, so anything the
-# ambient PATH happens to carry would quietly replace a stub — and the tools
-# whose docker fallback the cases below assert on (yq, shellcheck) are
-# exactly the ones a GitHub runner preinstalls. So the script runs with a
-# PATH holding the case's stub dir and this: symlinks to the handful of
-# utilities the script and the stubs call, and nothing else. `jq` is here
-# rather than in every stub dir because only one case wants a broken one,
-# and its stub dir comes first.
-CORE_BIN="$(mktemp -d)"
-WORKDIRS+=("$CORE_BIN")
-for cmd in bash dirname find grep jq sed sort; do
-  cmd_path="$(command -v "$cmd")" || {
-    echo "this harness needs $cmd on PATH" >&2
-    exit 1
-  }
-  ln -s "$cmd_path" "$CORE_BIN/$cmd"
-done
 
 new_repo() {
   local repo
