@@ -360,6 +360,36 @@ describe("AdminPhotographyPage list reordering", () => {
   });
 });
 
+describe("AdminPhotographyPage search", () => {
+  beforeEach(() => {
+    vi.mocked(PhotographyService.getListFromApi).mockResolvedValue([
+      savedPost,
+      {
+        id: "p2",
+        title: "B Post",
+        subtitle: "Sub",
+        blurb: "Blurb",
+        images: [{ image: "x.png", blurb: "caption" }],
+      },
+    ]);
+  });
+
+  it("filters by title, subtitle, blurb and image blurbs", async () => {
+    await renderPage();
+    const search = screen.getByRole("searchbox", {
+      name: "Search photography posts",
+    });
+    for (const query of ["b post", "sub", "blurb", "caption"]) {
+      fireEvent.change(search, { target: { value: query } });
+      expect(screen.getByText("B Post")).toBeInTheDocument();
+      expect(screen.queryByText("A Post")).toBeNull();
+    }
+    fireEvent.change(search, { target: { value: "a photo" } });
+    expect(screen.getByText("A Post")).toBeInTheDocument();
+    expect(screen.queryByText("B Post")).toBeNull();
+  });
+});
+
 describe("AdminPhotographyPage load failure", () => {
   it("shows a retryable error instead of an empty editable list", async () => {
     vi.mocked(PhotographyService.getListFromApi).mockRejectedValueOnce(

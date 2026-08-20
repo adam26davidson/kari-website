@@ -3,7 +3,10 @@ import "../admin.css";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate, useParams } from "react-router-dom";
 import { PhotographyPost } from "../../../models";
-import { moveItemByOne } from "../../../utils/data-list-helpers";
+import {
+  moveItemByIdByOne,
+  removeItemById,
+} from "../../../utils/data-list-helpers";
 import { ImageService } from "../../../services/images";
 import { PhotographyService } from "../../../services/photography";
 import { PhotographyPostEditor } from "./components/photography-post-editor/photography-post-editor";
@@ -92,19 +95,11 @@ export function AdminPhotographyPage() {
         JSON.stringify(openPost) !== JSON.stringify(savedPost)),
   );
 
-  const deletePost = async (idx: number) => {
-    const postToDelete = postList[idx];
-    if (!postToDelete) {
-      console.error("Post not found");
-      return;
-    }
-
+  const deletePost = async (id: string) => {
     // The post's image objects are deliberately NOT deleted: they may
     // still be referenced by other content (e.g. as the site background),
     // and if not, the image-cleanup sweep collects them later.
-    const newList = postList.slice();
-    newList.splice(idx, 1);
-    await saveList(newList, "Photography post deleted");
+    await saveList(removeItemById(postList, id), "Photography post deleted");
   };
 
   // List display functions ---------------------------------------------------
@@ -133,19 +128,19 @@ export function AdminPhotographyPage() {
     }
   };
 
-  const onDelete = (idx: number) => {
+  const onDelete = (id: string) => {
     confirm("Are you sure you want to delete this photography post?", () =>
-      deletePost(idx),
+      deletePost(id),
     );
   };
 
-  const onMove = async (idx: number, direction: "up" | "down") => {
-    const newPostList = moveItemByOne(postList, idx, direction);
+  const onMove = async (id: string, direction: "up" | "down") => {
+    const newPostList = moveItemByIdByOne(postList, id, direction);
     await saveList(newPostList, "Order updated");
   };
 
-  const onEdit = (idx: number) => {
-    navigate(`${LIST_PATH}/${postList[idx].id}`);
+  const onEdit = (id: string) => {
+    navigate(`${LIST_PATH}/${id}`);
   };
 
   // Editor functions ---------------------------------------------------------
@@ -230,12 +225,21 @@ export function AdminPhotographyPage() {
   ) : (
     <AdminItemList
       items={postList}
+      noun="photography posts"
+      getSearchText={(post) =>
+        [
+          post.title,
+          post.subtitle,
+          post.blurb,
+          ...post.images.map((image) => image.blurb),
+        ].join(" ")
+      }
       onNewItem={onNewItem}
       onEdit={onEdit}
       onDelete={onDelete}
       onMove={onMove}
-      renderItem={(post, idx) => (
-        <PhotographyPostSummary post={post} onClick={() => onEdit(idx)} />
+      renderItem={(post) => (
+        <PhotographyPostSummary post={post} onClick={() => onEdit(post.id)} />
       )}
     />
   );

@@ -2,7 +2,10 @@ import { PhotographyPost } from "../../../../../models";
 import { AdminItemList } from "../../../components/admin-item-list/admin-item-list";
 import { DataEditor } from "../../../components/data-editor/data-editor";
 import { PhotoPicker } from "../../../components/photo-picker/photo-picker";
-import { moveItemByOne } from "../../../../../utils/data-list-helpers";
+import {
+  moveItemByIdByOne,
+  removeItemById,
+} from "../../../../../utils/data-list-helpers";
 import { EditorImage, newEditorImage } from "./editor-image";
 import "./photography-post-editor.css";
 
@@ -33,13 +36,12 @@ export function PhotographyPostEditor({
     setImages([...images, newEditorImage()]);
   };
 
-  const onDelete = (idx: number) => {
-    const id = images[idx].id;
-    setImages(images.filter((entry) => entry.id !== id));
+  const onDelete = (id: string) => {
+    setImages(removeItemById(images, id));
   };
 
-  const onMove = (idx: number, direction: "up" | "down") => {
-    setImages(moveItemByOne(images, idx, direction));
+  const onMove = (id: string, direction: "up" | "down") => {
+    setImages(moveItemByIdByOne(images, id, direction));
   };
 
   const handleImageBlurbChange =
