@@ -140,7 +140,9 @@ describe("AdminOtherWorksPage image removal on save", () => {
     expect(BlogService.updateContent).toHaveBeenCalledOnce();
     expect(
       vi.mocked(BlogService.updateContent).mock.invocationCallOrder[0],
-    ).toBeLessThan(vi.mocked(BlogService.updateList).mock.invocationCallOrder[0]);
+    ).toBeLessThan(
+      vi.mocked(BlogService.updateList).mock.invocationCallOrder[0],
+    );
   });
 
   it("keeps the image when saving the content fails", async () => {
@@ -172,7 +174,9 @@ describe("AdminOtherWorksPage image removal on save", () => {
     // background). Content save strictly before the list save.
     expect(
       vi.mocked(BlogService.updateContent).mock.invocationCallOrder[0],
-    ).toBeLessThan(vi.mocked(BlogService.updateList).mock.invocationCallOrder[0]);
+    ).toBeLessThan(
+      vi.mocked(BlogService.updateList).mock.invocationCallOrder[0],
+    );
   });
 });
 
@@ -339,12 +343,12 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       );
       // Images public -> content public -> list flips to published; the
       // list is the commit point and must come last.
-      const lastFlip =
-        vi.mocked(ImageService.setPublished).mock.invocationCallOrder[1];
-      const contentOrder =
-        vi.mocked(BlogService.updateContent).mock.invocationCallOrder[0];
-      const listOrder =
-        vi.mocked(BlogService.updateList).mock.invocationCallOrder[0];
+      const lastFlip = vi.mocked(ImageService.setPublished).mock
+        .invocationCallOrder[1];
+      const contentOrder = vi.mocked(BlogService.updateContent).mock
+        .invocationCallOrder[0];
+      const listOrder = vi.mocked(BlogService.updateList).mock
+        .invocationCallOrder[0];
       expect(lastFlip).toBeLessThan(contentOrder);
       expect(contentOrder).toBeLessThan(listOrder);
     });
@@ -537,12 +541,12 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       ]);
       // List (hides the post) -> content -> image flips: nothing public
       // may ever reference a private object.
-      const listOrder =
-        vi.mocked(BlogService.updateList).mock.invocationCallOrder[0];
-      const contentOrder =
-        vi.mocked(BlogService.updateContent).mock.invocationCallOrder[0];
-      const firstFlip =
-        vi.mocked(ImageService.setPublished).mock.invocationCallOrder[0];
+      const listOrder = vi.mocked(BlogService.updateList).mock
+        .invocationCallOrder[0];
+      const contentOrder = vi.mocked(BlogService.updateContent).mock
+        .invocationCallOrder[0];
+      const firstFlip = vi.mocked(ImageService.setPublished).mock
+        .invocationCallOrder[0];
       expect(listOrder).toBeLessThan(contentOrder);
       expect(contentOrder).toBeLessThan(firstFlip);
     });
@@ -870,6 +874,54 @@ describe("AdminOtherWorksPage creation", () => {
   });
 });
 
+describe("AdminOtherWorksPage search", () => {
+  beforeEach(() => {
+    vi.mocked(BlogService.getListFromApi).mockResolvedValue([
+      savedPost,
+      {
+        id: "b2",
+        title: "B Post",
+        date: "2024-06-15T00:00:00.000Z",
+        isPublished: false,
+      },
+    ]);
+  });
+
+  it("filters by title and by the date as stored or displayed", async () => {
+    await renderPage();
+    const search = screen.getByRole("searchbox", {
+      name: "Search other works",
+    });
+    fireEvent.change(search, { target: { value: "b post" } });
+    expect(screen.getByText("B Post")).toBeInTheDocument();
+    expect(screen.queryByText("A Post")).toBeNull();
+    fireEvent.change(search, { target: { value: "2024-05" } });
+    expect(screen.getByText("A Post")).toBeInTheDocument();
+    expect(screen.queryByText("B Post")).toBeNull();
+    fireEvent.change(search, {
+      target: { value: new Date(savedPost.date).toLocaleDateString() },
+    });
+    expect(screen.getByText("A Post")).toBeInTheDocument();
+    expect(screen.queryByText("B Post")).toBeNull();
+  });
+
+  it("opens the post whose title is clicked in a filtered list", async () => {
+    const { router } = await renderPage();
+    fireEvent.change(
+      screen.getByRole("searchbox", { name: "Search other works" }),
+      { target: { value: "b post" } },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "B Post" }));
+    await screen.findByPlaceholderText("post content");
+
+    // The clicked title addresses its post by id, so filtering the list
+    // down to a single row still opens that row's post and not the first
+    // post of the unfiltered list.
+    expect(router.state.location.pathname).toBe("/admin/other-works/b2");
+  });
+});
+
 describe("AdminOtherWorksPage list reordering", () => {
   let secondPost: BlogPost;
 
@@ -985,9 +1037,9 @@ describe("AdminOtherWorksPage routing", () => {
       "/admin/other-works/b1",
     );
 
-    expect(
-      await screen.findByPlaceholderText("post content"),
-    ).toHaveValue(savedContent);
+    expect(await screen.findByPlaceholderText("post content")).toHaveValue(
+      savedContent,
+    );
   });
 
   it("falls back to the list for an unknown editor URL", async () => {

@@ -119,7 +119,9 @@ describe("AdminHaikuPage new haiku", () => {
     );
     expect(HaikuService.updateList).not.toHaveBeenCalled();
     // Still on the list view, not in the editor.
-    expect(screen.getByRole("button", { name: "Add item" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add item" }),
+    ).toBeInTheDocument();
   });
 
   it("does not open the editor when the save fails", async () => {
@@ -140,7 +142,9 @@ describe("AdminHaikuPage new haiku", () => {
     expect(
       screen.queryByRole("button", { name: "Save" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add item" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add item" }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -187,6 +191,40 @@ describe("AdminHaikuPage reordering", () => {
       [second, first],
       expect.any(Function),
     );
+  });
+});
+
+describe("AdminHaikuPage search", () => {
+  it("matches across line breaks and the publisher, acting by id", async () => {
+    const { adminUi } = renderPage();
+    const search = await screen.findByRole("searchbox", {
+      name: "Search haiku",
+    });
+
+    // A phrase spanning the first two lines still matches.
+    fireEvent.change(search, { target: { value: "pond a frog" } });
+    expect(screen.getByText("old pond")).toBeInTheDocument();
+    expect(screen.queryByText("summer grass")).toBeNull();
+    // Reordering is meaningless in a partial view.
+    expect(screen.queryByRole("button", { name: "Move up" })).toBeNull();
+
+    fireEvent.change(search, { target: { value: "PUB-TWO" } });
+    expect(screen.queryByText("old pond")).toBeNull();
+    expect(screen.getByText("summer grass")).toBeInTheDocument();
+
+    // The only visible delete control must remove the matched haiku, not
+    // whatever sits at that position in the full list.
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await answerYes(adminUi);
+    await waitFor(() =>
+      expect(HaikuService.updateList).toHaveBeenCalledWith(
+        [first],
+        expect.any(Function),
+      ),
+    );
+
+    fireEvent.change(search, { target: { value: "nothing" } });
+    expect(screen.getByText('No haiku match "nothing"')).toBeInTheDocument();
   });
 });
 

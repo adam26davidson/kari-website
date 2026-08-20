@@ -14,3 +14,26 @@ export function moveItemByOne<T>(
   newArray.splice(idx + offset, 0, item);
   return newArray;
 }
+
+/**
+ * moveItemByOne addressed by the item's id rather than its position, so
+ * callers rendering a filtered or reordered view never act on the wrong
+ * element. Unknown ids are a no-op.
+ */
+export function moveItemByIdByOne<T extends { id: string }>(
+  array: Array<T>,
+  id: string,
+  direction: "up" | "down",
+): Array<T> {
+  const idx = array.findIndex((item) => item.id === id);
+  if (idx === -1) return array.slice();
+  return moveItemByOne(array, idx, direction);
+}
+
+/** A copy of array without the item carrying id (no-op for unknown ids). */
+export function removeItemById<T extends { id: string }>(
+  array: Array<T>,
+  id: string,
+): Array<T> {
+  return array.filter((item) => item.id !== id);
+}

@@ -4,7 +4,10 @@ import "../admin.css";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate, useParams } from "react-router-dom";
 import { BlogPost } from "../../../models";
-import { moveItemByOne } from "../../../utils/data-list-helpers";
+import {
+  moveItemByIdByOne,
+  removeItemById,
+} from "../../../utils/data-list-helpers";
 import { BlogService } from "../../../services/blog";
 import { BlogPostSummary } from "../../../components/blog-post-summary/blog-post-summary";
 import { BlogPostEditor } from "./components/blog-post-editor/blog-post-editor";
@@ -117,16 +120,14 @@ export function AdminOtherWorksPage() {
         JSON.stringify(openPost) !== JSON.stringify(savedPost)),
   );
 
-  const deletePost = async (idx: number) => {
-    const postToDelete = postList[idx];
-    if (!postToDelete) {
+  const deletePost = async (id: string) => {
+    if (!postList.some((post) => post.id === id)) {
       console.error("Post not found");
       return;
     }
     // Save the shortened list first — if this fails the item stays fully
     // intact and referenced.
-    const newList = postList.slice();
-    newList.splice(idx, 1);
+    const newList = removeItemById(postList, id);
     if (!(await savePostList(newList, "Other works item deleted"))) return;
 
     // The saved list no longer references the item, so its content
@@ -135,10 +136,9 @@ export function AdminOtherWorksPage() {
     // referenced by other content (e.g. as the site background), and if
     // not, the image-cleanup sweep collects them later.
     showLoading("Deleting other works item content...");
-    await BlogService.deleteContent(
-      postToDelete.id,
-      getAccessTokenSilently,
-    ).catch(console.error);
+    await BlogService.deleteContent(id, getAccessTokenSilently).catch(
+      console.error,
+    );
     hideLoading();
   };
 
@@ -175,19 +175,19 @@ export function AdminOtherWorksPage() {
     navigate(`${LIST_PATH}/${newPost.id}`);
   };
 
-  const onDelete = (idx: number) => {
+  const onDelete = (id: string) => {
     confirm("Are you sure you want to delete this other works item?", () =>
-      deletePost(idx),
+      deletePost(id),
     );
   };
 
-  const onMove = async (idx: number, direction: "up" | "down") => {
-    const newPostList = moveItemByOne(postList, idx, direction);
+  const onMove = async (id: string, direction: "up" | "down") => {
+    const newPostList = moveItemByIdByOne(postList, id, direction);
     await savePostList(newPostList, "Order updated");
   };
 
-  const onEdit = (idx: number) => {
-    navigate(`${LIST_PATH}/${postList[idx].id}`);
+  const onEdit = (id: string) => {
+    navigate(`${LIST_PATH}/${id}`);
   };
 
   // Editor functions ---------------------------------------------------------
@@ -274,16 +274,21 @@ export function AdminOtherWorksPage() {
   ) : (
     <AdminItemList
       items={postList}
+      noun="other works"
+      getSearchText={(post) =>
+        // Both the stored ISO date and the localized form the list shows.
+        `${post.title} ${post.date} ${new Date(post.date).toLocaleDateString()}`
+      }
       onNewItem={onNewItem}
       onEdit={onEdit}
       onDelete={onDelete}
       onMove={onMove}
-      renderItem={(post, idx) => (
+      renderItem={(post) => (
         <BlogPostSummary
           post={post}
           showPublished={true}
           isAdmin={true}
-          onClick={() => onEdit(idx)}
+          onClick={() => onEdit(post.id)}
         />
       )}
     />
