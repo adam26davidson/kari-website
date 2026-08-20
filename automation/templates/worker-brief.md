@@ -58,13 +58,16 @@ CI or reviews; the orchestrator handles everything after the PR exists.
   have any change and at least every 45 minutes after that — before any
   long-running step (dependency install, e2e run, visual check) rather
   than after it. You live inside the orchestrator's process; if it is
-  killed by a host suspend or a usage limit, so are you, and the next
-  tick releases your claim and removes your worktree. It saves
-  uncommitted changes as a patch and keeps any `agent/{{SLUG}}` branch
-  that has commits ahead of `main`, handing both to the next worker on
-  this slug — but a pushed branch is the reliable record, and workers
-  that kept everything local have lost hours of work. PRs are
-  squash-merged, so WIP commit messages are fine.
+  killed by a host suspend or a usage limit, so are you. Once every
+  sign of life on your claim (an open PR, a write in your worktree, a
+  commit, activity on the issues, a running process) has been silent
+  for two hours, a later tick releases your claim and removes your
+  worktree. It saves uncommitted changes as a patch (or a WIP commit)
+  and keeps any `agent/{{SLUG}}` branch that has commits ahead of
+  `main`, handing both to the next worker on this slug — but a pushed
+  branch is the reliable record, and workers that kept everything local
+  have lost hours of work. PRs are squash-merged, so WIP commit
+  messages are fine.
 - Combined assignments (several issues on this one branch): claim every
   issue up front if the orchestrator has not already — `in progress`
   label plus a comment naming `agent/{{SLUG}}` on each. If one item turns

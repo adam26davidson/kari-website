@@ -266,8 +266,10 @@ for up to two hours. A slug released in a tick is never re-dispatched in
 that same tick. On release, uncommitted work in the worktree is
 saved to `wip/<slug>-<timestamp>.patch` in the state directory, and an
 `agent/<slug>` branch with commits ahead of `main` is pushed and kept
-rather than deleted; both are handed to the next worker on that slug as
-starting material. The `fallback` model
+rather than deleted; a `Claim released:` comment on each issue names
+both, and the next tick that picks the issue reads that comment, reuses
+the kept branch's slug and hands the material to the worker. The
+`fallback` model
 keeps orchestration running through a Fable outage, and the playbook
 postpones Fable-tier subagent work (never silently downgrades it) until
 the limit window resets.

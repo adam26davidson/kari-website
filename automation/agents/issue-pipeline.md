@@ -230,13 +230,28 @@ rescue:
   exists and `git -C ../kari-website-<slug> status --porcelain` shows ANY
   uncommitted change — modified or untracked — save all of it:
   `git -C ../kari-website-<slug> add -A -N &&
-  git -C ../kari-website-<slug> diff > $STATE/wip/<slug>-<UTC stamp>.patch`
+  git -C ../kari-website-<slug> diff --binary >
+  $STATE/wip/<slug>-<UTC stamp>.patch`
   (`mkdir -p` the directory; `add -N` makes untracked new files — the
   usual TDD case, a fresh test or component — part of the diff instead
-  of a casualty of the removal). Confirm the patch is non-empty and
-  mentions every path from `status --porcelain` before removing the
-  worktree; if it does not, leave the worktree in place and flag it in
-  the run summary.
+  of a casualty of the removal; `--binary` makes a captured screenshot
+  PNG or other binary file part of the patch instead of a content-free
+  "Binary files differ" line). Confirm the patch is non-empty and
+  mentions every path from `status --porcelain`. If it does not (or the
+  diff command fails), do NOT stop the release — a stopped release keeps
+  the dead claim and its slot alive tick after tick. Rescue by commit
+  instead, which is faithful for any file type:
+  `git -C ../kari-website-<slug> add -A &&
+  git -C ../kari-website-<slug> commit -m "WIP: rescued by issue-pipeline
+  from a stale claim"`. The worker is dead, so nothing is racing you in
+  that worktree. That commit puts the branch ahead of `main`, so the
+  **Commits** rescue below pushes and keeps it; discard the incomplete
+  patch and name the branch, not the patch, in the release comment.
+  Only if the commit itself fails (a corrupt worktree) leave the
+  worktree in place, flag it with the error in the run summary, and
+  still complete the release below — the next worker on that slug is
+  told about the leftover worktree by the release comment and can
+  inspect it before recreating its own.
 - **Commits.** The worker brief tells workers to push WIP commits as the
   reliable record, so a dead worker's branch usually carries hours of
   work that is NOT in any patch (`status --porcelain` is clean after a
@@ -254,16 +269,21 @@ rescue:
 
 Then remove `in progress` from EVERY issue claimed on the branch, and
 comment on each that the claim went stale and the issue is back in the
-queue — naming the kept branch and/or the patch path when either
-exists, so a human picking the issue up sees the starting material too.
-Remove the worktree (`git worktree remove --force ../kari-website-<slug>`),
-and delete the branch only in the zero-commits case above.
-Hand the kept branch and/or the patch path to the next worker on that
-slug in its brief as unverified starting material (Phase B step 5).
+queue, in this exact shape so a later tick can find it:
+`Claim released: agent/<slug> is stale. Starting material: branch
+agent/<slug> (kept, N commits ahead of main) | patch
+$STATE/wip/<slug>-<stamp>.patch | worktree ../kari-website-<slug> left
+in place (rescue failed: <error>) | none.` This comment is the ONLY
+record of the hand-over — the orchestrator is stateless, so the next
+tick learns about kept branches and patches by reading it (Phase B
+step 5), not from memory. Remove the worktree (`git worktree remove
+--force ../kari-website-<slug>`, unless the rescue above told you to
+leave it), and delete the branch only in the zero-commits case above.
 Only an `agent/*` branch the conjunction declared dead (so in
 particular no open PR, labelled or not) AND with no commits ahead of
-`origin/main` is pipeline debris safe to delete; this is the one case
-branch deletion outside a merge is allowed. Issues claimed by humans or
+`origin/main` is pipeline debris safe to delete; this, and the
+zero-commits orphan case in Phase C step 2, are the only cases branch
+deletion outside a merge is allowed. Issues claimed by humans or
 other sessions (comment names a non-`agent/*` branch) are NEVER touched.
 A slug released this tick is NOT re-dispatched this tick: keep a list of
 released slugs and skip their issues in step 1 below, even with spare
@@ -288,8 +308,12 @@ over the kept branch and/or patch.
    Also spot-check the premise: paths the body names should exist
    (`git ls-files <path>`), and a coverage-driven issue's figure should
    be plausibly current. An obviously stale premise (file moved, target
-   already met) gets a comment asking for a refresh instead of a
-   dispatch — don't burn a worker on a moved file.
+   already met) is handled exactly like an unready issue: ONE comment
+   saying what is stale and asking for a refresh, plus the
+   `needs-clarification` label — don't burn a worker on a moved file.
+   The label is what stops the next tick from re-reading the issue and
+   posting the same comment again; a human removes it when they refresh
+   the issue. Never comment without labelling.
 3. From the ready issues, select up to (3 − in-flight) workers, oldest
    first (there is no readiness label to prefer — `has-dependencies` is
    the only marker, and it is a hard skip in step 1). Estimate which
@@ -314,9 +338,14 @@ over the kept branch and/or patch.
    fine for small mechanical work and why behavioral changes never
    qualify.
 4. For each selection: add the `in progress` label and comment
-   `Working on this in branch agent/<slug>` on EVERY issue it covers
-   (slug: kebab-case, short, from the title or theme), so other
-   sessions see them all taken. Classify the work:
+   `Working on this in branch agent/<slug>` on EVERY issue it covers,
+   so other sessions see them all taken. Slug: kebab-case, short, from
+   the title or theme — EXCEPT when an issue in the selection carries a
+   `Claim released:` comment (step 5) naming a kept branch: then the
+   selection reuses that branch's slug, so the worker starts from the
+   kept work instead of orphaning it. If two issues in one selection
+   name different kept branches, do not combine them — dispatch one
+   under its kept slug and defer the other. Classify the work:
    - **opus** — scoped, well-specified, few files, established patterns.
    - **fable** — cross-cutting, architectural, gnarly async/CSS/state,
      vague-but-ready specs, or anything touching both API and UI.
@@ -324,13 +353,22 @@ over the kept branch and/or patch.
    `automation/templates/worker-brief.md`: ISSUE_LIST = full issue
    number(s), title(s), body/bodies, and relevant comments; SLUG = the
    slug; MODEL_NOTE = one line saying which model tier it got and why.
-   If a released claim on the same slug left starting material, name it
-   in ISSUE_LIST as unverified: a kept `agent/<slug>` branch with
-   commits ahead of `main` (tell the worker to start from
-   `origin/agent/<slug>` — `git worktree add ../kari-website-<slug>
-   agent/<slug>` after `git fetch origin` — instead of branching off
+   Before dispatching, look for starting material: read each selected
+   issue's comments (you did in step 2) for the most recent
+   `Claim released:` comment, and verify what it names still exists
+   (`git fetch origin && git rev-list --count origin/main..origin/agent/
+   <old-slug>` non-zero; `ls $STATE/wip/<old-slug>-*.patch`). Name
+   everything found in ISSUE_LIST as unverified: a kept branch (tell
+   the worker to start from it — `git worktree add
+   ../kari-website-<slug> agent/<slug>` after `git fetch origin`,
+   which is why step 4 reused its slug — instead of branching off
    `origin/main`, and to review what is there before building on it),
-   and/or a saved `wip/<slug>-*.patch` of uncommitted changes.
+   and/or a saved `wip/<old-slug>-*.patch` of uncommitted changes, and/
+   or a leftover worktree the rescue could not clear (the worker must
+   salvage and `git worktree remove --force` it before its own
+   `worktree add` can succeed on that path). A release comment
+   is the only link between an issue and its starting material, so
+   skipping this read orphans the kept branch for good.
 
 ## Phase C — housekeeping
 
@@ -339,17 +377,35 @@ over the kept branch and/or patch.
    (`gh issue create`) — check `gh issue list --search` first so you
    don't file duplicates. Anything the pipeline itself hit (broken
    scripts, confusing docs) gets an issue too, per CLAUDE.md.
-2. A worker that reported a blockage instead of a PR: remove the issue's
+2. **Orphaned kept branches.** A kept branch is reachable only through
+   the `Claim released:` comments on its issues, so once those issues
+   are all closed (shipped by another PR, or closed by a human) nothing
+   would ever look at it again. List remote pipeline branches without
+   an open PR: `git ls-remote --heads origin 'agent/*'` minus the heads
+   of `gh pr list --state open --json headRefName`. For each, find the
+   open issues that name it (`gh issue list --state open --search
+   "agent/<slug> in:comments"`). A branch named by an open `in
+   progress` claim or an open released issue is in play — leave it. A
+   branch named by NO open issue is an orphan: if
+   `git rev-list --count origin/main..origin/agent/<slug>` is zero,
+   delete it (`git push origin --delete agent/<slug>`) — it is debris
+   of the same kind Phase B deletes; if it is ahead of `main`, do not
+   delete it — report it in the run summary with its tip SHA and the
+   closed issues it came from, so a human decides, and report it again
+   each tick until it is gone. Never delete or report a non-`agent/*`
+   branch.
+3. A worker that reported a blockage instead of a PR: remove the issue's
    `in progress` label so a future tick (or a human) can pick it up
    after the blockage is resolved. A combined-branch worker that dropped
    one item (contentious, or larger than it looked) and shipped the
    rest: confirm the dropped issue has lost `in progress` and that its
    PR body no longer says `Closes #N` for it — fix either if the worker
    forgot.
-3. Print a run summary: PRs merged / updated / awaiting checks, fix and
+4. Print a run summary: PRs merged / updated / awaiting checks, fix and
    review agents dispatched, issues claimed, issues filed,
-   ownership-signal mismatches left for a human (Phase A), anything
-   skipped and why. This lands in the dispatcher's log for the human.
+   ownership-signal mismatches left for a human (Phase A), orphaned
+   kept branches (step 2), anything skipped and why. This lands in the
+   dispatcher's log for the human.
 
 ## Dispatching subagents
 
