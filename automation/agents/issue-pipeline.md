@@ -28,9 +28,11 @@ about the failure in Phase C rather than aborting everything.
 - Never approve, trigger, or touch production deployments or the
   `production` GitHub Environment. Merging to main (test deploy) is your
   ceiling.
-- At most 3 issue-workers in flight (open pipeline-owned PRs + issues
-  you claim this tick, combined). Fix/review agents for existing PRs
-  don't count.
+- At most 3 issue-workers in flight. Count WORKERS — distinct `agent/*`
+  branches (open pipeline-owned PRs + branches named in claim comments
+  on `in progress` issues + branches you create this tick) — not issues:
+  a combined branch closing several issues is one slot. Fix/review
+  agents for existing PRs don't count.
 - Merges are always squash merges, and always serial — one PR fully
   merged before the next is considered.
 - Stay inside this repository and its GitHub project. Nothing else.
@@ -79,7 +81,9 @@ For each owned PR, in order:
    `automation/templates/review-brief.md`. Verdict CLEAN → add the label.
    Findings → dispatch a fix agent with FEEDBACK = the findings; the
    label stays off, so the PR gets re-reviewed on a later tick after the
-   fixes land.
+   fixes land. On a combined PR (several `Closes #N`), findings against
+   one included issue are fixed in place the same way — never split the
+   PR mid-flight.
 4. **Merge (serial):** the first PR that is green + visually settled +
    labeled `agent:reviewed` gets merged. The ordering below is
    load-bearing — do not reorder it:
@@ -110,25 +114,65 @@ For each owned PR, in order:
 
 ## Phase B — pick new work (only if in-flight count < 3)
 
-In-flight = open pipeline-owned PRs (both ownership signals, per
-Phase A) + open issues labeled `in progress`. If at capacity, skip to
-Phase C.
+In-flight = distinct `agent/*` branches: open pipeline-owned PRs (both
+ownership signals, per Phase A) + the branches named in claim comments
+on open `in progress` issues, de-duplicated (six issues claimed on one
+branch = one worker). If at capacity, skip to Phase C.
 
 **Stale-claim recovery first:** a worker that died mid-task (crash, usage
-limit) leaves an issue labeled `in progress` whose named `agent/<slug>`
-branch has no open PR. For each `in progress` issue whose claim comment
-names an `agent/*` branch: if no open PR exists for that branch AND the
-issue has had no activity for over 2 hours, release it — remove
-`in progress`, comment that the claim went stale and the issue is back in
-the queue, and delete the ownerless branch/worktree if they exist. When
-checking for PRs here, look for ANY open PR on the branch
+or spend limit, host suspend) leaves issues labeled `in progress` whose
+named `agent/<slug>` branch has no open PR. Group `in progress` issues by
+the branch their claim comment names (a combined branch is judged once,
+and released or kept as a unit). For each `agent/*` branch with no open
+PR, decide whether its worker is alive — by **worker liveness**, never
+by issue-comment age: a healthy worker on a long combined branch can go
+hours without commenting, while a dead one can look "active" because its
+claim comment is recent. Workers must push WIP commits to their branch at
+least every 45 minutes (the worker brief says so), and every worker
+lives inside the `claude -p` process of the tick that dispatched it, so
+liveness is observable:
+
+- **Provably dead — release now, no waiting period.** No open PR on the
+  branch AND no tick process is running that predates the claim:
+  `ps -eo pid,etimes,args | grep '[c]laude -p'` — if every listed
+  process is younger than the claim comment (or none is listed), the
+  dispatching tick is gone and so is its worker. Corroborate when you
+  can: the dispatching tick's log
+  (`~/.local/state/kari-website-automation/logs/issue-pipeline-*.log`,
+  the one whose timestamp precedes the claim) ends in an error, a usage/
+  spend-limit message, or mid-sentence. An orphaned dev server or MinIO
+  from the worktree, reparented to PID 1 / the user manager, means its
+  spawner is gone — it is evidence of death, not of life.
+- **Alive — leave alone.** A tick process older than the claim is still
+  running, OR `git fetch origin && git log -1 --format=%cI
+  origin/agent/<slug>` shows a commit pushed within the last 2 hours.
+- **Cannot tell** (no `ps` access, ambiguous logs): fall back to
+  silence — release only when the newest of (latest pushed commit on the
+  branch, claim comment) is older than 2 hours.
+
+Compare timestamps in one zone (`date -u`; `git log %cI` and `gh` output
+carry explicit offsets; `ls`/`stat` print local time) — a local-vs-UTC
+misread of worktree mtimes has already mis-judged liveness once; prefer
+commit timestamps and process ages over mtimes.
+
+To release: if the worktree `../kari-website-<slug>` exists and
+`git -C ../kari-website-<slug> status --porcelain` shows uncommitted
+changes, save them before anything is deleted —
+`git -C ../kari-website-<slug> diff > ~/.local/state/kari-website-automation/wip/<slug>-$(date -u +%Y%m%dT%H%MZ).patch`
+(`mkdir -p` the directory; list untracked files in the run summary) —
+and hand the patch path to the next worker on that slug in its brief as
+unverified starting material. Then remove `in progress` from EVERY issue
+claimed on the branch, comment on each that the claim went stale and the
+issue is back in the queue, and delete the ownerless branch/worktree.
+When checking for PRs here, look for ANY open PR on the branch
 (`gh pr list --state open --head agent/<slug>`), labelled or not — the
 Phase A ownership filter must not hide an unlabelled PR from this check.
 Only an `agent/*` branch with no open PR at all (and in particular no
 `agent-pr`-labelled PR) is pipeline debris safe to delete; this is the
 one case branch deletion outside a merge is allowed. Issues claimed by
 humans or other sessions (comment names a non-`agent/*` branch) are
-NEVER touched.
+NEVER touched. A released branch's issues are ordinary candidates again
+this same tick — re-dispatch them (same slug is fine) if capacity allows.
 
 1. `gh issue list --state open --json number,title,labels,body`. Discard
    issues with any of these labels: `in progress`, `has-dependencies`,
@@ -140,14 +184,38 @@ NEVER touched.
    `needs-clarification` label (create it if missing:
    `gh label create needs-clarification --description "agent pipeline
    needs answers before working this" --color D93F0B`). Move on.
-3. From the ready issues, select up to (3 − in-flight), preferring
-   `parallel-safe`-labeled and oldest first. Estimate which files each
-   touches; issues that plausibly overlap go in ONE combined
-   branch/worker (multiple `Closes #N` lines), per CLAUDE.md — or defer
-   all but one. Anything overlapping an in-flight PR's files waits.
+   Also spot-check the premise: paths the body names should exist
+   (`git ls-files <path>`), and a coverage-driven issue's figure should
+   be plausibly current. An obviously stale premise (file moved, target
+   already met) gets a comment asking for a refresh instead of a
+   dispatch — don't burn a worker on a moved file.
+3. From the ready issues, select up to (3 − in-flight) workers, oldest
+   first (there is no readiness label to prefer — `has-dependencies` is
+   the only marker, and it is a hard skip in step 1). Estimate which
+   files each touches. Anything overlapping an in-flight branch's files
+   waits. Among the rest, clustered small issues should SHARE a worker
+   rather than trickle through one per tick (each PR costs a full CI
+   run): when two or more target the same file or tight area, send ONE
+   worker on ONE branch closing all of them (multiple `Closes #N`
+   lines), per CLAUDE.md. Combine only when ALL hold:
+   - each is small and mechanical — docs, comments, config, lockfile
+     bumps, test-only edits; never combine issues that change app
+     behavior;
+   - they share a file or a tight area (all CLAUDE.md; all
+     `automation/` prompts; all eslint config);
+   - at most 3 issues per combined branch;
+   - none carries `has-dependencies`, `needs-clarification`, or
+     `blocked`.
+   Otherwise defer all but one. A combined branch is one worker: one
+   in-flight slot, one PR whose title names the theme, one worker that
+   claims every included issue up front (step 4). Combining couples
+   their fates — a review finding on one holds the whole PR — which is
+   fine for small mechanical work and why behavioral changes never
+   qualify.
 4. For each selection: add the `in progress` label and comment
-   `Working on this in branch agent/<slug>` on the issue (slug:
-   kebab-case, short, from the title). Classify the work:
+   `Working on this in branch agent/<slug>` on EVERY issue it covers
+   (slug: kebab-case, short, from the title or theme), so other
+   sessions see them all taken. Classify the work:
    - **opus** — scoped, well-specified, few files, established patterns.
    - **fable** — cross-cutting, architectural, gnarly async/CSS/state,
      vague-but-ready specs, or anything touching both API and UI.
@@ -155,6 +223,8 @@ NEVER touched.
    `automation/templates/worker-brief.md`: ISSUE_LIST = full issue
    number(s), title(s), body/bodies, and relevant comments; SLUG = the
    slug; MODEL_NOTE = one line saying which model tier it got and why.
+   If a saved `wip/<slug>-*.patch` exists from a released claim on the
+   same slug, name it in ISSUE_LIST as unverified starting material.
 
 ## Phase C — housekeeping
 
@@ -165,7 +235,11 @@ NEVER touched.
    scripts, confusing docs) gets an issue too, per CLAUDE.md.
 2. A worker that reported a blockage instead of a PR: remove the issue's
    `in progress` label so a future tick (or a human) can pick it up
-   after the blockage is resolved.
+   after the blockage is resolved. A combined-branch worker that dropped
+   one item (contentious, or larger than it looked) and shipped the
+   rest: confirm the dropped issue has lost `in progress` and that its
+   PR body no longer says `Closes #N` for it — fix either if the worker
+   forgot.
 3. Print a run summary: PRs merged / updated / awaiting checks, fix and
    review agents dispatched, issues claimed, issues filed,
    ownership-signal mismatches left for a human (Phase A), anything
