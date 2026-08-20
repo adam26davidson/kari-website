@@ -20,6 +20,28 @@
   padding: 8px 0px;
 }
 
+/* Search box: same field styling as the editors (admin.css input rules
+   give it the opaque fill/border); sized to the row width so it lines up
+   with the items below it. */
+.admin-data-list-search {
+  width: calc(100% - 16px);
+  margin: 4px 8px;
+}
+
+/* Empty-result notice on the same near-solid backing as the rows so it
+   stays legible over whatever photo is behind it. */
+.admin-data-list-empty {
+  box-sizing: border-box;
+  width: calc(100% - 16px);
+  margin: 4px 8px;
+  padding: 12px 14px;
+  border-radius: 3px;
+  background-color: rgba(226, 226, 226, 0.8);
+  color: #4b4b4b;
+  font-family: "Roboto", sans-serif;
+  font-weight: 300;
+}
+
 .admin-data-list-item {
   background-color: rgba(226, 226, 226, 0.8);
   display: flex;

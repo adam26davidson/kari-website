@@ -182,7 +182,9 @@ describe("AdminHaigaPage deletion", () => {
         "error",
       ),
     );
-    expect(await screen.findByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Edit" }),
+    ).toBeInTheDocument();
   });
 
   it("saves the shortened list and leaves the image object in storage", async () => {
@@ -333,6 +335,35 @@ describe("AdminHaigaPage list reordering", () => {
   });
 });
 
+describe("AdminHaigaPage search", () => {
+  beforeEach(() => {
+    vi.mocked(HaigaService.getListFromApi).mockResolvedValue([
+      {
+        id: "h1",
+        lines: ["old pond", "a frog"],
+        publisher: "kari",
+        image: "a.png",
+      },
+      { id: "h2", lines: ["summer grass"], publisher: "other", image: "b.png" },
+    ]);
+  });
+
+  it("filters by joined lines and publisher", async () => {
+    renderPage();
+    const search = await screen.findByRole("searchbox", {
+      name: "Search haiga",
+    });
+    // Compact haiga rows only show the publisher (the lines live in the
+    // image), but the lines are still searchable.
+    fireEvent.change(search, { target: { value: "pond a frog" } });
+    expect(screen.getByText("kari")).toBeInTheDocument();
+    expect(screen.queryByText("other")).toBeNull();
+    fireEvent.change(search, { target: { value: "OTHER" } });
+    expect(screen.queryByText("kari")).toBeNull();
+    expect(screen.getByText("other")).toBeInTheDocument();
+  });
+});
+
 describe("AdminHaigaPage load failure", () => {
   beforeEach(() => {
     savedHaiga = {
@@ -385,13 +416,17 @@ describe("AdminHaigaPage routing", () => {
   it("opens the editor directly from an editor URL", async () => {
     renderPage("/admin/haiga/h1");
 
-    expect(await screen.findByRole("button", { name: "Save" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Save" }),
+    ).toBeInTheDocument();
   });
 
   it("falls back to the list for an unknown editor URL", async () => {
     const { router } = renderPage("/admin/haiga/no-such-id");
 
-    expect(await screen.findByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Edit" }),
+    ).toBeInTheDocument();
     await waitFor(() =>
       expect(router.state.location.pathname).toBe("/admin/haiga"),
     );
@@ -406,7 +441,9 @@ describe("AdminHaigaPage routing", () => {
       router.navigate(-1);
     });
 
-    expect(await screen.findByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Edit" }),
+    ).toBeInTheDocument();
   });
 
   it("treats a freshly picked image as unsaved changes on Close", async () => {
@@ -438,7 +475,9 @@ describe("AdminHaigaPage routing", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
-    expect(await screen.findByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Edit" }),
+    ).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/admin/haiga");
     expect(adminUi.confirm).not.toHaveBeenCalled();
   });
