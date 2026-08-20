@@ -1,3 +1,11 @@
+:root {
+  /* Opaque fill shared by every admin form field (inputs, textareas, the
+     rich-text editor) so typed content never competes with the photo
+     background showing through the card (#308). */
+  --admin-field-bg: rgb(240, 240, 240);
+  --admin-field-border: rgba(0, 0, 0, 0.15);
+}
+
 .admin-container {
   display: flex;
   flex-direction: row;
@@ -14,9 +22,15 @@
   align-items: center;
   justify-content: flex-start;
   width: 200px;
+  /* Never let the content column squeeze the sidebar (it shrank to ~160px
+     at tablet width when an editor overflowed, #259). */
+  flex-shrink: 0;
   height: calc(100% - 15px);
   padding-top: 15px;
   background-color: rgba(226, 226, 226, 0.8);
+  /* Blur what shows through so the menu text always sits on a calm,
+     near-solid backing regardless of the photo behind it (#307). */
+  backdrop-filter: blur(10px);
 }
 
 .admin-menu-item {
@@ -29,7 +43,9 @@
   text-align: left;
   text-decoration: none;
   box-sizing: content-box;
-  color: #757575;
+  /* Dark enough to stay legible where the photo behind the menu is light
+     (#307); the selected item is darker still. */
+  color: #4b4b4b;
   display: flex;
   justify-content: flex-start;
   align-items: center;
@@ -58,9 +74,17 @@
 
 .admin-content {
   flex-grow: 1;
+  /* The content column must be allowed to shrink below its content's
+     intrinsic width, or a wide editor pushes it (and the page) past the
+     viewport instead of being clamped by the rules below (#259). */
+  min-width: 0;
   margin: 0px;
   height: 100%;
   overflow-y: auto;
+  /* Symmetric gutter: at tablet width the sidebar eats the left side and
+     the cards otherwise run to within 8px of the right edge (#288). */
+  padding: 0 16px;
+  box-sizing: border-box;
 }
 
 /* Base input/textarea styling for the admin editors. Every raw <input> /
@@ -79,10 +103,15 @@ input,
 textarea {
   padding: 5px;
   border-radius: 3px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  background-color: rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--admin-field-border);
+  background-color: var(--admin-field-bg);
+  color: #181818;
   font-family: "Courier New", Courier, monospace;
   font-size: 14px;
+  /* The 400px default above must never push a field past its card,
+     whatever the viewport (#259). */
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 input:focus,
@@ -129,14 +158,9 @@ textarea {
     flex-grow: 1;
     height: auto;
     min-height: 0;
-  }
-
-  /* The 400px input/textarea width above overflows narrow screens; cap
-     it to the containing editor card. */
-  .admin-content input,
-  .admin-content textarea {
-    max-width: 100%;
-    box-sizing: border-box;
+    /* The list cards carry their own 8px margin; a narrow phone can't
+       spare the full gutter on top of it. */
+    padding: 0 4px;
   }
 }
 
@@ -150,7 +174,9 @@ textarea {
   padding: 0;
   font: inherit;
   color: inherit;
-  background-color: #6d3513b5;
+  /* Opaque, like .admin-button: a translucent fill reads washed out over
+     a light card or photo (#278, #321). */
+  background-color: #6d3513;
   border: none;
   border-radius: 50%;
   transition: background-color 0.2s;
@@ -160,14 +186,14 @@ textarea {
 .admin-icon-button.disabled:hover,
 .admin-icon-button:disabled,
 .admin-icon-button:disabled:hover {
-  background-color: #675347b5;
-  color: #a5a5a5b5;
+  background-color: #a89a91;
+  color: #e9e3de;
   cursor: not-allowed;
 }
 
 .admin-icon-button:hover,
 .admin-image-upload:hover {
-  background-color: #6d3513ee;
+  background-color: #552a0f;
   cursor: pointer;
 }
 

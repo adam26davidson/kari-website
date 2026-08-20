@@ -1,7 +1,15 @@
+/* These wrappers are otherwise shrink-to-fit, so they would inflate to
+   the 400px global input width and drag the fields (and the per-image
+   delete button) past the card and viewport. Pin them to their container
+   at every width so the inputs' max-width: 100% clamp (admin.css) can
+   bite (#259). */
 .photography-post-editor-fields {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .photography-post-editor-images {
@@ -10,6 +18,9 @@
   background-color: rgba(0, 0, 0, 0.1);
   overflow-y: auto;
   padding: 10px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .photography-post-editor-image-fields {
@@ -18,25 +29,14 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 15px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
-/* Narrow viewports: these wrappers are otherwise shrink-to-fit, so they
-   inflate to the 400px global input width and drag the fields (and the
-   per-image delete button) past the card and viewport. Pin them to their
-   container so the inputs' max-width: 100% clamp (admin.css) can bite. */
-@media (max-width: 767.98px) {
-  .photography-post-editor-fields,
-  .photography-post-editor-images,
-  .photography-post-editor-image-fields {
-    width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-  }
-
-  /* Caption textarea is a row flex item; let it shrink below its 400px
-     specified width instead of forcing the row wider than the card. */
-  .photography-post-editor-image-fields textarea {
-    flex: 1 1 150px;
-    min-width: 0;
-  }
+/* Caption textarea is a row flex item; let it shrink below its 400px
+   specified width instead of forcing the row wider than the card. */
+.photography-post-editor-image-fields textarea {
+  flex: 1 1 150px;
+  min-width: 0;
 }

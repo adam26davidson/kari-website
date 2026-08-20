@@ -3,7 +3,9 @@
   flex-direction: row;
   gap: 8px;
   color: #f9f5f2;
-  background-color: #6d3513b5;
+  /* Opaque: the old 71%-alpha fill took on whatever was behind the card
+     and read as washed out over light photos (#278, #321). */
+  background-color: #6d3513;
   border-width: 0px;
   font-size: 16px;
   width: fit-content;
@@ -14,10 +16,10 @@
 }
 
 .admin-button:hover {
-  background-color: #6d3513ee;
+  background-color: #552a0f;
   cursor: pointer;
 }
 
 .admin-button:active {
-  background-color: #6d3513ee;
+  background-color: #552a0f;
 }

@@ -35,6 +35,10 @@
   align-items: center;
   gap: 14px;
   width: 100%;
+  /* The compact admin card only pads 8px vertically, which left the
+     100px thumbnail nearly touching the card's edges (#277). */
+  padding: 6px 0;
+  box-sizing: border-box;
 }
 
 .haiga-list-item-thumbnail {
