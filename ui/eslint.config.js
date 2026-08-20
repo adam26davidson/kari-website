@@ -1,16 +1,25 @@
+import { includeIgnoreFile } from '@eslint/compat'
 import js from '@eslint/js'
 import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import jsxA11y from 'eslint-plugin-jsx-a11y'
 import tseslint from 'typescript-eslint'
+import { fileURLToPath } from 'node:url'
+
+// Single source of truth for "generated, not source": .gitignore. Everything
+// git is told to ignore -- `dist` from `npm run build`, `coverage` from
+// `npm run test:coverage`, the Playwright artifact directories -- is also
+// lint input otherwise, because `npm run lint` runs eslint over the whole
+// package. That bites hardest with --report-unused-disable-directives: the
+// coverage reporter emits vendored scripts carrying `/* eslint-disable */`
+// headers, which that flag reports as errors. Deriving the list here keeps it
+// from drifting out of sync with .gitignore; src/test/eslint-config.test.ts
+// asserts the derivation.
+const gitignorePath = fileURLToPath(new URL('.gitignore', import.meta.url))
 
 export default tseslint.config(
-  // Generated output, not source: `dist` from `npm run build`, `coverage`
-  // from `npm run test:coverage`. The coverage reporter emits vendored
-  // scripts with `/* eslint-disable */` headers that
-  // --report-unused-disable-directives flags as errors.
-  { ignores: ['dist', 'coverage'] },
+  includeIgnoreFile(gitignorePath),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
