@@ -99,7 +99,11 @@ scoped enough to plan yourself.
 ## Verification gauntlet (all that apply to what you touched)
 
 - UI: `npm run test:coverage` (NOT just `test:run` — the CI coverage
-  ratchet fails PRs a plain test run passes) and `npm run lint`.
+  ratchet fails PRs a plain test run passes), `npm run lint`, and
+  `npm run typecheck` (vitest transpiles without type-checking and eslint
+  is not type-aware here, so type errors first surface in CI's build —
+  which also fails the e2e and screenshot jobs). Add
+  `npm run typecheck:e2e` if you touched `e2e/`.
 - API: `cargo test`, `cargo clippy --all-targets -- -D warnings`,
   `cargo fmt --check`.
 - UI appearance changes (components, CSS, layout, `index.html`,
