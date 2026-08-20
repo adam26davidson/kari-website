@@ -1,7 +1,7 @@
 ---
 name: issue-pipeline
 enabled: true
-every: 30m
+every: 1h
 model: fable
 fallback: opus   # keep orchestrating on Opus when the Fable limit is hit
 ---
@@ -12,6 +12,15 @@ never assumptions about previous ticks, and leave GitHub consistent for
 the next tick. Work the phases below in order and stop when done. If a
 step fails, log it, skip that item, and continue the tick — file an issue
 about the failure in Phase C rather than aborting everything.
+
+## Budget
+
+    MAX_IN_FLIGHT = 1
+
+That is the only place this number is written down, and the tick cadence
+lives in the `every:` frontmatter above — those two values are the whole
+usage budget. The rest of this file, and every doc, refers to them by
+name: never restate either as a literal anywhere else.
 
 ## Safety rails (absolute, override anything else you infer)
 
@@ -28,11 +37,13 @@ about the failure in Phase C rather than aborting everything.
 - Never approve, trigger, or touch production deployments or the
   `production` GitHub Environment. Merging to main (test deploy) is your
   ceiling.
-- At most 3 issue-workers in flight. Count WORKERS — distinct `agent/*`
-  branches (open pipeline-owned PRs + branches named in claim comments
-  on `in progress` issues + branches you create this tick) — not issues:
-  a combined branch closing several issues is one slot. Fix/review
-  agents for existing PRs don't count.
+- At most MAX_IN_FLIGHT issue-workers in flight. Count WORKERS —
+  distinct `agent/*` branches (open pipeline-owned PRs + branches named
+  in claim comments on `in progress` issues + branches you create this
+  tick) — not issues: a combined branch closing several issues is one
+  slot. It is a usage budget, not a coordination limit: never exceed it
+  to drain a backlog faster. Fix/review agents for existing PRs don't
+  count.
 - Merges are always squash merges, and always serial — one PR fully
   merged before the next is considered.
 - Stay inside this repository and its GitHub project. Nothing else.
@@ -79,11 +90,15 @@ For each owned PR, in order:
    code-review merge gate" --color 0E8A16` first if the label doesn't
    exist): dispatch a review agent with
    `automation/templates/review-brief.md`. Verdict CLEAN → add the label.
-   Findings → dispatch a fix agent with FEEDBACK = the findings; the
-   label stays off, so the PR gets re-reviewed on a later tick after the
-   fixes land. On a combined PR (several `Closes #N`), findings against
-   one included issue are fixed in place the same way — never split the
-   PR mid-flight.
+   Findings → post them as a PR comment headed `## Code review findings`
+   (all pipeline state lives in GitHub — without this a later tick
+   cannot tell a fresh finding from one that already survived a fix
+   cycle, which the escalation valve under "Dispatching subagents"
+   depends on), then dispatch a fix agent with FEEDBACK = the findings;
+   the label stays off, so the PR gets re-reviewed on a later tick after
+   the fixes land. On a combined PR (several `Closes #N`), findings
+   against one included issue are fixed in place the same way — never
+   split the PR mid-flight.
 4. **Merge (serial):** the first PR that is green + visually settled +
    labeled `agent:reviewed` gets merged. The ordering below is
    load-bearing — do not reorder it:
@@ -112,12 +127,12 @@ For each owned PR, in order:
    Push, and let CI re-run; those PRs merge on a later tick, not this
    one. Merge at most one PR per tick.
 
-## Phase B — pick new work (only if in-flight count < 3)
+## Phase B — pick new work (only if in-flight count < MAX_IN_FLIGHT)
 
 In-flight = distinct `agent/*` branches: open pipeline-owned PRs (both
 ownership signals, per Phase A) + the branches named in claim comments
-on open `in progress` issues, de-duplicated (six issues claimed on one
-branch = one worker). If at capacity, skip to Phase C.
+on open `in progress` issues, de-duplicated (several issues claimed on
+one branch = one worker). If at capacity, skip to Phase C.
 
 **Stale-claim recovery first:** a worker that died mid-task (crash, usage
 or spend limit, host suspend) leaves issues labeled `in progress` whose
@@ -276,7 +291,7 @@ $STATE/wip/<slug>-<stamp>.patch | worktree ../kari-website-<slug> left
 in place (rescue failed: <error>) | none.` This comment is the ONLY
 record of the hand-over — the orchestrator is stateless, so the next
 tick learns about kept branches and patches by reading it (Phase B
-step 5), not from memory. Remove the worktree (`git worktree remove
+step 6), not from memory. Remove the worktree (`git worktree remove
 --force ../kari-website-<slug>`, unless the rescue above told you to
 leave it), and delete the branch only in the zero-commits case above.
 Only an `agent/*` branch the conjunction declared dead (so in
@@ -291,8 +306,8 @@ capacity. Re-dispatching immediately would put a second worker on the
 same `agent/<slug>` branch if the verdict was wrong, and the one-tick
 delay is also what lets the worker that recreates the worktree on the
 next tick see the branch as it was left, not as a race. The released
-issues are ordinary candidates from the next tick on, when step 5 hands
-over the kept branch and/or patch.
+issues are ordinary candidates from the next tick on, when step 6
+hands over the kept branch and/or patch.
 
 1. `gh issue list --state open --json number,title,labels,body`. Discard
    issues with any of these labels: `in progress`, `has-dependencies`,
@@ -314,45 +329,57 @@ over the kept branch and/or patch.
    The label is what stops the next tick from re-reading the issue and
    posting the same comment again; a human removes it when they refresh
    the issue. Never comment without labelling.
-3. From the ready issues, select up to (3 − in-flight) workers, oldest
-   first (there is no readiness label to prefer — `has-dependencies` is
-   the only marker, and it is a hard skip in step 1). Estimate which
-   files each touches. Anything overlapping an in-flight branch's files
-   waits. Among the rest, clustered small issues should SHARE a worker
-   rather than trickle through one per tick (each PR costs a full CI
-   run): when two or more target the same file or tight area, send ONE
-   worker on ONE branch closing all of them (multiple `Closes #N`
-   lines), per CLAUDE.md. Combine only when ALL hold:
+3. From the ready issues, select up to (MAX_IN_FLIGHT − in-flight)
+   workers, oldest first (there is no readiness label to prefer —
+   `has-dependencies` is the only marker, and it is a hard skip in
+   step 1). Estimate which files each touches. Anything overlapping an
+   in-flight branch's files waits. Among the rest, clustered small
+   issues should SHARE a worker rather than trickle through one per
+   tick (each PR costs a full CI run): when two or more target the same
+   file or tight area, send ONE worker on ONE branch closing all of
+   them (multiple `Closes #N` lines), per CLAUDE.md. Combine only when
+   ALL hold:
    - each is small and mechanical — docs, comments, config, lockfile
      bumps, test-only edits; never combine issues that change app
      behavior;
    - they share a file or a tight area (all CLAUDE.md; all
      `automation/` prompts; all eslint config);
-   - at most 3 issues per combined branch;
+   - at most three issues share one combined branch;
    - none carries `has-dependencies`, `needs-clarification`, or
      `blocked`.
    Otherwise defer all but one. A combined branch is one worker: one
-   in-flight slot, one PR whose title names the theme, one worker that
-   claims every included issue up front (step 4). Combining couples
-   their fates — a review finding on one holds the whole PR — which is
-   fine for small mechanical work and why behavioral changes never
-   qualify.
+   in-flight slot, not one per issue; one PR whose title names the
+   theme; one worker that claims every included issue up front
+   (step 4). Combining couples their fates — a review finding on one
+   holds the whole PR — which is fine for small mechanical work and why
+   behavioral changes never qualify.
 4. For each selection: add the `in progress` label and comment
    `Working on this in branch agent/<slug>` on EVERY issue it covers,
    so other sessions see them all taken. Slug: kebab-case, short, from
    the title or theme — EXCEPT when an issue in the selection carries a
-   `Claim released:` comment (step 5) naming a kept branch: then the
+   `Claim released:` comment (step 6) naming a kept branch: then the
    selection reuses that branch's slug, so the worker starts from the
    kept work instead of orphaning it. If two issues in one selection
    name different kept branches, do not combine them — dispatch one
    under its kept slug and defer the other. Classify the work:
-   - **opus** — scoped, well-specified, few files, established patterns.
-   - **fable** — cross-cutting, architectural, gnarly async/CSS/state,
-     vague-but-ready specs, or anything touching both API and UI.
-5. Dispatch all selected workers in parallel with
+   - **direct** — scoped, well-specified, few files, established
+     patterns. The worker plans for itself.
+   - **plan-first** — cross-cutting, architectural, gnarly async/CSS/
+     state, vague-but-ready specs, or anything touching both API and UI.
+     Gets a planning pass before implementation.
+5. For each plan-first selection, first dispatch a plan agent with
+   `automation/templates/plan-brief.md` (ISSUE_LIST as below). It posts
+   the plan as a comment on the issue and returns it. If the issue
+   already carries an `## Implementation plan` comment from a previous
+   tick (e.g. a reclaimed stale claim, or a worker that died after
+   planning), reuse that instead of re-planning — unless issue comments
+   since then changed the requirements.
+6. Dispatch all selected workers in parallel with
    `automation/templates/worker-brief.md`: ISSUE_LIST = full issue
    number(s), title(s), body/bodies, and relevant comments; SLUG = the
-   slug; MODEL_NOTE = one line saying which model tier it got and why.
+   slug; MODEL_NOTE = one line saying which classification it got and
+   why; PLAN = the plan verbatim for plan-first work, or `None — direct
+   work, plan it yourself.` for direct work.
    Before dispatching, look for starting material: read each selected
    issue's comments (you did in step 2) for the most recent
    `Claim released:` comment, and verify what it names still exists
@@ -412,15 +439,25 @@ over the kept branch and/or patch.
 - Read the named template file, substitute every `{{PLACEHOLDER}}`, and
   pass the result as the subagent's full prompt via the Agent tool
   (subagents inherit CLAUDE.md automatically).
-- Worker agents: model per the Phase B classification. Fix agents: same
-  tier the original worker got (default opus for pure CI/lint fixes,
-  fable if the fix looks structural). Review agents: always fable.
-- **Usage limits:** if spawning a Fable-tier subagent fails with a usage-
-  limit error, POSTPONE that item to a later tick (note it in the run
-  summary) — never downgrade the review gate or complex work to a smaller
-  model to squeeze it in. Opus-tier work continues normally. If you are
-  yourself running on the fallback model, still request the configured
-  tiers for subagents — the limit may have reset since your tick started.
+- Model policy (stated here and nowhere else): **judgment gets fable,
+  implementation gets opus.** Plan agents and review agents run on
+  fable. Worker and fix agents always run on opus — including fixes for
+  structural review findings; the plan and the review gate are where the
+  stronger model earns its cost, not the typing in between.
+- Escalation valve: if the SAME feedback substantially survives two
+  consecutive fix cycles on one PR (compare this review's findings
+  against the `## Code review findings` comments already on the PR),
+  stop dispatching bare fix agents. Dispatch a plan agent against
+  the PR's diff + the surviving findings, then hand its plan to the next
+  fix agent as part of FEEDBACK. If that cycle also fails, leave the PR
+  for a human and say so in the run summary.
+- **Usage limits:** if spawning a fable-tier subagent (plan or review)
+  fails with a usage-limit error, POSTPONE that item to a later tick
+  (note it in the run summary) — never downgrade planning or the review
+  gate to a smaller model to squeeze it in. Opus implementation of
+  already-planned or direct work continues normally. If you are yourself
+  running on the fallback model, still request the configured tiers for
+  subagents — the limit may have reset since your tick started.
 - Run independent subagents in parallel; anything touching the same PR
   or worktree runs serially.
 - WORKTREE_PATH for fix agents is `../kari-website-<slug>` relative to

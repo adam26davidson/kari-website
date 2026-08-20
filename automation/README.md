@@ -18,12 +18,13 @@ Design and decisions:
 - `agents/*.md` — one file per agent: YAML frontmatter (config) + body
   (the agent's prompt). Current fleet:
   - `issue-pipeline` — picks ready GitHub issues, implements them via
-    parallel worker subagents, shepherds the PRs through CI, the visual
-    review, and an automated code-review gate, then squash-merges them
-    serially into `main` (which auto-deploys to test).
+    worker subagents, shepherds the PRs through CI, the visual review,
+    and an automated code-review gate, then squash-merges them serially
+    into `main` (which auto-deploys to test). How fast it does that is
+    tuned by the two values in its agent file — see Throughput below.
 - `templates/*.md` — subagent prompt templates the issue-pipeline fills
-  in (`{{PLACEHOLDER}}` slots): `worker-brief.md`, `fix-brief.md`,
-  `review-brief.md`.
+  in (`{{PLACEHOLDER}}` slots): `plan-brief.md`, `worker-brief.md`,
+  `fix-brief.md`, `review-brief.md`.
 - `dispatch-test.sh` — local test harness for the dispatcher (not in
   CI). Run it whenever `dispatch.sh` changes.
 
@@ -248,28 +249,64 @@ User timers only run while the user has a session unless lingering is
 enabled: `loginctl enable-linger`. This is orthogonal to suspend — it
 covers logout and pre-login boot, and does nothing for a sleeping host.
 
+## Throughput (and the usage it costs)
+
+Two values bound how much model usage an agent can burn, and each is
+written down in exactly one place — retune by editing them there and
+nothing else. For `issue-pipeline`:
+
+- **Tick cadence** — `every:` in the frontmatter of
+  `agents/issue-pipeline.md`. Every tick costs orchestration tokens even
+  when it finds nothing to do.
+- **In-flight worker cap** — `MAX_IN_FLIGHT` in that file's Budget
+  section, referred to by name everywhere else in the playbook. Workers,
+  and the fix/review agents tending their PRs, are where most of the
+  usage goes.
+
+A third lever is *which model* each subagent gets. The policy lives in
+the playbook's "Dispatching subagents" section (and nowhere else):
+judgment — planning complex work, the code-review gate — gets the
+stronger tier; implementation — workers and fix agents — gets the
+cheaper one. Retune it by editing that one section.
+
+Read the current values there; this file deliberately doesn't repeat
+them. What they do:
+
+- The ceiling on worker starts per hour is `ticks/hour × MAX_IN_FLIGHT`,
+  so the two multiply — halving the cadence *and* halving the cap is a
+  4x cut to the ceiling.
+- Steady-state usage tracks the cap more than the cadence. A PR normally
+  needs several ticks to go green, get reviewed, and merge, so the fleet
+  rarely reaches that ceiling; what it actually spends is roughly
+  proportional to how many PRs are open at once. Cadence mostly sets the
+  orchestration floor and how promptly a finished PR gets noticed.
+
+So: cut the cap to spend less, cut the cadence to spend less *often*.
+Raising either multiplies usage the same way — a backlog is not on its
+own a reason to.
+
 ## Usage limits
 
 A tick or subagent that hits a model usage limit simply dies; state
 lives in GitHub, so the next due tick recovers — the playbook releases
-stale issue claims (`in progress` with no PR) and re-shepherds open PRs
-statelessly. A worker this tick dispatched is alive by construction
-(the per-agent lock means no earlier dispatcher tick, and so none of its
-workers, can still be running). Any other claim — a playbook run by hand
-or interactively — is released only when every sign of life has been
-silent for two hours at once: no open PR on the branch, nothing written
-in its `../kari-website-<slug>` worktree, no commit on the branch, no
+stale issue claims and re-shepherds open PRs statelessly. A worker this
+tick dispatched is alive by construction (the per-agent lock means no
+earlier dispatcher tick, and so none of its workers, can still be
+running). Any other claim — a playbook run by hand or interactively —
+is released only when every sign of life has been silent for a full
+liveness window at once: no open PR on the branch, nothing written in
+its `../kari-website-<slug>` worktree, no commit on the branch, no
 activity on the claimed issues, and no `claude` process working in the
 worktree right now. No single instantaneous sample can declare a worker
 dead; the cost is that a tick killed right after a push holds its slot
-for up to two hours. A slug released in a tick is never re-dispatched in
-that same tick. On release, uncommitted work in the worktree is
-saved to `wip/<slug>-<timestamp>.patch` in the state directory, and an
+until that window elapses. See `agents/issue-pipeline.md` for the window
+itself. A slug released in a tick is never re-dispatched in that same
+tick. On release, uncommitted work in the worktree is saved to
+`wip/<slug>-<timestamp>.patch` in the state directory, and an
 `agent/<slug>` branch with commits ahead of `main` is pushed and kept
 rather than deleted; a `Claim released:` comment on each issue names
 both, and the next tick that picks the issue reads that comment, reuses
 the kept branch's slug and hands the material to the worker. The
-`fallback` model
-keeps orchestration running through a Fable outage, and the playbook
-postpones Fable-tier subagent work (never silently downgrades it) until
-the limit window resets.
+`fallback` model keeps orchestration running through an outage of the
+primary, and the playbook postpones stronger-tier subagent work (never
+silently downgrades it) until the limit window resets.

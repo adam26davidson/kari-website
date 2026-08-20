@@ -35,7 +35,7 @@ cron (one entry, every 15 min)
             └─ issue-pipeline agent (orchestrator)
                  ├─ tends existing agent PRs (fix agents, review agent)
                  ├─ merges ready PRs serially
-                 └─ spawns ≤3 parallel issue workers (opus or fable)
+                 └─ spawns issue workers up to the in-flight cap
 ```
 
 ### Agent definition format
@@ -94,20 +94,25 @@ comments), so any tick can crash and the next recovers. Each run:
   re-measuring on the merged tree per CLAUDE.md — push, and let their CI
   re-run; they merge on a later tick.
 
-**Phase B — pick new work** (only if fewer than 3 agent PRs/claimed
-issues are in flight):
+**Phase B — pick new work** (only if agent PRs/claimed issues in flight
+are below the cap):
 
 - List open issues; skip ones labeled `in progress`, `has-dependencies`,
   `needs-clarification`, `idea`, or `blocked`.
-- Read the candidates. Underspecified issue → post a clarifying comment,
-  add `needs-clarification`, move on. `parallel-safe` label is a strong
-  readiness signal but the orchestrator still checks for file overlap
-  with in-flight work.
-- Issues that plausibly touch the same files are combined into one
-  branch/PR (per CLAUDE.md), not worked in parallel.
+- Read the candidates. Underspecified issue, or one whose premise the
+  current tree contradicts → post a clarifying comment, add
+  `needs-clarification`, move on. There is no positive readiness label;
+  readiness is judged per issue and the orchestrator checks for file
+  overlap with in-flight work.
+- Issues that plausibly touch the same files, and clusters of small
+  mechanical issues in the same area, are combined into one branch/PR
+  (per CLAUDE.md) — one worker, one in-flight slot — not worked in
+  parallel.
 - For each selection: add `in progress`, comment the branch name
-  (`agent/<slug>`), classify complexity — straightforward/scoped → Opus,
-  complex/cross-cutting/tricky → Fable — and spawn workers in parallel.
+  (`agent/<slug>`), classify complexity — straightforward/scoped issues
+  go straight to a worker; complex/cross-cutting/tricky ones get a
+  planning pass first, whose plan is handed to the worker — and spawn
+  workers in parallel.
 
 **Phase C — housekeeping**: file GitHub issues for everything workers
 reported (next steps, tech debt, tooling friction) and anything the
@@ -130,6 +135,9 @@ Prompt templates the orchestrator fills in and passes to subagents:
   open a PR with `Closes #N` and a squash-worthy title; **finish at
   PR-open** (never wait on CI); return a structured report: what shipped,
   natural next steps, tech debt, problems hit.
+- `plan-brief.md` — read-only planning pass for complex issues: decides
+  the approach, files, tests, and risks, posts the plan on the issue
+  (so it survives worker crashes), and hands it to the worker.
 - `fix-brief.md` — given a PR and its feedback (CI failure, visual-review
   findings, or code-review findings): work in the PR's existing worktree,
   address each item or dismiss it with a reasoned PR reply, push.
@@ -140,8 +148,9 @@ Prompt templates the orchestrator fills in and passes to subagents:
 ### Safety rails (encoded in the playbook)
 
 - Only `agent/*` branches; never force-push; never `git checkout` in the
-  main clone; never touch prod or approve deployments; ≤3 workers in
-  flight (fix agents don't count); merges always squash and serial.
+  main clone; never touch prod or approve deployments; no more than
+  `MAX_IN_FLIGHT` workers in flight (fix agents don't count); merges
+  always squash and serial.
 - Headless runs bypass permission prompts by necessity
   (`--dangerously-skip-permissions`); the playbook is the constraint and
   is written defensively. Accepted risk, noted here deliberately.
@@ -175,10 +184,17 @@ rate limit (60/hr/IP) dwarfs personal use.
 - Runtime: local cron + headless sessions (chosen over a long-running
   /loop session and manual kick-off) — stateless, crash-proof, survives
   reboots.
-- Throughput: hourly ticks, ≤3 workers in flight. (Raised to 30-minute
-  ticks on 2026-08-19 after the first live ticks showed the backlog
-  growing faster than the pipeline drained it.)
+- Throughput: two tunables rather than a fixed decision — the tick
+  cadence (`every:`) and the in-flight worker cap (`MAX_IN_FLIGHT`),
+  both living in `automation/agents/issue-pipeline.md` and explained in
+  `automation/README.md`. They have been retuned in both directions
+  since (backlog pressure up, usage cost down); read the agent file for
+  what they are now.
 - Test-vs-prod visibility: an in-app, staging-only page (chosen over a
   repo script, hosted dashboard, or pinned issue).
-- Worker model split: Opus for straightforward tasks, Fable for complex
-  ones, chosen per-issue by the orchestrator.
+- Model split: judgment (planning complex issues, the code-review gate)
+  on the stronger tier, implementation (workers, fix agents) on the
+  cheaper one. Which models those are is set in the playbook's
+  "Dispatching subagents" section, not recorded here. (Originally the
+  split was per-issue on the worker itself; moved to plan-first +
+  cheap implementation on 2026-08-20 to cut usage.)
