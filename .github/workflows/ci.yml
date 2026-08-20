@@ -19,7 +19,26 @@ permissions:
 # burning runner minutes and blocking anything that waits on the checks. The
 # values are observed p90 plus generous headroom — see each job — so a real
 # hang fails within minutes and an empty-commit retrigger recovers it.
+# The workflow-lint job enforces this on every workflow in the repo, so a
+# new job cannot ship without one.
 jobs:
+  workflow-lint:
+    name: Workflows (actionlint, job timeouts)
+    runs-on: ubuntu-latest
+    # Observed: seconds. Nearly all of it is the actionlint image pull.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # The same script anyone can run locally (see CLAUDE.md): actionlint
+      # over .github/ — including shellcheck on every embedded `run:` —
+      # plus the assertion that every job sets a job-level timeout-minutes,
+      # so the paragraph above cannot quietly stop being true.
+      # Shell linting beyond the workflows (automation/*.sh, #291) belongs
+      # in this job too — extend the script, not the matrix of jobs.
+      - name: Lint workflows
+        run: ./scripts/lint-workflows.sh
+
   frontend:
     name: Frontend (lint, build, unit tests)
     runs-on: ubuntu-latest
