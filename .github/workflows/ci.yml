@@ -82,6 +82,16 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # `npm run build` below type-checks src/** on its way to bundling, so
+      # this step is not the only thing standing between a type error and a
+      # red CI. It runs first so the failure is named "Typecheck" instead of
+      # surfacing minutes later as a build failure, and so it fails before
+      # the unit tests (which transpile without checking types) spend their
+      # time. `tsc -b` is incremental, so the build's own pass is a no-op
+      # after this one.
+      - name: Typecheck
+        run: npm run typecheck
+
       # The e2e specs and playwright.config.ts are outside the build's
       # tsconfigs (Playwright transpiles without checking), so type-check
       # them explicitly.
