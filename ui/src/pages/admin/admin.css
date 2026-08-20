@@ -43,9 +43,10 @@
   text-align: left;
   text-decoration: none;
   box-sizing: content-box;
-  /* Dark enough to stay legible where the photo behind the menu is light
-     (#307); the selected item is darker still. */
-  color: #4b4b4b;
+  /* Shared secondary-text token: dark enough to stay legible where the
+     photo behind the menu is light (#307, #354); the selected item is
+     darker still. */
+  color: var(--muted-text);
   display: flex;
   justify-content: flex-start;
   align-items: center;
@@ -173,7 +174,9 @@ textarea {
   margin: 5px;
   padding: 0;
   font: inherit;
-  color: inherit;
+  /* Explicit, not inherited: the icon sits on the dark fill below, so its
+     legibility must not depend on an ancestor's text colour (#347). */
+  color: var(--light-text);
   /* Opaque, like .admin-button: a translucent fill reads washed out over
      a light card or photo (#278, #321). */
   background-color: #6d3513;

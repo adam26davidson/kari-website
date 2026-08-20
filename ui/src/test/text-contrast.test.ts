@@ -13,6 +13,10 @@ import { readFileSync } from "node:fs";
 // legible across the whole range of card lightness, and not set in the
 // body's hairline 300 weight (which is what made 14-16px grey text read as
 // washed out even at a nominally passing ratio).
+//
+// The admin side reuses the same token on the same translucent backing
+// (#354), and the file also pins foregrounds that must not be left to
+// inheritance to come out legible (#347).
 
 // Comments are stripped so an explanatory `/* ... */` between declarations
 // can't hide the declaration that follows it from the regexes below.
@@ -84,6 +88,11 @@ const haigaCss = read("components/haiga-content/haiga-content.css");
 const photographyCss = read(
   "pages/photography-page/components/photography-post-content/photography-post-content.css",
 );
+const adminCss = read("pages/admin/admin.css");
+const adminHaikuCss = read("pages/admin/admin-haiku-page/admin-haiku-page.css");
+const adminItemListCss = read(
+  "pages/admin/components/admin-item-list/admin-item-list.css",
+);
 
 /** Every public rule that renders small secondary text on the card. */
 const SECONDARY_TEXT_RULES: ReadonlyArray<[string, string, string]> = [
@@ -97,8 +106,13 @@ const SECONDARY_TEXT_RULES: ReadonlyArray<[string, string, string]> = [
   ],
 ];
 
-const mutedText = () =>
-  parseColor(declaration(indexCss, ":root", "--muted-text"));
+/** A colour declaration, following one level of `var(--token)` to :root. */
+function resolveColor(value: string): Rgb {
+  const token = value.match(/^var\(\s*(--[\w-]+)\s*\)$/);
+  return parseColor(token ? declaration(indexCss, ":root", token[1]) : value);
+}
+
+const mutedText = () => resolveColor("var(--muted-text)");
 
 // The card as it actually renders: a translucent panel over the background
 // layer, which is itself a photo at partial opacity over the white page. The
@@ -164,4 +178,59 @@ describe("secondary text on the public cards", () => {
       ).toBeGreaterThanOrEqual(400);
     },
   );
+});
+
+// The admin panels are the same translucent grey over the same background
+// photo as the public cards, so the same token — and the contrast argument
+// above — applies to their secondary text (#354).
+const ADMIN_SECONDARY_TEXT_RULES: ReadonlyArray<[string, string, string]> = [
+  ["sidebar menu item", adminCss, ".admin-menu-item"],
+  ["empty-result notice", adminItemListCss, ".admin-data-list-empty"],
+  ["haiku list publisher", adminHaikuCss, ".admin-haiku-list-publisher"],
+];
+
+/** Every admin surface the rules above render their text on. */
+const ADMIN_PANELS: ReadonlyArray<[string, string, string]> = [
+  ["sidebar", adminCss, ".admin-menu"],
+  ["empty-result notice", adminItemListCss, ".admin-data-list-empty"],
+  ["list row", adminItemListCss, ".admin-data-list-item"],
+];
+
+describe("secondary text in the admin panels", () => {
+  it.each(ADMIN_SECONDARY_TEXT_RULES)(
+    "%s uses the shared --muted-text token",
+    (_name, css, selector) => {
+      expect(declaration(css, selector, "color")).toBe("var(--muted-text)");
+    },
+  );
+
+  it.each(ADMIN_PANELS)(
+    "%s is the same translucent backing as the public card",
+    (_name, css, selector) => {
+      expect(declaration(css, selector, "background-color")).toBe(
+        declaration(dataListCss, ".data-list", "background-color"),
+      );
+    },
+  );
+});
+
+// The icon on a filled control is only legible because of the colour
+// declared on the control. `color: inherit` made that lightness an accident
+// of whichever ancestor last set a colour — one dark-text ancestor away from
+// a dark icon on the dark brown fill (#347).
+describe("the admin icon buttons", () => {
+  const foreground = () => declaration(adminCss, ".admin-icon-button", "color");
+
+  it("declare their own foreground rather than inheriting one", () => {
+    expect(foreground()).not.toBe("inherit");
+  });
+
+  it("put an icon on their fill that meets WCAG AA", () => {
+    const fill = parseColor(
+      declaration(adminCss, ".admin-icon-button", "background-color"),
+    );
+    expect(
+      contrastRatio(resolveColor(foreground()), fill),
+    ).toBeGreaterThanOrEqual(4.5);
+  });
 });
