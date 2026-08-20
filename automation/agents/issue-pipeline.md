@@ -124,64 +124,103 @@ or spend limit, host suspend) leaves issues labeled `in progress` whose
 named `agent/<slug>` branch has no open PR. Group `in progress` issues by
 the branch their claim comment names (a combined branch is judged once,
 and released or kept as a unit). For each `agent/*` branch with no open
-PR, decide whether its worker is alive — by **worker liveness**, never
-by issue-comment age or branch activity: a healthy worker on a long
-combined branch can go hours without commenting, while a dead one can
-look "active" because its claim comment or last WIP push is recent.
+PR, decide whether its worker is alive. The asymmetry that shapes the
+rule: a false "alive" costs one tick of delay, while a false "dead"
+strips labels, deletes a worktree out from under a live worker and
+invites a second worker onto its branch. So the rule is built so that no
+single instantaneous sample can produce "dead" — every signal below is
+positive-only evidence of life, and a claim is stale only when ALL of
+them are silent for a full window.
 
-Liveness is decided by two checks, both mechanical:
+Liveness, in order:
 
-1. **Dispatched by this tick.** Every worker is a subagent living inside
-   the Claude process of the tick that dispatched it, and `dispatch.sh`
-   holds a per-agent `flock` for the life of a tick, so while a
-   dispatcher-started tick runs no earlier issue-pipeline tick — and
-   none of its workers — can still be alive. Workers this tick
-   dispatched are alive; leave them alone.
-2. **A live `claude` process working in the worktree.** The lock only
-   serializes `dispatch.sh` ticks. It says nothing about the playbook
-   run by hand or interactively (how the fleet was exercised before the
-   timer existed, and how #319's live `agent/admin-visual-polish` worker
-   coexisted with a running tick), so a branch this tick did not
-   dispatch may still have a live worker. Check for one directly: a
-   worker's tool calls (bash, node, cargo, git) run with their cwd inside
-   `../kari-website-<slug>`, so look for any process whose cwd is in
-   that worktree and whose ancestry contains a `claude` process:
+1. **Dispatched by this tick → alive.** Every worker is a subagent
+   living inside the Claude process of the tick that dispatched it, and
+   `dispatch.sh` holds a per-agent `flock` for the life of a tick, so
+   while a dispatcher-started tick runs no earlier issue-pipeline tick —
+   and none of its workers — can still be alive. Workers this tick
+   dispatched are alive; leave them alone and skip the rest.
+2. **Otherwise, alive if ANY of these shows life; stale only if ALL are
+   silent.** The lock only serializes `dispatch.sh` ticks. It says
+   nothing about the playbook run by hand or interactively (how the
+   fleet was exercised before the timer existed, and how #319's live
+   `agent/admin-visual-polish` worker coexisted with a running tick), so
+   a branch this tick did not dispatch may still have a live worker.
+   Window = 2 hours, measured from now; `W=../kari-website-<slug>`:
 
-   ```
-   alive=0
-   for d in /proc/[0-9]*; do
-     case "$(readlink "$d/cwd" 2>/dev/null)" in
-       */kari-website-<slug>|*/kari-website-<slug>/*) ;; *) continue ;;
-     esac
-     p=${d#/proc/}
-     while [ "${p:-1}" -gt 1 ]; do
-       [ "$(cat /proc/$p/comm 2>/dev/null)" = claude ] && alive=1 && break 2
-       p=$(awk '/^PPid/{print $2}' /proc/$p/status 2>/dev/null)
+   - **Open PR on the branch:** `gh pr list --state open --head
+     agent/<slug>` — ANY open PR, labelled or not (the Phase A ownership
+     filter must not hide an unlabelled PR from this check). A PR means
+     the claim is simply not stale; it belongs to Phase A.
+   - **Worktree written within the window:**
+     `find "$W" \( -name node_modules -o -name target \) -prune -o
+     -mmin -120 -print -quit` prints anything (this covers
+     `.git/index`, `.git/HEAD` and refs too, so a commit, checkout,
+     stash or merge counts as much as an `Edit`). A missing worktree
+     prints nothing — it is silent, not dead, on its own.
+   - **Branch tip within the window:** `git fetch origin` first, then
+     `git log -1 --format=%ct agent/<slug>` and
+     `git log -1 --format=%ct origin/agent/<slug>` (skip a ref that does
+     not exist); a committer time inside the window is life.
+   - **Issue activity within the window:** for each issue claimed on the
+     branch, `gh issue view <n> --json updatedAt`. Any label change,
+     comment or edit counts — including the claim comment itself, which
+     is what gives a just-claimed branch its grace period.
+   - **A `claude` process working in the worktree right now:** a
+     worker's tool calls (bash, node, cargo, git) run with their cwd
+     inside `$W`, so look for any process whose cwd is in that worktree
+     and whose ancestry contains a `claude` process:
+
+     ```
+     alive=0
+     for d in /proc/[0-9]*; do
+       case "$(readlink "$d/cwd" 2>/dev/null)" in
+         */kari-website-<slug>|*/kari-website-<slug>/*) ;; *) continue ;;
+       esac
+       p=${d#/proc/}
+       while [ "${p:-1}" -gt 1 ]; do
+         [ "$(cat /proc/$p/comm 2>/dev/null)" = claude ] && alive=1 && break 2
+         p=$(awk '/^PPid/{print $2}' /proc/$p/status 2>/dev/null)
+       done
      done
-   done
-   ```
+     ```
 
-   `alive=1` means a worker (or a human's `claude` session opened in
-   that worktree) is using the branch: treat it as alive and leave it
-   alone. The ancestry requirement is what separates a live worker from
-   the debris a dead one leaves behind — an orphaned dev server or MinIO
-   from the worktree reparented to PID 1 matches the cwd but has no
-   `claude` ancestor, and is itself a trace of death.
+     `alive=1` is life. `alive=0` proves nothing on its own: a healthy
+     worker spends most of its wall time between tool calls (model
+     turns, `Read`/`Edit`), and each Bash call is a one-shot shell that
+     exits when the command does, so a snapshot usually finds no
+     process at all. This check exists only to catch a worker that is
+     mid-command at the instant the tick samples. The ancestry
+     requirement separates a live worker from the debris a dead one
+     leaves behind — an orphaned dev server or MinIO from the worktree
+     reparented to PID 1 matches the cwd but has no `claude` ancestor,
+     and is itself a trace of death.
 
-- **Alive:** either check passes. Leave the branch alone.
-- **Dead — release now, no waiting period:** every `agent/*` branch with
-  no open PR that fails both checks. A WIP commit pushed minutes ago
-  proves only past liveness (the #322 sequence: push at 10:00, tick
-  killed by the spend limit at 10:05, branch still pushed "recently" at
-  the 10:15 tick) and never overrides this; neither does a `claude`
-  process that merely predates the claim without working in the
-  worktree (another agent's tick, or an unrelated interactive session).
-  The corroborating traces are usually there too — the dispatching
-  tick's log (`$STATE/logs/issue-pipeline-*.log`, where
-  `STATE=~/.local/state/kari-website-automation`) ending in an error, a
-  usage/spend-limit message, or mid-sentence; an orphaned dev server or
-  MinIO from the worktree reparented to PID 1 — but none is required to
-  release.
+- **Alive:** check 1 passes, or any signal in check 2 shows life. Leave
+  the branch alone; if only the window kept it alive, say so in the run
+  summary so a pattern of "alive on mtime alone, tick after tick" is
+  visible to a human.
+- **Dead — release this tick:** no open PR AND nothing written in the
+  worktree for 2h AND no commit on either ref for 2h AND no activity on
+  any claimed issue for 2h AND no `claude` process working there now. A
+  live worker cannot satisfy that conjunction: to go 2h without a PR,
+  an edit, a commit or a comment it would have to be doing nothing. The
+  cost of the window is that a worker killed right after a push (the
+  #322 sequence: push at 10:00, tick killed by the spend limit at 10:05)
+  is released at the first tick after 12:00 rather than at 10:15 — one
+  slot idle for under two hours, the price of never deleting a live
+  worker's worktree. Do not shorten the window on corroborating traces
+  (the dispatching tick's log under `$STATE/logs/issue-pipeline-*.log`,
+  where `STATE=~/.local/state/kari-website-automation`, ending in an
+  error or a usage/spend-limit message; an orphaned dev server
+  reparented to PID 1): those confirm a verdict the conjunction already
+  reached and make a good run-summary note, but are not a release
+  criterion. (#325 proposes a `claim-liveness.sh` helper that prints
+  these facts one per line; until it exists, run them by hand.)
+
+The release steps below — label removal, worktree removal, branch
+deletion — run ONLY on a branch the conjunction declared dead. Never run
+any of them on a branch that was alive by any signal.
 
 To release, save everything the worker left behind BEFORE anything is
 deleted — there are two kinds of leftovers and each needs its own
@@ -221,20 +260,24 @@ Remove the worktree (`git worktree remove --force ../kari-website-<slug>`),
 and delete the branch only in the zero-commits case above.
 Hand the kept branch and/or the patch path to the next worker on that
 slug in its brief as unverified starting material (Phase B step 5).
-When checking for PRs here, look for ANY open PR on the branch
-(`gh pr list --state open --head agent/<slug>`), labelled or not — the
-Phase A ownership filter must not hide an unlabelled PR from this check.
-Only an `agent/*` branch with no open PR at all (and in particular no
-`agent-pr`-labelled PR) AND no commits ahead of `origin/main` is
-pipeline debris safe to delete; this is the one case branch deletion
-outside a merge is allowed. Issues claimed by
-humans or other sessions (comment names a non-`agent/*` branch) are
-NEVER touched. A released branch's issues are ordinary candidates again
-this same tick — re-dispatch them (same slug is fine) if capacity allows.
+Only an `agent/*` branch the conjunction declared dead (so in
+particular no open PR, labelled or not) AND with no commits ahead of
+`origin/main` is pipeline debris safe to delete; this is the one case
+branch deletion outside a merge is allowed. Issues claimed by humans or
+other sessions (comment names a non-`agent/*` branch) are NEVER touched.
+A slug released this tick is NOT re-dispatched this tick: keep a list of
+released slugs and skip their issues in step 1 below, even with spare
+capacity. Re-dispatching immediately would put a second worker on the
+same `agent/<slug>` branch if the verdict was wrong, and the one-tick
+delay is also what lets the worker that recreates the worktree on the
+next tick see the branch as it was left, not as a race. The released
+issues are ordinary candidates from the next tick on, when step 5 hands
+over the kept branch and/or patch.
 
 1. `gh issue list --state open --json number,title,labels,body`. Discard
    issues with any of these labels: `in progress`, `has-dependencies`,
-   `needs-clarification`, `idea`, `blocked`.
+   `needs-clarification`, `idea`, `blocked` — and issues whose claim was
+   released this tick (above).
 2. Read the remaining candidates fully (`gh issue view <n> --comments`).
    Judge readiness: is the desired outcome unambiguous enough to build
    without product decisions you'd be guessing at? If not, post ONE

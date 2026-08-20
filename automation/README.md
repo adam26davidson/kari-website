@@ -253,14 +253,17 @@ covers logout and pre-login boot, and does nothing for a sleeping host.
 A tick or subagent that hits a model usage limit simply dies; state
 lives in GitHub, so the next due tick recovers — the playbook releases
 stale issue claims (`in progress` with no PR) and re-shepherds open PRs
-statelessly. A claim is released as soon as its worker is dead, with no
-waiting period; liveness is judged by construction, not by activity:
-a worker is alive only if this tick dispatched it (the per-agent lock
-means no earlier dispatcher tick, and so none of its workers, can still
-be running) or a live `claude` process is working in its
-`../kari-website-<slug>` worktree (a playbook run by hand). A recent
-push or claim comment never keeps a claim alive — a tick can push and
-then die minutes later. On release, uncommitted work in the worktree is
+statelessly. A worker this tick dispatched is alive by construction
+(the per-agent lock means no earlier dispatcher tick, and so none of its
+workers, can still be running). Any other claim — a playbook run by hand
+or interactively — is released only when every sign of life has been
+silent for two hours at once: no open PR on the branch, nothing written
+in its `../kari-website-<slug>` worktree, no commit on the branch, no
+activity on the claimed issues, and no `claude` process working in the
+worktree right now. No single instantaneous sample can declare a worker
+dead; the cost is that a tick killed right after a push holds its slot
+for up to two hours. A slug released in a tick is never re-dispatched in
+that same tick. On release, uncommitted work in the worktree is
 saved to `wip/<slug>-<timestamp>.patch` in the state directory, and an
 `agent/<slug>` branch with commits ahead of `main` is pushed and kept
 rather than deleted; both are handed to the next worker on that slug as
