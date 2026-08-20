@@ -22,16 +22,11 @@
   flex-direction: column;
   gap: 15px;
   padding: 10px;
-}
-
-/* Narrow viewports: the card content is otherwise shrink-to-fit inside
-   the flex-row card, so it inflates to the 400px global textarea width
-   and the blurb escapes the card; full width lets the textarea's
-   max-width: 100% clamp (admin.css) keep it inside. */
-@media (max-width: 767.98px) {
-  .home-page-editor-card-content {
-    width: 100%;
-    min-width: 0;
-    box-sizing: border-box;
-  }
+  /* The card content is otherwise shrink-to-fit inside the flex-row
+     card, so it inflates to the 400px global textarea width and the
+     blurb escapes a narrow card; full width lets the textarea's
+     max-width: 100% clamp (admin.css) keep it inside at every width. */
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }

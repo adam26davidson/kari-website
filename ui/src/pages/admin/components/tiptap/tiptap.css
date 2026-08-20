@@ -16,10 +16,10 @@
   max-height: calc(100% - 24px);
   margin: 10px 0;
   border-radius: 3px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  /* Opaque fill, like the other inputs' effective color, so post text
-     never sits directly on the photo background (#210) */
-  background-color: rgb(240, 240, 240);
+  border: 1px solid var(--admin-field-border);
+  /* Opaque fill shared with the other admin fields so post text never
+     sits directly on the photo background (#210, #308) */
+  background-color: var(--admin-field-bg);
 }
 
 .tiptap {
