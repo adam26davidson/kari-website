@@ -8,7 +8,10 @@ with code in this repository.
   dependencies + the Playwright browser the visual check needs). Idempotent
   and cheap to re-run; see Parallel Sessions below.
 - `./scripts/dev.sh` - Start the whole dev stack (MinIO + seed + API + UI);
-  `--aws` targets the real test bucket via SSO instead of local MinIO.
+  `--aws` targets the real test bucket via SSO instead of local MinIO. It
+  runs `setup-worktree.sh` first, so a stack always starts against
+  lockfile-matching dependencies; that script's skip check keeps a warm
+  start cheap.
   Stacks are per-worktree: compose's directory-based project naming keeps
   each worktree's MinIO container separate, and dev.sh uses the default
   ports (MinIO 9000, API 3000) when free but picks free ports otherwise
@@ -148,8 +151,9 @@ address or create github issues for them, but the job never blocks a merge.
   `ui/node_modules` already matches the lockfile, and Playwright's browsers
   live in a cache outside `node_modules` (`~/.cache/ms-playwright`), so that
   step is a quick no-op unless the machine is fresh or Playwright was
-  bumped. Pass `--force` to reinstall dependencies regardless. Changing the
-  script? Re-run its tests: `bash scripts/setup-worktree-test.sh`.
+  bumped. Pass `--force` to reinstall dependencies regardless. Changing this
+  script, or dev.sh's delegation to it? Re-run the tests:
+  `bash scripts/setup-worktree-test.sh`.
 - Commit only explicitly listed paths (`git add <paths>`, never `git add -A`
   in a shared tree); treat any file outside your issue's scope as owned by
   another session.
