@@ -17,6 +17,9 @@ jobs:
   sync-label:
     name: Sync "in progress" label on linked issues
     runs-on: ubuntu-latest
+    # A handful of API calls — seconds in practice. Anything near this cap is
+    # a wedged GitHub API call, not real work.
+    timeout-minutes: 5
     steps:
       - uses: actions/github-script@v7
         with:

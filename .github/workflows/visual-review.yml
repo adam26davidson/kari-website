@@ -44,6 +44,11 @@ jobs:
     # auto-merge proceeds.
     if: github.event.pull_request.user.type != 'Bot'
     runs-on: ubuntu-latest
+    # Same hermetic stack as the e2e job plus a preview build, screenshot
+    # capture and a Claude review, so it runs longer and varies more:
+    # observed ~4-15 min, max 24. Without a cap a hung fetch would run toward
+    # GitHub's 6-hour default even though this check is advisory.
+    timeout-minutes: 30
     env:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
     steps:
