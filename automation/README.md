@@ -258,5 +258,6 @@ commit on its `agent/*` branch; after 2h of silence if it cannot tell)
 and re-shepherds open PRs statelessly. Uncommitted work in a dead
 worker's worktree is saved to `wip/<slug>-<timestamp>.patch` in the
 state directory before the worktree is removed. The `fallback` model
-keeps orchestration running through a Fable outage, and the playbook postpones Fable-tier subagent
-work (never silently downgrades it) until the limit window resets.
+keeps orchestration running through a Fable outage, and the playbook
+postpones Fable-tier subagent work (never silently downgrades it) until
+the limit window resets.
