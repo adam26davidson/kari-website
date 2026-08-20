@@ -6,7 +6,10 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Haiku } from "../../../models";
 import { HaikuContent } from "../../../components/haiku-content/haiku-content";
 import { HaikuService } from "../../../services/haiku";
-import { moveItemByOne } from "../../../utils/data-list-helpers";
+import {
+  moveItemByIdByOne,
+  removeItemById,
+} from "../../../utils/data-list-helpers";
 import { HaikuEditor } from "./components/haiku-editor/haiku-editor";
 import { LoadError } from "../../../components/load-error/load-error";
 import { AdminItemList } from "../components/admin-item-list/admin-item-list";
@@ -59,10 +62,8 @@ export function AdminHaikuPage() {
     !!openHaiku && JSON.stringify(openHaiku) !== JSON.stringify(savedHaiku),
   );
 
-  const deleteHaiku = async (idx: number) => {
-    const newList = haikuList.slice();
-    newList.splice(idx, 1);
-    await saveList(newList, "Haiku deleted");
+  const deleteHaiku = async (id: string) => {
+    await saveList(removeItemById(haikuList, id), "Haiku deleted");
   };
 
   // List display functions ---------------------------------------------------
@@ -82,19 +83,19 @@ export function AdminHaikuPage() {
     }
   };
 
-  const onDelete = (idx: number) => {
+  const onDelete = (id: string) => {
     confirm("Are you sure you want to delete this haiku?", () =>
-      deleteHaiku(idx),
+      deleteHaiku(id),
     );
   };
 
-  const onMove = async (idx: number, direction: "up" | "down") => {
-    const newHaikuList = moveItemByOne(haikuList, idx, direction);
+  const onMove = async (id: string, direction: "up" | "down") => {
+    const newHaikuList = moveItemByIdByOne(haikuList, id, direction);
     await saveList(newHaikuList, "Order updated");
   };
 
-  const onEdit = (idx: number) => {
-    navigate(`${LIST_PATH}/${haikuList[idx].id}`);
+  const onEdit = (id: string) => {
+    navigate(`${LIST_PATH}/${id}`);
   };
 
   // Editor functions ---------------------------------------------------------
@@ -128,6 +129,8 @@ export function AdminHaikuPage() {
   ) : (
     <AdminItemList
       items={haikuList}
+      noun="haiku"
+      getSearchText={(haiku) => [...haiku.lines, haiku.publisher].join(" ")}
       compact={true}
       onNewItem={onNewItem}
       onEdit={onEdit}

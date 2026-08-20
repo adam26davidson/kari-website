@@ -6,7 +6,10 @@ import { Haiga } from "../../../models";
 import { HaigaService } from "../../../services/haiga";
 import { ImageService } from "../../../services/images";
 import { HaigaEditor } from "./components/haiga-editor/haiga-editor";
-import { moveItemByOne } from "../../../utils/data-list-helpers";
+import {
+  moveItemByIdByOne,
+  removeItemById,
+} from "../../../utils/data-list-helpers";
 import { HaigaContent } from "../../../components/haiga-content/haiga-content";
 import { LoadError } from "../../../components/load-error/load-error";
 import { AdminItemList } from "../components/admin-item-list/admin-item-list";
@@ -66,9 +69,8 @@ export function AdminHaigaPage() {
         JSON.stringify(openHaiga) !== JSON.stringify(savedHaiga)),
   );
 
-  const deleteHaiga = async (idx: number) => {
-    const newDataList = haigaList.slice();
-    newDataList.splice(idx, 1);
+  const deleteHaiga = async (id: string) => {
+    const newDataList = removeItemById(haigaList, id);
     // The image object is deliberately NOT deleted: it may still be
     // referenced by other content (e.g. as the site background), and if
     // not, the image-cleanup sweep collects it later.
@@ -97,19 +99,19 @@ export function AdminHaigaPage() {
     }
   };
 
-  const onDelete = (idx: number) => {
+  const onDelete = (id: string) => {
     confirm("Are you sure you want to delete this haiga?", () =>
-      deleteHaiga(idx),
+      deleteHaiga(id),
     );
   };
 
-  const onMove = async (idx: number, direction: "up" | "down") => {
-    const newHaigaList = moveItemByOne(haigaList, idx, direction);
+  const onMove = async (id: string, direction: "up" | "down") => {
+    const newHaigaList = moveItemByIdByOne(haigaList, id, direction);
     await saveList(newHaigaList, "Order updated");
   };
 
-  const onEdit = (idx: number) => {
-    navigate(`${LIST_PATH}/${haigaList[idx].id}`);
+  const onEdit = (id: string) => {
+    navigate(`${LIST_PATH}/${id}`);
   };
 
   // Editor functions ---------------------------------------------------------
@@ -179,6 +181,8 @@ export function AdminHaigaPage() {
   ) : (
     <AdminItemList
       items={haigaList}
+      noun="haiga"
+      getSearchText={(haiga) => [...haiga.lines, haiga.publisher].join(" ")}
       compact={true}
       onNewItem={onNewItem}
       onEdit={onEdit}
