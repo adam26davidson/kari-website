@@ -26,6 +26,10 @@ with code in this repository.
 - UI: `npm run build` - Build production UI
 - UI: `npm run build:test` - Build UI for test environment
 - UI: `npm run lint` - Lint TypeScript code
+- UI: `npm run typecheck` - Type-check app code, tests and the vite
+  configs (`tsc -b`, the same check CI's build runs; every project sets
+  `noEmit`, so nothing is written). `npm run typecheck:e2e` covers the
+  Playwright specs, which are a separate TS project.
 - API: `cargo watch -x 'run dev'` - Run API in watch mode
 - API: `cargo build` - Build the Rust API
 
@@ -80,7 +84,11 @@ Coverage thresholds are a ratchet: floors pinned just below current numbers
 in the coverage CI job). When coverage rises meaningfully, bump the floors in
 the same PR — never lower them to make a PR pass.
 Dependency updates are managed by Renovate (`renovate.json`); non-major updates
-auto-merge once these checks pass.
+auto-merge once these checks pass. To validate that file, pin the version —
+`npx --yes --package renovate@latest renovate-config-validator renovate.json`.
+A bare `--package renovate` can resolve a stale cached major that rejects
+current config keys (a renovate 37 in the npx cache rejected
+`managerFilePatterns`).
 
 ## Visual Checks (required for UI changes)
 Tests assert behavior, not appearance — features have shipped green while an
@@ -181,6 +189,18 @@ address or create github issues for them, but the job never blocks a merge.
   `npm run test:run` — the CI coverage job enforces the ratchet floors and
   plain test runs won't catch a floor breach. Adding conditional logic can
   lower the branch percentage even when every test passes.
+- Run `npm run typecheck` before pushing UI changes too (plus
+  `npm run typecheck:e2e` if you touched `e2e/`). Neither vitest (which
+  transpiles without checking types) nor eslint (not type-aware here) sees
+  type errors, so a green `test:coverage` + `lint` still fails CI's build on
+  something as small as an implicit-`any` callback parameter in a
+  `*.test.tsx` — and that failure takes the e2e and screenshot jobs down
+  with it, since their webServer builds the test bundle.
+- Undoing a temporary edit (a mutation-test tweak, a debug print): copy the
+  file aside first (`cp f f.bak`, restore with `cp f.bak f`) or `git stash`
+  / commit WIP. Never `git checkout -- <file>` or `git restore <file>` for
+  this — those revert to the committed version, silently destroying every
+  uncommitted change in the file, not just the one you meant to undo.
 - The coverage floors in `ui/vitest.config.ts` are the most conflict-prone
   lines in the repo when several PRs are open. If two PRs both bump them,
   whichever merges second must re-measure on the merged tree

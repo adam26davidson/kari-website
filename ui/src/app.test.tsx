@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "./app";
 import { useIsMobile } from "./hooks/use-is-mobile";
+import { SiteSettingsService } from "./services/site-settings";
 
 // App is a shell: Header + routes. Mock the lazy page modules to light
 // stubs so these tests exercise routing without pulling in every page's
@@ -45,6 +46,17 @@ vi.mock("./hooks/use-is-mobile", () => ({
   useIsMobile: vi.fn(),
 }));
 
+// App calls useSiteBackground, which reads site-settings.json straight
+// from S3. Nothing here asserts on the background, and an unstubbed call
+// reaches for a hostname that does not resolve — a real network attempt
+// per test, each one logging a fetch failure over the run's output. The
+// hook's own behaviour is covered in use-site-background.test.tsx.
+vi.mock("./services/site-settings", () => ({
+  SiteSettingsService: {
+    getFromS3: vi.fn(),
+  },
+}));
+
 vi.mock("@auth0/auth0-react", () => ({
   useAuth0: () => ({
     user: undefined,
@@ -64,6 +76,11 @@ function renderApp(path: string) {
 
 beforeEach(() => {
   vi.mocked(useIsMobile).mockReturnValue(false);
+  // Re-stubbed per test: setup.ts's vi.restoreAllMocks() drops any
+  // implementation set at mock-declaration time.
+  vi.mocked(SiteSettingsService.getFromS3).mockResolvedValue({
+    backgroundPhoto: "",
+  });
 });
 
 afterEach(() => {
