@@ -75,9 +75,10 @@ When the two signals disagree, the pipeline never merges:
 
 `~/.local/state/kari-website-automation/` (override:
 `KARI_AUTOMATION_STATE_DIR`): `<name>.last-run` timestamps,
-`<name>.lock` flock files, and `logs/<name>-<timestamp>.log` per run
-(pruned after 30 days). The repo defines *what and how often*; the
-machine tracks *when last*.
+`<name>.lock` flock files, `logs/<name>-<timestamp>.log` per run
+(pruned after 30 days), and `wip/<slug>-<timestamp>.patch` diffs rescued
+from dead workers' worktrees (see Usage limits). The repo defines *what
+and how often*; the machine tracks *when last*.
 
 ## Pausing
 
@@ -291,8 +292,24 @@ own a reason to.
 
 A tick or subagent that hits a model usage limit simply dies; state
 lives in GitHub, so the next due tick recovers — the playbook releases
-stale issue claims (`in progress` with no PR after 2h) and re-shepherds
-open PRs statelessly. The `fallback` model keeps orchestration running
-through an outage of the primary, and the playbook postpones
-stronger-tier subagent work (never silently downgrades it) until the
-limit window resets.
+stale issue claims and re-shepherds open PRs statelessly. A worker this
+tick dispatched is alive by construction (the per-agent lock means no
+earlier dispatcher tick, and so none of its workers, can still be
+running). Any other claim — a playbook run by hand or interactively —
+is released only when every sign of life has been silent for a full
+liveness window at once: no open PR on the branch, nothing written in
+its `../kari-website-<slug>` worktree, no commit on the branch, no
+activity on the claimed issues, and no `claude` process working in the
+worktree right now. No single instantaneous sample can declare a worker
+dead; the cost is that a tick killed right after a push holds its slot
+until that window elapses. See `agents/issue-pipeline.md` for the window
+itself. A slug released in a tick is never re-dispatched in that same
+tick. On release, uncommitted work in the worktree is saved to
+`wip/<slug>-<timestamp>.patch` in the state directory, and an
+`agent/<slug>` branch with commits ahead of `main` is pushed and kept
+rather than deleted; a `Claim released:` comment on each issue names
+both, and the next tick that picks the issue reads that comment, reuses
+the kept branch's slug and hands the material to the worker. The
+`fallback` model keeps orchestration running through an outage of the
+primary, and the playbook postpones stronger-tier subagent work (never
+silently downgrades it) until the limit window resets.

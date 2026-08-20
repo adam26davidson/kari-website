@@ -22,6 +22,24 @@ lives in the `every:` frontmatter above — those two values are the whole
 usage budget. The rest of this file, and every doc, refers to them by
 name: never restate either as a literal anywhere else.
 
+## State directory
+
+The fleet keeps its laptop-local state (dispatcher logs, and the WIP
+patches rescued in Phase B) in one directory. Resolve it once at the
+start of the tick, exactly as `automation/dispatch.sh` does, and refer
+to it as `$STATE` everywhere below:
+
+```sh
+STATE="${KARI_AUTOMATION_STATE_DIR:-$HOME/.local/state/kari-website-automation}"
+```
+
+`dispatch.sh` resolves that same expression for its own logs and locks,
+and the override reaches this tick through the environment, so on a host
+that sets `KARI_AUTOMATION_STATE_DIR` the default path is the wrong one.
+Never write it as a literal: doing so files rescued patches under a
+directory the next tick does not read, and points a human at logs that
+are not there.
+
 ## Safety rails (absolute, override anything else you infer)
 
 - Operate only on branches prefixed `agent/`. Never push to `main`
@@ -37,10 +55,13 @@ name: never restate either as a literal anywhere else.
 - Never approve, trigger, or touch production deployments or the
   `production` GitHub Environment. Merging to main (test deploy) is your
   ceiling.
-- At most MAX_IN_FLIGHT issue-workers in flight (open pipeline-owned
-  PRs + issues you claim this tick, combined). It is a usage budget, not
-  a coordination limit: never exceed it to drain a backlog faster.
-  Fix/review agents for existing PRs don't count.
+- At most MAX_IN_FLIGHT issue-workers in flight. Count WORKERS —
+  distinct `agent/*` branches (open pipeline-owned PRs + branches named
+  in claim comments on `in progress` issues + branches you create this
+  tick) — not issues: a combined branch closing several issues is one
+  slot. It is a usage budget, not a coordination limit: never exceed it
+  to drain a backlog faster. Fix/review agents for existing PRs don't
+  count.
 - Merges are always squash merges, and always serial — one PR fully
   merged before the next is considered.
 - Stay inside this repository and its GitHub project. Nothing else.
@@ -93,7 +114,9 @@ For each owned PR, in order:
    cycle, which the escalation valve under "Dispatching subagents"
    depends on), then dispatch a fix agent with FEEDBACK = the findings;
    the label stays off, so the PR gets re-reviewed on a later tick after
-   the fixes land.
+   the fixes land. On a combined PR (several `Closes #N`), findings
+   against one included issue are fixed in place the same way — never
+   split the PR mid-flight.
 4. **Merge (serial):** the first PR that is green + visually settled +
    labeled `agent:reviewed` gets merged. The ordering below is
    load-bearing — do not reorder it:
@@ -124,29 +147,208 @@ For each owned PR, in order:
 
 ## Phase B — pick new work (only if in-flight count < MAX_IN_FLIGHT)
 
-In-flight = open pipeline-owned PRs (both ownership signals, per
-Phase A) + open issues labeled `in progress`. If at capacity, skip to
-Phase C.
+In-flight = distinct `agent/*` branches: open pipeline-owned PRs (both
+ownership signals, per Phase A) + the branches named in claim comments
+on open `in progress` issues, de-duplicated (several issues claimed on
+one branch = one worker). Do NOT compare that count against
+MAX_IN_FLIGHT yet: stale-claim recovery (next) runs BEFORE the capacity
+check, because the count includes the branch named on every stale
+claim. Checking capacity first would let a single dead claim fill the
+only slot, skip recovery, and wedge the pipeline on every tick (the
+#319/#322 failure). Run recovery, then recompute in-flight excluding
+the slugs it released, and only then decide: if still at capacity, skip
+to Phase C.
 
 **Stale-claim recovery first:** a worker that died mid-task (crash, usage
-limit) leaves an issue labeled `in progress` whose named `agent/<slug>`
-branch has no open PR. For each `in progress` issue whose claim comment
-names an `agent/*` branch: if no open PR exists for that branch AND the
-issue has had no activity for over 2 hours, release it — remove
-`in progress`, comment that the claim went stale and the issue is back in
-the queue, and delete the ownerless branch/worktree if they exist. When
-checking for PRs here, look for ANY open PR on the branch
-(`gh pr list --state open --head agent/<slug>`), labelled or not — the
-Phase A ownership filter must not hide an unlabelled PR from this check.
-Only an `agent/*` branch with no open PR at all (and in particular no
-`agent-pr`-labelled PR) is pipeline debris safe to delete; this is the
-one case branch deletion outside a merge is allowed. Issues claimed by
-humans or other sessions (comment names a non-`agent/*` branch) are
-NEVER touched.
+or spend limit, host suspend) leaves issues labeled `in progress` whose
+named `agent/<slug>` branch has no open PR. Group `in progress` issues by
+the branch their claim comment names (a combined branch is judged once,
+and released or kept as a unit). For each `agent/*` branch with no open
+PR, decide whether its worker is alive. The asymmetry that shapes the
+rule: a false "alive" costs one tick of delay, while a false "dead"
+strips labels, deletes a worktree out from under a live worker and
+invites a second worker onto its branch. So the rule is built so that no
+single instantaneous sample can produce "dead" — every signal below is
+positive-only evidence of life, and a claim is stale only when ALL of
+them are silent for a full window.
+
+Liveness, in order:
+
+1. **Dispatched by this tick → alive.** Every worker is a subagent
+   living inside the Claude process of the tick that dispatched it, and
+   `dispatch.sh` holds a per-agent `flock` for the life of a tick, so
+   while a dispatcher-started tick runs no earlier issue-pipeline tick —
+   and none of its workers — can still be alive. Workers this tick
+   dispatched are alive; leave them alone and skip the rest.
+2. **Otherwise, alive if ANY of these shows life; stale only if ALL are
+   silent.** The lock only serializes `dispatch.sh` ticks. It says
+   nothing about the playbook run by hand or interactively (how the
+   fleet was exercised before the timer existed, and how #319's live
+   `agent/admin-visual-polish` worker coexisted with a running tick), so
+   a branch this tick did not dispatch may still have a live worker.
+   Window = 2 hours, measured from now; `W=../kari-website-<slug>`:
+
+   - **Open PR on the branch:** `gh pr list --state open --head
+     agent/<slug>` — ANY open PR, labelled or not (the Phase A ownership
+     filter must not hide an unlabelled PR from this check). A PR means
+     the claim is simply not stale; it belongs to Phase A.
+   - **Worktree written within the window:**
+     `find "$W" \( -name node_modules -o -name target \) -prune -o
+     -mmin -120 -print -quit` prints anything. This sees only the
+     working files: a linked worktree's `.git` is a one-line gitdir
+     file, and its index, HEAD and refs live under the main clone's
+     `.git/worktrees/<slug>/`, which `find "$W"` never visits. So also
+     run `find "$(git -C "$W" rev-parse --git-dir)" -mmin -120 -print
+     -quit`, which catches git-metadata-only activity (index-only
+     staging, a `git fetch`/`git merge` that moved no files). A missing
+     worktree prints nothing — it is silent, not dead, on its own.
+   - **Branch tip within the window:** `git fetch origin` first, then
+     `git log -1 --format=%ct agent/<slug>` and
+     `git log -1 --format=%ct origin/agent/<slug>` (skip a ref that does
+     not exist); a committer time inside the window is life.
+   - **Issue activity within the window:** for each issue claimed on the
+     branch, `gh issue view <n> --json updatedAt`. Any label change,
+     comment or edit counts — including the claim comment itself, which
+     is what gives a just-claimed branch its grace period.
+   - **A `claude` process working in the worktree right now:** a
+     worker's tool calls (bash, node, cargo, git) run with their cwd
+     inside `$W`, so look for any process whose cwd is in that worktree
+     and whose ancestry contains a `claude` process:
+
+     ```
+     alive=0
+     for d in /proc/[0-9]*; do
+       case "$(readlink "$d/cwd" 2>/dev/null)" in
+         */kari-website-<slug>|*/kari-website-<slug>/*) ;; *) continue ;;
+       esac
+       p=${d#/proc/}
+       while [ "${p:-1}" -gt 1 ]; do
+         [ "$(cat /proc/$p/comm 2>/dev/null)" = claude ] && alive=1 && break 2
+         p=$(awk '/^PPid/{print $2}' /proc/$p/status 2>/dev/null)
+       done
+     done
+     ```
+
+     `alive=1` is life. `alive=0` proves nothing on its own: a healthy
+     worker spends most of its wall time between tool calls (model
+     turns, `Read`/`Edit`), and each Bash call is a one-shot shell that
+     exits when the command does, so a snapshot usually finds no
+     process at all. This check exists only to catch a worker that is
+     mid-command at the instant the tick samples. The ancestry
+     requirement separates a live worker from the debris a dead one
+     leaves behind — an orphaned dev server or MinIO from the worktree
+     reparented to PID 1 matches the cwd but has no `claude` ancestor,
+     and is itself a trace of death.
+
+- **Alive:** check 1 passes, or any signal in check 2 shows life. Leave
+  the branch alone; if only the window kept it alive, say so in the run
+  summary so a pattern of "alive on mtime alone, tick after tick" is
+  visible to a human.
+- **Dead — release this tick:** no open PR AND nothing written in the
+  worktree for 2h AND no commit on either ref for 2h AND no activity on
+  any claimed issue for 2h AND no `claude` process working there now. A
+  live worker cannot satisfy that conjunction: to go 2h without a PR,
+  an edit, a commit or a comment it would have to be doing nothing. The
+  cost of the window is that a worker killed right after a push (the
+  #322 sequence: push at 10:00, tick killed by the spend limit at 10:05)
+  is released at the first tick after 12:00 rather than at 10:15 — one
+  slot idle for under two hours, the price of never deleting a live
+  worker's worktree. Do not shorten the window on corroborating traces
+  (the dispatching tick's log under `$STATE/logs/issue-pipeline-*.log`
+  ending in an error or a usage/spend-limit message; an orphaned dev
+  server reparented to PID 1): those confirm a verdict the conjunction
+  already reached and make a good run-summary note, but are not a
+  release criterion. (#325 proposes a `claim-liveness.sh` helper that prints
+  these facts one per line; until it exists, run them by hand.)
+
+The release steps below — label removal, worktree removal, branch
+deletion — run ONLY on a branch the conjunction declared dead. Never run
+any of them on a branch that was alive by any signal.
+
+To release, save everything the worker left behind BEFORE anything is
+deleted — there are two kinds of leftovers and each needs its own
+rescue:
+
+- **Uncommitted changes.** If the worktree `../kari-website-<slug>`
+  exists and `git -C ../kari-website-<slug> status --porcelain` shows ANY
+  uncommitted change — modified or untracked — save all of it:
+  `git -C ../kari-website-<slug> add -A -N &&
+  git -C ../kari-website-<slug> diff HEAD --binary >
+  $STATE/wip/<slug>-<UTC stamp>.patch`
+  (`mkdir -p` the directory; `add -N` makes untracked new files — the
+  usual TDD case, a fresh test or component — part of the diff instead
+  of a casualty of the removal; `--binary` makes a captured screenshot
+  PNG or other binary file part of the patch instead of a content-free
+  "Binary files differ" line). Diff against `HEAD`, never the bare
+  `git diff`: the bare form is index-vs-worktree, so for a file the
+  worker had staged and then edited again (`status` shows `MM`) it
+  emits only the second hunk, against a parent blob that no longer
+  exists once the worktree is removed — the staged work is gone and
+  the patch will not even apply. `diff HEAD` spans staged, unstaged and
+  intent-to-add together. Confirm the patch is non-empty and mentions
+  every path from `status --porcelain` — necessary but not sufficient,
+  since a half-captured `MM` file passes it, which is why the command
+  above has to be right. If the patch fails that check (or the diff
+  command fails), do NOT stop the release — a stopped release keeps
+  the dead claim and its slot alive tick after tick. Rescue by commit
+  instead, which is faithful for any file type:
+  `git -C ../kari-website-<slug> add -A &&
+  git -C ../kari-website-<slug> commit -m "WIP: rescued by issue-pipeline
+  from a stale claim"`. The worker is dead, so nothing is racing you in
+  that worktree. That commit puts the branch ahead of `main`, so the
+  **Commits** rescue below pushes and keeps it; discard the incomplete
+  patch and name the branch, not the patch, in the release comment.
+  Only if the commit itself fails (a corrupt worktree) leave the
+  worktree in place, flag it with the error in the run summary, and
+  still complete the release below — the next worker on that slug is
+  told about the leftover worktree by the release comment and can
+  inspect it before recreating its own.
+- **Commits.** The worker brief tells workers to push WIP commits as the
+  reliable record, so a dead worker's branch usually carries hours of
+  work that is NOT in any patch (`status --porcelain` is clean after a
+  commit). Run `git fetch origin` and check whether the branch has
+  commits ahead of `main`, locally or on the remote:
+  `git rev-list --count origin/main..agent/<slug>` and
+  `git rev-list --count origin/main..origin/agent/<slug>` (skip a ref
+  that does not exist). If EITHER count is non-zero, the branch is
+  starting material, not debris: if the local branch is ahead of the
+  remote (or the remote branch is missing), push it first
+  (`git push -u origin agent/<slug>`, never `--force`), then remove the
+  worktree and KEEP the branch — do not run `git branch -D` or
+  `git push origin --delete` on it. Only a branch with zero commits ahead
+  of `origin/main` at both refs is deleted.
+
+Then remove `in progress` from EVERY issue claimed on the branch, and
+comment on each that the claim went stale and the issue is back in the
+queue, in this exact shape so a later tick can find it:
+`Claim released: agent/<slug> is stale. Starting material: branch
+agent/<slug> (kept, N commits ahead of main) | patch
+$STATE/wip/<slug>-<stamp>.patch | worktree ../kari-website-<slug> left
+in place (rescue failed: <error>) | none.` This comment is the ONLY
+record of the hand-over — the orchestrator is stateless, so the next
+tick learns about kept branches and patches by reading it (Phase B
+step 6), not from memory. Remove the worktree (`git worktree remove
+--force ../kari-website-<slug>`, unless the rescue above told you to
+leave it), and delete the branch only in the zero-commits case above.
+Only an `agent/*` branch the conjunction declared dead (so in
+particular no open PR, labelled or not) AND with no commits ahead of
+`origin/main` is pipeline debris safe to delete; this, and the
+zero-commits orphan case in Phase C step 2, are the only cases branch
+deletion outside a merge is allowed. Issues claimed by humans or
+other sessions (comment names a non-`agent/*` branch) are NEVER touched.
+A slug released this tick is NOT re-dispatched this tick: keep a list of
+released slugs and skip their issues in step 1 below, even with spare
+capacity. Re-dispatching immediately would put a second worker on the
+same `agent/<slug>` branch if the verdict was wrong, and the one-tick
+delay is also what lets the worker that recreates the worktree on the
+next tick see the branch as it was left, not as a race. The released
+issues are ordinary candidates from the next tick on, when step 6
+hands over the kept branch and/or patch.
 
 1. `gh issue list --state open --json number,title,labels,body`. Discard
    issues with any of these labels: `in progress`, `has-dependencies`,
-   `needs-clarification`, `idea`, `blocked`.
+   `needs-clarification`, `idea`, `blocked` — and issues whose claim was
+   released this tick (above).
 2. Read the remaining candidates fully (`gh issue view <n> --comments`).
    Judge readiness: is the desired outcome unambiguous enough to build
    without product decisions you'd be guessing at? If not, post ONE
@@ -154,15 +356,48 @@ NEVER touched.
    `needs-clarification` label (create it if missing:
    `gh label create needs-clarification --description "agent pipeline
    needs answers before working this" --color D93F0B`). Move on.
-3. From the ready issues, select up to (MAX_IN_FLIGHT − in-flight),
-   preferring `parallel-safe`-labeled and oldest first. Estimate which
-   files each touches; issues that plausibly overlap go in ONE combined
-   branch/worker (multiple `Closes #N` lines), per CLAUDE.md — that
-   counts as one worker, not two — or defer all but one. Anything
-   overlapping an in-flight PR's files waits.
+   Also spot-check the premise: paths the body names should exist
+   (`git ls-files <path>`), and a coverage-driven issue's figure should
+   be plausibly current. An obviously stale premise (file moved, target
+   already met) is handled exactly like an unready issue: ONE comment
+   saying what is stale and asking for a refresh, plus the
+   `needs-clarification` label — don't burn a worker on a moved file.
+   The label is what stops the next tick from re-reading the issue and
+   posting the same comment again; a human removes it when they refresh
+   the issue. Never comment without labelling.
+3. From the ready issues, select up to (MAX_IN_FLIGHT − in-flight)
+   workers, oldest first (there is no readiness label to prefer —
+   `has-dependencies` is the only marker, and it is a hard skip in
+   step 1). Estimate which files each touches. Anything overlapping an
+   in-flight branch's files waits. Among the rest, clustered small
+   issues should SHARE a worker rather than trickle through one per
+   tick (each PR costs a full CI run): when two or more target the same
+   file or tight area, send ONE worker on ONE branch closing all of
+   them (multiple `Closes #N` lines), per CLAUDE.md. Combine only when
+   ALL hold:
+   - each is small and mechanical — docs, comments, config, lockfile
+     bumps, test-only edits; never combine issues that change app
+     behavior;
+   - they share a file or a tight area (all CLAUDE.md; all
+     `automation/` prompts; all eslint config);
+   - at most three issues share one combined branch;
+   - none carries `has-dependencies`, `needs-clarification`, or
+     `blocked`.
+   Otherwise defer all but one. A combined branch is one worker: one
+   in-flight slot, not one per issue; one PR whose title names the
+   theme; one worker that claims every included issue up front
+   (step 4). Combining couples their fates — a review finding on one
+   holds the whole PR — which is fine for small mechanical work and why
+   behavioral changes never qualify.
 4. For each selection: add the `in progress` label and comment
-   `Working on this in branch agent/<slug>` on the issue (slug:
-   kebab-case, short, from the title). Classify the work:
+   `Working on this in branch agent/<slug>` on EVERY issue it covers,
+   so other sessions see them all taken. Slug: kebab-case, short, from
+   the title or theme — EXCEPT when an issue in the selection carries a
+   `Claim released:` comment (step 6) naming a kept branch: then the
+   selection reuses that branch's slug, so the worker starts from the
+   kept work instead of orphaning it. If two issues in one selection
+   name different kept branches, do not combine them — dispatch one
+   under its kept slug and defer the other. Classify the work:
    - **direct** — scoped, well-specified, few files, established
      patterns. The worker plans for itself.
    - **plan-first** — cross-cutting, architectural, gnarly async/CSS/
@@ -181,6 +416,22 @@ NEVER touched.
    slug; MODEL_NOTE = one line saying which classification it got and
    why; PLAN = the plan verbatim for plan-first work, or `None — direct
    work, plan it yourself.` for direct work.
+   Before dispatching, look for starting material: read each selected
+   issue's comments (you did in step 2) for the most recent
+   `Claim released:` comment, and verify what it names still exists
+   (`git fetch origin && git rev-list --count origin/main..origin/agent/
+   <old-slug>` non-zero; `ls $STATE/wip/<old-slug>-*.patch`). Name
+   everything found in ISSUE_LIST as unverified: a kept branch (tell
+   the worker to start from it — `git worktree add
+   ../kari-website-<slug> agent/<slug>` after `git fetch origin`,
+   which is why step 4 reused its slug — instead of branching off
+   `origin/main`, and to review what is there before building on it),
+   and/or a saved `wip/<old-slug>-*.patch` of uncommitted changes, and/
+   or a leftover worktree the rescue could not clear (the worker must
+   salvage and `git worktree remove --force` it before its own
+   `worktree add` can succeed on that path). A release comment
+   is the only link between an issue and its starting material, so
+   skipping this read orphans the kept branch for good.
 
 ## Phase C — housekeeping
 
@@ -189,13 +440,51 @@ NEVER touched.
    (`gh issue create`) — check `gh issue list --search` first so you
    don't file duplicates. Anything the pipeline itself hit (broken
    scripts, confusing docs) gets an issue too, per CLAUDE.md.
-2. A worker that reported a blockage instead of a PR: remove the issue's
+2. **Orphaned kept branches.** A kept branch is reachable only through
+   the `Claim released:` comments on its issues, so once those issues
+   are all closed (shipped by another PR, or closed by a human) nothing
+   would ever look at it again. List remote pipeline branches without
+   an open PR: `git ls-remote --heads origin 'agent/*'` minus the heads
+   of `gh pr list --state open --json headRefName`. Then build the
+   in-play set from what this tick already read, NOT from a search:
+   every branch named by a claim comment on an open `in progress`
+   issue (the grouping from stale-claim recovery), every branch named
+   by a `Claim released:` comment read in Phase B (step 2 or 6),
+   every slug released this tick, and every slug dispatched this tick.
+   Any branch in that set is in play — leave it, whatever its commit
+   count. Workers dispatched this tick may still be running while you
+   do this, and a worker may `git push -u` its branch before its first
+   commit, so a dispatched slug with zero commits ahead of `main` is a
+   live worker, not debris. Only for a branch outside that set ask
+   GitHub: `gh issue list --state open --search "agent/<slug>
+   in:comments"`. A hit is a keep-signal (leave the branch); a miss is
+   never evidence on its own — the search index lags fresh comments by
+   minutes and tokenises slugs loosely — it only confirms what the
+   in-play set already said. (Branch age is no help either: a
+   just-pushed empty branch's tip IS `origin/main`, whose commit date
+   can be days old.) A branch outside the in-play set AND unnamed by
+   the search is an orphan: if `git rev-list --count
+   origin/main..origin/agent/<slug>` is zero, delete it (`git push
+   origin --delete agent/<slug>`) — it is debris of the same kind
+   Phase B deletes; if it is ahead of `main`, do not delete it —
+   report it in the run summary with its tip SHA and the closed issues
+   it came from, so a human decides, and report it again each tick
+   until it is gone. As in Phase B, every signal here is positive-only
+   evidence of life: a branch that was alive by ANY of them is never
+   deleted, and a one-tick delay on a true orphan costs nothing. Never
+   delete or report a non-`agent/*` branch.
+3. A worker that reported a blockage instead of a PR: remove the issue's
    `in progress` label so a future tick (or a human) can pick it up
-   after the blockage is resolved.
-3. Print a run summary: PRs merged / updated / awaiting checks, fix and
+   after the blockage is resolved. A combined-branch worker that dropped
+   one item (contentious, or larger than it looked) and shipped the
+   rest: confirm the dropped issue has lost `in progress` and that its
+   PR body no longer says `Closes #N` for it — fix either if the worker
+   forgot.
+4. Print a run summary: PRs merged / updated / awaiting checks, fix and
    review agents dispatched, issues claimed, issues filed,
-   ownership-signal mismatches left for a human (Phase A), anything
-   skipped and why. This lands in the dispatcher's log for the human.
+   ownership-signal mismatches left for a human (Phase A), orphaned
+   kept branches (step 2), anything skipped and why. This lands in the
+   dispatcher's log for the human.
 
 ## Dispatching subagents
 
