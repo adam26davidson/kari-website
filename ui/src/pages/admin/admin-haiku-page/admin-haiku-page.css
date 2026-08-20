@@ -5,6 +5,6 @@
 
 .admin-haiku-list-publisher {
   font-size: 16px;
-  color: #4b4b4b;
+  color: var(--muted-text);
   margin-top: 15px;
 }

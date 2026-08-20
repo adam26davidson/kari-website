@@ -4,10 +4,16 @@
    and the admin-selectable photo moves its lightness around. This value
    clears WCAG AAA over a mid-lightness photo and still clears AA at both
    extremes, while staying lighter than the body text so the line still
-   reads as secondary (#343). Enforced by
-   src/test/secondary-text-contrast.test.ts. */
+   reads as secondary (#343). The admin panels reuse it on the same
+   translucent grey (#354). Enforced by src/test/text-contrast.test.ts. */
 :root {
   --muted-text: #3d3d3d;
+
+  /* Light foreground for the dark surfaces: the page itself (body text over
+     the background photo) and the filled admin controls. Declared as a token
+     so a control's legibility never depends on inheriting the body's colour
+     (#347). */
+  --light-text: #e6e6e6;
 }
 
 body {
@@ -16,7 +22,7 @@ body {
   font-weight: 300;
   font-style: normal;
   margin: 0;
-  color: #e6e6e6;
+  color: var(--light-text);
   height: 100vh;
 }
 
