@@ -23,8 +23,8 @@ Design and decisions:
     into `main` (which auto-deploys to test). How fast it does that is
     tuned by the two values in its agent file — see Throughput below.
 - `templates/*.md` — subagent prompt templates the issue-pipeline fills
-  in (`{{PLACEHOLDER}}` slots): `worker-brief.md`, `fix-brief.md`,
-  `review-brief.md`.
+  in (`{{PLACEHOLDER}}` slots): `plan-brief.md`, `worker-brief.md`,
+  `fix-brief.md`, `review-brief.md`.
 - `dispatch-test.sh` — local test harness for the dispatcher (not in
   CI). Run it whenever `dispatch.sh` changes.
 
@@ -262,6 +262,12 @@ nothing else. For `issue-pipeline`:
   and the fix/review agents tending their PRs, are where most of the
   usage goes.
 
+A third lever is *which model* each subagent gets. The policy lives in
+the playbook's "Dispatching subagents" section (and nowhere else):
+judgment — planning complex work, the code-review gate — gets the
+stronger tier; implementation — workers and fix agents — gets the
+cheaper one. Retune it by editing that one section.
+
 Read the current values there; this file deliberately doesn't repeat
 them. What they do:
 
@@ -284,5 +290,6 @@ A tick or subagent that hits a model usage limit simply dies; state
 lives in GitHub, so the next due tick recovers — the playbook releases
 stale issue claims (`in progress` with no PR after 2h) and re-shepherds
 open PRs statelessly. The `fallback` model keeps orchestration running
-through a Fable outage, and the playbook postpones Fable-tier subagent
-work (never silently downgrades it) until the limit window resets.
+through an outage of the primary, and the playbook postpones
+stronger-tier subagent work (never silently downgrades it) until the
+limit window resets.

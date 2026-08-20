@@ -106,8 +106,10 @@ are below the cap):
 - Issues that plausibly touch the same files are combined into one
   branch/PR (per CLAUDE.md), not worked in parallel.
 - For each selection: add `in progress`, comment the branch name
-  (`agent/<slug>`), classify complexity — straightforward/scoped → Opus,
-  complex/cross-cutting/tricky → Fable — and spawn workers in parallel.
+  (`agent/<slug>`), classify complexity — straightforward/scoped issues
+  go straight to a worker; complex/cross-cutting/tricky ones get a
+  planning pass first, whose plan is handed to the worker — and spawn
+  workers in parallel.
 
 **Phase C — housekeeping**: file GitHub issues for everything workers
 reported (next steps, tech debt, tooling friction) and anything the
@@ -130,6 +132,9 @@ Prompt templates the orchestrator fills in and passes to subagents:
   open a PR with `Closes #N` and a squash-worthy title; **finish at
   PR-open** (never wait on CI); return a structured report: what shipped,
   natural next steps, tech debt, problems hit.
+- `plan-brief.md` — read-only planning pass for complex issues: decides
+  the approach, files, tests, and risks, posts the plan on the issue
+  (so it survives worker crashes), and hands it to the worker.
 - `fix-brief.md` — given a PR and its feedback (CI failure, visual-review
   findings, or code-review findings): work in the PR's existing worktree,
   address each item or dismiss it with a reasoned PR reply, push.
@@ -184,5 +189,9 @@ rate limit (60/hr/IP) dwarfs personal use.
   what they are now.
 - Test-vs-prod visibility: an in-app, staging-only page (chosen over a
   repo script, hosted dashboard, or pinned issue).
-- Worker model split: Opus for straightforward tasks, Fable for complex
-  ones, chosen per-issue by the orchestrator.
+- Model split: judgment (planning complex issues, the code-review gate)
+  on the stronger tier, implementation (workers, fix agents) on the
+  cheaper one. Which models those are is set in the playbook's
+  "Dispatching subagents" section, not recorded here. (Originally the
+  split was per-issue on the worker itself; moved to plan-first +
+  cheap implementation on 2026-08-20 to cut usage.)
