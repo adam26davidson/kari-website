@@ -12,6 +12,7 @@
 #   KARI_AUTOMATION_AGENTS_DIR  default <repo>/automation/agents
 #   KARI_AUTOMATION_PAUSE_FILE  default <repo>/automation/PAUSE
 #   KARI_AUTOMATION_CLAUDE_BIN  default claude
+#   KARI_AUTOMATION_INHIBIT_BIN default systemd-inhibit (skipped if absent)
 #   KARI_AUTOMATION_DUE_TOLERANCE  default 120 (seconds); see DUE_TOLERANCE
 set -euo pipefail
 
@@ -20,6 +21,7 @@ AGENTS_DIR="${KARI_AUTOMATION_AGENTS_DIR:-$REPO_ROOT/automation/agents}"
 STATE_DIR="${KARI_AUTOMATION_STATE_DIR:-$HOME/.local/state/kari-website-automation}"
 PAUSE_FILE="${KARI_AUTOMATION_PAUSE_FILE:-$REPO_ROOT/automation/PAUSE}"
 CLAUDE_BIN="${KARI_AUTOMATION_CLAUDE_BIN:-claude}"
+INHIBIT_BIN="${KARI_AUTOMATION_INHIBIT_BIN:-systemd-inhibit}"
 # Slack on the "has the interval elapsed?" test. Polls happen on a coarse
 # grid (cron every 15m) while last-run is stamped at the moment a run
 # starts, so without slack each cycle's start creeps later into the
@@ -100,10 +102,20 @@ launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
     date +%s >"$STATE_DIR/$name.last-run"
     echo "run $name -> $log"
     cd "$REPO_ROOT"
+    # Hold a sleep+idle inhibitor for the life of the tick. Without it an
+    # idle-suspend mid-tick severs the agent's in-flight API request and the
+    # run dies part-done (observed 2026-08-19: a tick suspended two minutes
+    # in and came back only to fail with "Request timed out"). Optional by
+    # design: on a host without systemd-inhibit the tick still runs.
+    local inhibit=()
+    if command -v "$INHIBIT_BIN" >/dev/null 2>&1; then
+      inhibit=("$INHIBIT_BIN" --what=sleep:idle --mode=block
+        --who="kari-automation" --why="agent tick: $name")
+    fi
     # Unquoted ${var:+...} is deliberate: no flag at all when unset.
     # shellcheck disable=SC2086
     prompt_body "$agent_file" |
-      "$CLAUDE_BIN" -p --dangerously-skip-permissions \
+      "${inhibit[@]}" "$CLAUDE_BIN" -p --dangerously-skip-permissions \
         ${model:+--model "$model"} \
         ${fallback:+--fallback-model "$fallback"} >"$log" 2>&1
   ) 9>"$STATE_DIR/$name.lock" &
