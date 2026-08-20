@@ -132,7 +132,14 @@ For each owned PR, in order:
 In-flight = distinct `agent/*` branches: open pipeline-owned PRs (both
 ownership signals, per Phase A) + the branches named in claim comments
 on open `in progress` issues, de-duplicated (several issues claimed on
-one branch = one worker). If at capacity, skip to Phase C.
+one branch = one worker). Do NOT compare that count against
+MAX_IN_FLIGHT yet: stale-claim recovery (next) runs BEFORE the capacity
+check, because the count includes the branch named on every stale
+claim. Checking capacity first would let a single dead claim fill the
+only slot, skip recovery, and wedge the pipeline on every tick (the
+#319/#322 failure). Run recovery, then recompute in-flight excluding
+the slugs it released, and only then decide: if still at capacity, skip
+to Phase C.
 
 **Stale-claim recovery first:** a worker that died mid-task (crash, usage
 or spend limit, host suspend) leaves issues labeled `in progress` whose
@@ -169,10 +176,14 @@ Liveness, in order:
      the claim is simply not stale; it belongs to Phase A.
    - **Worktree written within the window:**
      `find "$W" \( -name node_modules -o -name target \) -prune -o
-     -mmin -120 -print -quit` prints anything (this covers
-     `.git/index`, `.git/HEAD` and refs too, so a commit, checkout,
-     stash or merge counts as much as an `Edit`). A missing worktree
-     prints nothing — it is silent, not dead, on its own.
+     -mmin -120 -print -quit` prints anything. This sees only the
+     working files: a linked worktree's `.git` is a one-line gitdir
+     file, and its index, HEAD and refs live under the main clone's
+     `.git/worktrees/<slug>/`, which `find "$W"` never visits. So also
+     run `find "$(git -C "$W" rev-parse --git-dir)" -mmin -120 -print
+     -quit`, which catches git-metadata-only activity (index-only
+     staging, a `git fetch`/`git merge` that moved no files). A missing
+     worktree prints nothing — it is silent, not dead, on its own.
    - **Branch tip within the window:** `git fetch origin` first, then
      `git log -1 --format=%ct agent/<slug>` and
      `git log -1 --format=%ct origin/agent/<slug>` (skip a ref that does
