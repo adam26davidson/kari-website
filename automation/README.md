@@ -169,6 +169,22 @@ the cron cadence) should track that start lag rather than the cadence: a
 tolerance near the poll period would let an `every: 1h` agent
 legitimately start up to ~14 minutes early.
 
+## Suspend and sleep
+
+Each tick runs under a `systemd-inhibit --what=sleep:idle --mode=block`
+lock, so the machine cannot suspend while an agent is working. This is
+damage control, not a scheduler: it protects a *running* tick, but the
+host still sleeps when idle *between* ticks, and a sleeping laptop runs
+no ticks at all. For overnight work the host must be kept awake — on
+KDE, System Settings → Power Management → uncheck the automatic suspend
+for "On AC Power" (battery profiles are deliberately left alone) and keep
+the machine plugged in. Note the lid is not the trigger: idle-suspend
+fires with the lid open.
+
+Symptoms of a tick killed by suspend: a log containing only
+`Request timed out`, or a zero-byte log with a `last-run` stamp; the
+kernel journal shows `PM: suspend entry` between the two.
+
 ## Usage limits
 
 A tick or subagent that hits a model usage limit simply dies; state

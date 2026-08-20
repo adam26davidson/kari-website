@@ -281,6 +281,53 @@ done
 expect_not_contains "$w/stub-out" "--fallback-model" \
   "no fallback flag when frontmatter omits it"
 
+# Sleep inhibition: the agent runs under systemd-inhibit when available, so a
+# tick can never be suspended mid-flight (see the overnight suspend incident).
+STUB_INHIBIT="$STUB_DIR/inhibit-stub"
+cat >"$STUB_INHIBIT" <<'EOF'
+#!/usr/bin/env bash
+# Records its own flags, then runs the wrapped command so the launch still works.
+args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --*) args+=("$1"); shift ;;
+    *) break ;;
+  esac
+done
+echo "INHIBIT_FLAGS: ${args[*]}" >"$STUB_OUT.inhibit"
+exec "$@"
+EOF
+chmod +x "$STUB_INHIBIT"
+
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+KARI_AUTOMATION_INHIBIT_BIN="$STUB_INHIBIT" STUB_CLAUDE="$STUB_DIR/claude-stub" \
+  run_dispatch "$w"
+for _ in $(seq 50); do
+  [ -s "$w/stub-out" ] && break
+  sleep 0.1
+done
+expect_contains "$w/stub-out.inhibit" "--what=sleep:idle" \
+  "launch runs under a sleep+idle inhibitor"
+expect_contains "$w/stub-out.inhibit" "--mode=block" \
+  "inhibitor blocks rather than delays"
+expect_contains "$w/stub-out" "This is the issue-pipeline prompt body." \
+  "agent still receives its prompt through the inhibitor"
+
+# The inhibitor is optional: an unavailable binary must not stop the tick.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+KARI_AUTOMATION_INHIBIT_BIN="/nonexistent/systemd-inhibit" \
+  STUB_CLAUDE="$STUB_DIR/claude-stub" run_dispatch "$w"
+for _ in $(seq 50); do
+  [ -s "$w/stub-out" ] && break
+  sleep 0.1
+done
+expect_contains "$w/stub-out" "This is the issue-pipeline prompt body." \
+  "agent still launches when no inhibitor binary exists"
+
 echo
 if [ "$FAILURES" -gt 0 ]; then
   echo "$FAILURES test(s) FAILED"
