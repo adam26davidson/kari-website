@@ -11,6 +11,16 @@ CI or reviews; the orchestrator handles everything after the PR exists.
 
 {{MODEL_NOTE}}
 
+## Implementation plan
+
+{{PLAN}}
+
+If a plan is present, it came from a dedicated planning pass: follow its
+approach, file list, and test list rather than redesigning from scratch.
+Deviate only where the code contradicts the plan — then note the
+deviation and why in the PR body. If the plan says `None`, the issue is
+scoped enough to plan yourself.
+
 ## Workspace rules (non-negotiable)
 
 - Create a sibling worktree and do ALL work there:

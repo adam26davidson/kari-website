@@ -1,7 +1,7 @@
 ---
 name: issue-pipeline
 enabled: true
-every: 30m
+every: 1h
 model: fable
 fallback: opus   # keep orchestrating on Opus when the Fable limit is hit
 ---
@@ -12,6 +12,15 @@ never assumptions about previous ticks, and leave GitHub consistent for
 the next tick. Work the phases below in order and stop when done. If a
 step fails, log it, skip that item, and continue the tick — file an issue
 about the failure in Phase C rather than aborting everything.
+
+## Budget
+
+    MAX_IN_FLIGHT = 1
+
+That is the only place this number is written down, and the tick cadence
+lives in the `every:` frontmatter above — those two values are the whole
+usage budget. The rest of this file, and every doc, refers to them by
+name: never restate either as a literal anywhere else.
 
 ## Safety rails (absolute, override anything else you infer)
 
@@ -28,9 +37,10 @@ about the failure in Phase C rather than aborting everything.
 - Never approve, trigger, or touch production deployments or the
   `production` GitHub Environment. Merging to main (test deploy) is your
   ceiling.
-- At most 3 issue-workers in flight (open pipeline-owned PRs + issues
-  you claim this tick, combined). Fix/review agents for existing PRs
-  don't count.
+- At most MAX_IN_FLIGHT issue-workers in flight (open pipeline-owned
+  PRs + issues you claim this tick, combined). It is a usage budget, not
+  a coordination limit: never exceed it to drain a backlog faster.
+  Fix/review agents for existing PRs don't count.
 - Merges are always squash merges, and always serial — one PR fully
   merged before the next is considered.
 - Stay inside this repository and its GitHub project. Nothing else.
@@ -77,9 +87,13 @@ For each owned PR, in order:
    code-review merge gate" --color 0E8A16` first if the label doesn't
    exist): dispatch a review agent with
    `automation/templates/review-brief.md`. Verdict CLEAN → add the label.
-   Findings → dispatch a fix agent with FEEDBACK = the findings; the
-   label stays off, so the PR gets re-reviewed on a later tick after the
-   fixes land.
+   Findings → post them as a PR comment headed `## Code review findings`
+   (all pipeline state lives in GitHub — without this a later tick
+   cannot tell a fresh finding from one that already survived a fix
+   cycle, which the escalation valve under "Dispatching subagents"
+   depends on), then dispatch a fix agent with FEEDBACK = the findings;
+   the label stays off, so the PR gets re-reviewed on a later tick after
+   the fixes land.
 4. **Merge (serial):** the first PR that is green + visually settled +
    labeled `agent:reviewed` gets merged. The ordering below is
    load-bearing — do not reorder it:
@@ -108,7 +122,7 @@ For each owned PR, in order:
    Push, and let CI re-run; those PRs merge on a later tick, not this
    one. Merge at most one PR per tick.
 
-## Phase B — pick new work (only if in-flight count < 3)
+## Phase B — pick new work (only if in-flight count < MAX_IN_FLIGHT)
 
 In-flight = open pipeline-owned PRs (both ownership signals, per
 Phase A) + open issues labeled `in progress`. If at capacity, skip to
@@ -140,21 +154,33 @@ NEVER touched.
    `needs-clarification` label (create it if missing:
    `gh label create needs-clarification --description "agent pipeline
    needs answers before working this" --color D93F0B`). Move on.
-3. From the ready issues, select up to (3 − in-flight), preferring
-   `parallel-safe`-labeled and oldest first. Estimate which files each
-   touches; issues that plausibly overlap go in ONE combined
-   branch/worker (multiple `Closes #N` lines), per CLAUDE.md — or defer
-   all but one. Anything overlapping an in-flight PR's files waits.
+3. From the ready issues, select up to (MAX_IN_FLIGHT − in-flight),
+   preferring `parallel-safe`-labeled and oldest first. Estimate which
+   files each touches; issues that plausibly overlap go in ONE combined
+   branch/worker (multiple `Closes #N` lines), per CLAUDE.md — that
+   counts as one worker, not two — or defer all but one. Anything
+   overlapping an in-flight PR's files waits.
 4. For each selection: add the `in progress` label and comment
    `Working on this in branch agent/<slug>` on the issue (slug:
    kebab-case, short, from the title). Classify the work:
-   - **opus** — scoped, well-specified, few files, established patterns.
-   - **fable** — cross-cutting, architectural, gnarly async/CSS/state,
-     vague-but-ready specs, or anything touching both API and UI.
-5. Dispatch all selected workers in parallel with
+   - **direct** — scoped, well-specified, few files, established
+     patterns. The worker plans for itself.
+   - **plan-first** — cross-cutting, architectural, gnarly async/CSS/
+     state, vague-but-ready specs, or anything touching both API and UI.
+     Gets a planning pass before implementation.
+5. For each plan-first selection, first dispatch a plan agent with
+   `automation/templates/plan-brief.md` (ISSUE_LIST as below). It posts
+   the plan as a comment on the issue and returns it. If the issue
+   already carries an `## Implementation plan` comment from a previous
+   tick (e.g. a reclaimed stale claim, or a worker that died after
+   planning), reuse that instead of re-planning — unless issue comments
+   since then changed the requirements.
+6. Dispatch all selected workers in parallel with
    `automation/templates/worker-brief.md`: ISSUE_LIST = full issue
    number(s), title(s), body/bodies, and relevant comments; SLUG = the
-   slug; MODEL_NOTE = one line saying which model tier it got and why.
+   slug; MODEL_NOTE = one line saying which classification it got and
+   why; PLAN = the plan verbatim for plan-first work, or `None — direct
+   work, plan it yourself.` for direct work.
 
 ## Phase C — housekeeping
 
@@ -176,15 +202,25 @@ NEVER touched.
 - Read the named template file, substitute every `{{PLACEHOLDER}}`, and
   pass the result as the subagent's full prompt via the Agent tool
   (subagents inherit CLAUDE.md automatically).
-- Worker agents: model per the Phase B classification. Fix agents: same
-  tier the original worker got (default opus for pure CI/lint fixes,
-  fable if the fix looks structural). Review agents: always fable.
-- **Usage limits:** if spawning a Fable-tier subagent fails with a usage-
-  limit error, POSTPONE that item to a later tick (note it in the run
-  summary) — never downgrade the review gate or complex work to a smaller
-  model to squeeze it in. Opus-tier work continues normally. If you are
-  yourself running on the fallback model, still request the configured
-  tiers for subagents — the limit may have reset since your tick started.
+- Model policy (stated here and nowhere else): **judgment gets fable,
+  implementation gets opus.** Plan agents and review agents run on
+  fable. Worker and fix agents always run on opus — including fixes for
+  structural review findings; the plan and the review gate are where the
+  stronger model earns its cost, not the typing in between.
+- Escalation valve: if the SAME feedback substantially survives two
+  consecutive fix cycles on one PR (compare this review's findings
+  against the `## Code review findings` comments already on the PR),
+  stop dispatching bare fix agents. Dispatch a plan agent against
+  the PR's diff + the surviving findings, then hand its plan to the next
+  fix agent as part of FEEDBACK. If that cycle also fails, leave the PR
+  for a human and say so in the run summary.
+- **Usage limits:** if spawning a fable-tier subagent (plan or review)
+  fails with a usage-limit error, POSTPONE that item to a later tick
+  (note it in the run summary) — never downgrade planning or the review
+  gate to a smaller model to squeeze it in. Opus implementation of
+  already-planned or direct work continues normally. If you are yourself
+  running on the fallback model, still request the configured tiers for
+  subagents — the limit may have reset since your tick started.
 - Run independent subagents in parallel; anything touching the same PR
   or worktree runs serially.
 - WORKTREE_PATH for fix agents is `../kari-website-<slug>` relative to
