@@ -22,6 +22,24 @@ lives in the `every:` frontmatter above — those two values are the whole
 usage budget. The rest of this file, and every doc, refers to them by
 name: never restate either as a literal anywhere else.
 
+## State directory
+
+The fleet keeps its laptop-local state (dispatcher logs, and the WIP
+patches rescued in Phase B) in one directory. Resolve it once at the
+start of the tick, exactly as `automation/dispatch.sh` does, and refer
+to it as `$STATE` everywhere below:
+
+```sh
+STATE="${KARI_AUTOMATION_STATE_DIR:-$HOME/.local/state/kari-website-automation}"
+```
+
+`dispatch.sh` resolves that same expression for its own logs and locks,
+and the override reaches this tick through the environment, so on a host
+that sets `KARI_AUTOMATION_STATE_DIR` the default path is the wrong one.
+Never write it as a literal: doing so files rescued patches under a
+directory the next tick does not read, and points a human at logs that
+are not there.
+
 ## Safety rails (absolute, override anything else you infer)
 
 - Operate only on branches prefixed `agent/`. Never push to `main`
@@ -236,12 +254,11 @@ Liveness, in order:
   is released at the first tick after 12:00 rather than at 10:15 — one
   slot idle for under two hours, the price of never deleting a live
   worker's worktree. Do not shorten the window on corroborating traces
-  (the dispatching tick's log under `$STATE/logs/issue-pipeline-*.log`,
-  where `STATE=~/.local/state/kari-website-automation`, ending in an
-  error or a usage/spend-limit message; an orphaned dev server
-  reparented to PID 1): those confirm a verdict the conjunction already
-  reached and make a good run-summary note, but are not a release
-  criterion. (#325 proposes a `claim-liveness.sh` helper that prints
+  (the dispatching tick's log under `$STATE/logs/issue-pipeline-*.log`
+  ending in an error or a usage/spend-limit message; an orphaned dev
+  server reparented to PID 1): those confirm a verdict the conjunction
+  already reached and make a good run-summary note, but are not a
+  release criterion. (#325 proposes a `claim-liveness.sh` helper that prints
   these facts one per line; until it exists, run them by hand.)
 
 The release steps below — label removal, worktree removal, branch
@@ -256,15 +273,23 @@ rescue:
   exists and `git -C ../kari-website-<slug> status --porcelain` shows ANY
   uncommitted change — modified or untracked — save all of it:
   `git -C ../kari-website-<slug> add -A -N &&
-  git -C ../kari-website-<slug> diff --binary >
+  git -C ../kari-website-<slug> diff HEAD --binary >
   $STATE/wip/<slug>-<UTC stamp>.patch`
   (`mkdir -p` the directory; `add -N` makes untracked new files — the
   usual TDD case, a fresh test or component — part of the diff instead
   of a casualty of the removal; `--binary` makes a captured screenshot
   PNG or other binary file part of the patch instead of a content-free
-  "Binary files differ" line). Confirm the patch is non-empty and
-  mentions every path from `status --porcelain`. If it does not (or the
-  diff command fails), do NOT stop the release — a stopped release keeps
+  "Binary files differ" line). Diff against `HEAD`, never the bare
+  `git diff`: the bare form is index-vs-worktree, so for a file the
+  worker had staged and then edited again (`status` shows `MM`) it
+  emits only the second hunk, against a parent blob that no longer
+  exists once the worktree is removed — the staged work is gone and
+  the patch will not even apply. `diff HEAD` spans staged, unstaged and
+  intent-to-add together. Confirm the patch is non-empty and mentions
+  every path from `status --porcelain` — necessary but not sufficient,
+  since a half-captured `MM` file passes it, which is why the command
+  above has to be right. If the patch fails that check (or the diff
+  command fails), do NOT stop the release — a stopped release keeps
   the dead claim and its slot alive tick after tick. Rescue by commit
   instead, which is faithful for any file type:
   `git -C ../kari-website-<slug> add -A &&
