@@ -76,8 +76,8 @@ When the two signals disagree, the pipeline never merges:
 `KARI_AUTOMATION_STATE_DIR`): `<name>.last-run` timestamps,
 `<name>.lock` flock files, `logs/<name>-<timestamp>.log` per run
 (pruned after 30 days), and `wip/<slug>-<timestamp>.patch` diffs rescued
-from dead workers' worktrees (see Usage limits). The repo defines *what and how often*; the
-machine tracks *when last*.
+from dead workers' worktrees (see Usage limits). The repo defines *what
+and how often*; the machine tracks *when last*.
 
 ## Pausing
 
@@ -257,6 +257,6 @@ provably dead: no tick process predating the claim and no recent pushed
 commit on its `agent/*` branch; after 2h of silence if it cannot tell)
 and re-shepherds open PRs statelessly. Uncommitted work in a dead
 worker's worktree is saved to `wip/<slug>-<timestamp>.patch` in the
-state directory before the worktree is removed. The `fallback` model keeps orchestration running
-through a Fable outage, and the playbook postpones Fable-tier subagent
+state directory before the worktree is removed. The `fallback` model
+keeps orchestration running through a Fable outage, and the playbook postpones Fable-tier subagent
 work (never silently downgrades it) until the limit window resets.
