@@ -17,8 +17,14 @@ LINT="$HERE/lint-workflows.sh"
 FAILURES=0
 WORKDIRS=()
 
-# Invoked by the EXIT trap below.
-# shellcheck disable=SC2329
+# Invoked by the EXIT trap below, which shellcheck does not model, so it
+# reads the function as dead code — under a different name per release:
+# 0.11 (the pinned image) reports the function as never invoked (SC2329),
+# while 0.9/0.10 — what GitHub runners ship — report its body as
+# unreachable (SC2317), because this script's last statement is an
+# unconditional `exit`. Both codes have to be listed: silencing only the
+# one the pin emits left CI red on the one it does not.
+# shellcheck disable=SC2329,SC2317
 cleanup() {
   for d in "${WORKDIRS[@]:-}"; do
     [ -n "$d" ] && rm -rf "$d"
@@ -414,7 +420,23 @@ expect_contains "$r/stub.log" "shellcheck " \
 expect_not_contains "$r/stub.log" "koalaman/shellcheck" \
   "a local shellcheck skips the docker image"
 
-# 21. Dependency and build trees are not ours to lint — thousands of vendored
+# 21. No severity filter. shellcheck's `info` tier holds SC2086 and friends,
+#     so a `--severity` floor would trade real bugs for quiet — including
+#     quiet about the version-skew false positives it is tempting to reach
+#     for it over (see the disable on cleanup() above). Those get a
+#     line-level disable naming every code the releases in play emit.
+r="$(new_repo)"
+good_workflow "$r" ci
+run_lint "$r"
+expect_contains "$r/stub.log" "koalaman/shellcheck" \
+  "the severity case really did run shellcheck"
+expect_not_contains "$r/stub.log" "--severity" \
+  "the shellcheck image runs with no severity filter"
+STUB_PATH="$STUB_BIN" run_lint "$r"
+expect_not_contains "$r/stub.log" "--severity" \
+  "a local shellcheck runs with no severity filter"
+
+# 22. Dependency and build trees are not ours to lint — thousands of vendored
 #     scripts would drown the real findings (and slow the check to a crawl).
 r="$(new_repo)"
 good_workflow "$r" ci
@@ -435,7 +457,7 @@ expect_not_contains "$r/stub.log" ".claude" \
 # and would otherwise flag this harness's own fixture text.
 pin='PINNED_IMAGE="busybox:1.36"'
 
-# 22. A pinned image with no `# renovate:` annotation above it is invisible
+# 23. A pinned image with no `# renovate:` annotation above it is invisible
 #     to renovate and would rot silently, so the lint rejects it.
 r="$(new_repo)"
 good_workflow "$r" ci
@@ -447,7 +469,7 @@ expect_contains "$r/out" "scripts/thing.sh" \
 expect_contains "$r/out" "renovate" \
   "an unannotated image pin says what is missing"
 
-# 23. With the annotation renovate needs, the same pin is fine.
+# 24. With the annotation renovate needs, the same pin is fine.
 r="$(new_repo)"
 good_workflow "$r" ci
 extra_script "$r" scripts/thing.sh "# renovate: datasource=docker
@@ -455,7 +477,7 @@ $pin"
 run_lint "$r"
 expect_eq "$(cat "$r/exit-code")" 0 "an annotated image pin is accepted"
 
-# 24. The annotation has to be the renovate one — an ordinary comment above
+# 25. The annotation has to be the renovate one — an ordinary comment above
 #     the pin must not satisfy the check.
 r="$(new_repo)"
 good_workflow "$r" ci
@@ -465,7 +487,7 @@ run_lint "$r"
 expect_not_contains "$r/exit-code" "0" \
   "an ordinary comment does not satisfy the annotation check"
 
-# 25. An assignment with no pinned tag (an image chosen at runtime) has
+# 26. An assignment with no pinned tag (an image chosen at runtime) has
 #     nothing for renovate to track, so it must not be flagged.
 r="$(new_repo)"
 good_workflow "$r" ci

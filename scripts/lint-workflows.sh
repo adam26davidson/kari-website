@@ -15,7 +15,11 @@
 #      rejects timeout-minutes on those.
 #   3. shellcheck over every *.sh in the repo (scripts/, automation/, the
 #      CodeDeploy hooks). actionlint only sees the shell embedded in
-#      workflows; these are the scripts that shell calls out to.
+#      workflows; these are the scripts that shell calls out to. Findings
+#      are not filtered by severity: shellcheck's `info` tier is where
+#      SC2086 and friends live, so a `--severity` floor would buy quiet
+#      with real bugs. A false positive gets a `# shellcheck disable=` at
+#      its own line instead.
 #   4. Annotated image pins — every pinned docker image in those scripts
 #      needs a `# renovate: datasource=docker` comment above it, which is
 #      what renovate.json's customManager keys off. Without one the pin is
@@ -25,8 +29,13 @@
 # PATH, actionlint/shellcheck run from their images and the YAML parse from
 # mikefarah/yq's. GitHub runners ship yq and shellcheck, so CI pulls only
 # the actionlint image — which does mean CI's shellcheck is the runner's
-# version rather than the pin below. That skew only ever costs findings
-# (the runner's is the older release), never a spurious red.
+# version rather than the pin below. That skew cuts both ways: the runner's
+# older release can miss a finding the pin makes, and it can also raise one
+# the pin does not (it has: SC2317 on a trap handler that 0.11 reports as
+# SC2329 instead). So a locally clean run is not proof CI is clean, and a
+# disable comment for a version-skew false positive has to name every code
+# the releases in play emit. Issue #340 tracks making CI use the pins so
+# the two agree.
 #
 # Tests: scripts/lint-workflows-test.sh
 set -uo pipefail
