@@ -15,6 +15,10 @@ CI or reviews; the orchestrator handles everything after the PR exists.
 
 - Create a sibling worktree and do ALL work there:
   `git fetch origin && git worktree add ../kari-website-{{SLUG}} -b agent/{{SLUG}} origin/main`
+  If your assignment names a kept `agent/{{SLUG}}` branch from a
+  released claim, start from it instead (`git fetch origin &&
+  git worktree add ../kari-website-{{SLUG}} agent/{{SLUG}}`) and review
+  what it contains before building on it — it is unverified.
   Any worktree of the repo can create another — run this from your
   current repo directory, not via `git -C <main clone>` (the harness may
   refuse commands targeting directories outside your workspace). If your
@@ -55,9 +59,11 @@ CI or reviews; the orchestrator handles everything after the PR exists.
   long-running step (dependency install, e2e run, visual check) rather
   than after it. You live inside the orchestrator's process; if it is
   killed by a host suspend or a usage limit, so are you, and the next
-  tick releases your claim and removes your worktree (saving uncommitted
-  changes as a patch, but a pushed branch is the reliable record).
-  Workers that kept everything local have lost hours of work. PRs are
+  tick releases your claim and removes your worktree. It saves
+  uncommitted changes as a patch and keeps any `agent/{{SLUG}}` branch
+  that has commits ahead of `main`, handing both to the next worker on
+  this slug — but a pushed branch is the reliable record, and workers
+  that kept everything local have lost hours of work. PRs are
   squash-merged, so WIP commit messages are fine.
 - Combined assignments (several issues on this one branch): claim every
   issue up front if the orchestrator has not already — `in progress`

@@ -129,20 +129,53 @@ by issue-comment age or branch activity: a healthy worker on a long
 combined branch can go hours without commenting, while a dead one can
 look "active" because its claim comment or last WIP push is recent.
 
-Liveness is a matter of construction, not heuristics. Every worker is a
-subagent living inside the Claude process of the tick that dispatched
-it, and `dispatch.sh` holds a per-agent `flock` for the life of a tick,
-so while this tick runs no earlier issue-pipeline tick — and therefore
-none of its workers — can still be alive. Hence:
+Liveness is decided by two checks, both mechanical:
 
-- **Alive:** only workers dispatched by THIS tick. Leave them alone.
+1. **Dispatched by this tick.** Every worker is a subagent living inside
+   the Claude process of the tick that dispatched it, and `dispatch.sh`
+   holds a per-agent `flock` for the life of a tick, so while a
+   dispatcher-started tick runs no earlier issue-pipeline tick — and
+   none of its workers — can still be alive. Workers this tick
+   dispatched are alive; leave them alone.
+2. **A live `claude` process working in the worktree.** The lock only
+   serializes `dispatch.sh` ticks. It says nothing about the playbook
+   run by hand or interactively (how the fleet was exercised before the
+   timer existed, and how #319's live `agent/admin-visual-polish` worker
+   coexisted with a running tick), so a branch this tick did not
+   dispatch may still have a live worker. Check for one directly: a
+   worker's tool calls (bash, node, cargo, git) run with their cwd inside
+   `../kari-website-<slug>`, so look for any process whose cwd is in
+   that worktree and whose ancestry contains a `claude` process:
+
+   ```
+   alive=0
+   for d in /proc/[0-9]*; do
+     case "$(readlink "$d/cwd" 2>/dev/null)" in
+       */kari-website-<slug>|*/kari-website-<slug>/*) ;; *) continue ;;
+     esac
+     p=${d#/proc/}
+     while [ "${p:-1}" -gt 1 ]; do
+       [ "$(cat /proc/$p/comm 2>/dev/null)" = claude ] && alive=1 && break 2
+       p=$(awk '/^PPid/{print $2}' /proc/$p/status 2>/dev/null)
+     done
+   done
+   ```
+
+   `alive=1` means a worker (or a human's `claude` session opened in
+   that worktree) is using the branch: treat it as alive and leave it
+   alone. The ancestry requirement is what separates a live worker from
+   the debris a dead one leaves behind — an orphaned dev server or MinIO
+   from the worktree reparented to PID 1 matches the cwd but has no
+   `claude` ancestor, and is itself a trace of death.
+
+- **Alive:** either check passes. Leave the branch alone.
 - **Dead — release now, no waiting period:** every `agent/*` branch with
-  no open PR that this tick did not dispatch. A WIP commit pushed
-  minutes ago proves only past liveness (the #322 sequence: push at
-  10:00, tick killed by the spend limit at 10:05, branch still pushed
-  "recently" at the 10:15 tick) and never overrides this; neither does a
-  `claude` process older than the claim (another agent's tick, or an
-  interactive session — the lock rules out its being the dispatcher).
+  no open PR that fails both checks. A WIP commit pushed minutes ago
+  proves only past liveness (the #322 sequence: push at 10:00, tick
+  killed by the spend limit at 10:05, branch still pushed "recently" at
+  the 10:15 tick) and never overrides this; neither does a `claude`
+  process that merely predates the claim without working in the
+  worktree (another agent's tick, or an unrelated interactive session).
   The corroborating traces are usually there too — the dispatching
   tick's log (`$STATE/logs/issue-pipeline-*.log`, where
   `STATE=~/.local/state/kari-website-automation`) ending in an error, a
@@ -150,27 +183,51 @@ none of its workers — can still be alive. Hence:
   MinIO from the worktree reparented to PID 1 — but none is required to
   release.
 
-To release: if the worktree `../kari-website-<slug>` exists and
-`git -C ../kari-website-<slug> status --porcelain` shows ANY uncommitted
-change — modified or untracked — save all of it before anything is
-deleted: `git -C ../kari-website-<slug> add -A -N &&
-git -C ../kari-website-<slug> diff > $STATE/wip/<slug>-<UTC stamp>.patch`
-(`mkdir -p` the directory; `add -N` makes untracked new files — the
-usual TDD case, a fresh test or component — part of the diff instead of
-a casualty of the removal). Confirm the patch is non-empty and mentions
-every path from `status --porcelain` before removing the worktree; if
-it does not, leave the worktree in place and flag it in the run
-summary. Hand the patch path to the next worker on that slug in its
-brief as unverified starting material. Then remove `in progress` from
-EVERY issue claimed on the branch, comment on each that the claim went
-stale and the issue is back in the queue, and delete the ownerless
-branch/worktree.
+To release, save everything the worker left behind BEFORE anything is
+deleted — there are two kinds of leftovers and each needs its own
+rescue:
+
+- **Uncommitted changes.** If the worktree `../kari-website-<slug>`
+  exists and `git -C ../kari-website-<slug> status --porcelain` shows ANY
+  uncommitted change — modified or untracked — save all of it:
+  `git -C ../kari-website-<slug> add -A -N &&
+  git -C ../kari-website-<slug> diff > $STATE/wip/<slug>-<UTC stamp>.patch`
+  (`mkdir -p` the directory; `add -N` makes untracked new files — the
+  usual TDD case, a fresh test or component — part of the diff instead
+  of a casualty of the removal). Confirm the patch is non-empty and
+  mentions every path from `status --porcelain` before removing the
+  worktree; if it does not, leave the worktree in place and flag it in
+  the run summary.
+- **Commits.** The worker brief tells workers to push WIP commits as the
+  reliable record, so a dead worker's branch usually carries hours of
+  work that is NOT in any patch (`status --porcelain` is clean after a
+  commit). Run `git fetch origin` and check whether the branch has
+  commits ahead of `main`, locally or on the remote:
+  `git rev-list --count origin/main..agent/<slug>` and
+  `git rev-list --count origin/main..origin/agent/<slug>` (skip a ref
+  that does not exist). If EITHER count is non-zero, the branch is
+  starting material, not debris: if the local branch is ahead of the
+  remote (or the remote branch is missing), push it first
+  (`git push -u origin agent/<slug>`, never `--force`), then remove the
+  worktree and KEEP the branch — do not run `git branch -D` or
+  `git push origin --delete` on it. Only a branch with zero commits ahead
+  of `origin/main` at both refs is deleted.
+
+Then remove `in progress` from EVERY issue claimed on the branch, and
+comment on each that the claim went stale and the issue is back in the
+queue — naming the kept branch and/or the patch path when either
+exists, so a human picking the issue up sees the starting material too.
+Remove the worktree (`git worktree remove --force ../kari-website-<slug>`),
+and delete the branch only in the zero-commits case above.
+Hand the kept branch and/or the patch path to the next worker on that
+slug in its brief as unverified starting material (Phase B step 5).
 When checking for PRs here, look for ANY open PR on the branch
 (`gh pr list --state open --head agent/<slug>`), labelled or not — the
 Phase A ownership filter must not hide an unlabelled PR from this check.
 Only an `agent/*` branch with no open PR at all (and in particular no
-`agent-pr`-labelled PR) is pipeline debris safe to delete; this is the
-one case branch deletion outside a merge is allowed. Issues claimed by
+`agent-pr`-labelled PR) AND no commits ahead of `origin/main` is
+pipeline debris safe to delete; this is the one case branch deletion
+outside a merge is allowed. Issues claimed by
 humans or other sessions (comment names a non-`agent/*` branch) are
 NEVER touched. A released branch's issues are ordinary candidates again
 this same tick — re-dispatch them (same slug is fine) if capacity allows.
@@ -224,8 +281,13 @@ this same tick — re-dispatch them (same slug is fine) if capacity allows.
    `automation/templates/worker-brief.md`: ISSUE_LIST = full issue
    number(s), title(s), body/bodies, and relevant comments; SLUG = the
    slug; MODEL_NOTE = one line saying which model tier it got and why.
-   If a saved `wip/<slug>-*.patch` exists from a released claim on the
-   same slug, name it in ISSUE_LIST as unverified starting material.
+   If a released claim on the same slug left starting material, name it
+   in ISSUE_LIST as unverified: a kept `agent/<slug>` branch with
+   commits ahead of `main` (tell the worker to start from
+   `origin/agent/<slug>` — `git worktree add ../kari-website-<slug>
+   agent/<slug>` after `git fetch origin` — instead of branching off
+   `origin/main`, and to review what is there before building on it),
+   and/or a saved `wip/<slug>-*.patch` of uncommitted changes.
 
 ## Phase C — housekeeping
 
