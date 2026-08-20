@@ -3,6 +3,7 @@
 # /health probes S3 read+write, so a deploy with broken credentials fails
 # validation instead of going live.
 set -e
+# shellcheck source=scripts/deploy/env.sh
 . "$(dirname "$0")/env.sh"
 for i in $(seq 1 15); do
   code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${API_PORT}/health" || true)
