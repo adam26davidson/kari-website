@@ -45,6 +45,7 @@ run_dispatch() { # <workdir> [args...] — output in <workdir>/out
   KARI_AUTOMATION_CLAUDE_BIN="${STUB_CLAUDE:-claude}" \
   KARI_AUTOMATION_DUE_TOLERANCE="${DUE_TOLERANCE:-}" \
   KARI_AUTOMATION_INHIBIT_BIN="${KARI_AUTOMATION_INHIBIT_BIN:-/nonexistent/systemd-inhibit}" \
+  KARI_AUTOMATION_SELF_UPDATE="${SELF_UPDATE:-0}" \
     bash "$DISPATCH" "$@" >"$work/out" 2>&1
   echo $? >"$work/exit-code"
 }
@@ -521,6 +522,103 @@ run_dispatch "$w" --status
 expect_contains "$w/out" "paused" "status mentions the PAUSE file"
 expect_eq "$(status_line "$w" issue-pipeline last-run)" never \
   "status still lists agents while paused"
+
+# 12. Self-update: a real tick fast-forwards the clone it runs from to
+# origin/main before reading agents, so config merged to main takes effect
+# on the next tick instead of waiting for a human to pull (#399). Exercised
+# against a throwaway bare "origin" and a clone of it carrying a copy of
+# dispatch.sh, because REPO_ROOT is derived from the script's own location.
+git_q() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main \
+  -c commit.gpgsign=false "$@" >/dev/null 2>&1; }
+new_repo_pair() { # <workdir> — sets ORIGIN (bare) and CLONE (on main)
+  local work="$1"
+  ORIGIN="$work/origin.git"
+  CLONE="$work/clone"
+  git_q init --bare "$ORIGIN"
+  git_q clone "$ORIGIN" "$CLONE"
+  mkdir -p "$CLONE/automation"
+  cp "$DISPATCH" "$CLONE/automation/dispatch.sh"
+  git_q -C "$CLONE" add -A
+  git_q -C "$CLONE" commit -m "seed"
+  git_q -C "$CLONE" push -u origin main
+}
+push_upstream_commit() { # <workdir> — a second clone lands a commit on main
+  local work="$1"
+  git_q clone "$ORIGIN" "$work/other"
+  echo "upstream" >"$work/other/upstream.txt"
+  git_q -C "$work/other" add -A
+  git_q -C "$work/other" commit -m "upstream"
+  git_q -C "$work/other" push origin main
+  rm -rf "$work/other"
+}
+head_of() { git -C "$1" rev-parse "${2:-HEAD}"; }
+
+# 12a. A real tick on main fast-forwards to origin/main and says so.
+w="$(new_work)"
+new_repo_pair "$w"
+push_upstream_commit "$w"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=1 run_launch "$w"
+expect_eq "$(head_of "$CLONE")" "$(head_of "$ORIGIN" main)" \
+  "tick fast-forwards the clone to origin/main"
+expect_contains "$w/out" "self-update:" "tick reports the fast-forward"
+expect_contains "$w/out" "run issue-pipeline" "tick still launches after updating"
+
+# 12b. Already current: quiet, no self-update line.
+DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=1 run_launch "$w"
+expect_not_contains "$w/out" "self-update:" "no report when already current"
+expect_not_contains "$w/out" "warn:" "no warning when already current"
+
+# 12c. Not on main: warns, leaves the tree alone, still ticks.
+w="$(new_work)"
+new_repo_pair "$w"
+git_q -C "$CLONE" checkout -b feature
+push_upstream_commit "$w"
+before="$(head_of "$CLONE")"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=1 run_launch "$w"
+expect_eq "$(head_of "$CLONE")" "$before" "non-main checkout is left alone"
+expect_contains "$w/out" "not main" "non-main checkout is reported"
+expect_contains "$w/out" "run issue-pipeline" "tick still launches off main"
+
+# 12d. Diverged (local commit on main): warns, keeps local history, ticks.
+w="$(new_work)"
+new_repo_pair "$w"
+push_upstream_commit "$w"
+echo "local" >"$CLONE/local.txt"
+git_q -C "$CLONE" add -A
+git_q -C "$CLONE" commit -m "local"
+before="$(head_of "$CLONE")"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=1 run_launch "$w"
+expect_eq "$(head_of "$CLONE")" "$before" "diverged clone keeps its commits"
+expect_contains "$w/out" "cannot fast-forward" "divergence is reported"
+expect_contains "$w/out" "run issue-pipeline" "tick still launches when diverged"
+
+# 12e. Remote unreachable: warns, ticks on the current checkout.
+w="$(new_work)"
+new_repo_pair "$w"
+rm -rf "$ORIGIN"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=1 run_launch "$w"
+expect_contains "$w/out" "fetch of origin/main failed" "fetch failure is reported"
+expect_contains "$w/out" "run issue-pipeline" "tick still launches offline"
+expect_eq "$(cat "$w/exit-code")" 0 "fetch failure does not fail the tick"
+
+# 12f. --dry-run and --status never touch the tree, even on main.
+w="$(new_work)"
+new_repo_pair "$w"
+push_upstream_commit "$w"
+before="$(head_of "$CLONE")"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=1 run_dispatch "$w" --dry-run
+DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=1 run_dispatch "$w" --status
+expect_eq "$(head_of "$CLONE")" "$before" "diagnostic modes do not update"
+
+# 12g. KARI_AUTOMATION_SELF_UPDATE=0 opts out entirely.
+DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=0 run_launch "$w"
+expect_eq "$(head_of "$CLONE")" "$before" "opt-out leaves the clone alone"
+expect_not_contains "$w/out" "warn:" "opt-out is silent"
 
 echo
 if [ "$FAILURES" -gt 0 ]; then
