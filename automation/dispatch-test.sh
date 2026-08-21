@@ -255,6 +255,7 @@ cat >"$STUB_DIR/claude-stub" <<'EOF'
 #!/usr/bin/env bash
 {
   echo "ARGS: $*"
+  echo "BG_WAIT_CEILING_MS: ${CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS-unset}"
   echo "STDIN:"
   cat
 } >"$STUB_OUT"
@@ -273,6 +274,17 @@ expect_contains "$w/stub-out" "This is the issue-pipeline prompt body." \
 expect_not_contains "$w/stub-out" "name: issue-pipeline" \
   "frontmatter is stripped from the prompt"
 expect_file "$w/state/issue-pipeline.last-run" "last-run recorded"
+# claude -p terminates background subagents 600s after the main turn ends
+# unless told otherwise; a worker needs 20-40 minutes (#403).
+expect_contains "$w/stub-out" "BG_WAIT_CEILING_MS: 5400000" \
+  "launch raises claude's background-task wait ceiling to 90 minutes"
+
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+KARI_AUTOMATION_BG_WAIT_CEILING_MS=0 run_launch "$w"
+expect_contains "$w/stub-out" "BG_WAIT_CEILING_MS: 0" \
+  "KARI_AUTOMATION_BG_WAIT_CEILING_MS overrides the ceiling"
 expect_eq \
   "$(find "$w/state/logs" -name 'issue-pipeline-*.log' 2>/dev/null | wc -l)" \
   1 "one log file created"

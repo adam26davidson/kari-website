@@ -24,6 +24,9 @@
 #   KARI_AUTOMATION_SYSTEMD_RUN_BIN default systemd-run (skipped if absent);
 #   KARI_AUTOMATION_SYSTEMCTL_BIN   default systemctl — see launch()
 #   KARI_AUTOMATION_DUE_TOLERANCE  default 120 (seconds); see DUE_TOLERANCE
+#   KARI_AUTOMATION_BG_WAIT_CEILING_MS default 5400000 (90 minutes); how
+#                               long claude -p waits for background
+#                               subagents after the main turn ends
 #   KARI_AUTOMATION_SELF_UPDATE default 1; 0 skips the fast-forward of the
 #                               clone at the start of a tick (see self_update)
 set -euo pipefail
@@ -37,6 +40,15 @@ SELF_UPDATE="${KARI_AUTOMATION_SELF_UPDATE:-1}"
 INHIBIT_BIN="${KARI_AUTOMATION_INHIBIT_BIN:-systemd-inhibit}"
 SYSTEMD_RUN_BIN="${KARI_AUTOMATION_SYSTEMD_RUN_BIN:-systemd-run}"
 SYSTEMCTL_BIN="${KARI_AUTOMATION_SYSTEMCTL_BIN:-systemctl}"
+# claude -p ends the session 600s after its main turn finishes, killing
+# any background subagents still running. The orchestrator dispatches
+# workers as background subagents and its own turn routinely ends before
+# they do, so the default ceiling killed a worker ten minutes into a
+# 20-40 minute task, stranding its claim for the liveness window (#403).
+# 90 minutes covers a slow worker plus the fix/review agents tending its
+# PR. Deliberately not 0 ("wait indefinitely"): a hung worker would then
+# hold the agent's flock forever and stall every later tick.
+BG_WAIT_CEILING_MS="${KARI_AUTOMATION_BG_WAIT_CEILING_MS:-5400000}"
 # Slack on the "has the interval elapsed?" test. Polls happen on a coarse
 # grid (cron every 15m) while last-run is stamped at the moment a run
 # starts, so without slack each cycle's start creeps later into the
@@ -281,6 +293,7 @@ launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
     local rc=0
     # shellcheck disable=SC2086
     prompt_body "$agent_file" |
+      CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS="$BG_WAIT_CEILING_MS" \
       "${scope[@]}" "${inhibit[@]}" "$CLAUDE_BIN" -p \
         --dangerously-skip-permissions \
         ${model:+--model "$model"} \

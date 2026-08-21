@@ -170,6 +170,20 @@ best-effort: no `systemd-run`, or one that cannot reach a user manager
 (CI runners, containers), and the session simply runs uncontained.
 `systemctl --user list-units 'kari-agent-*'` shows sessions in flight.
 
+### Workers get 90 minutes, not 10
+
+`claude -p` ends a session 600 s after its main turn finishes and kills
+any background subagents still running. The orchestrator dispatches
+workers as background subagents and its own turn routinely ends first,
+so the default killed workers ten minutes into 20–40 minute tasks and
+stranded their claims for the whole liveness window (#403). The
+dispatcher therefore launches every session with
+`CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=5400000` (90 minutes;
+`KARI_AUTOMATION_BG_WAIT_CEILING_MS` overrides). Deliberately finite: `0`
+would wait forever, and a hung worker would then hold the agent's lock
+and stall every later tick. A dispatcher log ending in `Background tasks
+still running after …s; terminating` is this ceiling firing.
+
 ### The clone keeps itself current
 
 Everything the timer reads — agent files, the playbook, `dispatch.sh`
