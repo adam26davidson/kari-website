@@ -366,9 +366,34 @@ hands over the kept branch and/or patch.
    posting the same comment again; a human removes it when they refresh
    the issue. Never comment without labelling.
 3. From the ready issues, select up to (MAX_IN_FLIGHT − in-flight)
-   workers, oldest first (there is no readiness label to prefer —
+   workers. Order: product work first when the machinery is smooth,
+   then oldest first (there is no readiness label to prefer —
    `has-dependencies` is the only marker, and it is a hard skip in
-   step 1). Estimate which files each touches. Anything overlapping an
+   step 1). Concretely:
+
+   Issues labelled `automation` are about the machinery — the
+   pipeline, CI and workflows, the lint and dev scripts, the test
+   harnesses — work the fleet largely generates for itself, and it
+   generates it faster than it clears it (2026-08-19..21: two thirds
+   of merged agent PRs were machinery, eight touched the website, and
+   the backlog grew). The machinery exists to ship the website, so the
+   default lean is towards the product: when the machinery is running
+   smoothly, pick the oldest ready issue WITHOUT the `automation`
+   label, even when older `automation` issues are waiting.
+   "Smoothly" means this tick saw none of: a CI or tooling failure you
+   had to dispatch a fix agent for, a stale claim released, a
+   dispatcher-log error or usage-limit kill, a worker `problems`
+   report naming a tool or script, a visual-review job that failed to
+   run. Pick an `automation` issue instead when it is in the way —
+   something a worker reported in `problems` or a recent run summary
+   flagged, a broken or flaky job, a claim-handling bug — when it is
+   small and a product issue's worker would hit it anyway, or when no
+   product issue is ready. This is a direction for your judgement, not
+   a quota: a tick with a broken CI job is a machinery tick, a quiet
+   tick is a product tick, and the run summary says which way you
+   leaned and why in one line.
+
+   Then estimate which files each touches. Anything overlapping an
    in-flight branch's files waits. Among the rest, clustered small
    issues should SHARE a worker rather than trickle through one per
    tick (each PR costs a full CI run): when two or more target the same
@@ -440,15 +465,24 @@ hands over the kept branch and/or patch.
    (`gh issue create`) — check `gh issue list --search` first so you
    don't file duplicates. Anything the pipeline itself hit (broken
    scripts, confusing docs) gets an issue too, per CLAUDE.md.
-   Label every issue that is about the pipeline itself — the dispatcher,
-   the briefs and playbooks under `automation/`, claim and worktree
-   handling, this housekeeping — with `automation`
-   (`gh issue create ... --label automation`, or
-   `gh issue edit <n> --add-label automation`). Without it pipeline work
-   scatters across `enhancement` and unlabelled and cannot be triaged as
-   one body of work. If the label is missing, create it first with
-   `gh label create automation --color 5319E7` plus a
-   `--description` of "The automation pipeline / dispatcher itself".
+   Label every issue that is about the machinery rather than the
+   website — the dispatcher, the briefs and playbooks under
+   `automation/`, claim and worktree handling, this housekeeping, CI
+   and the workflows, the lint scripts, the dev scripts and dev
+   environment, the shell and vitest test harnesses — with
+   `automation` (`gh issue create ... --label automation`, or
+   `gh issue edit <n> --add-label automation`). An issue about what a
+   visitor or the admin sees or does is product work and does NOT get
+   the label, whoever filed it. The label is what Phase B step 3 reads
+   to lean towards product work when the machinery is smooth, so a
+   mislabelled product issue gets deprioritised and a mislabelled
+   machinery issue gets picked as if it were product. If the label is
+   missing, create it first with `gh label create automation --color
+   5319E7` plus a `--description` of "The machinery rather than the
+   website: pipeline, CI, lint, dev env, test harnesses".
+   End the body of every issue you file with a provenance line —
+   `_Filed by the issue-pipeline, tick <UTC stamp>._` — so a human
+   triaging can tell fleet-filed issues from their own.
 2. **Orphaned kept branches.** A kept branch is reachable only through
    the `Claim released:` comments on its issues, so once those issues
    are all closed (shipped by another PR, or closed by a human) nothing

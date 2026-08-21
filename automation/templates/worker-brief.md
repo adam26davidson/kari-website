@@ -162,8 +162,10 @@ scoped enough to plan yourself.
 - `tech-debt`: debt you saw or created (with file paths).
 - `problems`: anything that slowed you down (flaky tooling, confusing
   scripts, missing docs) — the orchestrator files issues from these.
-- In all three, say explicitly when an item is about the automation
-  pipeline itself (the dispatcher, these briefs, the playbooks under
-  `automation/`, claim/worktree handling) rather than about the website.
-  The orchestrator files those with the `automation` label, which is how
-  pipeline work gets triaged together.
+- In all three, say explicitly when an item is about the machinery
+  rather than about the website: the dispatcher, these briefs, the
+  playbooks under `automation/`, claim/worktree handling, CI and the
+  workflows, the lint scripts, the dev scripts and dev environment, the
+  test harnesses. The orchestrator files those with the `automation`
+  label, which is how machinery work gets triaged together and how the
+  pipeline leans towards product work when the machinery is smooth.
