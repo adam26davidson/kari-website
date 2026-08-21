@@ -47,6 +47,16 @@ describe("BlogPostPage", () => {
     );
   });
 
+  it("renders the post inside the public list card (#410)", async () => {
+    // Without the card the post sits directly on the background photo and
+    // is illegible wherever the photo is dark.
+    const { container } = renderAt("/blog/post-1");
+    await screen.findByText("A Published Post");
+    const card = container.querySelector(".data-list");
+    expect(card).not.toBeNull();
+    expect(card).toContainElement(screen.getByText("A Published Post"));
+  });
+
   it("shows a loading indicator on first paint", async () => {
     renderAt("/blog/post-1");
     expect(screen.getByText("Loading...")).toBeInTheDocument();

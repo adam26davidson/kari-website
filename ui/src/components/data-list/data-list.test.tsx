@@ -18,6 +18,20 @@ describe("DataList", () => {
     expect(screen.getByText("second")).toBeInTheDocument();
   });
 
+  it("renders a single, non-array child as the card with no separator", () => {
+    // The blog permalink page puts one OtherWorksItem in the card.
+    const { container } = render(
+      <DataList>
+        <span>only</span>
+      </DataList>,
+    );
+    expect(screen.getByText("only")).toBeInTheDocument();
+    expect(container.querySelector(".data-list")).not.toBeNull();
+    expect(
+      container.querySelectorAll(".data-list-item-separator"),
+    ).toHaveLength(0);
+  });
+
   it("separates items but not after the last", () => {
     const { container } = renderList();
     const separators = container.querySelectorAll(
