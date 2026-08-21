@@ -98,6 +98,12 @@ scoped enough to plan yourself.
 
 ## Verification gauntlet (all that apply to what you touched)
 
+- NEVER `npm run test` — that is vitest in watch mode: it never exits,
+  and its long-lived workers grow on every rerun until they hit V8's
+  heap cap (a worker doing this OOMed the host on 2026-08-21, #415).
+  Use `npm run test:run` for a quick pass and `test:coverage` before
+  pushing. The same goes for any other watch/serve command you are not
+  going to stop yourself.
 - UI: `npm run test:coverage` (NOT just `test:run` — the CI coverage
   ratchet fails PRs a plain test run passes, and `test:coverage` is also
   what runs `npm run typecheck`, which `test:run` does not) and
