@@ -73,8 +73,11 @@ with code in this repository.
   `# renovate: datasource=docker` comment that `renovate.json`'s
   customManager keys off (without it the pin is invisible to Renovate).
   Nothing to install — actionlint, shellcheck and yq each fall back to a
-  pinned docker image when the binary is missing. CI runs this same script,
-  and alongside it the shell test harnesses `automation/dispatch-test.sh`,
+  pinned docker image when the binary is missing, so there is never a
+  reason to hand-roll a `docker run koalaman/shellcheck` of your own. This
+  is the script CI's `shell-lint` job runs, so run it locally before
+  pushing any change to a `*.sh` file or to `.github/workflows/*`. That
+  job also runs the shell test harnesses `automation/dispatch-test.sh`,
   `scripts/setup-worktree-test.sh` and `scripts/lint-workflows-test.sh`.
   Changing the lint script? Re-run its tests:
   `bash scripts/lint-workflows-test.sh` (needs jq plus either python3 +
@@ -202,6 +205,10 @@ address or create github issues for them, but the job never blocks a merge.
   callback parameter in a `*.test.tsx` — and that failure takes the e2e and
   screenshot jobs down with it, since their webServer builds the test
   bundle.
+- Before pushing shell or workflow changes (`*.sh` anywhere in the repo,
+  including `automation/`, and `.github/workflows/*`), run
+  `./scripts/lint-workflows.sh` — see Test Commands above. It is the same
+  script CI's `shell-lint` job runs, and it needs nothing installed.
 - Undoing a temporary edit (a mutation-test tweak, a debug print): copy the
   file aside first (`cp f f.bak`, restore with `cp f.bak f`) or `git stash`
   / commit WIP. Never `git checkout -- <file>` or `git restore <file>` for
