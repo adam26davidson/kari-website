@@ -50,8 +50,11 @@ done
 # copy of the install logic (issue #298): it installs from the lockfile with
 # `npm ci` — no silent lockfile drift — and adds the Playwright browser the
 # visual check needs. Its own skip check keeps a re-run down to about a
-# second, so a warm stack starts as fast as it used to.
-scripts/setup-worktree.sh
+# second, so a warm stack starts as fast as it used to. --quiet keeps that
+# warm path silent (issue #300) — a stack start should not be preceded by a
+# setup banner about work that did not happen; a run that does install still
+# says so.
+scripts/setup-worktree.sh --quiet
 
 pids=()
 cleanup() {
