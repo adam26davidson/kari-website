@@ -137,6 +137,10 @@ scoped enough to plan yourself.
   capture public pages — note in the PR that admin pages rely on CI's
   visual review, and see CLAUDE.md's Visual Checks section for how much
   local capture is worth when the change is admin-only.
+- Admin UI changes (anything that changes what `/admin` shows,
+  including copy and empty/error/success states): read
+  `docs/ui-design-brief.md` first and self-check against its reviewer
+  checklist before opening the PR. The reviewer applies the same list.
 - If you changed conditional logic in the UI, coverage may drop below
   the ratchet floors even with green tests; add tests until
   `test:coverage` passes.

@@ -26,6 +26,11 @@ review here ships bugs to main (and auto-deploys them to test).
   4. **Repo conventions** — CLAUDE.md code style, named exports only,
      per-component CSS, no stray files outside the issue's scope, no
      lowered coverage floors.
+  5. **Admin UI brief** — if the diff changes what `/admin` shows,
+     walk the reviewer checklist in `docs/ui-design-brief.md`; a "no"
+     there (a failure path with no plain-language message, an empty
+     list with no empty state, a confirmation that does not name the
+     item) is a finding, with the checklist line as the violated rule.
 - Do NOT report style nits, hypothetical refactors, or taste. Every
   finding needs a concrete failure scenario or a violated repo rule.
 - Verify each finding against the actual code before reporting it —

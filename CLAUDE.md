@@ -161,6 +161,14 @@ deliberately never API credits; skips with a notice when absent). Advisory
 means treat findings as a reviewer's notes —
 address or create github issues for them, but the job never blocks a merge.
 
+Admin UI changes also have a design brief, `docs/ui-design-brief.md`:
+the admin should feel friendly and welcoming to its one non-technical
+user, and every change to what it shows (components, copy, empty/error/
+success states, dialogs) is judged against that brief's checklist as
+well as the visual check. Read it before starting such a change; the
+visual check asks "does it look right", the brief asks "does it feel
+right".
+
 Admin-only changes without local credentials: when a change is confined to
 components only the admin pages render (e.g. `tiptap.tsx`, reachable only
 through the admin blog post editor) and you have no `E2E_AUTH0_*` env vars,
