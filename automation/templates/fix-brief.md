@@ -14,6 +14,13 @@ report. You finish at push — never merge, never wait for checks to rerun.
   (branch `agent/{{SLUG}}` is already checked out there).
 - Never touch the main clone; never force-push; stage only files you
   changed, by explicit path — never `git add -A`.
+- You push to PR #{{PR_NUMBER}}; you do not open PRs. If some situation
+  ever forces you to open one anyway, mark it pipeline-owned immediately
+  after `gh pr create`: `gh pr edit <n> --add-label agent-pr` (create the
+  label first with `gh label create agent-pr --description "Opened by the
+  automation pipeline; the pipeline may review and merge it" --color
+  1D76DB` if it is missing). An `agent/*` branch without that label is
+  not owned by the pipeline, so the PR sits until a human intervenes.
 
 ## How to work
 

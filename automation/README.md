@@ -25,8 +25,11 @@ Design and decisions:
 - `templates/*.md` — subagent prompt templates the issue-pipeline fills
   in (`{{PLACEHOLDER}}` slots): `plan-brief.md`, `worker-brief.md`,
   `fix-brief.md`, `review-brief.md`.
-- `dispatch-test.sh` — local test harness for the dispatcher (not in
-  CI). Run it whenever `dispatch.sh` changes.
+- `dispatch-test.sh` — test harness for the dispatcher; runs in CI (the
+  `shell-lint` job) and locally. Run it whenever `dispatch.sh` changes.
+- `systemd/` — the timer's unit files (source of truth, see
+  Installation), installed by `install-timer.sh`. Its test harness,
+  `install-timer-test.sh`, runs in the same CI job.
 
 ## Adding an agent
 
@@ -110,45 +113,32 @@ and how often*; the machine tracks *when last*.
 ## Installation (systemd user timer)
 
 The maintainer's Arch laptop has no cron installed; the fleet runs via
-a systemd user timer. Two units in `~/.config/systemd/user/`:
-
-`kari-automation.service`:
-
-```ini
-[Unit]
-Description=kari-website automation dispatcher
-
-[Service]
-Type=oneshot
-ExecStart=/home/adamd/Projects/kari-website/automation/dispatch.sh
-# REQUIRED: the dispatcher backgrounds the agent sessions and exits.
-# The default control-group KillMode would kill those sessions the
-# moment the oneshot finishes; KillMode=process leaves them running.
-KillMode=process
-# `claude` lives in ~/.local/bin, which the user manager's default
-# PATH does not include.
-Environment=PATH=/home/adamd/.local/bin:/usr/local/bin:/usr/bin:/bin
-```
-
-`kari-automation.timer`:
-
-```ini
-[Unit]
-Description=Run the kari-website automation dispatcher every 15 minutes
-
-[Timer]
-OnCalendar=*:00/15
-
-[Install]
-WantedBy=timers.target
-```
-
-Enable with:
+a systemd user timer. The two units are committed under `systemd/` —
+those files are the source of truth, not this section, which is why it no
+longer inlines them — and one script installs them:
 
 ```
-systemctl --user daemon-reload
-systemctl --user enable --now kari-automation.timer
+automation/install-timer.sh            # install/refresh, then enable
+automation/install-timer.sh --dry-run  # report only; write nothing
 ```
+
+It renders the units into `~/.config/systemd/user/`, runs
+`systemctl --user daemon-reload`, and enables/starts the timer. Re-run it
+after any change to the unit files; it reports each unit as `installed`,
+`updated` or `unchanged`, and every step is idempotent. Read the two
+files for the exact content — the parts that are load-bearing rather than
+cosmetic:
+
+- `Type=oneshot` with `KillMode=process`. REQUIRED: the dispatcher
+  backgrounds the agent sessions and exits, and the default control-group
+  KillMode would kill those sessions the moment the oneshot finishes.
+- `Environment=PATH=%h/.local/bin:...` — `claude` lives in
+  `~/.local/bin`, which the user manager's default PATH does not include.
+- `ExecStart` is rendered by the script to the absolute path of the *main
+  clone's* `dispatch.sh`, so running the installer from a linked worktree
+  still points the timer at a checkout that will outlive it.
+- `OnCalendar=*:00/15` with `Persistent=false` — see Timing for what the
+  15-minute grid means, and Suspend and sleep for missed slots.
 
 Caveat: user timers only fire while the user is logged in. For ticks
 across logouts/reboots, enable lingering: `loginctl enable-linger`.

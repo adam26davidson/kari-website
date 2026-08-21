@@ -1,0 +1,18 @@
+# Template for ~/.config/systemd/user/kari-automation.service.
+# Installed by automation/install-timer.sh, which renders {{DISPATCH}} to
+# the absolute path of the main clone's automation/dispatch.sh. Edit this
+# file, not the installed copy — a hand-edit there is overwritten on the
+# next install and invisible to code review.
+[Unit]
+Description=Kari website automation fleet dispatcher (one tick)
+
+[Service]
+Type=oneshot
+# The dispatcher launches agent sessions in the background and exits;
+# the default control-group KillMode would kill them with it.
+KillMode=process
+# The dispatcher needs `claude` (~/.local/bin) and the usual tools on PATH;
+# everything the launched agent sessions themselves run picks up the full
+# environment from the user's shell profile.
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart={{DISPATCH}}
