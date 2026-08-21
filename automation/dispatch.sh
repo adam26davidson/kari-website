@@ -15,6 +15,12 @@
 #                          # included), lock state, observed inter-run gaps
 #   dispatch.sh --wait     # a tick that blocks until its launches finish
 #
+# Every per-run log ends in a "tick exited <code>" line (written by an
+# EXIT trap, signals included), so a reader — automation/claim-liveness.sh
+# in particular — can tell a finished tick from one that was killed hard
+# without guessing at claude's last line. No trailer = SIGKILLed or still
+# running.
+#
 # Env overrides (used by dispatch-test.sh):
 #   KARI_AUTOMATION_STATE_DIR   default ~/.local/state/kari-website-automation
 #   KARI_AUTOMATION_AGENTS_DIR  default <repo>/automation/agents
@@ -240,6 +246,21 @@ launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
       echo "skip $name: previous run still holds the lock"
       exit 0
     }
+    # Every log this run creates ends in a "tick exited <code>" line, so
+    # "did the tick die, and how?" is a test on the last line rather than
+    # pattern-matching whatever claude happened to print last (#325). The
+    # traps are installed AFTER the flock so the skip path above — which
+    # never creates a log — writes nothing. TERM/HUP/INT are turned into
+    # a normal exit because bash does not run an EXIT trap on an
+    # untrapped fatal signal, and a scope stop or a timer kill arrives
+    # that way. SIGKILL (the OOM killer) can never write a trailer: a log
+    # without one means "killed hard, or still running".
+    # $? must be read as the trap's first statement — the newline guard
+    # below would otherwise clobber the status being reported.
+    trap '__tick_rc=$?
+      if [ -s "$log" ] && [ -n "$(tail -c1 "$log")" ]; then echo >>"$log"; fi
+      echo "tick exited $__tick_rc" >>"$log"' EXIT
+    trap 'exit 143' TERM HUP INT
     date +%s >"$STATE_DIR/$name.last-run"
     echo "run $name -> $log"
     cd "$REPO_ROOT"

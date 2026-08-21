@@ -6,6 +6,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DISPATCH="$HERE/dispatch.sh"
+LIVENESS="$HERE/claim-liveness.sh"
 FAILURES=0
 WORKDIRS=()
 
@@ -672,6 +673,7 @@ new_repo_pair() { # <workdir> — sets ORIGIN (bare) and CLONE (on main)
   git_q clone "$ORIGIN" "$CLONE"
   mkdir -p "$CLONE/automation"
   cp "$DISPATCH" "$CLONE/automation/dispatch.sh"
+  cp "$LIVENESS" "$CLONE/automation/claim-liveness.sh"
   git_q -C "$CLONE" add -A
   git_q -C "$CLONE" commit -m "seed"
   git_q -C "$CLONE" push -u origin main
@@ -753,6 +755,421 @@ expect_eq "$(head_of "$CLONE")" "$before" "diagnostic modes do not update"
 DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=0 run_launch "$w"
 expect_eq "$(head_of "$CLONE")" "$before" "opt-out leaves the clone alone"
 expect_not_contains "$w/out" "warn:" "opt-out is silent"
+
+# 13. Log trailer (#325): every per-run log ends in "tick exited <code>",
+#     so the playbook (and claim-liveness.sh) can test whether the tick
+#     that dispatched a worker finished or died, instead of pattern-
+#     matching whatever claude printed last.
+only_log() { # <workdir> — the single issue-pipeline log of the last run
+  find "$1/state/logs" -name 'issue-pipeline-*.log' | head -n1
+}
+
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+run_launch "$w"
+expect_eq "$(tail -n1 "$(only_log "$w")")" "tick exited 0" \
+  "a clean tick's log ends in tick exited 0"
+
+# The code is the agent's, not a constant: a failing session says so.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+STUB_CLAUDE="$STUB_DIR/claude-failing-stub" run_launch "$w"
+expect_eq "$(tail -n1 "$(only_log "$w")")" "tick exited 3" \
+  "a failing tick's log ends in its exit code"
+expect_eq "$(cat "$w/exit-code")" 1 \
+  "--wait still reports the failure with the trailer in place"
+
+# The usage-limit shape (#322): claude prints its message without a
+# trailing newline and dies. The trailer must not land on the same line —
+# the message has to survive intact for a later matcher to find.
+STUB_LIMIT="$STUB_DIR/claude-limit-stub"
+cat >"$STUB_LIMIT" <<'EOF'
+#!/usr/bin/env bash
+cat >/dev/null
+printf "You've hit your session limit"
+exit 1
+EOF
+chmod +x "$STUB_LIMIT"
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+STUB_CLAUDE="$STUB_LIMIT" run_launch "$w"
+log="$(only_log "$w")"
+expect_eq "$(tail -n1 "$log")" "tick exited 1" \
+  "a log that ended mid-line still gets the trailer on its own line"
+expect_eq "$(grep -c "You've hit your session limit" "$log")" 1 \
+  "the unterminated last line survives the newline guard"
+
+# Killed by a signal (a scope stop, or the timer's KillMode): bash runs no
+# EXIT trap on an untrapped fatal signal, so TERM/HUP/INT are trapped into
+# a normal exit and the log still gets a trailer.
+STUB_SIGNAL="$STUB_DIR/claude-signal-stub"
+cat >"$STUB_SIGNAL" <<'EOF'
+#!/usr/bin/env bash
+echo "$PPID" >"$STUB_OUT.ppid"
+kill -TERM "$PPID"
+cat >/dev/null
+sleep 1
+exit 0
+EOF
+chmod +x "$STUB_SIGNAL"
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+STUB_CLAUDE="$STUB_SIGNAL" run_launch "$w"
+expect_eq "$(tail -n1 "$(only_log "$w")")" "tick exited 143" \
+  "a tick killed by SIGTERM still writes a trailer"
+expect_eq "$(cat "$w/exit-code")" 1 \
+  "--wait reports a signalled tick as a failure"
+
+# The skip path (a previous run still holds the lock) creates no log, so
+# it must not create one just to write a trailer into it.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+mkdir -p "$w/state/logs"
+( flock 9 && run_launch "$w" ) 9>"$w/state/issue-pipeline.lock"
+expect_contains "$w/out" "still holds the lock" "the locked-out tick skipped"
+expect_eq "$(find "$w/state/logs" -name 'issue-pipeline-*.log' | wc -l)" 0 \
+  "the skip path writes no log and no trailer"
+
+# 14. claim-liveness.sh (#325): the playbook's Phase B conjunction as a
+#     script. One "key=value" line per signal, then alive_by= and
+#     verdict=. Like claim-liveness.sh itself, these tests run against a
+#     throwaway origin/clone pair with a linked worktree beside it,
+#     because the script derives both paths from its own location.
+
+# gh stub: `pr list` answers from STUB_GH_PR (empty = no open PR),
+# `issue view` from STUB_GH_UPDATED, and STUB_GH_FAIL=1 makes both fail
+# the way a rate-limited or logged-out gh does.
+STUB_GH="$STUB_DIR/gh-stub"
+cat >"$STUB_GH" <<'EOF'
+#!/usr/bin/env bash
+if [ "${STUB_GH_FAIL:-0}" = 1 ]; then
+  echo "gh: stubbed failure" >&2
+  exit 1
+fi
+case "$1" in
+  pr) echo "${STUB_GH_PR:-}" ;;
+  issue) echo "${STUB_GH_UPDATED:-}" ;;
+  *) exit 1 ;;
+esac
+EOF
+chmod +x "$STUB_GH"
+
+# A `comm` no ancestor of this harness can have. Run inside a Claude Code
+# session, every process the harness spawns has a real `claude` ancestor,
+# so the script's default would make claude_process=yes unfalsifiable and
+# the negative test would pass for free.
+# `comm` is the basename of the file that was exec'd, truncated to 15
+# chars — so a SYMLINK to bash carries it, while a `#!` script does not
+# (that one execs the interpreter, and reports `bash`).
+LIVENESS_COMM="clstub$$"
+ln -sf "$(command -v bash)" "$STUB_DIR/$LIVENESS_COMM"
+
+run_liveness() { # <workdir> [args...] — output in <workdir>/out
+  local work="$1"
+  shift
+  KARI_AUTOMATION_STATE_DIR="$work/state" \
+  KARI_AUTOMATION_GH_BIN="$STUB_GH" \
+  KARI_AUTOMATION_CLAUDE_COMM="${LIVENESS_COMM_OVERRIDE:-$LIVENESS_COMM}" \
+  STUB_GH_PR="${STUB_GH_PR:-}" \
+  STUB_GH_UPDATED="${STUB_GH_UPDATED:-}" \
+  STUB_GH_FAIL="${STUB_GH_FAIL:-0}" \
+    bash "$CLONE/automation/claim-liveness.sh" "$@" >"$work/out" 2>&1
+  echo $? >"$work/exit-code"
+}
+
+# The output contract is "key=value", one per line; tests read a key
+# rather than matching on line numbers or wording.
+fact_of() { # <workdir> <key> — "" when the key was not printed
+  awk -F= -v k="$2" '$1 == k { print substr($0, length(k) + 2); exit }' \
+    "$1/out"
+}
+alive_by_has() { # <workdir> <key> — yes|no
+  case ",$(fact_of "$1" alive_by)," in
+    *",$2,"*) echo yes ;;
+    *) echo no ;;
+  esac
+}
+
+new_liveness() { # <workdir> <slug> — origin/clone pair + linked worktree
+  local work="$1" slug="$2"
+  new_repo_pair "$work"
+  LIVE_W="$work/kari-website-$slug"
+  git_q -C "$CLONE" worktree add "$LIVE_W" -b "agent/$slug"
+}
+
+# Everything a worker could have touched pushed outside the window: the
+# branch tip's committer date, the working files, and the linked
+# worktree's git dir under the main clone (the commit writes there, so it
+# has to happen before the touch).
+age_liveness() {
+  local gitdir
+  gitdir="$(git -C "$LIVE_W" rev-parse --absolute-git-dir)"
+  # A subshell with real exports: `VAR=x func` does not put VAR in the
+  # environment of the commands the function runs, so git would ignore it
+  # and date the commit now — silently making every "aged" fixture alive.
+  (
+    # RFC 2822, not "3 hours ago": git rejects approxidate in these
+    # variables outright ("fatal: invalid date format"), and git_q hides
+    # stderr, so a relative value here would leave the fixture's tip at
+    # the seed commit's timestamp — fresh — with nothing on screen.
+    GIT_AUTHOR_DATE="$(date -R -d '3 hours ago')"
+    GIT_COMMITTER_DATE="$GIT_AUTHOR_DATE"
+    export GIT_AUTHOR_DATE GIT_COMMITTER_DATE
+    git_q -C "$LIVE_W" commit --allow-empty -m "old work"
+  )
+  find "$LIVE_W" -exec touch -d '3 hours ago' {} +
+  find "$gitdir" -exec touch -d '3 hours ago' {} +
+}
+
+push_upstream_branch() { # <workdir> <branch> — a second clone pushes to it
+  local work="$1" branch="$2"
+  git_q clone "$ORIGIN" "$work/other"
+  git_q -C "$work/other" checkout -b "$branch"
+  echo "upstream work" >"$work/other/upstream-work.txt"
+  git_q -C "$work/other" add -A
+  git_q -C "$work/other" commit -m "upstream work"
+  git_q -C "$work/other" push -u origin "$branch"
+  rm -rf "$work/other"
+}
+
+OLD_ISO="$(date -u -d '3 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
+NOW_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+# 14a. A worktree written just now is life on its own, with no PR, no
+#      commits and no issues to corroborate it.
+w="$(new_work)"
+new_liveness "$w" fresh
+run_liveness "$w" fresh
+expect_eq "$(cat "$w/exit-code")" 0 "liveness exits 0 when it printed a verdict"
+expect_eq "$(fact_of "$w" slug)" fresh "the slug is echoed back"
+expect_eq "$(fact_of "$w" branch)" agent/fresh "the branch is derived"
+expect_eq "$(fact_of "$w" worktree)" "$LIVE_W" \
+  "the worktree is the repo root's sibling"
+expect_eq "$(fact_of "$w" window_min)" 120 "the window is stated once"
+expect_eq "$(fact_of "$w" worktree_recent)" yes "a fresh worktree is recent"
+expect_eq "$(fact_of "$w" issues)" none "no issue arguments means no issues"
+expect_eq "$(alive_by_has "$w" worktree_recent)" yes \
+  "alive_by names the signal that kept it alive"
+expect_eq "$(fact_of "$w" verdict)" ALIVE "a fresh worktree is ALIVE"
+
+# 14b. The full conjunction: no PR, nothing written for 3h, no commit for
+#      3h, the claimed issue untouched for 3h, no process. Only this
+#      releases a claim.
+w="$(new_work)"
+new_liveness "$w" dead
+age_liveness
+STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" dead 41
+expect_eq "$(fact_of "$w" worktree_recent)" no "an aged worktree is not recent"
+expect_eq "$(fact_of "$w" gitdir_recent)" no "an aged git dir is not recent"
+expect_eq "$(fact_of "$w" open_pr)" none "no open PR on the branch"
+expect_eq "$(fact_of "$w" fetch)" ok "the fetch succeeded"
+expect_eq "$(fact_of "$w" local_tip_recent)" no "an aged local tip is not recent"
+expect_eq "$(fact_of "$w" remote_tip)" none "an unpushed branch has no remote tip"
+expect_eq "$(fact_of "$w" issues)" 41 "claimed issues come from the arguments"
+expect_eq "$(fact_of "$w" issue_41_updated)" "$OLD_ISO" \
+  "the issue's updatedAt is reported"
+expect_eq "$(fact_of "$w" issue_41_recent)" no "a 3h-old issue update is not recent"
+expect_eq "$(fact_of "$w" claude_process)" no "no claude process in the worktree"
+expect_eq "$(fact_of "$w" alive_by)" none "nothing kept the claim alive"
+expect_eq "$(fact_of "$w" verdict)" DEAD "silence on every signal is DEAD"
+
+# 14c. An open PR alone keeps it alive — the claim is Phase A's problem.
+w="$(new_work)"
+new_liveness "$w" withpr
+age_liveness
+STUB_GH_PR=17 STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" withpr 41
+expect_eq "$(fact_of "$w" open_pr)" 17 "the open PR number is reported"
+expect_eq "$(alive_by_has "$w" open_pr)" yes "an open PR is named in alive_by"
+expect_eq "$(fact_of "$w" verdict)" ALIVE "an open PR keeps the claim alive"
+
+# 14d. Issue activity alone keeps it alive — this is what gives a
+#      just-claimed branch its grace period (the claim comment itself).
+w="$(new_work)"
+new_liveness "$w" claimed
+age_liveness
+STUB_GH_UPDATED="$NOW_ISO" run_liveness "$w" claimed 41
+expect_eq "$(fact_of "$w" issue_41_recent)" yes "a fresh issue update is recent"
+expect_eq "$(fact_of "$w" verdict)" ALIVE "issue activity keeps the claim alive"
+
+# 14e. A commit pushed to origin but never merged back into the local
+#      worktree still counts: workers are told to push WIP as the
+#      reliable record, and the tick reads it after its own fetch.
+w="$(new_work)"
+new_liveness "$w" pushed
+age_liveness
+push_upstream_branch "$w" agent/pushed
+STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" pushed 41
+expect_eq "$(fact_of "$w" remote_tip_recent)" yes "a fresh remote tip is recent"
+expect_eq "$(fact_of "$w" local_tip_recent)" no "the local tip is still aged"
+expect_eq "$(fact_of "$w" verdict)" ALIVE "a pushed commit keeps the claim alive"
+
+# ...and the mirror: a local commit the worker has not pushed yet.
+w="$(new_work)"
+new_liveness "$w" localonly
+age_liveness
+git_q -C "$LIVE_W" commit --allow-empty -m "fresh local work"
+find "$LIVE_W" -exec touch -d '3 hours ago' {} +
+find "$(git -C "$LIVE_W" rev-parse --absolute-git-dir)" \
+  -exec touch -d '3 hours ago' {} +
+STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" localonly 41
+expect_eq "$(fact_of "$w" local_tip_recent)" yes "a fresh local tip is recent"
+expect_eq "$(fact_of "$w" remote_tip)" none "nothing was pushed"
+expect_eq "$(fact_of "$w" verdict)" ALIVE \
+  "an unpushed local commit keeps the claim alive"
+
+# 14f. Git-metadata-only activity (index staging, a fetch that moved no
+#      files) lives under the MAIN clone's .git/worktrees/<name>, which
+#      `find $W` never visits. Without the second probe this reads as
+#      silence and a working worker gets released.
+w="$(new_work)"
+new_liveness "$w" gitonly
+age_liveness
+touch "$(git -C "$LIVE_W" rev-parse --absolute-git-dir)/index"
+STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" gitonly 41
+expect_eq "$(fact_of "$w" worktree_recent)" no "no working file was touched"
+expect_eq "$(fact_of "$w" gitdir_recent)" yes "the git dir probe sees it"
+expect_eq "$(fact_of "$w" verdict)" ALIVE \
+  "git-metadata-only activity keeps the claim alive"
+
+# 14g. A missing worktree is silent, not dead: the other signals decide.
+w="$(new_work)"
+new_liveness "$w" gone
+age_liveness
+rm -rf "$LIVE_W"
+STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" gone 41
+expect_eq "$(fact_of "$w" worktree_recent)" missing "a missing worktree says so"
+expect_eq "$(fact_of "$w" gitdir_recent)" missing "...and so does its git dir"
+expect_eq "$(fact_of "$w" uncommitted)" missing "...and the rescue probe"
+expect_eq "$(fact_of "$w" verdict)" DEAD \
+  "a missing worktree does not rescue a claim every other signal calls dead"
+
+# 14h. A process whose cwd is in the worktree and whose ancestry reaches a
+#      claude is life. The fifo holds it open for exactly as long as the
+#      probe needs, so there is no sleep to race.
+w="$(new_work)"
+new_liveness "$w" busy
+age_liveness
+mkfifo "$w/hold"
+"$STUB_DIR/$LIVENESS_COMM" -c \
+  'cd "$1" || exit 1; : >"$2"; read -r _ <"$3"' \
+  _ "$LIVE_W" "$w/ready" "$w/hold" &
+live_pid=$!
+for _ in $(seq 100); do [ -e "$w/ready" ] && break; sleep 0.05; done
+STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" busy 41
+echo go >"$w/hold"
+wait "$live_pid" 2>/dev/null || true
+expect_eq "$(fact_of "$w" claude_process)" yes \
+  "a claude-descended process in the worktree is life"
+expect_eq "$(fact_of "$w" verdict)" ALIVE "...and keeps the claim alive"
+
+# ...while debris a dead worker left behind (an orphaned dev server, a
+# shell with no claude above it) is not. This must fail when it should:
+# hence the stub comm, since the harness itself has a real claude ancestor.
+w="$(new_work)"
+new_liveness "$w" debris
+age_liveness
+mkfifo "$w/hold"
+( cd "$LIVE_W" && read -r _ <"$w/hold" ) &
+debris_pid=$!
+STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" debris 41
+echo go >"$w/hold"
+wait "$debris_pid" 2>/dev/null || true
+expect_eq "$(fact_of "$w" claude_process)" no \
+  "a process with no claude ancestor is not life"
+expect_eq "$(fact_of "$w" verdict)" DEAD "...and does not save the claim"
+
+# 14i. A failed probe counts as life. A gh outage that read as "no PR,
+#      no issue activity" would delete live workers' worktrees wholesale.
+w="$(new_work)"
+new_liveness "$w" ghdown
+age_liveness
+STUB_GH_FAIL=1 run_liveness "$w" ghdown 41
+expect_eq "$(fact_of "$w" open_pr)" error "a failing gh is reported, not assumed"
+expect_eq "$(fact_of "$w" issue_41_updated)" error "...for issues too"
+expect_eq "$(alive_by_has "$w" gh-error)" yes "the failure is named in alive_by"
+expect_eq "$(fact_of "$w" verdict)" ALIVE "a gh outage can never release a claim"
+
+# 14j. The dispatching tick's log and its trailer (section 13): printed
+#      for the run summary, never part of the verdict.
+w="$(new_work)"
+new_liveness "$w" logged
+age_liveness
+mkdir -p "$w/state/logs"
+cat >"$w/state/logs/issue-pipeline-20260821T090000.log" <<'EOF'
+dispatched worker for agent/logged
+You've hit your session limit
+tick exited 1
+EOF
+STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" logged 41
+expect_eq "$(fact_of "$w" tick_log)" \
+  "$w/state/logs/issue-pipeline-20260821T090000.log" \
+  "the tick log mentioning the branch is found"
+expect_eq "$(fact_of "$w" tick_log_trailer)" 1 \
+  "the trailer's exit code is read off the last line"
+expect_eq "$(fact_of "$w" tick_log_last)" "tick exited 1" \
+  "the log's last line is quoted verbatim"
+expect_eq "$(fact_of "$w" verdict)" DEAD \
+  "a tick log does not change the verdict the conjunction reached"
+
+# A log with no trailer means SIGKILL (the OOM killer) or a tick still
+# running — never "finished cleanly".
+w="$(new_work)"
+new_liveness "$w" killed
+age_liveness
+mkdir -p "$w/state/logs"
+printf 'dispatched worker for agent/killed\nstill working\n' \
+  >"$w/state/logs/issue-pipeline-20260821T090000.log"
+STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" killed 41
+expect_eq "$(fact_of "$w" tick_log_trailer)" none "a log with no trailer says none"
+expect_eq "$(fact_of "$w" tick_log_last)" "still working" \
+  "the last line is still reported"
+
+# A log belonging to another slug is not ours.
+w="$(new_work)"
+new_liveness "$w" unlogged
+age_liveness
+mkdir -p "$w/state/logs"
+printf 'dispatched worker for agent/somebody-else\ntick exited 0\n' \
+  >"$w/state/logs/issue-pipeline-20260821T090000.log"
+STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" unlogged 41
+expect_eq "$(fact_of "$w" tick_log)" none "another slug's log is not ours"
+expect_eq "$(fact_of "$w" tick_log_trailer)" none "...and contributes no trailer"
+
+# 14k. The probe must not manufacture life. `git status` refreshes the
+#      index, which writes into the linked worktree's git dir — run
+#      without --no-optional-locks, the second tick would see a fresh
+#      mtime, and every tick after it, so a dead claim would never
+#      release. Running the helper twice has to leave the verdict alone.
+w="$(new_work)"
+new_liveness "$w" leftovers
+age_liveness
+echo "half-written component" >"$LIVE_W/wip.txt"
+find "$LIVE_W" -exec touch -d '3 hours ago' {} +
+find "$(git -C "$LIVE_W" rev-parse --absolute-git-dir)" \
+  -exec touch -d '3 hours ago' {} +
+STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" leftovers 41
+expect_eq "$(fact_of "$w" uncommitted)" yes \
+  "uncommitted work is flagged for the rescue step"
+expect_eq "$(fact_of "$w" verdict)" DEAD \
+  "uncommitted work is corroborating only, not a life signal"
+STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" leftovers 41
+expect_eq "$(fact_of "$w" gitdir_recent)" no \
+  "a second run still sees an aged git dir (the probe wrote nothing)"
+expect_eq "$(fact_of "$w" worktree_recent)" no \
+  "...and an aged worktree"
+expect_eq "$(fact_of "$w" verdict)" DEAD "...so the verdict is stable"
+
+# 14l. No slug: a usage error, not a verdict a caller could act on.
+w="$(new_work)"
+new_liveness "$w" nousage
+run_liveness "$w"
+expect_eq "$(cat "$w/exit-code")" 2 "no slug exits 2"
+expect_eq "$(fact_of "$w" verdict)" "" "no slug prints no verdict"
 
 echo
 if [ "$FAILURES" -gt 0 ]; then
