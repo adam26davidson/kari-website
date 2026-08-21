@@ -121,7 +121,7 @@ jobs:
           path: bundle
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::336231940806:role/kari-website-ci
           aws-region: us-east-2
@@ -169,7 +169,7 @@ jobs:
           path: bundle
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::336231940806:role/kari-website-ci
           aws-region: us-east-2
