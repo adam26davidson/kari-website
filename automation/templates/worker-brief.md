@@ -104,6 +104,18 @@ scoped enough to plan yourself.
   `npm run lint`. Add `npm run typecheck:e2e` if you touched `e2e/`.
 - API: `cargo test`, `cargo clippy --all-targets -- -D warnings`,
   `cargo fmt --check`.
+- Shell or workflow changes (any `*.sh`, including `automation/`, and
+  `.github/workflows/*`): `./scripts/lint-workflows.sh`. It is exactly what
+  CI's `shell-lint` job runs — actionlint over the workflows, the
+  job-level `timeout-minutes` assertion, shellcheck over every `*.sh` in
+  the repo, and the renovate annotation on every pinned docker image — and
+  it needs nothing installed, falling back to pinned docker images when a
+  tool is missing from PATH. Don't hand-roll a `docker run
+  koalaman/shellcheck` instead. If you touched the dispatcher, the
+  worktree setup script or the lint itself, run the matching harness too —
+  the same CI job runs `bash automation/dispatch-test.sh`,
+  `bash scripts/setup-worktree-test.sh` and
+  `bash scripts/lint-workflows-test.sh`.
 - UI appearance changes (components, CSS, layout, `index.html`,
   UI deps): the visual check is REQUIRED. Start a dev stack in YOUR
   worktree (`./scripts/dev.sh` — it picks free ports and prints them),
@@ -144,3 +156,8 @@ scoped enough to plan yourself.
 - `tech-debt`: debt you saw or created (with file paths).
 - `problems`: anything that slowed you down (flaky tooling, confusing
   scripts, missing docs) — the orchestrator files issues from these.
+- In all three, say explicitly when an item is about the automation
+  pipeline itself (the dispatcher, these briefs, the playbooks under
+  `automation/`, claim/worktree handling) rather than about the website.
+  The orchestrator files those with the `automation` label, which is how
+  pipeline work gets triaged together.
