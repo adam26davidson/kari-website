@@ -179,9 +179,11 @@ the kernel kills the biggest process in the scope, not whatever it finds
 on the host — and the session carries on; the worker sees a killed
 command (exit 137) and reports it like any other failure. A scope that
 hit its cap is visible in `journalctl -k` as "Memory cgroup out of
-memory" naming the `kari-agent-*` unit. Note the host runs without
-swap: zram or a swapfile would turn a spike into slowness rather than a
-kill, at the maintainer's discretion.
+memory" naming the `kari-agent-*` unit. The host also has a 16 GB zstd
+zram swap (`zram-generator`, `/etc/systemd/zram-generator.conf`:
+`zram-size = min(ram / 2, 16384)`, installed 2026-08-21 after the
+incident above) so that a spike outside the fleet degrades into
+slowness rather than a kill; `swapon --show` should list `/dev/zram0`.
 
 ### Workers get 90 minutes, not 10
 
