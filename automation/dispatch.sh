@@ -22,6 +22,8 @@
 #   KARI_AUTOMATION_CLAUDE_BIN  default claude
 #   KARI_AUTOMATION_INHIBIT_BIN default systemd-inhibit (skipped if absent)
 #   KARI_AUTOMATION_DUE_TOLERANCE  default 120 (seconds); see DUE_TOLERANCE
+#   KARI_AUTOMATION_SELF_UPDATE default 1; 0 skips the fast-forward of the
+#                               clone at the start of a tick (see self_update)
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -29,6 +31,7 @@ AGENTS_DIR="${KARI_AUTOMATION_AGENTS_DIR:-$REPO_ROOT/automation/agents}"
 STATE_DIR="${KARI_AUTOMATION_STATE_DIR:-$HOME/.local/state/kari-website-automation}"
 PAUSE_FILE="${KARI_AUTOMATION_PAUSE_FILE:-$REPO_ROOT/automation/PAUSE}"
 CLAUDE_BIN="${KARI_AUTOMATION_CLAUDE_BIN:-claude}"
+SELF_UPDATE="${KARI_AUTOMATION_SELF_UPDATE:-1}"
 INHIBIT_BIN="${KARI_AUTOMATION_INHIBIT_BIN:-systemd-inhibit}"
 # Slack on the "has the interval elapsed?" test. Polls happen on a coarse
 # grid (cron every 15m) while last-run is stamped at the moment a run
@@ -259,6 +262,41 @@ launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
 }
 LAUNCHED=()
 
+# Bring the clone the timer runs from up to date with origin/main before
+# reading anything from it. The agent files, the playbook and this script
+# are all read from REPO_ROOT, and nothing else ever pulls that clone: a
+# cadence cut merged to main sat inert for 17 hours (2026-08-20, #399)
+# while the fleet kept ticking on the stale checkout. Fast-forward only,
+# and only on main -- a maintainer who has checked out a branch or left
+# local edits in the clone keeps them; the tick just warns and runs on
+# what is on disk. Nothing here may fail the tick: offline, no remote,
+# diverged history all degrade to "stale but running", which is the
+# state the fleet was in before this existed.
+self_update() {
+  [ "$SELF_UPDATE" = 1 ] || return 0
+  local branch
+  branch="$(git -C "$REPO_ROOT" symbolic-ref --short -q HEAD 2>/dev/null)" ||
+    branch=""
+  if [ "$branch" != main ]; then
+    echo "warn: $REPO_ROOT is on '${branch:-detached HEAD}', not main;" \
+      "running without self-update" >&2
+    return 0
+  fi
+  if ! git -C "$REPO_ROOT" fetch -q origin main 2>/dev/null; then
+    echo "warn: fetch of origin/main failed; running on the current checkout" >&2
+    return 0
+  fi
+  local before after
+  before="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
+  if ! git -C "$REPO_ROOT" merge -q --ff-only origin/main 2>/dev/null; then
+    echo "warn: cannot fast-forward $REPO_ROOT to origin/main" \
+      "(local commits or edits?); running on $before" >&2
+    return 0
+  fi
+  after="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
+  [ "$before" = "$after" ] || echo "self-update: $before -> $after"
+}
+
 if [ -e "$PAUSE_FILE" ]; then
   case "$MODE" in
     status) echo "fleet paused ($PAUSE_FILE exists) — nothing will launch" ;;
@@ -274,6 +312,10 @@ if [ -e "$PAUSE_FILE" ]; then
 fi
 
 mkdir -p "$STATE_DIR/logs"
+
+# Only a real tick updates: --dry-run and --status are diagnostics and
+# must not change the tree under the operator reading them.
+[ "$MODE" = run ] && self_update
 
 for agent_file in "$AGENTS_DIR"/*.md; do
   [ -e "$agent_file" ] || continue

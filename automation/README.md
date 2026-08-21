@@ -153,6 +153,21 @@ Alternative for machines that have cron — a single crontab line
 Either way, the 15-minute cadence is the dispatcher's polling
 resolution; each agent's own `every` decides how often it runs.
 
+### The clone keeps itself current
+
+Everything the timer reads — agent files, the playbook, `dispatch.sh`
+itself — comes from the main clone's working tree, and nothing else ever
+pulls that clone. So each real tick starts with `git fetch` and a
+`--ff-only` merge of `origin/main`, and a change merged to `main` is live
+on the next tick. (Before this existed, #342's cadence cut sat merged but
+inert for 17 hours while the fleet kept ticking on the stale checkout —
+#399.) The update is deliberately timid: it only fast-forwards, only when
+the clone is on `main`, and any failure — offline, a branch checked out,
+local commits — prints a `warn:` line and the tick runs on whatever is on
+disk. A stale fleet is always preferred to a stopped one. `--dry-run` and
+`--status` never touch the tree; `KARI_AUTOMATION_SELF_UPDATE=0` disables
+the step (the test harness sets it).
+
 ## Timing
 
 `every` means *about* every N, not exactly. `<name>.last-run` is stamped
