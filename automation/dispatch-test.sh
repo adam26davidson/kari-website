@@ -49,13 +49,21 @@ run_dispatch() { # <workdir> [args...] — output in <workdir>/out
   echo $? >"$work/exit-code"
 }
 
-# Launches are backgrounded, so give the stub a moment to write its record.
-wait_for_stub() { # <workdir>
-  local _
-  for _ in $(seq 50); do
-    [ -s "$1/stub-out" ] && return
-    sleep 0.1
-  done
+# Real launches are backgrounded and disowned; --wait makes the dispatcher
+# block until they finish, so a stub's record is complete when this returns
+# (no sleep-polling, which was a latent flake source under load).
+run_launch() { # <workdir> — a real (non-dry-run) tick with the stub claude
+  STUB_CLAUDE="${STUB_CLAUDE:-$STUB_DIR/claude-stub}" run_dispatch "$1" --wait
+}
+
+# --dry-run prints one "<decision>\t<name>\t<detail>" line per agent; tests
+# read the decision column rather than matching human-readable copy.
+decision_of() { # <workdir> <name> — "" when the agent has no line
+  awk -F'\t' -v name="$2" '$2 == name { print $1; exit }' "$1/out"
+}
+
+decisions() { # <workdir> — every decision, space-separated
+  awk -F'\t' 'NF >= 2 { printf "%s%s", sep, $1; sep = " " }' "$1/out"
 }
 
 ran_ago() { # <workdir> <name> <seconds-ago>
@@ -104,33 +112,42 @@ expect_file() { # <path> <test-name>
   fi
 }
 
+expect_file_absent() { # <path> <test-name>
+  if [ -e "$1" ]; then
+    echo "FAIL: $2 — unexpected file $1"
+    FAILURES=$((FAILURES + 1))
+  else
+    echo "ok: $2"
+  fi
+}
+
 # 1. Enabled agent that has never run is due.
 w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
 run_dispatch "$w" --dry-run
-expect_contains "$w/out" "WOULD RUN issue-pipeline" \
+expect_eq "$(decision_of "$w" issue-pipeline)" run \
   "dry-run: never-run enabled agent is due"
 
 # 2. Disabled agent is skipped.
 w="$(new_work)"
 write_agent "$w" demo-agent.md demo-agent false 1h opus
 run_dispatch "$w" --dry-run
-expect_contains "$w/out" "skip demo-agent: disabled" "disabled agent skipped"
+expect_eq "$(decision_of "$w" demo-agent)" disabled "disabled agent skipped"
 
 # 3. Agent that ran 60s ago with every: 1h is not due.
 w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
 ran_ago "$w" issue-pipeline 60
 run_dispatch "$w" --dry-run
-expect_contains "$w/out" "not due" "recently-run agent is not due"
-expect_not_contains "$w/out" "WOULD RUN" "recently-run agent not launched"
+expect_eq "$(decision_of "$w" issue-pipeline)" not-due \
+  "recently-run agent is not due"
 
 # 4. Agent that ran 2h ago with every: 1h is due again.
 w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
 ran_ago "$w" issue-pipeline 7200
 run_dispatch "$w" --dry-run
-expect_contains "$w/out" "WOULD RUN issue-pipeline" \
+expect_eq "$(decision_of "$w" issue-pipeline)" run \
   "agent past its interval is due"
 
 # 4a. Drift guard (#276): a run that started slightly inside the polling
@@ -140,7 +157,7 @@ w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
 ran_ago "$w" issue-pipeline $((3600 - 60))
 run_dispatch "$w" --dry-run
-expect_contains "$w/out" "WOULD RUN issue-pipeline" \
+expect_eq "$(decision_of "$w" issue-pipeline)" run \
   "agent within the due tolerance is due"
 
 # 4b. ...while "interval - (tolerance + 60s)" is still not due.
@@ -148,9 +165,8 @@ w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
 ran_ago "$w" issue-pipeline $((3600 - (120 + 60)))
 run_dispatch "$w" --dry-run
-expect_contains "$w/out" "not due" "agent outside the due tolerance is not due"
-expect_not_contains "$w/out" "WOULD RUN" \
-  "agent outside the due tolerance not launched"
+expect_eq "$(decision_of "$w" issue-pipeline)" not-due \
+  "agent outside the due tolerance is not due"
 
 # 4c. The tolerance is configurable: a widened one makes an agent due
 #     that the default tolerance would have skipped.
@@ -158,12 +174,13 @@ w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
 ran_ago "$w" issue-pipeline 1800
 run_dispatch "$w" --dry-run
-expect_contains "$w/out" "not due" "half-elapsed agent not due by default"
+expect_eq "$(decision_of "$w" issue-pipeline)" not-due \
+  "half-elapsed agent not due by default"
 w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
 ran_ago "$w" issue-pipeline 1800
 DUE_TOLERANCE=2400 run_dispatch "$w" --dry-run
-expect_contains "$w/out" "WOULD RUN issue-pipeline" \
+expect_eq "$(decision_of "$w" issue-pipeline)" run \
   "due tolerance is configurable"
 
 # 4d. A tolerance wider than the interval never makes an agent overdue
@@ -173,7 +190,7 @@ w="$(new_work)"
 write_agent "$w" fast-agent.md fast-agent true 5m opus
 ran_ago "$w" fast-agent 1
 DUE_TOLERANCE=3600 run_dispatch "$w" --dry-run
-expect_contains "$w/out" "WOULD RUN fast-agent" \
+expect_eq "$(decision_of "$w" fast-agent)" run \
   "tolerance larger than the interval clamps instead of underflowing"
 expect_eq "$(cat "$w/exit-code")" 0 "oversized tolerance exits 0"
 
@@ -191,7 +208,7 @@ for bad_tolerance in 120s 2m "" abc -60 090 0120; do
   write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
   ran_ago "$w" issue-pipeline $((3600 - 100))
   DUE_TOLERANCE="$bad_tolerance" run_dispatch "$w" --dry-run
-  expect_contains "$w/out" "WOULD RUN issue-pipeline" \
+  expect_eq "$(decision_of "$w" issue-pipeline)" run \
     "tolerance '$bad_tolerance' falls back to the default instead of skipping"
   expect_eq "$(cat "$w/exit-code")" 0 "tolerance '$bad_tolerance' exits 0"
 done
@@ -208,8 +225,9 @@ w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
 touch "$w/PAUSE"
 run_dispatch "$w" --dry-run
-expect_contains "$w/out" "paused" "PAUSE file reported"
-expect_not_contains "$w/out" "WOULD RUN" "PAUSE file prevents launches"
+expect_eq "$(decisions "$w")" paused "PAUSE file is the only decision"
+expect_eq "$(decision_of "$w" issue-pipeline)" "" \
+  "PAUSE file prevents launches"
 
 # 6. Agent file missing required frontmatter warns but doesn't fail the run.
 w="$(new_work)"
@@ -221,8 +239,8 @@ enabled: true
 body with no name or interval
 EOF
 run_dispatch "$w" --dry-run
-expect_contains "$w/out" "SKIP" "broken agent file warned about"
-expect_contains "$w/out" "WOULD RUN good-agent" \
+expect_eq "$(decision_of "$w" broken.md)" invalid "broken agent file reported"
+expect_eq "$(decision_of "$w" good-agent)" run \
   "other agents still processed after a broken file"
 expect_eq "$(cat "$w/exit-code")" 0 "broken agent file exits 0"
 
@@ -243,8 +261,7 @@ chmod +x "$STUB_DIR/claude-stub"
 w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
 export STUB_OUT="$w/stub-out"
-STUB_CLAUDE="$STUB_DIR/claude-stub" run_dispatch "$w"
-wait_for_stub "$w"
+run_launch "$w"
 expect_contains "$w/stub-out" "--dangerously-skip-permissions" \
   "launch passes --dangerously-skip-permissions"
 expect_contains "$w/stub-out" "--model fable" "launch passes the model"
@@ -256,10 +273,12 @@ expect_file "$w/state/issue-pipeline.last-run" "last-run recorded"
 expect_eq \
   "$(find "$w/state/logs" -name 'issue-pipeline-*.log' 2>/dev/null | wc -l)" \
   1 "one log file created"
+expect_eq "$(cat "$w/exit-code")" 0 "--wait exits 0 when every agent succeeds"
 
 # 8. Immediately after a real run, the agent is no longer due.
 run_dispatch "$w" --dry-run
-expect_contains "$w/out" "not due" "agent not due right after a run"
+expect_eq "$(decision_of "$w" issue-pipeline)" not-due \
+  "agent not due right after a run"
 
 # 9. Optional fallback frontmatter becomes --fallback-model; absent when unset.
 w="$(new_work)"
@@ -274,18 +293,62 @@ fallback: opus
 This is the issue-pipeline prompt body.
 EOF
 export STUB_OUT="$w/stub-out"
-STUB_CLAUDE="$STUB_DIR/claude-stub" run_dispatch "$w"
-wait_for_stub "$w"
+run_launch "$w"
 expect_contains "$w/stub-out" "--fallback-model opus" \
   "launch passes the fallback model when configured"
 
 w="$(new_work)"
 write_agent "$w" no-fallback.md no-fallback true 1h opus
 export STUB_OUT="$w/stub-out"
-STUB_CLAUDE="$STUB_DIR/claude-stub" run_dispatch "$w"
-wait_for_stub "$w"
+run_launch "$w"
 expect_not_contains "$w/stub-out" "--fallback-model" \
   "no fallback flag when frontmatter omits it"
+
+# --wait's other half: a tick blocks until its launches finish AND reports
+# their failure. A failed agent is otherwise invisible — the launch is
+# backgrounded, so without propagating the wait status a manual tick (or the
+# fleet's own retry logic) would read a dead run as a clean one.
+STUB_FAILING="$STUB_DIR/claude-failing-stub"
+cat >"$STUB_FAILING" <<'EOF'
+#!/usr/bin/env bash
+cat >"$STUB_OUT"
+echo "stub claude failing on purpose" >&2
+exit 3
+EOF
+chmod +x "$STUB_FAILING"
+
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+STUB_CLAUDE="$STUB_FAILING" run_launch "$w"
+expect_contains "$w/stub-out" "This is the issue-pipeline prompt body." \
+  "the failing stub really ran"
+expect_eq "$(cat "$w/exit-code")" 1 \
+  "--wait exits non-zero when a launched agent fails"
+
+# One failure is enough: a tick with a healthy agent alongside a failing one
+# still reports failure, and the healthy agent still runs.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+write_agent "$w" demo-agent.md demo-agent true 1h opus
+export STUB_OUT="$w/stub-out"
+# Per-agent marker files rather than one shared log: the two launches are
+# concurrent, so interleaved appends would be the flake this harness avoids.
+cat >"$STUB_DIR/claude-mixed-stub" <<'EOF'
+#!/usr/bin/env bash
+cat >/dev/null
+case "$*" in
+  *"--model opus"*) echo failed >"$STUB_OUT.opus"; exit 4 ;;
+  *) echo ran >"$STUB_OUT.fable" ;;
+esac
+EOF
+chmod +x "$STUB_DIR/claude-mixed-stub"
+STUB_CLAUDE="$STUB_DIR/claude-mixed-stub" run_launch "$w"
+expect_eq "$(cat "$w/exit-code")" 1 \
+  "--wait reports failure even when another agent succeeded"
+expect_file "$STUB_OUT.opus" "the failing agent ran"
+expect_file "$STUB_OUT.fable" \
+  "the healthy agent still ran to completion alongside the failing one"
 
 # Sleep inhibition: the agent runs under systemd-inhibit when available, so a
 # tick can never be suspended mid-flight (see the overnight suspend incident).
@@ -308,9 +371,7 @@ chmod +x "$STUB_INHIBIT"
 w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
 export STUB_OUT="$w/stub-out"
-KARI_AUTOMATION_INHIBIT_BIN="$STUB_INHIBIT" STUB_CLAUDE="$STUB_DIR/claude-stub" \
-  run_dispatch "$w"
-wait_for_stub "$w"
+KARI_AUTOMATION_INHIBIT_BIN="$STUB_INHIBIT" run_launch "$w"
 expect_contains "$w/stub-out.inhibit" "--what=sleep:idle" \
   "launch runs under a sleep+idle inhibitor"
 expect_contains "$w/stub-out.inhibit" "--mode=block" \
@@ -322,9 +383,7 @@ expect_contains "$w/stub-out" "This is the issue-pipeline prompt body." \
 w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
 export STUB_OUT="$w/stub-out"
-KARI_AUTOMATION_INHIBIT_BIN="/nonexistent/systemd-inhibit" \
-  STUB_CLAUDE="$STUB_DIR/claude-stub" run_dispatch "$w"
-wait_for_stub "$w"
+KARI_AUTOMATION_INHIBIT_BIN="/nonexistent/systemd-inhibit" run_launch "$w"
 expect_contains "$w/stub-out" "This is the issue-pipeline prompt body." \
   "agent still launches when no inhibitor binary exists"
 
@@ -344,11 +403,124 @@ chmod +x "$STUB_BROKEN_INHIBIT"
 w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
 export STUB_OUT="$w/stub-out"
-KARI_AUTOMATION_INHIBIT_BIN="$STUB_BROKEN_INHIBIT" \
-  STUB_CLAUDE="$STUB_DIR/claude-stub" run_dispatch "$w"
-wait_for_stub "$w"
+KARI_AUTOMATION_INHIBIT_BIN="$STUB_BROKEN_INHIBIT" run_launch "$w"
 expect_contains "$w/stub-out" "This is the issue-pipeline prompt body." \
   "agent still launches when the inhibitor cannot take a lock"
+
+# 10. Unknown flags are rejected rather than silently treated as a real tick.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+run_dispatch "$w" --bogus
+expect_eq "$(cat "$w/exit-code")" 2 "unknown flag exits 2"
+expect_file_absent "$w/state/issue-pipeline.last-run" \
+  "unknown flag launches nothing"
+
+# 11. --status (#292): per-agent last-run, next-due (tolerance included),
+#     lock state, and the observed inter-run gaps. Gaps come from the
+#     per-run log filenames, which already form a 30-day run history.
+log_at() { # <workdir> <name> <YYYYmmddTHHMMSS>
+  touch "$1/state/logs/$2-$3.log"
+}
+status_line() { # <workdir> <name> <field> — the field's value for the agent
+  awk -v name="$2" -v field="$3" '
+    /^[^ ]/ { current = $1 }
+    current == name && $1 == field":" { sub(/^[^:]*:[[:space:]]*/, ""); print }
+  ' "$1/out"
+}
+w="$(new_work)"
+mkdir -p "$w/state/logs"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+write_agent "$w" demo-agent.md demo-agent false 2h opus
+write_agent "$w" fresh-agent.md fresh-agent true 30m opus
+ran_ago "$w" issue-pipeline 600
+log_at "$w" issue-pipeline 20260821T080000
+log_at "$w" issue-pipeline 20260821T090000
+log_at "$w" issue-pipeline 20260821T101500
+log_at "$w" issue-pipeline 20260821T111000
+log_at "$w" issue-pipelines 20260821T120000 # another agent's log, not ours
+run_dispatch "$w" --status
+expect_eq "$(cat "$w/exit-code")" 0 "status exits 0"
+last_epoch="$(cat "$w/state/issue-pipeline.last-run")"
+expect_contains "$w/out" \
+  "$(date -d "@$last_epoch" '+%Y-%m-%d %H:%M:%S')" "status shows last run"
+expect_contains "$w/out" \
+  "$(date -d "@$((last_epoch + 3600 - 120))" '+%Y-%m-%d %H:%M:%S')" \
+  "status shows next-due including the tolerance"
+expect_eq "$(status_line "$w" issue-pipeline gaps)" \
+  "1h00m 1h15m 55m00s (4 runs logged, mean 1h03m)" \
+  "status lists the observed inter-run gaps oldest first"
+expect_eq "$(status_line "$w" issue-pipeline lock)" free \
+  "status reports a free lock"
+expect_eq "$(status_line "$w" fresh-agent last-run)" never \
+  "status shows never-run agents"
+expect_eq "$(status_line "$w" fresh-agent next-due)" now \
+  "never-run agents are due now"
+expect_eq "$(status_line "$w" fresh-agent gaps)" "(no runs logged)" \
+  "never-run agents have no gaps"
+expect_eq "$(status_line "$w" demo-agent next-due)" "n/a (disabled)" \
+  "disabled agents have no next-due"
+expect_file_absent "$w/state/fresh-agent.last-run" \
+  "status launches nothing"
+
+# 11d. Long histories are summarised: only the newest 12 gaps are listed,
+#      while the run count and mean still cover every logged run.
+w="$(new_work)"
+mkdir -p "$w/state/logs"
+write_agent "$w" fast-agent.md fast-agent true 30m opus
+for i in $(seq 0 14); do
+  log_at "$w" fast-agent "$(printf '20260821T%02d0000' "$i")"
+done
+log_at "$w" fast-agent 20260821T153000
+run_dispatch "$w" --status
+eleven_hours="$(printf '1h00m %.0s' $(seq 11))"
+expect_eq "$(status_line "$w" fast-agent gaps)" \
+  "${eleven_hours}1h30m (16 runs logged, showing last 12, mean 1h02m)" \
+  "status caps the listed gaps at the newest 12"
+
+# 11e. Sibling names that share our "<name>-" log prefix: `a` and `a-2` both
+#      match a `a-*` glob, so run_starts has to reject any filename whose
+#      suffix is not a bare timestamp. Without that, `a` tries to parse
+#      "2-20260821T101500" as a date and prints parse errors to stderr while
+#      dropping the sibling's runs anyway.
+w="$(new_work)"
+mkdir -p "$w/state/logs"
+write_agent "$w" a.md a true 1h fable
+write_agent "$w" a-2.md a-2 true 1h fable
+log_at "$w" a 20260821T080000
+log_at "$w" a 20260821T090000
+log_at "$w" a-2 20260821T101500
+log_at "$w" a-2 20260821T111000
+run_dispatch "$w" --status
+expect_eq "$(status_line "$w" a gaps)" "1h00m (2 runs logged, mean 1h00m)" \
+  "a digit-suffixed sibling's logs stay out of our gap history"
+expect_eq "$(status_line "$w" a-2 gaps)" "55m00s (2 runs logged, mean 55m00s)" \
+  "the sibling still reports its own gaps"
+expect_not_contains "$w/out" "invalid date" \
+  "sibling logs produce no date-parse noise"
+
+# 11a. A held lock (a run still in progress) is reported as such.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+ran_ago "$w" issue-pipeline 600
+( flock 9 && run_dispatch "$w" --status ) 9>"$w/state/issue-pipeline.lock"
+expect_eq "$(status_line "$w" issue-pipeline lock)" \
+  "held (run in progress)" "status reports a held lock"
+
+# 11b. A lapsed agent: next-due is in the past and flagged overdue.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+ran_ago "$w" issue-pipeline 7200
+run_dispatch "$w" --status
+expect_contains "$w/out" "overdue" "status flags an overdue agent"
+
+# 11c. --status still reports while the fleet is paused, and says so.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+touch "$w/PAUSE"
+run_dispatch "$w" --status
+expect_contains "$w/out" "paused" "status mentions the PAUSE file"
+expect_eq "$(status_line "$w" issue-pipeline last-run)" never \
+  "status still lists agents while paused"
 
 echo
 if [ "$FAILURES" -gt 0 ]; then
