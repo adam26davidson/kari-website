@@ -1,11 +1,12 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
+import {
+  applyTimeZone,
+  restoreHostTimeZoneAfterEach,
+} from "../test/timezone";
 import { formatPostDate, todayAsPostDate } from "./date-helpers";
 
 describe("formatPostDate", () => {
-  const hostTimeZone = process.env.TZ;
-  afterEach(() => {
-    process.env.TZ = hostTimeZone;
-  });
+  restoreHostTimeZoneAfterEach();
 
   it("renders the year, month and day of an ISO timestamp", () => {
     // Midday UTC so the calendar day is the same either side of the
@@ -34,7 +35,7 @@ describe("formatPostDate", () => {
     // UTC saw the previous day. Run the assertion in a west-of-UTC zone
     // so it fails on a locale-converting formatter even though CI's host
     // clock is UTC.
-    process.env.TZ = "America/Los_Angeles";
+    applyTimeZone("America/Los_Angeles");
     // The same calendar day rendered from a local-midnight Date: locale
     // agnostic, so this says nothing about the format, only the day.
     expect(formatPostDate("2026-01-01T00:00:00.000Z")).toBe(
@@ -43,7 +44,7 @@ describe("formatPostDate", () => {
   });
 
   it("shows the stored calendar day east of UTC", () => {
-    process.env.TZ = "Pacific/Kiritimati";
+    applyTimeZone("Pacific/Kiritimati");
     expect(formatPostDate("2026-01-01T00:00:00.000Z")).toBe(
       new Date(2026, 0, 1).toLocaleDateString(),
     );
@@ -51,9 +52,8 @@ describe("formatPostDate", () => {
 });
 
 describe("todayAsPostDate", () => {
-  const hostTimeZone = process.env.TZ;
+  restoreHostTimeZoneAfterEach();
   afterEach(() => {
-    process.env.TZ = hostTimeZone;
     vi.useRealTimers();
   });
 
@@ -61,14 +61,14 @@ describe("todayAsPostDate", () => {
     // 17:00 PST on Jan 1 is 01:00 UTC on Jan 2. The author means "Jan 1",
     // so the stored value must be Jan 1 at UTC midnight — not the creation
     // instant, which formatPostDate would then show as Jan 2.
-    process.env.TZ = "America/Los_Angeles";
+    applyTimeZone("America/Los_Angeles");
     vi.useFakeTimers({ now: new Date(2026, 0, 1, 17, 0, 0) });
     expect(todayAsPostDate()).toBe("2026-01-01T00:00:00.000Z");
   });
 
   it("pins the local calendar day east of UTC too", () => {
     // 02:00 on Jan 2 in Kiritimati (UTC+14) is still Jan 1 in UTC.
-    process.env.TZ = "Pacific/Kiritimati";
+    applyTimeZone("Pacific/Kiritimati");
     vi.useFakeTimers({ now: new Date(2026, 0, 2, 2, 0, 0) });
     expect(todayAsPostDate()).toBe("2026-01-02T00:00:00.000Z");
   });

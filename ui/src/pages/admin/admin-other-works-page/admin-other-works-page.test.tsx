@@ -6,6 +6,10 @@ import { BlogService } from "../../../services/blog";
 import { ImageService } from "../../../services/images";
 import { TokenGetter } from "../../../services/http";
 import { answerYes, renderAdminPage } from "../admin-ui-test-helpers";
+import {
+  applyTimeZone,
+  restoreHostTimeZoneAfterEach,
+} from "../../../test/timezone";
 
 vi.mock("../../../services/blog", () => ({
   BlogService: {
@@ -1170,9 +1174,8 @@ describe("AdminOtherWorksPage image upload on save", () => {
 });
 
 describe("AdminOtherWorksPage new item", () => {
-  const hostTimeZone = process.env.TZ;
+  restoreHostTimeZoneAfterEach();
   afterEach(() => {
-    process.env.TZ = hostTimeZone;
     vi.useRealTimers();
   });
 
@@ -1180,7 +1183,7 @@ describe("AdminOtherWorksPage new item", () => {
     // Created at 17:00 PST on Jan 1 (01:00 UTC on Jan 2): the stored date
     // must be Jan 1, the day the author sees, so formatPostDate (which
     // reads the UTC day) shows the same day everywhere.
-    process.env.TZ = "America/Los_Angeles";
+    applyTimeZone("America/Los_Angeles");
     vi.useFakeTimers({
       now: new Date(2026, 0, 1, 17, 0, 0),
       shouldAdvanceTime: true,
