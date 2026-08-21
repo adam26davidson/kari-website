@@ -273,6 +273,7 @@ expect_file "$w/state/issue-pipeline.last-run" "last-run recorded"
 expect_eq \
   "$(find "$w/state/logs" -name 'issue-pipeline-*.log' 2>/dev/null | wc -l)" \
   1 "one log file created"
+expect_eq "$(cat "$w/exit-code")" 0 "--wait exits 0 when every agent succeeds"
 
 # 8. Immediately after a real run, the agent is no longer due.
 run_dispatch "$w" --dry-run
@@ -302,6 +303,52 @@ export STUB_OUT="$w/stub-out"
 run_launch "$w"
 expect_not_contains "$w/stub-out" "--fallback-model" \
   "no fallback flag when frontmatter omits it"
+
+# --wait's other half: a tick blocks until its launches finish AND reports
+# their failure. A failed agent is otherwise invisible — the launch is
+# backgrounded, so without propagating the wait status a manual tick (or the
+# fleet's own retry logic) would read a dead run as a clean one.
+STUB_FAILING="$STUB_DIR/claude-failing-stub"
+cat >"$STUB_FAILING" <<'EOF'
+#!/usr/bin/env bash
+cat >"$STUB_OUT"
+echo "stub claude failing on purpose" >&2
+exit 3
+EOF
+chmod +x "$STUB_FAILING"
+
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+STUB_CLAUDE="$STUB_FAILING" run_launch "$w"
+expect_contains "$w/stub-out" "This is the issue-pipeline prompt body." \
+  "the failing stub really ran"
+expect_eq "$(cat "$w/exit-code")" 1 \
+  "--wait exits non-zero when a launched agent fails"
+
+# One failure is enough: a tick with a healthy agent alongside a failing one
+# still reports failure, and the healthy agent still runs.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+write_agent "$w" demo-agent.md demo-agent true 1h opus
+export STUB_OUT="$w/stub-out"
+# Per-agent marker files rather than one shared log: the two launches are
+# concurrent, so interleaved appends would be the flake this harness avoids.
+cat >"$STUB_DIR/claude-mixed-stub" <<'EOF'
+#!/usr/bin/env bash
+cat >/dev/null
+case "$*" in
+  *"--model opus"*) echo failed >"$STUB_OUT.opus"; exit 4 ;;
+  *) echo ran >"$STUB_OUT.fable" ;;
+esac
+EOF
+chmod +x "$STUB_DIR/claude-mixed-stub"
+STUB_CLAUDE="$STUB_DIR/claude-mixed-stub" run_launch "$w"
+expect_eq "$(cat "$w/exit-code")" 1 \
+  "--wait reports failure even when another agent succeeded"
+expect_file "$STUB_OUT.opus" "the failing agent ran"
+expect_file "$STUB_OUT.fable" \
+  "the healthy agent still ran to completion alongside the failing one"
 
 # Sleep inhibition: the agent runs under systemd-inhibit when available, so a
 # tick can never be suspended mid-flight (see the overnight suspend incident).
