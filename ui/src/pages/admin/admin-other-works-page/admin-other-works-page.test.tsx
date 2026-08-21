@@ -874,6 +874,14 @@ describe("AdminOtherWorksPage creation", () => {
   });
 });
 
+/** The date text the list row for the given title actually renders. */
+function displayedDate(title: string): string {
+  const row = screen
+    .getByRole("button", { name: title })
+    .closest(".blog-post-summary");
+  return row?.querySelector("span")?.textContent ?? "";
+}
+
 describe("AdminOtherWorksPage search", () => {
   beforeEach(() => {
     vi.mocked(BlogService.getListFromApi).mockResolvedValue([
@@ -898,9 +906,10 @@ describe("AdminOtherWorksPage search", () => {
     fireEvent.change(search, { target: { value: "2024-05" } });
     expect(screen.getByText("A Post")).toBeInTheDocument();
     expect(screen.queryByText("B Post")).toBeNull();
-    fireEvent.change(search, {
-      target: { value: new Date(savedPost.date).toLocaleDateString() },
-    });
+    // Search by the exact string the row renders, read back out of the
+    // DOM: if the displayed format and the searched format ever drift
+    // apart, this stops matching.
+    fireEvent.change(search, { target: { value: displayedDate("A Post") } });
     expect(screen.getByText("A Post")).toBeInTheDocument();
     expect(screen.queryByText("B Post")).toBeNull();
   });

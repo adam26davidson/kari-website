@@ -1,4 +1,5 @@
 import { BlogPost } from "../../models";
+import { formatPostDate } from "../../utils/date-helpers";
 import { TitleLink } from "../title-link/title-link";
 import "./blog-post-summary.css";
 
@@ -21,7 +22,7 @@ export function BlogPostSummary({
       >
         {post.title}
       </TitleLink>
-      <span>{new Date(post.date).toLocaleDateString()}</span>
+      <span>{formatPostDate(post.date)}</span>
       {showPublished && (
         <span className="blog-post-summary-status">
           {post.isPublished ? "Published" : "Draft"}
