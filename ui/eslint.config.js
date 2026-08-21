@@ -14,8 +14,8 @@ import { fileURLToPath } from 'node:url'
 // package. That bites hardest with --report-unused-disable-directives: the
 // coverage reporter emits vendored scripts carrying `/* eslint-disable */`
 // headers, which that flag reports as errors. Deriving the list here keeps it
-// from drifting out of sync with .gitignore; src/test/eslint-config.test.ts
-// asserts the derivation.
+// from drifting out of sync with .gitignore;
+// src/test/config/eslint-config.test.ts asserts the derivation.
 const gitignorePath = fileURLToPath(new URL('.gitignore', import.meta.url))
 
 export default tseslint.config(

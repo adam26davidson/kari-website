@@ -59,6 +59,11 @@ the field and ignores it, so this is about local output and local intent.
   documented pre-push command (see Parallel Sessions below), so the check
   is mechanical rather than remembered; `npm run test` / `test:run` stay
   typecheck-free to keep the inner loop fast.
+  The vitest suite is split into two projects (`ui/vitest.workspace.ts`):
+  `unit` (jsdom) for app code, and `config` (node) for tests that assert on
+  this package's own tooling. Config-level tests go in
+  `ui/src/test/config/`; everything else defaults to `unit`. Coverage stays
+  configured once in `ui/vitest.config.ts` and is measured across both.
 - UI: `npm run test:e2e` - Playwright e2e tests (seeds a local S3, builds the
   test-mode bundle, previews it, and runs smoke + visitor journeys; admin
   journeys additionally run when `E2E_AUTH0_USERNAME` / `E2E_AUTH0_PASSWORD`

@@ -1,25 +1,15 @@
-import { defineConfig, configDefaults } from "vitest/config";
-import react from "@vitejs/plugin-react-swc";
+import { defineConfig } from "vitest/config";
 
 // Vitest configuration for unit/component tests. Kept separate from
 // vite.config.ts so the build config stays focused on bundling.
+//
+// Which tests run, and in which environment, is defined per project in
+// vitest.workspace.ts. What stays here is everything Vitest scopes to the
+// whole run rather than to a project -- coverage above all, which must keep
+// measuring all of src/ across both projects.
 export default defineConfig({
-  plugins: [react()],
   test: {
-    globals: true,
-    environment: "jsdom",
-    setupFiles: ["./src/test/setup.ts"],
-    // Playwright specs live in e2e/ and must not be run by Vitest.
-    exclude: [...configDefaults.exclude, "e2e/**"],
-    // Components import their own .css files; we don't need to process them
-    // for logic/render tests.
-    css: false,
-    // Default values for the Vite env vars the app reads at import time.
-    // Individual tests can override with vi.stubEnv().
-    env: {
-      VITE_API_URL: "https://api.test.local",
-      VITE_S3_URL: "https://s3.test.local",
-    },
+    workspace: "./vitest.workspace.ts",
     coverage: {
       provider: "v8",
       // json-summary feeds the CI coverage comment on PRs.

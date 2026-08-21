@@ -7,7 +7,7 @@ import {
   apiImageUrl,
 } from "./image-management-helpers";
 
-// VITE_API_URL / VITE_S3_URL are provided by vitest.config.ts test.env.
+// VITE_API_URL / VITE_S3_URL are provided by vitest.workspace.ts test.env.
 const API = "https://api.test.local";
 const S3 = "https://s3.test.local";
 
