@@ -19,11 +19,12 @@ WORKDIRS=()
 
 # Invoked by the EXIT trap below, which shellcheck does not model, so it
 # reads the function as dead code — under a different name per release:
-# 0.11 (the pinned image) reports the function as never invoked (SC2329),
-# while 0.9/0.10 — what GitHub runners ship — report its body as
-# unreachable (SC2317), because this script's last statement is an
-# unconditional `exit`. Both codes have to be listed: silencing only the
-# one the pin emits left CI red on the one it does not.
+# 0.11 (the pinned image, and since #340 what CI runs too) reports the
+# function as never invoked (SC2329), while 0.9/0.10 — what GitHub runners
+# ship — report its body as unreachable (SC2317), because this script's
+# last statement is an unconditional `exit`. Only SC2329 is load-bearing
+# now; SC2317 stays for anyone linting with an older shellcheck off PATH
+# instead of `./scripts/lint-workflows.sh --images`.
 # shellcheck disable=SC2329,SC2317
 cleanup() {
   for d in "${WORKDIRS[@]:-}"; do
@@ -187,6 +188,16 @@ NO_ACTIONLINT_BIN="$(mktemp -d)"
 WORKDIRS+=("$NO_ACTIONLINT_BIN")
 cp "$STUB_BIN/docker" "$STUB_BIN/yq" "$NO_ACTIONLINT_BIN/"
 chmod +x "$NO_ACTIONLINT_BIN/docker" "$NO_ACTIONLINT_BIN/yq"
+
+# A stub dir with every tool installed except docker, for the --images cases
+# below: forcing the pins on a machine with no docker has to fail loudly
+# rather than fall back to the local binaries the flag exists to bypass.
+NO_DOCKER_BIN="$(mktemp -d)"
+WORKDIRS+=("$NO_DOCKER_BIN")
+cp "$STUB_BIN/yq" "$STUB_BIN/actionlint" "$STUB_BIN/shellcheck" \
+  "$NO_DOCKER_BIN/"
+chmod +x "$NO_DOCKER_BIN/yq" "$NO_DOCKER_BIN/actionlint" \
+  "$NO_DOCKER_BIN/shellcheck"
 
 new_repo() {
   local repo
@@ -579,6 +590,85 @@ extra_script "$r" scripts/thing.sh 'RUNTIME_IMAGE="$1"'
 run_lint "$r"
 expect_eq "$(cat "$r/exit-code")" 0 \
   "an unpinned image assignment is not flagged"
+
+# --- deterministic mode: --images / KARI_LINT_FORCE_IMAGES (#340) ----------
+# Whichever actionlint/shellcheck/yq a machine happens to have installed is
+# not the version the pins name, and for shellcheck the difference is not
+# only missing findings: 0.9 (what GitHub runners ship) reports a trap
+# handler as SC2317 where 0.11 (the pin) reports SC2329, so a tree that is
+# clean under one is red under the other. The flag skips every `command -v`
+# probe so a run answers with the pins and nothing else — that is what CI
+# passes, which makes the pins the single source of truth for "clean".
+
+# 27. --images ignores an installed actionlint and runs the pin.
+r="$(new_repo)"
+good_workflow "$r" ci
+STUB_PATH="$STUB_BIN" run_lint "$r" --images
+expect_eq "$(cat "$r/exit-code")" 0 "--images on a clean tree exits 0"
+expect_contains "$r/stub.log" "rhysd/actionlint:" \
+  "--images runs actionlint from the pin"
+expect_not_contains "$r/stub.log" "actionlint " \
+  "--images ignores the installed actionlint"
+
+# 28. ... and an installed shellcheck, which is the skew that motivated the
+#     flag.
+expect_contains "$r/stub.log" "koalaman/shellcheck:" \
+  "--images runs shellcheck from the pin"
+expect_not_contains "$r/stub.log" "shellcheck -x" \
+  "--images ignores the installed shellcheck"
+
+# 29. ... and an installed yq: one probe left in place is one version the
+#     pins do not describe.
+expect_contains "$r/stub.log" "mikefarah/yq" \
+  "--images runs the YAML parse from the pin"
+expect_not_contains "$r/stub.log" "yq -o=json" \
+  "--images ignores the installed yq"
+
+# 30. The env var is equivalent, so CI (or a shell profile) can force the
+#     pins without editing every call site.
+r="$(new_repo)"
+good_workflow "$r" ci
+KARI_LINT_FORCE_IMAGES=1 STUB_PATH="$STUB_BIN" run_lint "$r"
+expect_eq "$(cat "$r/exit-code")" 0 "KARI_LINT_FORCE_IMAGES=1 exits 0"
+expect_contains "$r/stub.log" "koalaman/shellcheck:" \
+  "KARI_LINT_FORCE_IMAGES=1 runs shellcheck from the pin"
+expect_not_contains "$r/stub.log" "shellcheck -x" \
+  "KARI_LINT_FORCE_IMAGES=1 ignores the installed shellcheck"
+
+# 31. A falsy value leaves the fast path alone: an exported 0 must not cost
+#     every local run three image pulls.
+r="$(new_repo)"
+good_workflow "$r" ci
+KARI_LINT_FORCE_IMAGES=0 STUB_PATH="$STUB_BIN" run_lint "$r"
+expect_contains "$r/stub.log" "shellcheck -x" \
+  "KARI_LINT_FORCE_IMAGES=0 still prefers the installed shellcheck"
+expect_not_contains "$r/stub.log" "koalaman/shellcheck" \
+  "KARI_LINT_FORCE_IMAGES=0 pulls no image"
+
+# 32. Forcing the pins without docker fails, and fails before running
+#     anything: silently falling back to the local binaries would hand back
+#     exactly the answer the flag was used to avoid.
+r="$(new_repo)"
+good_workflow "$r" ci
+STUB_PATH="$NO_DOCKER_BIN" run_lint "$r" --images
+expect_not_contains "$r/exit-code" "0" "--images without docker exits non-zero"
+expect_contains "$r/out" "docker" "--images without docker names docker"
+expect_contains "$r/out" "--images" "--images without docker names the flag"
+expect_eq "$(wc -c < "$r/stub.log")" 0 \
+  "--images without docker runs no tools"
+# The same tree without the flag is clean, so the failure above is the flag
+# and not something wrong with the fixture.
+STUB_PATH="$NO_DOCKER_BIN" run_lint "$r"
+expect_eq "$(cat "$r/exit-code")" 0 "the same tree without --images is clean"
+
+# 33. --help documents the flag; an undiscoverable switch is one nobody
+#     reaches for when a local run disagrees with CI.
+r="$(new_repo)"
+good_workflow "$r" ci
+run_lint "$r" --help
+expect_contains "$r/out" "--images" "--help documents --images"
+expect_contains "$r/out" "KARI_LINT_FORCE_IMAGES" \
+  "--help documents the env var"
 
 echo
 if [ "$FAILURES" -eq 0 ]; then

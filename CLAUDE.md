@@ -76,7 +76,14 @@ with code in this repository.
   pinned docker image when the binary is missing, so there is never a
   reason to hand-roll a `docker run koalaman/shellcheck` of your own. This
   is the script CI's `shell-lint` job runs, so run it locally before
-  pushing any change to a `*.sh` file or to `.github/workflows/*`. That
+  pushing any change to a `*.sh` file or to `.github/workflows/*`.
+  CI runs it as `--images`, which ignores installed binaries and uses the
+  pins for every tool; an installed shellcheck is whatever release the
+  machine has, and releases disagree about real findings (0.9 reds a trap
+  handler as SC2317 that the pinned 0.11 reports as SC2329). So if a local
+  run disagrees with CI, re-run with `--images` (or
+  `KARI_LINT_FORCE_IMAGES=1`) — that, not your `shellcheck --version`, is
+  the definition of clean. That
   job also runs the shell test harnesses `automation/dispatch-test.sh`,
   `scripts/setup-worktree-test.sh` and `scripts/lint-workflows-test.sh`.
   Changing the lint script? Re-run its tests:
