@@ -23,6 +23,8 @@
 #   KARI_AUTOMATION_INHIBIT_BIN default systemd-inhibit (skipped if absent)
 #   KARI_AUTOMATION_SYSTEMD_RUN_BIN default systemd-run (skipped if absent);
 #   KARI_AUTOMATION_SYSTEMCTL_BIN   default systemctl — see launch()
+#   KARI_AUTOMATION_MEMORY_MAX  default 50% (of RAM); MemoryMax of the
+#                               scope each agent session runs in
 #   KARI_AUTOMATION_DUE_TOLERANCE  default 120 (seconds); see DUE_TOLERANCE
 #   KARI_AUTOMATION_BG_WAIT_CEILING_MS default 5400000 (90 minutes); how
 #                               long claude -p waits for background
@@ -40,6 +42,7 @@ SELF_UPDATE="${KARI_AUTOMATION_SELF_UPDATE:-1}"
 INHIBIT_BIN="${KARI_AUTOMATION_INHIBIT_BIN:-systemd-inhibit}"
 SYSTEMD_RUN_BIN="${KARI_AUTOMATION_SYSTEMD_RUN_BIN:-systemd-run}"
 SYSTEMCTL_BIN="${KARI_AUTOMATION_SYSTEMCTL_BIN:-systemctl}"
+MEMORY_MAX="${KARI_AUTOMATION_MEMORY_MAX:-50%}"
 # claude -p ends the session 600s after its main turn finishes, killing
 # any background subagents still running. The orchestrator dispatches
 # workers as background subagents and its own turn routinely ends before
@@ -281,7 +284,17 @@ launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
       if "$SYSTEMD_RUN_BIN" --user --scope --quiet -- true >/dev/null 2>&1
       then
         unit="kari-agent-$name-$stamp"
-        scope=("$SYSTEMD_RUN_BIN" --user --scope --quiet --unit="$unit" --)
+        # OOMPolicy: systemd's default for a scope is `stop`, which turned
+        # one OOM-killed vitest worker into the death of the whole tick
+        # (2026-08-21, #412) -- the opposite of what the scope is for.
+        # `continue` lets the kernel take the one process and the session
+        # carry on. MemoryMax keeps that kill inside the scope's own
+        # cgroup: a runaway then OOMs against the cap and the kernel
+        # picks the biggest process in the scope, not whatever it finds
+        # on the host. Half the machine leaves the desktop breathing
+        # room on a host with no swap.
+        scope=("$SYSTEMD_RUN_BIN" --user --scope --quiet --unit="$unit"
+          --property=OOMPolicy=continue --property="MemoryMax=$MEMORY_MAX" --)
       else
         echo "warn: $SYSTEMD_RUN_BIN cannot create a scope;" \
           "running $name uncontained" >&2

@@ -461,12 +461,28 @@ expect_contains "$w/stub-out.scope" "--scope" \
   "launch runs inside a transient scope"
 expect_contains "$w/stub-out.scope" "--unit=kari-agent-issue-pipeline-" \
   "scope is named after the agent"
+# One OOM-killed process must not take the tick with it (#412): systemd's
+# default OOMPolicy=stop did exactly that, and a memory cap keeps the
+# kill inside the scope's own cgroup instead of wherever the kernel looks.
+expect_contains "$w/stub-out.scope" "--property=OOMPolicy=continue" \
+  "scope survives an OOM kill of one of its processes"
+expect_contains "$w/stub-out.scope" "--property=MemoryMax=50%" \
+  "scope is capped at half the host's memory by default"
 expect_contains "$w/stub-out" "This is the issue-pipeline prompt body." \
   "agent still receives its prompt inside the scope"
 expect_contains "$w/stub-out.systemctl" "stop kari-agent-issue-pipeline-" \
   "leftover scope is stopped after the agent exits"
 expect_contains "$w/out" "reap issue-pipeline" \
   "tick reports that it reaped leftovers"
+
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+KARI_AUTOMATION_MEMORY_MAX=12G \
+KARI_AUTOMATION_SYSTEMD_RUN_BIN="$STUB_SYSTEMD_RUN" \
+KARI_AUTOMATION_SYSTEMCTL_BIN="$STUB_SYSTEMCTL" run_launch "$w"
+expect_contains "$w/stub-out.scope" "--property=MemoryMax=12G" \
+  "KARI_AUTOMATION_MEMORY_MAX overrides the cap"
 
 # The scope wrapper is optional, like the inhibitor: no binary, or one that
 # cannot create a scope (no user manager: CI runners, containers), must not
