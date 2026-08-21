@@ -25,7 +25,7 @@ jobs:
   shell-lint:
     name: Shell and workflows (lint, script tests)
     runs-on: ubuntu-latest
-    # Observed: seconds. Nearly all of it is the actionlint image pull.
+    # Observed: seconds. Nearly all of it is the image pulls.
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -36,8 +36,14 @@ jobs:
       # so the paragraph above cannot quietly stop being true, shellcheck
       # over every *.sh in the repo, and the check that each pinned docker
       # image in them carries its renovate annotation.
+      #
+      # --images because runners ship their own shellcheck and yq, and the
+      # runner's shellcheck (0.9) disagrees with the pin (0.11) about real
+      # findings — it reds a trap handler as SC2317 that the pin reports as
+      # SC2329 (#340). Forcing the pins costs two more image pulls and buys
+      # a CI result anyone can reproduce with the same flag.
       - name: Lint workflows and shell scripts
-        run: ./scripts/lint-workflows.sh
+        run: ./scripts/lint-workflows.sh --images
 
       # The shell test harnesses. They were local-only until #291, which
       # meant a regression in the dispatcher (#276) or in the setup script

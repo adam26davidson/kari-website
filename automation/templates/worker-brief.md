@@ -111,7 +111,9 @@ scoped enough to plan yourself.
   the repo, and the renovate annotation on every pinned docker image — and
   it needs nothing installed, falling back to pinned docker images when a
   tool is missing from PATH. Don't hand-roll a `docker run
-  koalaman/shellcheck` instead. If you touched the dispatcher, the
+  koalaman/shellcheck` instead. CI passes `--images`, which uses the pins
+  for every tool instead of whatever the runner has installed; add the
+  flag locally if your run and CI disagree. If you touched the dispatcher, the
   worktree setup script or the lint itself, run the matching harness too —
   the same CI job runs `bash automation/dispatch-test.sh`,
   `bash scripts/setup-worktree-test.sh` and
