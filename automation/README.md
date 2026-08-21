@@ -87,6 +87,26 @@ and how often*; the machine tracks *when last*.
 - Uninstall: `systemctl --user disable --now kari-automation.timer`
   (or remove the cron entry, if installed that way).
 
+## Dispatcher modes
+
+- `dispatch.sh` — a tick: launches whatever is due in the background and
+  exits. What the timer calls.
+- `dispatch.sh --status` — launches nothing; prints, per agent, the last
+  run, the next due time (tolerance included, see Timing), whether its
+  lock is held (a run in progress), and the observed inter-run gaps —
+  recovered from the `logs/<name>-<timestamp>.log` filenames, so the
+  history is the 30-day log window. Drift shows up as gaps creeping past
+  `every`; a stuck agent as a next-due far in the past flagged `overdue`,
+  or a lock held long after its last run.
+- `dispatch.sh --dry-run` — launches nothing; one tab-separated
+  `<decision> <name> <detail>` line per agent, where the decision is
+  `run`, `not-due`, `disabled`, `invalid` or (fleet-wide) `paused`. This
+  is the machine-readable contract `dispatch-test.sh` asserts on, so the
+  human-readable messages of a real tick can be reworded freely.
+- `--wait` — a tick that blocks until every launched agent finishes and
+  exits non-zero if any failed. For running a tick by hand (and the test
+  harness); the timer must not use it.
+
 ## Installation (systemd user timer)
 
 The maintainer's Arch laptop has no cron installed; the fleet runs via
