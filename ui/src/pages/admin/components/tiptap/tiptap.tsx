@@ -19,48 +19,30 @@ import TextAlign from "@tiptap/extension-text-align";
 import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import { Editor, EditorContent, useEditor } from "@tiptap/react";
+import { FormEvent, useState } from "react";
 import StarterKit from "@tiptap/starter-kit";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { v4 as uuidv4 } from "uuid";
 
 const HEADING_LEVELS = [1, 2, 3] as const;
 
-const setLink = (editor: Editor) => {
-  const previousUrl = editor.getAttributes("link").href;
-  const url = window.prompt("URL", previousUrl);
+// The Link extension refuses any protocol outside its allow-list
+// (javascript:, data:, ...) by returning false from setLink rather than by
+// throwing, so the panel shows this instead of failing silently.
+const LINK_REFUSED_MESSAGE =
+  "That link was not applied: only http(s), mailto, tel and relative " +
+  "URLs are allowed.";
 
-  // cancelled
-  if (url === null) {
-    return;
-  }
-
-  // empty
-  if (url === "") {
-    editor.chain().focus().extendMarkRange("link").unsetLink().run();
-
-    return;
-  }
-
-  // update link. setLink reports failure by returning false rather than
-  // throwing: the Link extension refuses any protocol outside its
-  // allow-list (javascript:, data:, ...), which would otherwise be a
-  // silent no-op for the author.
-  const applied = editor
-    .chain()
-    .focus()
-    .extendMarkRange("link")
-    .setLink({ href: url })
-    .run();
-
-  if (!applied) {
-    console.error("Could not set link:", url);
-  }
-};
+// Toolbar items that drive menu state rather than the document receive
+// these callbacks alongside the editor.
+interface MenuActions {
+  toggleLinkPanel: () => void;
+}
 
 interface ToolbarItem {
   name: string;
   icon: IconDefinition;
-  command: (editor: Editor) => void;
+  command: (editor: Editor, menu: MenuActions) => void;
   isActive?: (editor: Editor) => boolean;
   isDisabled?: (editor: Editor) => boolean;
 }
@@ -138,7 +120,7 @@ const TOOLBAR_GROUPS: ToolbarGroup[] = [
       {
         name: "link",
         icon: faLink,
-        command: setLink,
+        command: (_editor, menu) => menu.toggleLinkPanel(),
         isActive: (editor) => editor.isActive("link"),
       },
       {
@@ -154,12 +136,18 @@ const TOOLBAR_GROUPS: ToolbarGroup[] = [
 const ToolbarButton = ({
   editor,
   item,
+  menu,
+  expanded,
 }: {
   editor: Editor;
   item: ToolbarItem;
+  menu: MenuActions;
+  expanded?: boolean;
 }) => (
   <button
-    onClick={() => item.command(editor)}
+    type="button"
+    onClick={() => item.command(editor, menu)}
+    aria-expanded={expanded}
     className={
       item.isActive ? (item.isActive(editor) ? "is-active" : "") : undefined
     }
@@ -178,9 +166,46 @@ const MenuBar = ({
   editor: Editor | null;
   onAddImage: (file: File, id: string) => void;
 }) => {
+  // null = the link panel is closed; a string = the current input value.
+  // Declared above the null guard so the hook order never changes.
+  const [linkDraft, setLinkDraft] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
+
   if (!editor) {
     return null;
   }
+
+  const toggleLinkPanel = () => {
+    setLinkError(null);
+    setLinkDraft(
+      linkDraft === null ? (editor.getAttributes("link").href ?? "") : null,
+    );
+  };
+
+  // The draft is passed in rather than read from state so the caller's
+  // "panel is open" narrowing carries the non-null type through.
+  const applyLink = (event: FormEvent, draft: string) => {
+    event.preventDefault();
+    const href = draft.trim();
+
+    if (href === "") {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      setLinkDraft(null);
+      return;
+    }
+
+    // Ask before applying rather than reacting to the chain's return
+    // value: chain().focus() hands focus to the editor on the next frame
+    // even when setLink then refuses the href, which would pull the caret
+    // out of the panel the author still needs to correct.
+    if (!editor.can().setLink({ href })) {
+      setLinkError(LINK_REFUSED_MESSAGE);
+      return;
+    }
+
+    editor.chain().focus().extendMarkRange("link").setLink({ href }).run();
+    setLinkDraft(null);
+  };
 
   const addImage = () => {
     // prompt user to select a file
@@ -217,6 +242,8 @@ const MenuBar = ({
       ? "p"
       : "";
 
+  const menu: MenuActions = { toggleLinkPanel };
+
   return (
     <div className="control-group">
       <div className="button-group">
@@ -247,19 +274,69 @@ const MenuBar = ({
           group.grouped ? (
             <div className="grouped-buttons" key={group.name}>
               {group.items.map((item) => (
-                <ToolbarButton key={item.name} editor={editor} item={item} />
+                <ToolbarButton
+                  key={item.name}
+                  editor={editor}
+                  item={item}
+                  menu={menu}
+                />
               ))}
             </div>
           ) : (
             group.items.map((item) => (
-              <ToolbarButton key={item.name} editor={editor} item={item} />
+              <ToolbarButton
+                key={item.name}
+                editor={editor}
+                item={item}
+                menu={menu}
+                expanded={item.name === "link" ? linkDraft !== null : undefined}
+              />
             ))
           ),
         )}
-        <button onClick={addImage} aria-label="image" title="image">
+        <button
+          type="button"
+          onClick={addImage}
+          aria-label="image"
+          title="image"
+        >
           <FontAwesomeIcon icon={faImage} />
         </button>
       </div>
+      {linkDraft !== null && (
+        <form
+          className="link-popover"
+          onSubmit={(event) => applyLink(event, linkDraft)}
+        >
+          <input
+            aria-label="link url"
+            // Not type="url": the extension accepts relative paths and
+            // mailto: without a host, which native url validation rejects.
+            type="text"
+            autoFocus
+            value={linkDraft}
+            onChange={(event) => {
+              setLinkDraft(event.target.value);
+              setLinkError(null);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                toggleLinkPanel();
+              }
+            }}
+            placeholder="https://"
+          />
+          <button type="submit">apply</button>
+          <button type="button" onClick={toggleLinkPanel}>
+            cancel
+          </button>
+          {linkError && (
+            <p className="link-popover-error" role="alert">
+              {linkError}
+            </p>
+          )}
+        </form>
+      )}
     </div>
   );
 };
