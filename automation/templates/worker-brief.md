@@ -124,7 +124,8 @@ scoped enough to plan yourself.
   first), then actually Read every PNG and fix what looks wrong before
   proceeding. Without `E2E_AUTH0_*` env vars you can only
   capture public pages — note in the PR that admin pages rely on CI's
-  visual review.
+  visual review, and see CLAUDE.md's Visual Checks section for how much
+  local capture is worth when the change is admin-only.
 - If you changed conditional logic in the UI, coverage may drop below
   the ratchet floors even with green tests; add tests until
   `test:coverage` passes.
