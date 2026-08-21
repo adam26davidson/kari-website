@@ -440,6 +440,15 @@ hands over the kept branch and/or patch.
    (`gh issue create`) — check `gh issue list --search` first so you
    don't file duplicates. Anything the pipeline itself hit (broken
    scripts, confusing docs) gets an issue too, per CLAUDE.md.
+   Label every issue that is about the pipeline itself — the dispatcher,
+   the briefs and playbooks under `automation/`, claim and worktree
+   handling, this housekeeping — with `automation`
+   (`gh issue create ... --label automation`, or
+   `gh issue edit <n> --add-label automation`). Without it pipeline work
+   scatters across `enhancement` and unlabelled and cannot be triaged as
+   one body of work. If the label is missing, create it first with
+   `gh label create automation --color 5319E7` plus a
+   `--description` of "The automation pipeline / dispatcher itself".
 2. **Orphaned kept branches.** A kept branch is reachable only through
    the `Claim released:` comments on its issues, so once those issues
    are all closed (shipped by another PR, or closed by a human) nothing
