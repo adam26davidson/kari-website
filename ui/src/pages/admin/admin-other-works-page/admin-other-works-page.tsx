@@ -8,7 +8,7 @@ import {
   moveItemByIdByOne,
   removeItemById,
 } from "../../../utils/data-list-helpers";
-import { formatPostDate } from "../../../utils/date-helpers";
+import { formatPostDate, todayAsPostDate } from "../../../utils/date-helpers";
 import { BlogService } from "../../../services/blog";
 import { BlogPostSummary } from "../../../components/blog-post-summary/blog-post-summary";
 import { BlogPostEditor } from "./components/blog-post-editor/blog-post-editor";
@@ -157,7 +157,7 @@ export function AdminOtherWorksPage() {
     const newPost: BlogPost = {
       id,
       title: "",
-      date: new Date().toISOString(),
+      date: todayAsPostDate(),
       isPublished: false,
     };
     const newPostList = [...postList, { ...newPost }];
