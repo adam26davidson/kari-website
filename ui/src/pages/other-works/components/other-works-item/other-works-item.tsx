@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { BlogService } from "../../../../services/blog";
 import { BlogPost as BlogPostData } from "../../../../models";
 import { LoadError } from "../../../../components/load-error/load-error";
+import { formatPostDate } from "../../../../utils/date-helpers";
 
 export function OtherWorksItem({ id }: { id: string }) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -69,7 +70,7 @@ export function OtherWorksItem({ id }: { id: string }) {
         </Link>
       </h1>
       <div className="other-works-date">
-        {new Date(post.date).toLocaleDateString()}
+        {formatPostDate(post.date)}
       </div>
       <div
         className="other-works-item-content"
