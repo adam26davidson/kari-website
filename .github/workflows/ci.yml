@@ -28,7 +28,7 @@ jobs:
     # Observed: seconds. Nearly all of it is the image pulls.
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The same script anyone can run locally (see CLAUDE.md): actionlint
       # over .github/ — including shellcheck on every embedded `run:` —
@@ -79,7 +79,7 @@ jobs:
       run:
         working-directory: ui
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node
         uses: actions/setup-node@v7
@@ -130,7 +130,7 @@ jobs:
       run:
         working-directory: ui
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Node + npm ci, Rust + cargo cache, MinIO seeded with fixture
       # content, the API health-polled on localhost:3000, and Playwright's
@@ -178,7 +178,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node
         uses: actions/setup-node@v7
@@ -263,7 +263,7 @@ jobs:
       run:
         working-directory: api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
