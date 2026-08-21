@@ -1196,6 +1196,45 @@ expect_eq "$(fact_of "$w" tick_log)" none "another slug's log is not ours"
 expect_eq "$(fact_of "$w" tick_log_trailer)" none \
   "...and contributes no trailer"
 
+# ...and neither does a NAME-EXTENDING sibling's, which a substring match
+# cannot tell from ours: every line naming agent/sibling-2 also contains
+# the string "agent/sibling". Here the sibling's log is the NEWER one, so
+# a substring probe would hand the run summary that log's "tick exited 1"
+# while our own tick was SIGKILLed (trailer none) — misattributing the
+# death cause the trailer exists to record.
+w="$(new_work)"
+new_liveness "$w" sibling
+age_liveness
+mkdir -p "$w/state/logs"
+printf 'dispatched worker for agent/sibling\nstill working\n' \
+  >"$w/state/logs/issue-pipeline-20260821T090000.log"
+printf 'dispatched worker for agent/sibling-2\ntick exited 1\n' \
+  >"$w/state/logs/issue-pipeline-20260821T100000.log"
+touch -d '2 hours ago' "$w/state/logs/issue-pipeline-20260821T090000.log"
+touch -d '1 hour ago' "$w/state/logs/issue-pipeline-20260821T100000.log"
+STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" sibling 41
+expect_eq "$(fact_of "$w" tick_log)" \
+  "$w/state/logs/issue-pipeline-20260821T090000.log" \
+  "a name-extending sibling's newer log is not ours"
+expect_eq "$(fact_of "$w" tick_log_trailer)" none \
+  "...so our SIGKILLed tick keeps its empty trailer"
+expect_eq "$(fact_of "$w" tick_log_last)" "still working" \
+  "...and the sibling's exit code is not quoted as ours"
+
+# A mention at end of line, with nothing after the branch name, is still
+# ours: the boundary the sibling case needs must not cost us that.
+w="$(new_work)"
+new_liveness "$w" eol
+age_liveness
+mkdir -p "$w/state/logs"
+printf 'dispatched worker for origin/agent/eol\ntick exited 0\n' \
+  >"$w/state/logs/issue-pipeline-20260821T090000.log"
+STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" eol 41
+expect_eq "$(fact_of "$w" tick_log)" \
+  "$w/state/logs/issue-pipeline-20260821T090000.log" \
+  "a branch named at end of line is found"
+expect_eq "$(fact_of "$w" tick_log_trailer)" 0 "...with its trailer"
+
 # 14k. The probe must not manufacture life. `git status` refreshes the
 #      index, which writes into the linked worktree's git dir — run
 #      without --no-optional-locks, the second tick would see a fresh

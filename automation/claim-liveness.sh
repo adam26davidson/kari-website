@@ -249,7 +249,17 @@ tick_log=none
 tick_log_last=""
 tick_log_trailer=none
 if [ -d "$STATE_DIR/logs" ]; then
-  candidate="$(grep -l -F -- "$BRANCH" "$STATE_DIR/logs"/*.log 2>/dev/null |
+  # Matched with a right boundary, not as a substring: the same
+  # name-extending sibling the process scan has to exclude bites here
+  # too. Every line naming agent/<slug>-2 contains the string
+  # agent/<slug>, so a substring match can report the sibling's log —
+  # and its trailer — as ours, quoting "tick exited 1" for a tick that
+  # was actually SIGKILLed. The class is what a branch name can be
+  # continued with; nothing constrains the LEFT side, since a line
+  # saying origin/agent/<slug> is us.
+  branch_re="$(printf '%s' "$BRANCH" | sed 's/[][^$.*+?(){}|\]/\\&/g')"
+  candidate="$(grep -l -E -- "$branch_re"'([^[:alnum:]_/.-]|$)' \
+    "$STATE_DIR/logs"/*.log 2>/dev/null |
     xargs -r ls -1t 2>/dev/null | head -n1)" || candidate=""
   if [ -n "$candidate" ]; then
     tick_log="$candidate"
