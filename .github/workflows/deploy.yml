@@ -33,7 +33,7 @@ jobs:
     steps:
       # Pin to the exact commit CI validated (falls back to the default branch
       # head for manual dispatches).
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 

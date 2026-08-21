@@ -64,7 +64,7 @@ jobs:
             echo "::notice::Skipping visual review — no CLAUDE_CODE_OAUTH_TOKEN secret."
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: steps.check.outputs.enabled == 'true'
 
       # Same hermetic stack as the frontend-e2e job in ci.yml (Node +
