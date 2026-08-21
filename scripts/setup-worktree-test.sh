@@ -35,9 +35,19 @@ if [ "${1:-}" = ci ]; then
   touch node_modules/.package-lock.json
 fi
 EOF
+# The npx stub reproduces what a real `npx playwright install` prints when
+# the browser cache is already warm on a distro Playwright has no dedicated
+# build for: npm announcing the command, and Playwright's "BEWARE" banner
+# once per candidate download URL. Both are noise the script should drop,
+# and dropping both is what leaves a warm run with nothing to print at all
+# (issue #300).
 cat > "$STUB_BIN/npx" <<'EOF'
 #!/usr/bin/env bash
 echo "$PWD: npx $*" >>"$STUB_LOG"
+echo "npm notice run kari-website@0.0.0 npx" >&2
+echo "BEWARE: your OS is not officially supported by Playwright; downloading fallback build for ubuntu24.04-x64."
+echo "BEWARE: your OS is not officially supported by Playwright; downloading fallback build for ubuntu24.04-x64."
+echo "BEWARE: your OS is not officially supported by Playwright; downloading fallback build for ubuntu24.04-x64."
 EOF
 cat > "$STUB_BIN/node" <<'EOF'
 #!/usr/bin/env bash
@@ -71,6 +81,38 @@ exit 1
 EOF
 chmod +x "$FAIL_BIN/npm" "$FAIL_BIN/npx" "$FAIL_BIN/node" \
   "$FAIL_BIN/cargo" "$FAIL_BIN/docker"
+
+# A stub dir whose `npx` also downloads, for checking that the filter keeps
+# what a cold run has to say.
+NPX_COLD_BIN="$(mktemp -d)"
+WORKDIRS+=("$NPX_COLD_BIN")
+cp "$STUB_BIN/npm" "$STUB_BIN/node" "$STUB_BIN/cargo" \
+  "$STUB_BIN/docker" "$NPX_COLD_BIN/"
+cat > "$NPX_COLD_BIN/npx" <<'EOF'
+#!/usr/bin/env bash
+echo "$PWD: npx $*" >>"$STUB_LOG"
+echo "npm notice run kari-website@0.0.0 npx" >&2
+echo "BEWARE: your OS is not officially supported by Playwright; downloading fallback build for ubuntu24.04-x64."
+echo "Downloading Chromium 140.0.1 from https://cdn.playwright.dev"
+echo "Chromium 140.0.1 downloaded to /home/u/.cache/ms-playwright/chromium-1200"
+EOF
+chmod +x "$NPX_COLD_BIN/npm" "$NPX_COLD_BIN/npx" "$NPX_COLD_BIN/node" \
+  "$NPX_COLD_BIN/cargo" "$NPX_COLD_BIN/docker"
+
+# A stub dir whose `npx` fails, so the browser step's output filtering can be
+# checked for swallowing a real failure.
+NPX_FAIL_BIN="$(mktemp -d)"
+WORKDIRS+=("$NPX_FAIL_BIN")
+cp "$STUB_BIN/npm" "$STUB_BIN/node" "$STUB_BIN/cargo" \
+  "$STUB_BIN/docker" "$NPX_FAIL_BIN/"
+cat > "$NPX_FAIL_BIN/npx" <<'EOF'
+#!/usr/bin/env bash
+echo "$PWD: npx $*" >>"$STUB_LOG"
+echo "Error: Failed to download Chromium" >&2
+exit 1
+EOF
+chmod +x "$NPX_FAIL_BIN/npm" "$NPX_FAIL_BIN/npx" "$NPX_FAIL_BIN/node" \
+  "$NPX_FAIL_BIN/cargo" "$NPX_FAIL_BIN/docker"
 
 # A stub dir with node but deliberately no npm, for the missing-tool case.
 NO_NPM_BIN="$(mktemp -d)"
@@ -160,6 +202,10 @@ expect_contains "$r/stub.log" "/ui: npm ci" "fresh worktree runs npm ci in ui/"
 expect_contains "$r/stub.log" "/ui: npx playwright install chromium" \
   "fresh worktree installs the chromium browser"
 expect_eq "$(cat "$r/exit-code")" 0 "fresh worktree setup exits 0"
+expect_not_contains "$r/out" "BEWARE: your OS is not officially supported" \
+  "Playwright's unsupported-OS banner is filtered out"
+expect_not_contains "$r/out" "npm notice run" \
+  "npx's own command announcement is filtered out"
 
 # 2. Re-run with dependencies already current: npm ci is skipped (that is
 #    what makes the script cheap to run again), the browser step still runs
@@ -219,9 +265,54 @@ expect_contains "$r/out" "unknown option" "unknown option is reported"
 expect_not_contains "$r/exit-code" "0" "unknown option exits non-zero"
 expect_eq "$(wc -c < "$r/stub.log")" 0 "unknown option runs no commands"
 
+# 9. The filter is narrow: a cold run's download reporting still comes
+#    through, so a long install is never unexplained silence.
+r="$(new_repo)"
+STUB_PATH="$NPX_COLD_BIN" run_setup "$r"
+expect_contains "$r/out" "Downloading Chromium" \
+  "a cold browser install still reports the download"
+expect_contains "$r/out" "downloaded to" \
+  "a cold browser install still reports where the build landed"
+
+# 10. Filtering the browser step's output must not swallow a real failure:
+#     the error text still shows and the script exits non-zero.
+r="$(new_repo)"
+STUB_PATH="$NPX_FAIL_BIN" run_setup "$r"
+expect_not_contains "$r/exit-code" "0" \
+  "a failing browser install exits non-zero"
+expect_contains "$r/out" "Failed to download Chromium" \
+  "a failing browser install still reports why"
+
+# 11. --quiet: a warm run has nothing to say, so it says nothing. dev.sh
+#     uses this so a stack start is not preceded by a setup banner.
+r="$(new_repo)"
+run_setup "$r"
+: > "$r/stub.log"
+run_setup "$r" --quiet
+expect_eq "$(wc -c < "$r/out")" 0 "--quiet prints nothing when there is no work"
+expect_contains "$r/stub.log" "/ui: npx playwright install chromium" \
+  "--quiet still runs the browser install"
+expect_eq "$(cat "$r/exit-code")" 0 "--quiet exits 0"
+
+# 12. --quiet still announces the slow step, so a minute of `npm ci` is
+#     never unexplained silence.
+r="$(new_repo)"
+run_setup "$r" --quiet
+expect_contains "$r/out" "Installing UI dependencies" \
+  "--quiet still announces a real install"
+
+# 13. --quiet composes with --force and is documented in the usage line.
+r="$(new_repo)"
+run_setup "$r" --force --quiet
+expect_contains "$r/stub.log" "/ui: npm ci" "--force --quiet still reinstalls"
+expect_eq "$(cat "$r/exit-code")" 0 "--force --quiet exits 0"
+r="$(new_repo)"
+run_setup "$r" --help
+expect_contains "$r/out" "--quiet" "--help documents --quiet"
+
 # --- scripts/dev.sh delegates its setup to setup-worktree.sh (issue #298) --
 
-# 9. A dev stack in a fresh worktree gets the canonical setup: `npm ci` from
+# 14. A dev stack in a fresh worktree gets the canonical setup: `npm ci` from
 #    the lockfile (not a drift-prone `npm install`) plus the Playwright
 #    browser, before anything in the stack starts.
 r="$(new_repo)"
@@ -234,20 +325,23 @@ expect_contains "$r/stub.log" "/ui: npx playwright install chromium" \
 expect_before "$r/stub.log" "npm ci" "docker" \
   "dev.sh finishes setup before starting the stack"
 
-# 10. Re-running the stack is cheap: the setup skip means no second npm ci.
+# 15. Re-running the stack is cheap: the setup skip means no second npm ci.
 : > "$r/stub.log"
 run_dev "$r"
 expect_not_contains "$r/stub.log" "npm ci" "a second dev.sh run skips npm ci"
-expect_contains "$r/out" "up to date" "dev.sh reports dependencies current"
+expect_not_contains "$r/out" "up to date" \
+  "a warm dev.sh start prints no setup banner"
+expect_not_contains "$r/out" "BEWARE: your OS is not officially supported" \
+  "a warm dev.sh start prints no Playwright unsupported-OS banner"
 
-# 11. A failing setup aborts dev.sh instead of starting a half-built stack.
+# 16. A failing setup aborts dev.sh instead of starting a half-built stack.
 r="$(new_repo)"
 STUB_PATH="$FAIL_BIN" run_dev "$r"
 expect_not_contains "$r/exit-code" "0" "failed setup exits dev.sh non-zero"
 expect_not_contains "$r/stub.log" "docker" \
   "failed setup stops dev.sh before the stack starts"
 
-# 12. Argument handling still comes first, so --help stays instant.
+# 17. Argument handling still comes first, so --help stays instant.
 r="$(new_repo)"
 run_dev "$r" --help
 expect_contains "$r/out" "usage: scripts/dev.sh" "dev.sh --help prints usage"

@@ -34,6 +34,23 @@ with code in this repository.
 - API: `cargo watch -x 'run dev'` - Run API in watch mode
 - API: `cargo build` - Build the Rust API
 
+## Dependency Install Scripts
+npm 12 (what recent Node ships locally) blocks a dependency's install
+scripts unless `allowScripts` in `ui/package.json` covers it, and ends the
+install with a warning naming everything it skipped. Every dependency that
+ships one is recorded there as `false` — reviewed and denied, not
+overlooked: the four `@fortawesome/*` scripts and `browser-tabs-lock`'s only
+`console.log` a banner, `@swc/core`'s quietly swaps in a `@swc/wasm`
+fallback we would rather fail loudly without, and `esbuild`'s can fetch a
+binary over the network that the lockfile's platform package already
+provides. Nothing needs to run, so `npm ci` is warning-free.
+That is the point of recording them: a warning appearing again means a NEW
+script arrived. Review it — `npm install-scripts ls` lists it — then
+`npm install-scripts deny <pkg>` (or `approve <pkg>`, if it genuinely must
+run) and commit the `package.json` change. Never silence it with
+`--dangerously-allow-all-scripts`. CI is on Node 22 / npm 10, which predates
+the field and ignores it, so this is about local output and local intent.
+
 ## Test Commands
 - UI: `npm run test` - Vitest in watch mode
 - UI: `npm run test:run` - Vitest once (used in CI)
