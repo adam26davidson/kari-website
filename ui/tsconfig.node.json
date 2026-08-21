@@ -12,6 +12,7 @@
   },
   "include": [
     "vite.config.ts",
+    "vite-bundle-budget.ts",
     "vitest.config.ts",
     "vitest.workspace.ts"
   ]

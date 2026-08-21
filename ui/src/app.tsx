@@ -1,12 +1,14 @@
 import { Header } from "./components/header/header";
 import "./app.css";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useIsMobile } from "./hooks/use-is-mobile";
 import { useSiteBackground } from "./hooks/use-site-background";
 import { MobileMenu } from "./components/mobile-menu/mobile-menu";
 import { Suspense, useState } from "react";
 import { RouteErrorBoundary } from "./components/error-boundary/error-boundary";
 import { lazyWithRetry } from "./components/error-boundary/lazy-with-retry";
+import { AdminAuthProvider } from "./auth/lazy-admin-auth";
+import { isAdminPath } from "./utils/admin-routes";
 
 // Route-level code splitting: each page loads as its own chunk, so
 // visitors never download the admin section (and its tiptap editor
@@ -55,8 +57,9 @@ function RouteFallback() {
 export function App() {
   const [showingMobileMenu, setShowingMobileMenu] = useState(false);
   const isMobile = useIsMobile();
+  const isAdminRoute = isAdminPath(useLocation().pathname);
   useSiteBackground();
-  return (
+  const shell = (
     <div className="whole-page">
       <Header
         showingMobileMenu={showingMobileMenu}
@@ -87,5 +90,25 @@ export function App() {
         )}
       </div>
     </div>
+  );
+
+  // The Auth0 session boundary is mounted only for admin routes, and from
+  // a lazy chunk, so public visitors never download the SDK (issue #272).
+  // It wraps the whole shell because the header renders the signed-in user
+  // outside the route outlet. The cost is one extra round trip before
+  // /admin paints -- admin-only, and the section is maintainer-facing.
+  //
+  // The RouteErrorBoundary has to sit ABOVE this Suspense: it is the one lazy chunk
+  // fetched from outside the shell, so the shell's own RouteErrorBoundary
+  // is below it and cannot catch a persistent load failure. Uncaught, that
+  // error escapes App to the data router in main.tsx -- which declares no
+  // errorElement -- instead of the chunk-load prompt from #107.
+  if (!isAdminRoute) return shell;
+  return (
+    <RouteErrorBoundary>
+      <Suspense fallback={<RouteFallback />}>
+        <AdminAuthProvider>{shell}</AdminAuthProvider>
+      </Suspense>
+    </RouteErrorBoundary>
   );
 }

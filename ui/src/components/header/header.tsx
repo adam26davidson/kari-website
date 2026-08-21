@@ -1,15 +1,12 @@
+import { Suspense } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { useAuth0 } from "@auth0/auth0-react";
 import "./header.css";
-import {
-  faUser,
-  faBars,
-  faRightFromBracket,
-} from "@fortawesome/free-solid-svg-icons";
+import { faBars } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useIsMobile } from "../../hooks/use-is-mobile";
 import { PAGES } from "../../constants";
-import { SiteButton } from "../site-button/site-button";
+import { isAdminPath } from "../../utils/admin-routes";
+import { HeaderUserSection } from "../../auth/lazy-admin-auth";
 
 export function Header({
   showingMobileMenu,
@@ -20,10 +17,7 @@ export function Header({
 }) {
   const location = useLocation();
   const isMobile = useIsMobile();
-  const { user, isAuthenticated, isLoading, logout } = useAuth0();
-  const isAdminPage =
-    location.pathname === "/admin" ||
-    location.pathname.startsWith("/admin/");
+  const isAdminPage = isAdminPath(location.pathname);
 
   return (
     <div className={isAdminPage ? "admin-header" : "header"}>
@@ -61,20 +55,16 @@ export function Header({
           ))}
         </div>
       )}
-      {isAdminPage && isAuthenticated && !isLoading && (
-        <div className="header-user-section">
-          <FontAwesomeIcon icon={faUser} />
-          <div className="header-user-name">{user?.name}</div>
-          <SiteButton
-            onClick={() =>
-              logout({ logoutParams: { returnTo: window.location.origin } })
-            }
-          >
-            <FontAwesomeIcon icon={faRightFromBracket} />
-          </SiteButton>
-        </div>
+      {/* Admin-only, and lazy: the user section is the header's sole
+          Auth0 consumer, so keeping it in its own chunk keeps the SDK off
+          every public page. The chunk is already in flight by the time
+          this renders -- the app shell mounts AdminAuthProvider from the
+          same module -- so the null fallback is momentary. */}
+      {isAdminPage && (
+        <Suspense fallback={null}>
+          <HeaderUserSection />
+        </Suspense>
       )}
-      {isAdminPage && isLoading && "Logging in..."}
     </div>
   );
 }

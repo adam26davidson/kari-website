@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { App } from "./app";
 import { useIsMobile } from "./hooks/use-is-mobile";
@@ -57,13 +58,16 @@ vi.mock("./services/site-settings", () => ({
   },
 }));
 
-vi.mock("@auth0/auth0-react", () => ({
-  useAuth0: () => ({
-    user: undefined,
-    isAuthenticated: false,
-    isLoading: false,
-    logout: vi.fn(),
-  }),
+// The Auth0 SDK lives behind a lazy chunk that only admin routes fetch
+// (auth/lazy-admin-auth.ts). Stubbing the module behind it keeps
+// @auth0/auth0-react out of these tests entirely, and makes the boundary
+// observable: "admin auth boundary" appears exactly where the real
+// Auth0Provider would be mounted.
+vi.mock("./auth/admin-auth", () => ({
+  AdminAuthProvider: ({ children }: { children?: ReactNode }) => (
+    <div data-testid="admin-auth-boundary">{children}</div>
+  ),
+  HeaderUserSection: () => <div>User section stub</div>,
 }));
 
 function renderApp(path: string) {
@@ -102,6 +106,23 @@ describe("App", () => {
   it("routes nested admin paths to the admin shell", async () => {
     renderApp("/admin/haiku/some-id");
     expect(await screen.findByText("Admin page stub")).toBeInTheDocument();
+  });
+
+  it("mounts the Auth0 session boundary on admin routes", async () => {
+    renderApp("/admin/haiku/some-id");
+    expect(await screen.findByText("Admin page stub")).toBeInTheDocument();
+    expect(screen.getByTestId("admin-auth-boundary")).toBeInTheDocument();
+    // The header sits inside the boundary, so its user section has a
+    // session to read.
+    expect(
+      screen.getByTestId("admin-auth-boundary"),
+    ).toContainElement(screen.getByText("Kari Davidson - Admin"));
+  });
+
+  it("leaves public routes outside the Auth0 session boundary", async () => {
+    renderApp("/haiku");
+    expect(await screen.findByText("Haiku page stub")).toBeInTheDocument();
+    expect(screen.queryByTestId("admin-auth-boundary")).toBeNull();
   });
 
   it("redirects /blog to /other-works", async () => {
