@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { AdminOtherWorksPage } from "./admin-other-works-page";
 import { BlogPost } from "../../../models";
@@ -1166,5 +1166,33 @@ describe("AdminOtherWorksPage image upload on save", () => {
     // Nothing was saved or deleted for a post whose upload failed.
     expect(BlogService.updateContent).not.toHaveBeenCalled();
     expect(BlogService.updateList).not.toHaveBeenCalled();
+  });
+});
+
+describe("AdminOtherWorksPage new item", () => {
+  const hostTimeZone = process.env.TZ;
+  afterEach(() => {
+    process.env.TZ = hostTimeZone;
+    vi.useRealTimers();
+  });
+
+  it("dates a new item at UTC midnight of the author's calendar day", async () => {
+    // Created at 17:00 PST on Jan 1 (01:00 UTC on Jan 2): the stored date
+    // must be Jan 1, the day the author sees, so formatPostDate (which
+    // reads the UTC day) shows the same day everywhere.
+    process.env.TZ = "America/Los_Angeles";
+    vi.useFakeTimers({
+      now: new Date(2026, 0, 1, 17, 0, 0),
+      shouldAdvanceTime: true,
+    });
+    const { adminUi } = await renderPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "Add item" }));
+    await answerYes(adminUi);
+
+    await waitFor(() => expect(BlogService.updateList).toHaveBeenCalled());
+    const [savedList] = vi.mocked(BlogService.updateList).mock.calls[0];
+    const created = (savedList as BlogPost[]).find((p) => p.id !== "b1");
+    expect(created?.date).toBe("2026-01-01T00:00:00.000Z");
   });
 });
