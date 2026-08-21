@@ -21,6 +21,8 @@
 #   KARI_AUTOMATION_PAUSE_FILE  default <repo>/automation/PAUSE
 #   KARI_AUTOMATION_CLAUDE_BIN  default claude
 #   KARI_AUTOMATION_INHIBIT_BIN default systemd-inhibit (skipped if absent)
+#   KARI_AUTOMATION_SYSTEMD_RUN_BIN default systemd-run (skipped if absent);
+#   KARI_AUTOMATION_SYSTEMCTL_BIN   default systemctl — see launch()
 #   KARI_AUTOMATION_DUE_TOLERANCE  default 120 (seconds); see DUE_TOLERANCE
 #   KARI_AUTOMATION_SELF_UPDATE default 1; 0 skips the fast-forward of the
 #                               clone at the start of a tick (see self_update)
@@ -33,6 +35,8 @@ PAUSE_FILE="${KARI_AUTOMATION_PAUSE_FILE:-$REPO_ROOT/automation/PAUSE}"
 CLAUDE_BIN="${KARI_AUTOMATION_CLAUDE_BIN:-claude}"
 SELF_UPDATE="${KARI_AUTOMATION_SELF_UPDATE:-1}"
 INHIBIT_BIN="${KARI_AUTOMATION_INHIBIT_BIN:-systemd-inhibit}"
+SYSTEMD_RUN_BIN="${KARI_AUTOMATION_SYSTEMD_RUN_BIN:-systemd-run}"
+SYSTEMCTL_BIN="${KARI_AUTOMATION_SYSTEMCTL_BIN:-systemctl}"
 # Slack on the "has the interval elapsed?" test. Polls happen on a coarse
 # grid (cron every 15m) while last-run is stamped at the moment a run
 # starts, so without slack each cycle's start creeps later into the
@@ -213,8 +217,9 @@ interval_seconds() { # interval_seconds <Nm|Nh|Nd>
 
 launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
   local name="$1" model="$2" fallback="$3" agent_file="$4"
-  local log
-  log="$STATE_DIR/logs/$name-$(date +%Y%m%dT%H%M%S).log"
+  local stamp log
+  stamp="$(date +%Y%m%dT%H%M%S)"
+  log="$STATE_DIR/logs/$name-$stamp.log"
   (
     flock -n 9 || {
       echo "skip $name: previous run still holds the lock"
@@ -247,12 +252,49 @@ launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
           "running $name without sleep inhibition" >&2
       fi
     fi
+    # Contain the session in a transient scope unit of its own, and stop
+    # the scope once claude exits. The service unit has to use
+    # KillMode=process (the tick exits while the session runs on), so
+    # nothing else ever reaps what a session spawns and forgets -- most
+    # often a `./scripts/dev.sh` backgrounded for the visual check: three
+    # full API+vite stacks, 3.6G of RAM, and their MinIO containers were
+    # found idling in the service cgroup hours after their ticks (#401).
+    # With a scope, the whole tree is one cgroup and `systemctl stop`
+    # SIGTERMs all of it; dev.sh's TERM trap brings its container down
+    # too. Same optionality as the inhibitor: no systemd-run, or one that
+    # cannot reach a user manager (CI runners, containers), means the
+    # session simply runs unscoped rather than not at all.
+    local scope=() unit=""
+    if command -v "$SYSTEMD_RUN_BIN" >/dev/null 2>&1; then
+      if "$SYSTEMD_RUN_BIN" --user --scope --quiet -- true >/dev/null 2>&1
+      then
+        unit="kari-agent-$name-$stamp"
+        scope=("$SYSTEMD_RUN_BIN" --user --scope --quiet --unit="$unit" --)
+      else
+        echo "warn: $SYSTEMD_RUN_BIN cannot create a scope;" \
+          "running $name uncontained" >&2
+      fi
+    fi
     # Unquoted ${var:+...} is deliberate: no flag at all when unset.
+    # `|| rc=$?` rather than a bare status read: under set -e a failing
+    # session would otherwise end the subshell here, before the reap.
+    local rc=0
     # shellcheck disable=SC2086
     prompt_body "$agent_file" |
-      "${inhibit[@]}" "$CLAUDE_BIN" -p --dangerously-skip-permissions \
+      "${scope[@]}" "${inhibit[@]}" "$CLAUDE_BIN" -p \
+        --dangerously-skip-permissions \
         ${model:+--model "$model"} \
-        ${fallback:+--fallback-model "$fallback"} >"$log" 2>&1
+        ${fallback:+--fallback-model "$fallback"} >"$log" 2>&1 || rc=$?
+    # Only a scope that still has processes in it is "stopped"; an empty
+    # one was already collected, and a session that cleaned up after
+    # itself deserves a quiet exit.
+    if [ -n "$unit" ] &&
+      "$SYSTEMCTL_BIN" --user is-active --quiet "$unit.scope" 2>/dev/null
+    then
+      echo "reap $name: stopping leftover processes in $unit.scope"
+      "$SYSTEMCTL_BIN" --user stop "$unit.scope" 2>/dev/null || true
+    fi
+    exit "$rc"
   ) 9>"$STATE_DIR/$name.lock" &
   if $WAIT; then
     LAUNCHED+=("$!")

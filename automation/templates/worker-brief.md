@@ -124,7 +124,10 @@ scoped enough to plan yourself.
   run `node e2e/screenshots.mjs` in `ui/` (pass `--base-url` for
   non-default ports; a fresh worktree needs `./scripts/setup-worktree.sh`
   first), then actually Read every PNG and fix what looks wrong before
-  proceeding. Without `E2E_AUTH0_*` env vars you can only
+  proceeding. Stop the stack when you are done with it (SIGTERM the
+  `dev.sh` process you started — its trap tears down the API, vite and
+  the MinIO container); the dispatcher reaps whatever survives your
+  session, but a stack left running wastes RAM for the rest of it. Without `E2E_AUTH0_*` env vars you can only
   capture public pages — note in the PR that admin pages rely on CI's
   visual review, and see CLAUDE.md's Visual Checks section for how much
   local capture is worth when the change is admin-only.

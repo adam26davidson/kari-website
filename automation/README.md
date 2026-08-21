@@ -153,6 +153,23 @@ Alternative for machines that have cron — a single crontab line
 Either way, the 15-minute cadence is the dispatcher's polling
 resolution; each agent's own `every` decides how often it runs.
 
+### Each session runs in its own scope
+
+The service unit needs `KillMode=process` (the tick exits while the
+sessions run on), so systemd never reaps what a session spawns and
+forgets — most often a `./scripts/dev.sh` backgrounded for the visual
+check. Three full API+vite stacks, 3.6 GB of RAM and their MinIO
+containers were once found idling in the service cgroup hours after
+their ticks (#401). So the dispatcher runs each session inside a
+transient scope unit (`systemd-run --user --scope`, named
+`kari-agent-<name>-<timestamp>.scope`) and, once `claude` exits, stops
+the scope if anything is still in it — the tick logs `reap <name>` when
+that happens. `systemctl stop` SIGTERMs the whole tree, and dev.sh's
+TERM trap takes its container down with it. Like the inhibitor this is
+best-effort: no `systemd-run`, or one that cannot reach a user manager
+(CI runners, containers), and the session simply runs uncontained.
+`systemctl --user list-units 'kari-agent-*'` shows sessions in flight.
+
 ### The clone keeps itself current
 
 Everything the timer reads — agent files, the playbook, `dispatch.sh`
