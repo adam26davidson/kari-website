@@ -1,0 +1,7 @@
+# Variables `cross` forwards into its build container. Cargo/rustc vars pass
+# through on their own; anything else has to be listed here or the build
+# inside the container never sees it.
+[build.env]
+# The deploy workflow sets this to the commit being built so the API can
+# report it from GET /version (see src/routes/version.rs).
+passthrough = ["KARI_COMMIT_SHA"]

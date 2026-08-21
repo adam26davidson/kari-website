@@ -931,6 +931,24 @@ async fn set_image_published_store_outage_is_500() {
 // back a haiga, a post, AND the site background), so the reference-checked
 // GC sweep (POST /images/gc) is the only way image objects are removed.
 
+// --------------------------------------------------------------- version
+
+#[tokio::test]
+async fn version_is_public_and_reports_the_build_sha_or_null() {
+    // The test binary is built without KARI_COMMIT_SHA, so the sha is
+    // null; deployed binaries carry the commit the workflow baked in. Either
+    // way the shape is fixed -- the admin page keys off `sha` being a
+    // string.
+    let (_store, app) = setup();
+    let expected = kari_website_api::routes::version::COMMIT_SHA
+        .map(Value::from)
+        .unwrap_or(Value::Null);
+    assert_eq!(
+        send(app, get("/version")).await,
+        (StatusCode::OK, json!({ "sha": expected }))
+    );
+}
+
 // ---------------------------------------------------------------- health
 
 #[tokio::test]
