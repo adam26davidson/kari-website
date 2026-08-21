@@ -34,6 +34,11 @@ your report.
    implementer would otherwise hit (invariants in surrounding code,
    coverage-ratchet exposure from new branches, visual-check surface).
 5. **Out of scope** — what NOT to touch, so the diff stays reviewable.
+6. **Design intent** — only when the issue changes what the admin UI
+   shows (components, copy, empty/error/success states, dialogs): one
+   short paragraph, written against `docs/ui-design-brief.md`, saying
+   what the user sees and what the empty, error and success states
+   say. Omit this section entirely for everything else.
 
 Concrete beats complete: name real files, real functions, real test
 cases. If the code contradicts an assumption in the issue, say so

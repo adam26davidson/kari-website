@@ -141,10 +141,15 @@ jobs:
             tiles in order as one page. They cover the public pages
             and, when captured, the
             admin pages (files named admin-*: list pages, editors opened
-            on a fixture item, and image cleanup). The admin pages are
-            utilitarian editing UI — judge their layout, legibility, and
-            usability (fields and buttons visible, reachable, not
-            overlapping), not their visual polish. The content everywhere
+            on a fixture item, and image cleanup). For the admin pages
+            also read docs/ui-design-brief.md and judge them against its
+            principles and reviewer checklist — the admin is meant to feel
+            calm and welcoming to its one non-technical user: one clear
+            primary action, inviting empty states, plain-language copy,
+            nothing cramped. Report a brief violation you can SEE in a
+            screenshot (a bare empty table, a wall of same-weight
+            buttons, jargon in a label); do not guess at behavior the
+            screenshots cannot show. The content everywhere
             is seeded fixture data, so judge layout and legibility, not
             the content itself; gray placeholder rectangles where photos
             would be are expected and fine.
