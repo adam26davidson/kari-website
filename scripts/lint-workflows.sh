@@ -27,15 +27,17 @@
 #
 # Nothing has to be installed locally: whenever a binary is missing from
 # PATH, actionlint/shellcheck run from their images and the YAML parse from
-# mikefarah/yq's. GitHub runners ship yq and shellcheck, so CI pulls only
-# the actionlint image — which does mean CI's shellcheck is the runner's
-# version rather than the pin below. That skew cuts both ways: the runner's
-# older release can miss a finding the pin makes, and it can also raise one
-# the pin does not (it has: SC2317 on a trap handler that 0.11 reports as
-# SC2329 instead). So a locally clean run is not proof CI is clean, and a
-# disable comment for a version-skew false positive has to name every code
-# the releases in play emit. Issue #340 tracks making CI use the pins so
-# the two agree.
+# mikefarah/yq's. That fast path is a convenience, not the definition of
+# clean — an installed tool is whatever release the machine has, and the
+# difference is not merely missing findings. Shellcheck 0.9 (what GitHub
+# runners ship) reports a trap handler as SC2317 where the pinned 0.11
+# reports SC2329, so one release reds a tree the other passes.
+#
+# So `--images` (or KARI_LINT_FORCE_IMAGES=1) skips every `command -v`
+# probe and runs the pins below and nothing else. CI passes it, which makes
+# the pins the single source of truth for what "clean" means and makes a CI
+# finding reproducible on any machine with docker. Reach for it whenever a
+# local run disagrees with CI (issue #340).
 #
 # Tests: scripts/lint-workflows-test.sh
 set -uo pipefail
@@ -51,10 +53,32 @@ SHELLCHECK_IMAGE="${SHELLCHECK_IMAGE:-koalaman/shellcheck:v0.11.0}"
 # renovate: datasource=docker
 YQ_IMAGE="${YQ_IMAGE:-mikefarah/yq:4}"
 
-usage() { echo "usage: scripts/lint-workflows.sh [--help]"; }
+# printf rather than a heredoc + cat: usage has to print on a PATH holding
+# nothing but this script's own tools (the test harness runs it on exactly
+# that), and printf is a builtin.
+usage() {
+  printf '%s\n' \
+    'usage: scripts/lint-workflows.sh [--images] [--help]' \
+    '' \
+    '  --images  Run actionlint, shellcheck and the YAML parse from the' \
+    '            pinned images above, ignoring any installed binary.' \
+    '            This is what CI does, so it is how you reproduce a CI' \
+    '            finding locally. Needs docker.' \
+    '            Same thing: KARI_LINT_FORCE_IMAGES=1.'
+}
+
+# Any value but the empty string and the usual falsy pair turns it on, so
+# `KARI_LINT_FORCE_IMAGES=true` does what it looks like it does.
+case "${KARI_LINT_FORCE_IMAGES:-}" in
+  "" | 0 | false) force_images=0 ;;
+  *) force_images=1 ;;
+esac
 
 for arg in "$@"; do
   case "$arg" in
+    --images)
+      force_images=1
+      ;;
     -h | --help)
       usage
       exit 0
@@ -78,6 +102,26 @@ require() {
   }
 }
 
+# Every tool with an image fallback is chosen through this, so --images
+# cannot half-apply: one probe left in place is one version the pins do not
+# describe.
+use_local() { # <tool> — true when the run should use the PATH copy
+  [ "$force_images" -eq 1 ] && return 1
+  command -v "$1" > /dev/null
+}
+
+# Checked up front rather than at the first fallback: without docker the
+# probes would each answer "use the local binary", which is the answer the
+# flag exists to refuse, and the run would look like it honoured it.
+if [ "$force_images" -eq 1 ]; then
+  command -v docker > /dev/null || {
+    echo "--images (KARI_LINT_FORCE_IMAGES) runs every tool from its" \
+      "pinned image, and docker is not installed" >&2
+    exit 1
+  }
+  echo "==> --images: actionlint, shellcheck and yq from their pins"
+fi
+
 shopt -s nullglob
 workflows=(.github/workflows/*.yml .github/workflows/*.yaml)
 if [ ${#workflows[@]} -eq 0 ]; then
@@ -92,7 +136,7 @@ status=0
 # which is what we want: the composite action under .github/actions is
 # checked through the workflows that use it.
 echo "==> actionlint (${#workflows[@]} workflow files)"
-if command -v actionlint > /dev/null; then
+if use_local actionlint; then
   actionlint -color || status=1
 else
   require docker
@@ -104,7 +148,7 @@ fi
 require jq
 
 to_json() { # <workflow file> — the file as JSON on stdout
-  if command -v yq > /dev/null; then
+  if use_local yq; then
     yq -o=json '.' "$1"
   else
     require docker
@@ -189,7 +233,7 @@ if [ ${#shell_scripts[@]} -eq 0 ]; then
 else
   # -x follows sourced files, so the CodeDeploy hooks' `. env.sh` resolves
   # instead of being reported as an unfollowable source.
-  if command -v shellcheck > /dev/null; then
+  if use_local shellcheck; then
     shellcheck -x "${shell_scripts[@]}" || status=1
   else
     require docker
