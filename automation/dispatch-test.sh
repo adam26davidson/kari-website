@@ -968,13 +968,17 @@ expect_eq "$(fact_of "$w" worktree_recent)" no "an aged worktree is not recent"
 expect_eq "$(fact_of "$w" gitdir_recent)" no "an aged git dir is not recent"
 expect_eq "$(fact_of "$w" open_pr)" none "no open PR on the branch"
 expect_eq "$(fact_of "$w" fetch)" ok "the fetch succeeded"
-expect_eq "$(fact_of "$w" local_tip_recent)" no "an aged local tip is not recent"
-expect_eq "$(fact_of "$w" remote_tip)" none "an unpushed branch has no remote tip"
+expect_eq "$(fact_of "$w" local_tip_recent)" no \
+  "an aged local tip is not recent"
+expect_eq "$(fact_of "$w" remote_tip)" none \
+  "an unpushed branch has no remote tip"
 expect_eq "$(fact_of "$w" issues)" 41 "claimed issues come from the arguments"
 expect_eq "$(fact_of "$w" issue_41_updated)" "$OLD_ISO" \
   "the issue's updatedAt is reported"
-expect_eq "$(fact_of "$w" issue_41_recent)" no "a 3h-old issue update is not recent"
-expect_eq "$(fact_of "$w" claude_process)" no "no claude process in the worktree"
+expect_eq "$(fact_of "$w" issue_41_recent)" no \
+  "a 3h-old issue update is not recent"
+expect_eq "$(fact_of "$w" claude_process)" no \
+  "no claude process in the worktree"
 expect_eq "$(fact_of "$w" alive_by)" none "nothing kept the claim alive"
 expect_eq "$(fact_of "$w" verdict)" DEAD "silence on every signal is DEAD"
 
@@ -1006,7 +1010,8 @@ push_upstream_branch "$w" agent/pushed
 STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" pushed 41
 expect_eq "$(fact_of "$w" remote_tip_recent)" yes "a fresh remote tip is recent"
 expect_eq "$(fact_of "$w" local_tip_recent)" no "the local tip is still aged"
-expect_eq "$(fact_of "$w" verdict)" ALIVE "a pushed commit keeps the claim alive"
+expect_eq "$(fact_of "$w" verdict)" ALIVE \
+  "a pushed commit keeps the claim alive"
 
 # ...and the mirror: a local commit the worker has not pushed yet.
 w="$(new_work)"
@@ -1111,10 +1116,12 @@ w="$(new_work)"
 new_liveness "$w" ghdown
 age_liveness
 STUB_GH_FAIL=1 run_liveness "$w" ghdown 41
-expect_eq "$(fact_of "$w" open_pr)" error "a failing gh is reported, not assumed"
+expect_eq "$(fact_of "$w" open_pr)" error \
+  "a failing gh is reported, not assumed"
 expect_eq "$(fact_of "$w" issue_41_updated)" error "...for issues too"
 expect_eq "$(alive_by_has "$w" gh-error)" yes "the failure is named in alive_by"
-expect_eq "$(fact_of "$w" verdict)" ALIVE "a gh outage can never release a claim"
+expect_eq "$(fact_of "$w" verdict)" ALIVE \
+  "a gh outage can never release a claim"
 
 # ...including a branch with no claimed issues at all, where the PR probe
 # is the only gh call there is.
@@ -1172,7 +1179,8 @@ mkdir -p "$w/state/logs"
 printf 'dispatched worker for agent/killed\nstill working\n' \
   >"$w/state/logs/issue-pipeline-20260821T090000.log"
 STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" killed 41
-expect_eq "$(fact_of "$w" tick_log_trailer)" none "a log with no trailer says none"
+expect_eq "$(fact_of "$w" tick_log_trailer)" none \
+  "a log with no trailer says none"
 expect_eq "$(fact_of "$w" tick_log_last)" "still working" \
   "the last line is still reported"
 
@@ -1185,7 +1193,8 @@ printf 'dispatched worker for agent/somebody-else\ntick exited 0\n' \
   >"$w/state/logs/issue-pipeline-20260821T090000.log"
 STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" unlogged 41
 expect_eq "$(fact_of "$w" tick_log)" none "another slug's log is not ours"
-expect_eq "$(fact_of "$w" tick_log_trailer)" none "...and contributes no trailer"
+expect_eq "$(fact_of "$w" tick_log_trailer)" none \
+  "...and contributes no trailer"
 
 # 14k. The probe must not manufacture life. `git status` refreshes the
 #      index, which writes into the linked worktree's git dir — run
