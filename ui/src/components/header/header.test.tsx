@@ -1,31 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { Header } from "./header";
 import { PAGES } from "../../constants";
 import { useIsMobile } from "../../hooks/use-is-mobile";
-import { useAuth0 } from "@auth0/auth0-react";
 
 vi.mock("../../hooks/use-is-mobile", () => ({
   useIsMobile: vi.fn(),
 }));
 
-vi.mock("@auth0/auth0-react", () => ({
-  useAuth0: vi.fn(),
+// The header's only Auth0 consumer is HeaderUserSection, which it pulls in
+// through a lazy chunk (see auth/lazy-admin-auth.ts). Stubbing the module
+// behind that chunk keeps @auth0/auth0-react out of this file entirely --
+// which is the point: a header that reached for Auth0 directly would throw
+// "You forgot to wrap your component in <Auth0Provider>" in every
+// public-route test below, since public pages mount no provider.
+vi.mock("../../auth/admin-auth", () => ({
+  AdminAuthProvider: ({ children }: { children: ReactNode }) => (
+    <>{children}</>
+  ),
+  HeaderUserSection: () => <div>User section stub</div>,
 }));
-
-const logout = vi.fn();
-
-function mockAuth0(overrides = {}) {
-  vi.mocked(useAuth0).mockReturnValue({
-    user: undefined,
-    isAuthenticated: false,
-    isLoading: false,
-    logout,
-    ...overrides,
-  } as unknown as ReturnType<typeof useAuth0>);
-}
 
 function renderHeader(
   path: string,
@@ -50,7 +47,6 @@ function renderHeader(
 
 beforeEach(() => {
   vi.mocked(useIsMobile).mockReturnValue(false);
-  mockAuth0();
 });
 
 describe("Header on desktop, non-admin routes", () => {
@@ -116,34 +112,26 @@ describe("Header on mobile", () => {
 });
 
 describe("Header on /admin", () => {
-  it("shows the admin title, user name, and a working logout button", async () => {
-    mockAuth0({
-      user: { name: "Kari" },
-      isAuthenticated: true,
-    });
+  it("shows the admin title and the signed-in user section", async () => {
     renderHeader("/admin");
     expect(screen.getByText("Kari Davidson - Admin")).toBeInTheDocument();
-    expect(screen.getByText("Kari")).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button"));
-    expect(logout).toHaveBeenCalledWith({
-      logoutParams: { returnTo: window.location.origin },
-    });
+    expect(await screen.findByText("User section stub")).toBeInTheDocument();
   });
 
-  it("shows the admin header on nested admin routes", () => {
-    mockAuth0({
-      user: { name: "Kari" },
-      isAuthenticated: true,
-    });
+  it("shows the admin header on nested admin routes", async () => {
     renderHeader("/admin/haiku/h1");
     expect(screen.getByText("Kari Davidson - Admin")).toBeInTheDocument();
+    expect(await screen.findByText("User section stub")).toBeInTheDocument();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
+});
 
-  it("shows a logging-in message while Auth0 is loading", () => {
-    mockAuth0({ isLoading: true });
-    renderHeader("/admin");
-    expect(screen.getByText("Logging in...")).toBeInTheDocument();
+describe("Header on public routes", () => {
+  it("never mounts the Auth0-backed user section", async () => {
+    renderHeader("/haiku");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.queryByText("User section stub")).toBeNull();
   });
 });

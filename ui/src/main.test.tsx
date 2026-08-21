@@ -1,13 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
-import { Auth0Provider } from "@auth0/auth0-react";
 import type { RouteObject } from "react-router-dom";
 import { RouterProvider } from "react-router-dom";
 
 // main.tsx is the entry point: importing it mounts the app. Stub the DOM
-// renderer so the import is observable without actually booting React
-// (which would put Auth0 on the network), then assert on the element tree
-// it hands to render().
+// renderer so the import is observable without actually booting React,
+// then assert on the element tree it hands to render().
 const render = vi.fn();
 const createRoot = vi.fn(() => ({ render, unmount: vi.fn() }));
 vi.mock("react-dom/client", () => ({
@@ -26,9 +24,6 @@ beforeEach(() => {
   document.body.innerHTML = '<div id="root"></div>';
   createRoot.mockClear();
   render.mockClear();
-  vi.stubEnv("VITE_AUTH0_DOMAIN", "tenant.test.auth0.com");
-  vi.stubEnv("VITE_AUTH0_CLIENT_ID", "test-client-id");
-  vi.stubEnv("VITE_AUTH0_AUDIENCE", "https://api.test.local/");
 });
 
 afterEach(() => {
@@ -48,40 +43,16 @@ describe("main entry point", () => {
     expect(tree.type).toBe(React.StrictMode);
   });
 
-  it("configures Auth0 from the build's env vars", async () => {
-    const provider = (await bootApp()).props.children;
-    expect(provider.type).toBe(Auth0Provider);
-    expect(provider.props.domain).toBe("tenant.test.auth0.com");
-    expect(provider.props.clientId).toBe("test-client-id");
-    expect(provider.props.authorizationParams).toEqual({
-      redirect_uri: window.location.origin + "/admin",
-      audience: "https://api.test.local/",
-    });
-  });
-
-  it("sends the Auth0 callback back to /admin on this origin", async () => {
-    const provider = (await bootApp()).props.children;
-    expect(provider.props.authorizationParams.redirect_uri).toBe(
-      `${window.location.origin}/admin`,
-    );
-  });
-
-  it("persists Auth0 tokens to localStorage in test builds", async () => {
-    vi.stubEnv("MODE", "test");
-    const provider = (await bootApp()).props.children;
-    expect(provider.props.cacheLocation).toBe("localstorage");
-  });
-
-  it("keeps the default in-memory Auth0 cache outside test builds", async () => {
-    vi.stubEnv("MODE", "production");
-    const provider = (await bootApp()).props.children;
-    expect(provider.props.cacheLocation).toBeUndefined();
+  // Auth0 is deliberately absent from the entry point: the provider is
+  // mounted per-route from a lazy chunk (see auth/admin-auth.tsx), so
+  // public visitors never download the SDK. Issue #272.
+  it("mounts the router without an Auth0 provider around it", async () => {
+    const tree = await bootApp();
+    expect(tree.props.children.type).toBe(RouterProvider);
   });
 
   it("drives routing through a data router matching every path", async () => {
-    const provider = (await bootApp()).props.children;
-    const routerProvider = provider.props.children;
-    expect(routerProvider.type).toBe(RouterProvider);
+    const routerProvider = (await bootApp()).props.children;
     const routes: RouteObject[] = routerProvider.props.router.routes;
     expect(routes.map((r) => r.path)).toEqual(["*"]);
   });
