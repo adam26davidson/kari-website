@@ -62,8 +62,17 @@ const OUTPUT_DIR = path.join(E2E_DIR, "screenshots");
  */
 
 /** The public routes. @type {RouteEntry[]} */
-const PUBLIC_ROUTES = ["/", "/haiku", "/haiga", "/other-works", "/photography"]
-  .map((route) => ({ route, name: slug(route) }));
+const PUBLIC_ROUTES = [
+  "/",
+  "/haiku",
+  "/haiga",
+  "/other-works",
+  // The blog permalink page, deep-linked to the seeded post. It shipped
+  // without a card and sat illegibly on the background photo for months
+  // because no capture ever rendered it (#410).
+  "/blog/seed-blog-1",
+  "/photography",
+].map((route) => ({ route, name: slug(route) }));
 
 /**
  * The admin routes: every list page plus each editor, deep-linked to the
