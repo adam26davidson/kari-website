@@ -97,10 +97,18 @@ export function App() {
   // It wraps the whole shell because the header renders the signed-in user
   // outside the route outlet. The cost is one extra round trip before
   // /admin paints -- admin-only, and the section is maintainer-facing.
+  //
+  // The RouteErrorBoundary has to sit ABOVE this Suspense: it is the one lazy chunk
+  // fetched from outside the shell, so the shell's own RouteErrorBoundary
+  // is below it and cannot catch a persistent load failure. Uncaught, that
+  // error escapes App to the data router in main.tsx -- which declares no
+  // errorElement -- instead of the chunk-load prompt from #107.
   if (!isAdminRoute) return shell;
   return (
-    <Suspense fallback={<RouteFallback />}>
-      <AdminAuthProvider>{shell}</AdminAuthProvider>
-    </Suspense>
+    <RouteErrorBoundary>
+      <Suspense fallback={<RouteFallback />}>
+        <AdminAuthProvider>{shell}</AdminAuthProvider>
+      </Suspense>
+    </RouteErrorBoundary>
   );
 }
