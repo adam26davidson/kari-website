@@ -34,6 +34,18 @@ function fakeStorage(initial: Record<string, string> = {}) {
   };
 }
 
+/**
+ * Storage that exists but throws on every operation -- Safari in private
+ * mode, or a browser with site data blocked. The API is present, so the
+ * `storage === null` guard does not catch this case.
+ */
+function throwingStorage() {
+  const denied = () => {
+    throw new Error("The operation is insecure.");
+  };
+  return { getItem: denied, setItem: denied, removeItem: denied };
+}
+
 function renderLazy(component: ReturnType<typeof lazyWithRetry>) {
   const Component = component;
   return render(
@@ -160,5 +172,26 @@ describe("lazyWithRetry", () => {
       await screen.findByText(/A new version of the site/),
     ).toBeInTheDocument();
     expect(reload).not.toHaveBeenCalled();
+  });
+
+  // Storage that throws on access cannot remember a reload, so an
+  // auto-reload could not be limited to one -- fall through to the
+  // boundary's manual prompt instead of risking a reload loop.
+  it("never auto-reloads when storage throws on access", async () => {
+    const reload = vi.fn();
+    const factory = vi.fn().mockRejectedValue(chunkError());
+    renderLazy(lazyWithRetry(factory, { reload, storage: throwingStorage() }));
+
+    expect(
+      await screen.findByText(/A new version of the site/),
+    ).toBeInTheDocument();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("still renders the page when storage throws on a successful load", async () => {
+    const factory = vi.fn().mockResolvedValue({ default: Page });
+    renderLazy(lazyWithRetry(factory, { storage: throwingStorage() }));
+
+    expect(await screen.findByText("page loaded")).toBeInTheDocument();
   });
 });
