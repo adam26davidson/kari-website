@@ -477,6 +477,27 @@ expect_eq "$(status_line "$w" fast-agent gaps)" \
   "${eleven_hours}1h30m (16 runs logged, showing last 12, mean 1h02m)" \
   "status caps the listed gaps at the newest 12"
 
+# 11e. Sibling names that share our "<name>-" log prefix: `a` and `a-2` both
+#      match a `a-*` glob, so run_starts has to reject any filename whose
+#      suffix is not a bare timestamp. Without that, `a` tries to parse
+#      "2-20260821T101500" as a date and prints parse errors to stderr while
+#      dropping the sibling's runs anyway.
+w="$(new_work)"
+mkdir -p "$w/state/logs"
+write_agent "$w" a.md a true 1h fable
+write_agent "$w" a-2.md a-2 true 1h fable
+log_at "$w" a 20260821T080000
+log_at "$w" a 20260821T090000
+log_at "$w" a-2 20260821T101500
+log_at "$w" a-2 20260821T111000
+run_dispatch "$w" --status
+expect_eq "$(status_line "$w" a gaps)" "1h00m (2 runs logged, mean 1h00m)" \
+  "a digit-suffixed sibling's logs stay out of our gap history"
+expect_eq "$(status_line "$w" a-2 gaps)" "55m00s (2 runs logged, mean 55m00s)" \
+  "the sibling still reports its own gaps"
+expect_not_contains "$w/out" "invalid date" \
+  "sibling logs produce no date-parse noise"
+
 # 11a. A held lock (a run still in progress) is reported as such.
 w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable

@@ -95,8 +95,12 @@ fmt_duration() { # fmt_duration <seconds> -> 2d04h | 1h03m | 5m07s | 42s
 
 # Start times (epoch seconds, ascending) of every logged run: each run
 # writes logs/<name>-<YYYYmmddTHHMMSS>.log, so the log dir is already a
-# 30-day run history. The [0-9] right after "<name>-" keeps an agent from
-# claiming the logs of another whose name extends its own.
+# 30-day run history. An agent must not claim the logs of another whose
+# name extends its own, and the glob alone cannot tell them apart -- for
+# agents "a" and "a-2", "a-2-<ts>.log" matches any "a-"* pattern a
+# timestamp would. So the suffix is matched exactly, and anything that is
+# not a bare timestamp (it belongs to a longer-named sibling) is skipped
+# before date ever sees it.
 run_starts() { # run_starts <name>
   local f ts
   for f in "$STATE_DIR/logs/$1-"[0-9]*T[0-9]*.log; do
@@ -104,6 +108,7 @@ run_starts() { # run_starts <name>
     ts="${f##*/}"
     ts="${ts#"$1-"}"
     ts="${ts%.log}"
+    [[ "$ts" =~ ^[0-9]{8}T[0-9]{6}$ ]] || continue
     date -d "${ts:0:4}-${ts:4:2}-${ts:6:2} ${ts:9:2}:${ts:11:2}:${ts:13:2}" +%s
   done | sort -n
 }
