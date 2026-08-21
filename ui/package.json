@@ -12,7 +12,7 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "npm run typecheck && vitest run --coverage",
     "test:e2e": "node e2e/seed.mjs && playwright test",
     "typecheck": "tsc -b",
     "typecheck:e2e": "tsc -p tsconfig.e2e.json"
