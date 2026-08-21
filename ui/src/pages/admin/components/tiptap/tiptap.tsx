@@ -26,12 +26,28 @@ import { v4 as uuidv4 } from "uuid";
 
 const HEADING_LEVELS = [1, 2, 3] as const;
 
-// The Link extension refuses any protocol outside its allow-list
-// (javascript:, data:, ...) by returning false from setLink rather than by
-// throwing, so the panel shows this instead of failing silently.
+// The Link extension reports a refusal by returning false from setLink
+// rather than by throwing, so the panel shows one of these instead of
+// failing silently. A URL can be refused for what it is (a protocol
+// outside the allow-list: javascript:, data:, ...) or for where it lands
+// (a block that holds no marks at all).
 const LINK_REFUSED_MESSAGE =
   "That link was not applied: only http(s), mailto, tel and relative " +
   "URLs are allowed.";
+const LINK_UNSUPPORTED_HERE_MESSAGE =
+  "That link was not applied: this block cannot hold a link.";
+
+// Whether a link mark is legal where the selection starts. can() cannot
+// answer this for a collapsed cursor — ProseMirror's canSetMark only tests
+// mark exclusion there, never the parent node's allowed marks — so a
+// cursor inside a code block passes every check the extension offers,
+// stores a link mark the block then silently drops, and reports success.
+// Reachable without a toolbar button: StarterKit's ``` input rule makes a
+// code block.
+const blockAcceptsLinks = (editor: Editor) =>
+  editor.state.selection.$from.parent.type.allowsMarkType(
+    editor.schema.marks.link,
+  );
 
 // Toolbar items that drive menu state rather than the document receive
 // these callbacks alongside the editor.
@@ -194,16 +210,29 @@ const MenuBar = ({
       return;
     }
 
-    // Ask before applying rather than reacting to the chain's return
-    // value: chain().focus() hands focus to the editor on the next frame
-    // even when setLink then refuses the href, which would pull the caret
-    // out of the panel the author still needs to correct.
-    if (!editor.can().setLink({ href })) {
+    // Where first: a block that takes no marks refuses any URL, however
+    // impeccable, and only this check sees it coming.
+    if (!blockAcceptsLinks(editor)) {
+      setLinkError(LINK_UNSUPPORTED_HERE_MESSAGE);
+      return;
+    }
+
+    // Then what. Asking can() before applying, rather than only reading
+    // the chain's return value, keeps a refusal from moving the caret:
+    // chain().focus() hands focus to the editor on the next frame even
+    // when setLink then refuses the href, pulling it out of the panel the
+    // author still needs to correct. The applied chain's own result is
+    // still the last word, so a refusal neither check predicted surfaces
+    // as an error rather than as a discarded URL.
+    const applied =
+      editor.can().setLink({ href }) &&
+      editor.chain().focus().extendMarkRange("link").setLink({ href }).run();
+
+    if (!applied) {
       setLinkError(LINK_REFUSED_MESSAGE);
       return;
     }
 
-    editor.chain().focus().extendMarkRange("link").setLink({ href }).run();
     setLinkDraft(null);
   };
 

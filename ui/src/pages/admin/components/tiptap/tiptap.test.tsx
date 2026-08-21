@@ -289,6 +289,26 @@ describe("Tiptap toolbar", () => {
     expect(getButton("link").className).not.toContain("is-active");
   });
 
+  it("keeps the panel open when the block cannot hold a link", async () => {
+    const user = userEvent.setup();
+    // A code block allows no marks at all, so the extension refuses a URL
+    // its allow-list is perfectly happy with. can().setLink only judges the
+    // URL, so this refusal is invisible until the chain itself is asked.
+    // Code blocks need no toolbar button to reach: StarterKit's ``` input
+    // rule makes one.
+    const { setContent } = renderTiptap("<pre><code>hello</code></pre>");
+
+    await user.click(getButton("link"));
+    await user.type(getLinkInput(), "https://example.com");
+    await user.click(getButton("apply"));
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /this block cannot hold a link/
+    );
+    expect(getLinkInput()).toHaveValue("https://example.com");
+    expect(setContent).not.toHaveBeenCalled();
+  });
+
   it("clears the error once the url is edited", async () => {
     const user = userEvent.setup();
     renderTiptap();
