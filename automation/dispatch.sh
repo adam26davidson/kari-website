@@ -236,6 +236,13 @@ interval_seconds() { # interval_seconds <Nm|Nh|Nd>
   esac
 }
 
+# shellcheck disable=SC2329  # invoked from launch()'s EXIT trap
+tick_trailer() { # tick_trailer <log> <code> — the last line of every run log
+  local log="$1" code="$2"
+  if [ -s "$log" ] && [ -n "$(tail -c1 "$log")" ]; then echo >>"$log"; fi
+  echo "tick exited $code" >>"$log"
+}
+
 launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
   local name="$1" model="$2" fallback="$3" agent_file="$4"
   local stamp log
@@ -255,11 +262,12 @@ launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
     # untrapped fatal signal, and a scope stop or a timer kill arrives
     # that way. SIGKILL (the OOM killer) can never write a trailer: a log
     # without one means "killed hard, or still running".
-    # $? must be read as the trap's first statement — the newline guard
-    # below would otherwise clobber the status being reported.
-    trap '__tick_rc=$?
-      if [ -s "$log" ] && [ -n "$(tail -c1 "$log")" ]; then echo >>"$log"; fi
-      echo "tick exited $__tick_rc" >>"$log"' EXIT
+    # $? is passed as an argument so it is read before anything else in
+    # the trap can clobber it — the newline guard below runs a command.
+    # The guard exists because a session killed mid-line (claude prints
+    # "You've hit your session limit" with no trailing newline) would
+    # otherwise get the trailer glued onto that message, hiding both.
+    trap 'tick_trailer "$log" "$?"' EXIT
     trap 'exit 143' TERM HUP INT
     date +%s >"$STATE_DIR/$name.last-run"
     echo "run $name -> $log"

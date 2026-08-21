@@ -1055,6 +1055,7 @@ w="$(new_work)"
 new_liveness "$w" busy
 age_liveness
 mkfifo "$w/hold"
+# shellcheck disable=SC2016  # $1..$3 are the inner bash -c's, not ours
 "$STUB_DIR/$LIVENESS_COMM" -c \
   'cd "$1" || exit 1; : >"$2"; read -r _ <"$3"' \
   _ "$LIVE_W" "$w/ready" "$w/hold" &
@@ -1083,6 +1084,27 @@ expect_eq "$(fact_of "$w" claude_process)" no \
   "a process with no claude ancestor is not life"
 expect_eq "$(fact_of "$w" verdict)" DEAD "...and does not save the claim"
 
+# ...and neither is a live worker on a DIFFERENT slug whose worktree name
+# merely extends ours: agent/debris must not be kept alive by
+# kari-website-debris-2.
+w="$(new_work)"
+new_liveness "$w" debris
+age_liveness
+mkdir -p "$w/kari-website-debris-2"
+mkfifo "$w/hold"
+# shellcheck disable=SC2016  # $1..$3 are the inner bash -c's, not ours
+"$STUB_DIR/$LIVENESS_COMM" -c \
+  'cd "$1" || exit 1; : >"$2"; read -r _ <"$3"' \
+  _ "$w/kari-website-debris-2" "$w/ready" "$w/hold" &
+sibling_pid=$!
+for _ in $(seq 100); do [ -e "$w/ready" ] && break; sleep 0.05; done
+STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" debris 41
+echo go >"$w/hold"
+wait "$sibling_pid" 2>/dev/null || true
+expect_eq "$(fact_of "$w" claude_process)" no \
+  "a worker in a name-extending sibling worktree is not our worker"
+expect_eq "$(fact_of "$w" verdict)" DEAD "...and does not save our claim"
+
 # 14i. A failed probe counts as life. A gh outage that read as "no PR,
 #      no issue activity" would delete live workers' worktrees wholesale.
 w="$(new_work)"
@@ -1093,6 +1115,31 @@ expect_eq "$(fact_of "$w" open_pr)" error "a failing gh is reported, not assumed
 expect_eq "$(fact_of "$w" issue_41_updated)" error "...for issues too"
 expect_eq "$(alive_by_has "$w" gh-error)" yes "the failure is named in alive_by"
 expect_eq "$(fact_of "$w" verdict)" ALIVE "a gh outage can never release a claim"
+
+# ...including a branch with no claimed issues at all, where the PR probe
+# is the only gh call there is.
+w="$(new_work)"
+new_liveness "$w" ghdown2
+age_liveness
+STUB_GH_FAIL=1 run_liveness "$w" ghdown2
+expect_eq "$(fact_of "$w" open_pr)" error "a failing pr list is reported"
+expect_eq "$(alive_by_has "$w" gh-error)" yes \
+  "a failing pr list alone is enough to count as life"
+expect_eq "$(fact_of "$w" verdict)" ALIVE \
+  "a gh outage keeps an issue-less branch alive too"
+
+# The same for an unreachable remote: without the fetch the branch tips
+# are stale readings, so "no recent commit" is not a fact we have.
+w="$(new_work)"
+new_liveness "$w" offline
+age_liveness
+rm -rf "$ORIGIN"
+STUB_GH_UPDATED="$OLD_ISO" run_liveness "$w" offline 41
+expect_eq "$(fact_of "$w" fetch)" failed "a failed fetch is reported"
+expect_eq "$(alive_by_has "$w" fetch-error)" yes \
+  "a failed fetch counts as life"
+expect_eq "$(fact_of "$w" verdict)" ALIVE \
+  "an unreachable remote can never release a claim"
 
 # 14j. The dispatching tick's log and its trailer (section 13): printed
 #      for the run summary, never part of the verdict.
