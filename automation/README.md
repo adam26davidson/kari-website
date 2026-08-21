@@ -170,6 +170,21 @@ best-effort: no `systemd-run`, or one that cannot reach a user manager
 (CI runners, containers), and the session simply runs uncontained.
 `systemctl --user list-units 'kari-agent-*'` shows sessions in flight.
 
+The scope also carries `OOMPolicy=continue` and `MemoryMax=50%` (of
+RAM; `KARI_AUTOMATION_MEMORY_MAX` overrides). systemd's default policy
+for a scope is `stop`, which on 2026-08-21 turned one OOM-killed vitest
+worker (4.3 GB, eight times a normal run) into the death of the whole
+tick (#412). Now a runaway OOMs against the cap inside its own cgroup —
+the kernel kills the biggest process in the scope, not whatever it finds
+on the host — and the session carries on; the worker sees a killed
+command (exit 137) and reports it like any other failure. A scope that
+hit its cap is visible in `journalctl -k` as "Memory cgroup out of
+memory" naming the `kari-agent-*` unit. The host also has a 16 GB zstd
+zram swap (`zram-generator`, `/etc/systemd/zram-generator.conf`:
+`zram-size = min(ram / 2, 16384)`, installed 2026-08-21 after the
+incident above) so that a spike outside the fleet degrades into
+slowness rather than a kill; `swapon --show` should list `/dev/zram0`.
+
 ### Workers get 90 minutes, not 10
 
 `claude -p` ends a session 600 s after its main turn finishes and kills
