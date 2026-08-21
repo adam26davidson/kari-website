@@ -41,11 +41,17 @@ jobs:
 
       # The shell test harnesses. They were local-only until #291, which
       # meant a regression in the dispatcher (#276) or in the setup script
-      # every worktree runs first only showed up in use. All three are
+      # every worktree runs first only showed up in use. All of them are
       # stubbed, hermetic and take seconds, so they run on every PR rather
       # than behind a path filter.
       - name: Dispatcher tests
         run: bash automation/dispatch-test.sh
+
+      # Points KARI_SYSTEMD_USER_DIR at a temp dir and systemctl at a
+      # stub, so it never touches a real unit dir — here or on the
+      # maintainer's laptop, where the fleet's timer is live.
+      - name: Timer install tests
+        run: bash automation/install-timer-test.sh
 
       - name: Worktree setup tests
         run: bash scripts/setup-worktree-test.sh
