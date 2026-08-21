@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Fleet dispatcher: the only thing cron calls. Reads agent definitions
-# (YAML frontmatter + prompt body) from automation/agents/, launches each
-# enabled agent whose interval has elapsed as a headless Claude session
-# from the repo root, and records last-run/locks/logs in a laptop-local
-# state dir. See automation/README.md.
+# Fleet dispatcher: the only thing the systemd timer (or cron) calls.
+# Reads agent definitions (YAML frontmatter + prompt body) from
+# automation/agents/, launches each enabled agent whose interval has
+# elapsed as a headless Claude session from the repo root, and records
+# last-run/locks/logs in a laptop-local state dir. See
+# automation/README.md; the timer itself is installed by
+# automation/install-timer.sh.
 #
 #   dispatch.sh            # a tick: launch whatever is due, in the background
 #   dispatch.sh --dry-run  # one "<decision>\t<name>\t<detail>" line per agent

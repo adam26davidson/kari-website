@@ -1,0 +1,13 @@
+# Installed verbatim into ~/.config/systemd/user/ by
+# automation/install-timer.sh. Edit this file, not the installed copy.
+[Unit]
+Description=Run the kari-website automation dispatcher every 15 minutes
+
+[Timer]
+OnCalendar=*:00/15
+# Slots missed while the host is asleep are not replayed; on resume the
+# overdue timer fires once and the schedule continues from there.
+Persistent=false
+
+[Install]
+WantedBy=timers.target
