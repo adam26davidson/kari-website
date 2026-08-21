@@ -371,20 +371,23 @@ hands over the kept branch and/or patch.
    `has-dependencies` is the only marker, and it is a hard skip in
    step 1). Concretely:
 
-   Issues labelled `automation` are about the machinery — the
-   pipeline, CI and workflows, the lint and dev scripts, the test
-   harnesses — work the fleet largely generates for itself, and it
-   generates it faster than it clears it (2026-08-19..21: two thirds
-   of merged agent PRs were machinery, eight touched the website, and
-   the backlog grew). The machinery exists to ship the website, so the
+   Issues labelled `tooling` are about the machinery — the pipeline,
+   CI and workflows, the lint and dev scripts, the test harnesses —
+   work the fleet largely generates for itself, and it generates it
+   faster than it clears it (2026-08-19..21: two thirds of merged
+   agent PRs were machinery, eight touched the website, and the
+   backlog grew). The machinery exists to ship the website, so the
    default lean is towards the product: when the machinery is running
-   smoothly, pick the oldest ready issue WITHOUT the `automation`
-   label, even when older `automation` issues are waiting.
+   smoothly, pick the oldest ready issue WITHOUT the `tooling` label,
+   even when older `tooling` issues are waiting. (`automation` is a
+   different label — provenance, "filed by the pipeline" — and says
+   nothing about topic: a product defect a worker reported carries
+   `automation` and is product work.)
    "Smoothly" means this tick saw none of: a CI or tooling failure you
    had to dispatch a fix agent for, a stale claim released, a
    dispatcher-log error or usage-limit kill, a worker `problems`
    report naming a tool or script, a visual-review job that failed to
-   run. Pick an `automation` issue instead when it is in the way —
+   run. Pick a `tooling` issue instead when it is in the way —
    something a worker reported in `problems` or a recent run summary
    flagged, a broken or flaky job, a claim-handling bug — when it is
    small and a product issue's worker would hit it anyway, or when no
@@ -465,24 +468,30 @@ hands over the kept branch and/or patch.
    (`gh issue create`) — check `gh issue list --search` first so you
    don't file duplicates. Anything the pipeline itself hit (broken
    scripts, confusing docs) gets an issue too, per CLAUDE.md.
-   Label every issue that is about the machinery rather than the
-   website — the dispatcher, the briefs and playbooks under
-   `automation/`, claim and worktree handling, this housekeeping, CI
-   and the workflows, the lint scripts, the dev scripts and dev
-   environment, the shell and vitest test harnesses — with
-   `automation` (`gh issue create ... --label automation`, or
-   `gh issue edit <n> --add-label automation`). An issue about what a
-   visitor or the admin sees or does is product work and does NOT get
-   the label, whoever filed it. The label is what Phase B step 3 reads
-   to lean towards product work when the machinery is smooth, so a
-   mislabelled product issue gets deprioritised and a mislabelled
-   machinery issue gets picked as if it were product. If the label is
-   missing, create it first with `gh label create automation --color
-   5319E7` plus a `--description` of "The machinery rather than the
-   website: pipeline, CI, lint, dev env, test harnesses".
-   End the body of every issue you file with a provenance line —
-   `_Filed by the issue-pipeline, tick <UTC stamp>._` — so a human
-   triaging can tell fleet-filed issues from their own.
+   Two labels, two questions:
+   - **Who filed it → `automation`.** EVERY issue you file gets it
+     (`gh issue create ... --label automation`), whatever it is about
+     — a product defect a worker noticed included. It is provenance,
+     so a human triaging can tell fleet-filed issues from their own;
+     it says nothing about topic and Phase B never reads it.
+   - **What it is about → `tooling`.** Add it (alongside `automation`)
+     when the issue is about the machinery rather than the website:
+     the dispatcher, the briefs and playbooks under `automation/`,
+     claim and worktree handling, this housekeeping, CI and the
+     workflows, the lint scripts, the dev scripts and dev environment,
+     the shell and vitest test harnesses. An issue about what a visitor
+     or the admin sees or does is product work and does NOT get it.
+     This is the label Phase B step 3 reads to lean towards product
+     work when the machinery is smooth, so a mislabelled product issue
+     gets deprioritised and a mislabelled machinery issue gets picked
+     as if it were product. Also add `tooling` to an existing issue you
+     touch that plainly qualifies and lacks it (`gh issue edit <n>
+     --add-label tooling`).
+   If either label is missing, create it first: `gh label create
+   automation --color 5319E7 --description "Filed by the automation
+   pipeline (provenance; see 'tooling' for topic)"`; `gh label create
+   tooling --color 0E8A16 --description "About the machinery rather
+   than the website: pipeline, CI, lint, dev env, test harnesses"`.
 2. **Orphaned kept branches.** A kept branch is reachable only through
    the `Claim released:` comments on its issues, so once those issues
    are all closed (shipped by another PR, or closed by a human) nothing

@@ -166,6 +166,8 @@ scoped enough to plan yourself.
   rather than about the website: the dispatcher, these briefs, the
   playbooks under `automation/`, claim/worktree handling, CI and the
   workflows, the lint scripts, the dev scripts and dev environment, the
-  test harnesses. The orchestrator files those with the `automation`
+  test harnesses. The orchestrator files those with the `tooling`
   label, which is how machinery work gets triaged together and how the
   pipeline leans towards product work when the machinery is smooth.
+  (Everything it files also gets `automation`, which only records that
+  the pipeline filed it.)
