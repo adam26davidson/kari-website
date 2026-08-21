@@ -6,6 +6,7 @@ import { setupServiceTestHooks } from "./test-helpers";
 const DEPLOYMENTS_URL =
   "https://api.github.com/repos/adam26davidson/kari-website/deployments" +
   `?environment=production&per_page=${DEPLOYMENTS_SCAN_LIMIT}`;
+const PROD_VERSION_URL = "https://karidavidson.com/api/version";
 const COMPARE_URL =
   "https://api.github.com/repos/adam26davidson/kari-website/compare/" +
   "aaa1111...bbb2222";
@@ -34,12 +35,70 @@ function deployment(sha: string, id: number) {
   };
 }
 
+/** Production before the first promotion that carries GET /version. */
+const prodVersionUnavailable = { ok: false, status: 404 };
+
 /** A statuses response for a deployment that never got approved. */
 const waiting = { ok: true, json: async () => [{ state: "waiting" }] };
 
 describe("DeployStatusService.getLatestProdDeploy", () => {
+  it("asks production which commit it runs, with no GitHub scan", async () => {
+    const fetchMock = mockFetchSequence([
+      { ok: true, json: async () => ({ sha: "aaa1111" }) },
+    ]);
+    await expect(DeployStatusService.getLatestProdDeploy()).resolves.toEqual(
+      { kind: "found", sha: "aaa1111" },
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(PROD_VERSION_URL);
+  });
+
+  // Until the first promotion that carries GET /version, production answers
+  // 404 (SPA fallback) or null; the GitHub scan is the only source then.
+  it("falls back to the GitHub deployment scan when production has no version endpoint", async () => {
+    const fetchMock = mockFetchSequence([
+      prodVersionUnavailable,
+      { ok: true, json: async () => [deployment("aaa1111", 1)] },
+      { ok: true, json: async () => [{ state: "success" }] },
+    ]);
+    await expect(DeployStatusService.getLatestProdDeploy()).resolves.toEqual(
+      { kind: "found", sha: "aaa1111" },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(1, PROD_VERSION_URL);
+    expect(fetchMock).toHaveBeenNthCalledWith(2, DEPLOYMENTS_URL);
+  });
+
+  it("falls back when production reports a null sha", async () => {
+    mockFetchSequence([
+      { ok: true, json: async () => ({ sha: null }) },
+      { ok: true, json: async () => [deployment("aaa1111", 1)] },
+      { ok: true, json: async () => [{ state: "success" }] },
+    ]);
+    await expect(DeployStatusService.getLatestProdDeploy()).resolves.toEqual(
+      { kind: "found", sha: "aaa1111" },
+    );
+  });
+
+  it("falls back when the version request fails at the network level", async () => {
+    const fetchMock = vi.fn();
+    fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [deployment("aaa1111", 1)],
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [{ state: "success" }],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(DeployStatusService.getLatestProdDeploy()).resolves.toEqual(
+      { kind: "found", sha: "aaa1111" },
+    );
+  });
+
   it("returns the sha of the newest deployment with a success status", async () => {
     const fetchMock = mockFetchSequence([
+      prodVersionUnavailable,
       { ok: true, json: async () => [deployment("headsha", 2)] },
       { ok: true, json: async () => [{ state: "success" }] },
     ]);
@@ -47,15 +106,16 @@ describe("DeployStatusService.getLatestProdDeploy", () => {
     const result = await DeployStatusService.getLatestProdDeploy();
 
     expect(result).toEqual({ kind: "found", sha: "headsha" });
-    expect(fetchMock).toHaveBeenNthCalledWith(1, DEPLOYMENTS_URL);
+    expect(fetchMock).toHaveBeenNthCalledWith(2, DEPLOYMENTS_URL);
     expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       "https://api.github.com/repos/adam26davidson/kari-website/deployments/2/statuses",
     );
   });
 
   it("skips deployments that never reached success", async () => {
     mockFetchSequence([
+      prodVersionUnavailable,
       {
         ok: true,
         json: async () => [deployment("failedsha", 3), deployment("goodsha", 2)],
@@ -80,6 +140,7 @@ describe("DeployStatusService.getLatestProdDeploy", () => {
       deployment(`pending${i}`, 20 - i),
     ).concat([deployment("promotedsha", 7)]);
     mockFetchSequence([
+      prodVersionUnavailable,
       { ok: true, json: async () => deployments },
       ...deployments.slice(0, 12).map(() => waiting),
       { ok: true, json: async () => [{ state: "success" }] },
@@ -95,6 +156,7 @@ describe("DeployStatusService.getLatestProdDeploy", () => {
     // A partial page means GitHub had nothing older to return, so the
     // scan really covered every production deployment.
     mockFetchSequence([
+      prodVersionUnavailable,
       { ok: true, json: async () => [deployment("failedsha", 3)] },
       { ok: true, json: async () => [{ state: "error" }] },
     ]);
@@ -105,7 +167,10 @@ describe("DeployStatusService.getLatestProdDeploy", () => {
   });
 
   it("returns 'none' when there are no production deployments", async () => {
-    mockFetchSequence([{ ok: true, json: async () => [] }]);
+    mockFetchSequence([
+      prodVersionUnavailable,
+      { ok: true, json: async () => [] },
+    ]);
 
     expect(await DeployStatusService.getLatestProdDeploy()).toEqual({
       kind: "none",
@@ -121,6 +186,7 @@ describe("DeployStatusService.getLatestProdDeploy", () => {
       deployment(`pending${i}`, 100 - i),
     );
     const fetchMock = mockFetchSequence([
+      prodVersionUnavailable,
       { ok: true, json: async () => fullPage },
       ...fullPage.map(() => waiting),
     ]);
@@ -129,11 +195,11 @@ describe("DeployStatusService.getLatestProdDeploy", () => {
       kind: "indeterminate",
     });
     // The scan never goes past one page: total requests stay bounded.
-    expect(fetchMock).toHaveBeenCalledTimes(DEPLOYMENTS_SCAN_LIMIT + 1);
+    expect(fetchMock).toHaveBeenCalledTimes(DEPLOYMENTS_SCAN_LIMIT + 2);
   });
 
   it("throws an HttpError when the deployments fetch fails", async () => {
-    mockFetchSequence([{ ok: false, status: 403 }]);
+    mockFetchSequence([prodVersionUnavailable, { ok: false, status: 403 }]);
 
     await expect(DeployStatusService.getLatestProdDeploy()).rejects.toThrow(
       HttpError,
@@ -142,6 +208,7 @@ describe("DeployStatusService.getLatestProdDeploy", () => {
 
   it("throws an HttpError when a statuses fetch fails", async () => {
     mockFetchSequence([
+      prodVersionUnavailable,
       { ok: true, json: async () => [deployment("headsha", 2)] },
       { ok: false, status: 500 },
     ]);

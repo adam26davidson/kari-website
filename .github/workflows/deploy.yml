@@ -69,6 +69,11 @@ jobs:
 
       - name: Build aarch64 API binary (true cross-compile, no emulation)
         working-directory: api
+        # KARI_COMMIT_SHA is baked into the binary (GET /version) so each
+        # environment can say which commit it runs; api/Cross.toml forwards
+        # it into the cross container.
+        env:
+          KARI_COMMIT_SHA: ${{ github.sha }}
         run: cross build --release --target aarch64-unknown-linux-gnu
 
       # The API binary and lifecycle scripts are identical in both bundles;

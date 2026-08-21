@@ -121,11 +121,14 @@ export function AdminWhatsOnTestPage() {
           )}
           {data.prod.kind === "indeterminate" && (
             <p className="whats-on-test-note">
-              Couldn&apos;t determine what production is running: none of the
-              newest {DEPLOYMENTS_SCAN_LIMIT} production deployments ever
-              succeeded, and older ones weren&apos;t scanned (each scan is a
-              GitHub API request against a 60/hour limit). The pending list
-              can&apos;t be computed.
+              Couldn&apos;t determine what production is running. Production
+              doesn&apos;t report its version yet (that arrives with the next
+              promotion), and the GitHub fallback found no promoted
+              deployment among the newest {DEPLOYMENTS_SCAN_LIMIT} — the
+              rest are unpromoted candidates, not failures — without
+              scanning older ones (each scan is a GitHub API request
+              against a 60/hour limit). Approving a production deploy
+              fixes this for good.
             </p>
           )}
           {data.prod.kind === "found" && data.commits.length === 0 && (

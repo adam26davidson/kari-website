@@ -1,16 +1,26 @@
 import { ensureOk } from "./http";
 
 /**
- * Reads deployment state from the public, unauthenticated GitHub API to
- * answer "which merged changes are on test but not yet promoted to
- * production?" (the staging-only /admin/whats-on-test page). The repo is
- * public, so no token is needed, but every request counts against the
- * unauthenticated rate limit (60 req/hr/IP) — hence the deliberate scan
- * cap below.
+ * Answers "which merged changes are on test but not yet promoted to
+ * production?" for the staging-only /admin/whats-on-test page.
+ *
+ * What production runs comes from production itself: the API bakes its
+ * commit sha in at build time and reports it from GET /version, so one
+ * request with no rate limit settles it. The GitHub deployment scan below
+ * is the fallback for a production that predates that endpoint (every
+ * unpromoted merge leaves a superseded `error` deployment behind, so the
+ * scan's request budget runs out after ~20 merges without a promotion —
+ * #409 — which is why it is no longer the primary source). The commit
+ * list between the two shas still comes from GitHub's compare API: one
+ * request. The repo is public, so no token is needed, but every request
+ * counts against the unauthenticated rate limit (60 req/hr/IP).
  */
 
 const GITHUB_REPO_URL =
   "https://api.github.com/repos/adam26davidson/kari-website";
+
+/** Production's own report of the commit it was built from. */
+export const PROD_VERSION_URL = "https://karidavidson.com/api/version";
 
 /**
  * How many recent production deployments to scan for a success status.
@@ -102,12 +112,47 @@ function toPendingCommit(entry: GithubCompareCommit): PendingCommit {
 
 export class DeployStatusService {
   /**
-   * The commit currently on production: the sha of the newest deployment
-   * to the `production` GitHub Environment that reached a `success`
-   * status, scanning at most the newest DEPLOYMENTS_SCAN_LIMIT
-   * deployments (see the cap's doc comment for the request budget).
+   * The commit currently on production. Asks production's API first
+   * (GET /version); only when that yields nothing — the endpoint is not
+   * deployed there yet, or a network/CORS failure — does it fall back to
+   * scanning GitHub's production deployments for the newest `success`.
    */
   static async getLatestProdDeploy(): Promise<ProdDeployLookup> {
+    const reported = await DeployStatusService.getProdReportedSha();
+    if (reported) return { kind: "found", sha: reported };
+    return DeployStatusService.scanGithubDeployments();
+  }
+
+  /**
+   * The sha production reports for itself, or null when it cannot say:
+   * a non-OK response (before the endpoint exists, the SPA fallback
+   * answers 404 or serves index.html), a body without a string `sha`
+   * (a binary built without KARI_COMMIT_SHA reports null), or a failed
+   * request. All of those mean "fall back", never "error": the scan
+   * below is still available and its errors are the ones worth showing.
+   */
+  private static async getProdReportedSha(): Promise<string | null> {
+    try {
+      const response = await fetch(PROD_VERSION_URL);
+      if (!response.ok) return null;
+      const body: unknown = await response.json();
+      const sha =
+        body && typeof body === "object" && "sha" in body
+          ? (body as { sha: unknown }).sha
+          : null;
+      return typeof sha === "string" && sha !== "" ? sha : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Fallback: the sha of the newest deployment to the `production` GitHub
+   * Environment that reached a `success` status, scanning at most the
+   * newest DEPLOYMENTS_SCAN_LIMIT deployments (see the cap's doc comment
+   * for the request budget).
+   */
+  private static async scanGithubDeployments(): Promise<ProdDeployLookup> {
     const response = await fetch(
       `${GITHUB_REPO_URL}/deployments` +
         `?environment=production&per_page=${DEPLOYMENTS_SCAN_LIMIT}`,

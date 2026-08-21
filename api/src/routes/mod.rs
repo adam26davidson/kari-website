@@ -6,6 +6,7 @@ pub mod home;
 pub mod images;
 pub mod photography;
 pub mod site_settings;
+pub mod version;
 
 use axum::{
     extract::DefaultBodyLimit,
@@ -57,7 +58,8 @@ pub fn create_router(state: AppState) -> Router {
         .route(
             "/site-settings",
             get(site_settings::get_site_settings_handler),
-        );
+        )
+        .route("/version", get(version::version_handler));
 
     Router::new()
         .merge(secure_routes)
