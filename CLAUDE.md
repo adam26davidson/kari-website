@@ -27,8 +27,9 @@ with code in this repository.
 - UI: `npm run build:test` - Build UI for test environment
 - UI: `npm run lint` - Lint TypeScript code
 - UI: `npm run typecheck` - Type-check app code, tests and the vite
-  configs (`tsc -b`, the same check CI's build runs; every project sets
-  `noEmit`, so nothing is written). `npm run typecheck:e2e` covers the
+  configs (`tsc -b`; every project sets `noEmit`, so nothing is written).
+  CI's Frontend job runs it as its own step, so a type error is named
+  rather than buried in a build failure. `npm run typecheck:e2e` covers the
   Playwright specs, which are a separate TS project.
 - API: `cargo watch -x 'run dev'` - Run API in watch mode
 - API: `cargo build` - Build the Rust API
@@ -36,7 +37,11 @@ with code in this repository.
 ## Test Commands
 - UI: `npm run test` - Vitest in watch mode
 - UI: `npm run test:run` - Vitest once (used in CI)
-- UI: `npm run test:coverage` - Vitest with coverage
+- UI: `npm run test:coverage` - Type-check (`npm run typecheck`), then
+  vitest with coverage. The typecheck runs first because this is the
+  documented pre-push command (see Parallel Sessions below), so the check
+  is mechanical rather than remembered; `npm run test` / `test:run` stay
+  typecheck-free to keep the inner loop fast.
 - UI: `npm run test:e2e` - Playwright e2e tests (seeds a local S3, builds the
   test-mode bundle, previews it, and runs smoke + visitor journeys; admin
   journeys additionally run when `E2E_AUTH0_USERNAME` / `E2E_AUTH0_PASSWORD`
@@ -189,13 +194,14 @@ address or create github issues for them, but the job never blocks a merge.
   `npm run test:run` — the CI coverage job enforces the ratchet floors and
   plain test runs won't catch a floor breach. Adding conditional logic can
   lower the branch percentage even when every test passes.
-- Run `npm run typecheck` before pushing UI changes too (plus
-  `npm run typecheck:e2e` if you touched `e2e/`). Neither vitest (which
-  transpiles without checking types) nor eslint (not type-aware here) sees
-  type errors, so a green `test:coverage` + `lint` still fails CI's build on
-  something as small as an implicit-`any` callback parameter in a
-  `*.test.tsx` — and that failure takes the e2e and screenshot jobs down
-  with it, since their webServer builds the test bundle.
+- `test:coverage` runs `npm run typecheck` first, so that covers the type
+  check; add `npm run typecheck:e2e` yourself if you touched `e2e/`.
+  Neither vitest (which transpiles without checking types) nor eslint (not
+  type-aware here) sees type errors, so a bare `vitest run` + `lint` can be
+  green while CI's build fails on something as small as an implicit-`any`
+  callback parameter in a `*.test.tsx` — and that failure takes the e2e and
+  screenshot jobs down with it, since their webServer builds the test
+  bundle.
 - Undoing a temporary edit (a mutation-test tweak, a debug print): copy the
   file aside first (`cp f f.bak`, restore with `cp f.bak f`) or `git stash`
   / commit WIP. Never `git checkout -- <file>` or `git restore <file>` for
