@@ -45,6 +45,8 @@ run_dispatch() { # <workdir> [args...] — output in <workdir>/out
   KARI_AUTOMATION_CLAUDE_BIN="${STUB_CLAUDE:-claude}" \
   KARI_AUTOMATION_DUE_TOLERANCE="${DUE_TOLERANCE:-}" \
   KARI_AUTOMATION_INHIBIT_BIN="${KARI_AUTOMATION_INHIBIT_BIN:-/nonexistent/systemd-inhibit}" \
+  KARI_AUTOMATION_SYSTEMD_RUN_BIN="${KARI_AUTOMATION_SYSTEMD_RUN_BIN:-/nonexistent/systemd-run}" \
+  KARI_AUTOMATION_SYSTEMCTL_BIN="${KARI_AUTOMATION_SYSTEMCTL_BIN:-/nonexistent/systemctl}" \
   KARI_AUTOMATION_SELF_UPDATE="${SELF_UPDATE:-0}" \
     bash "$DISPATCH" "$@" >"$work/out" 2>&1
   echo $? >"$work/exit-code"
@@ -407,6 +409,104 @@ export STUB_OUT="$w/stub-out"
 KARI_AUTOMATION_INHIBIT_BIN="$STUB_BROKEN_INHIBIT" run_launch "$w"
 expect_contains "$w/stub-out" "This is the issue-pipeline prompt body." \
   "agent still launches when the inhibitor cannot take a lock"
+
+# Process containment (#401): the agent runs inside a transient systemd
+# scope, and the scope is stopped once claude exits, so everything the
+# session spawned and left behind (dev stacks for the visual check, most
+# often) dies with its tick instead of piling up in the service cgroup.
+STUB_SYSTEMD_RUN="$STUB_DIR/systemd-run-stub"
+cat >"$STUB_SYSTEMD_RUN" <<'EOF'
+#!/usr/bin/env bash
+# Records its flags, then runs the wrapped command so the launch still works.
+args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --) shift; break ;;
+    --*) args+=("$1"); shift ;;
+    *) break ;;
+  esac
+done
+echo "SCOPE_FLAGS: ${args[*]}" >>"$STUB_OUT.scope"
+exec "$@"
+EOF
+chmod +x "$STUB_SYSTEMD_RUN"
+# Answers "active" to is-active (as if the agent left something running)
+# and records every call, so the test can see the reap happen.
+STUB_SYSTEMCTL="$STUB_DIR/systemctl-stub"
+cat >"$STUB_SYSTEMCTL" <<'EOF'
+#!/usr/bin/env bash
+echo "SYSTEMCTL: $*" >>"$STUB_OUT.systemctl"
+exit 0
+EOF
+chmod +x "$STUB_SYSTEMCTL"
+
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+KARI_AUTOMATION_SYSTEMD_RUN_BIN="$STUB_SYSTEMD_RUN" \
+KARI_AUTOMATION_SYSTEMCTL_BIN="$STUB_SYSTEMCTL" run_launch "$w"
+expect_contains "$w/stub-out.scope" "--scope" \
+  "launch runs inside a transient scope"
+expect_contains "$w/stub-out.scope" "--unit=kari-agent-issue-pipeline-" \
+  "scope is named after the agent"
+expect_contains "$w/stub-out" "This is the issue-pipeline prompt body." \
+  "agent still receives its prompt inside the scope"
+expect_contains "$w/stub-out.systemctl" "stop kari-agent-issue-pipeline-" \
+  "leftover scope is stopped after the agent exits"
+expect_contains "$w/out" "reap issue-pipeline" \
+  "tick reports that it reaped leftovers"
+
+# The scope wrapper is optional, like the inhibitor: no binary, or one that
+# cannot create a scope (no user manager: CI runners, containers), must not
+# cost the tick its run.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+KARI_AUTOMATION_SYSTEMD_RUN_BIN="/nonexistent/systemd-run" run_launch "$w"
+expect_contains "$w/stub-out" "This is the issue-pipeline prompt body." \
+  "agent still launches when no systemd-run exists"
+expect_file_absent "$w/stub-out.scope" "no scope recorded without systemd-run"
+
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+KARI_AUTOMATION_SYSTEMD_RUN_BIN="$STUB_BROKEN_INHIBIT" run_launch "$w"
+expect_contains "$w/stub-out" "This is the issue-pipeline prompt body." \
+  "agent still launches when systemd-run cannot create a scope"
+
+# A scope that is already empty when claude exits is not "stopped" (the
+# agent cleaned up after itself): no reap line, no stop call.
+STUB_SYSTEMCTL_EMPTY="$STUB_DIR/systemctl-empty-stub"
+cat >"$STUB_SYSTEMCTL_EMPTY" <<'EOF'
+#!/usr/bin/env bash
+echo "SYSTEMCTL: $*" >>"$STUB_OUT.systemctl"
+case "$*" in
+  *is-active*) exit 3 ;;
+  *) exit 0 ;;
+esac
+EOF
+chmod +x "$STUB_SYSTEMCTL_EMPTY"
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+KARI_AUTOMATION_SYSTEMD_RUN_BIN="$STUB_SYSTEMD_RUN" \
+KARI_AUTOMATION_SYSTEMCTL_BIN="$STUB_SYSTEMCTL_EMPTY" run_launch "$w"
+expect_not_contains "$w/stub-out.systemctl" " stop " \
+  "an already-empty scope is not stopped"
+expect_not_contains "$w/out" "reap issue-pipeline" \
+  "no reap line when the agent left nothing behind"
+
+# A failing agent is still reaped, and --wait still reports the failure.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+STUB_CLAUDE="$STUB_DIR/claude-failing-stub" \
+KARI_AUTOMATION_SYSTEMD_RUN_BIN="$STUB_SYSTEMD_RUN" \
+KARI_AUTOMATION_SYSTEMCTL_BIN="$STUB_SYSTEMCTL" run_launch "$w"
+expect_contains "$w/stub-out.systemctl" " stop " \
+  "a failing agent's scope is still stopped"
+expect_eq "$(cat "$w/exit-code")" 1 \
+  "--wait still reports the agent's failure after reaping"
 
 # 10. Unknown flags are rejected rather than silently treated as a real tick.
 w="$(new_work)"
