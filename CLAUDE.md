@@ -139,6 +139,20 @@ deliberately never API credits; skips with a notice when absent). Advisory
 means treat findings as a reviewer's notes —
 address or create github issues for them, but the job never blocks a merge.
 
+Admin-only changes without local credentials: when a change is confined to
+components only the admin pages render (e.g. `tiptap.tsx`, reachable only
+through the admin blog post editor) and you have no `E2E_AUTH0_*` env vars,
+local capture cannot exercise what you changed. Still run it, but know its
+purpose there is narrower: the horizontal-overflow assertions plus a
+public-page regression baseline, nothing more. Don't over-invest in
+studying public PNGs that cannot show your change — CI's visual review is
+the authoritative appearance check for admin pages, and say so in the PR.
+To reproduce a finding CI reported, download the exact images the reviewer
+saw rather than recreating them locally:
+`gh run download <run-id> -n visual-review-screenshots`. Issue #266
+(compile-time-gated fake auth) is the real fix — it would let local capture
+cover admin pages without Auth0 credentials.
+
 ## Working on GitHub Issues
 - If a github issue doesn't exist yet for what you are working on, create one.
 - Before starting work on an issue, add the `in progress` label and leave a
