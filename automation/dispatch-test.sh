@@ -256,6 +256,7 @@ cat >"$STUB_DIR/claude-stub" <<'EOF'
 {
   echo "ARGS: $*"
   echo "BG_WAIT_CEILING_MS: ${CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS-unset}"
+  echo "CI: ${CI-unset}"
   echo "STDIN:"
   cat
 } >"$STUB_OUT"
@@ -278,6 +279,11 @@ expect_file "$w/state/issue-pipeline.last-run" "last-run recorded"
 # unless told otherwise; a worker needs 20-40 minutes (#403).
 expect_contains "$w/stub-out" "BG_WAIT_CEILING_MS: 5400000" \
   "launch raises claude's background-task wait ceiling to 90 minutes"
+# CI=true makes vitest (and most tooling) run once and non-interactive:
+# a session that left vitest in watch mode grew its workers to V8's heap
+# cap and OOMed the host (#415).
+expect_contains "$w/stub-out" "CI: true" \
+  "launch runs the session with CI=true so tooling never enters watch mode"
 
 w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable

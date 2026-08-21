@@ -300,6 +300,12 @@ launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
           "running $name uncontained" >&2
       fi
     fi
+    # CI=true: vitest runs once instead of entering watch mode even when
+    # invoked bare, and Playwright/npm go non-interactive -- what a
+    # headless session wants anyway. A worker that left vitest watching
+    # for ~30 minutes grew five workers to V8's ~4 GB heap cap each and
+    # OOMed the host (2026-08-21, #412/#415); the same code ran once in
+    # 1.5 GB.
     # Unquoted ${var:+...} is deliberate: no flag at all when unset.
     # `|| rc=$?` rather than a bare status read: under set -e a failing
     # session would otherwise end the subshell here, before the reap.
@@ -307,6 +313,7 @@ launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
     # shellcheck disable=SC2086
     prompt_body "$agent_file" |
       CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS="$BG_WAIT_CEILING_MS" \
+      CI=true \
       "${scope[@]}" "${inhibit[@]}" "$CLAUDE_BIN" -p \
         --dangerously-skip-permissions \
         ${model:+--model "$model"} \
