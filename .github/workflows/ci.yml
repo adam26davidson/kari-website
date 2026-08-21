@@ -125,6 +125,14 @@ jobs:
       # chromium. Shared with visual-review.yml — see the action for the
       # hermetic-stack details.
       - name: Stand up hermetic e2e stack
+        # Bounds setup separately from the tests, so a stalled fetch fails
+        # here in minutes instead of eating the job's whole budget and
+        # leaving "did the tests hang?" ambiguous. Composite actions cannot
+        # set timeout-minutes on their inner steps (GitHub limitation), so
+        # this caller step is the only lever. Setup is ~1-4 min with the
+        # caches warm; 12 leaves the cold-cache path (cargo build from
+        # scratch, a browser download) plenty of room.
+        timeout-minutes: 12
         uses: ./.github/actions/e2e-stack
 
       - name: Run e2e tests

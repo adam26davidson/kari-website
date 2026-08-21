@@ -73,6 +73,9 @@ jobs:
       # the test-mode bundle is then previewed locally below.
       - name: Stand up hermetic e2e stack
         if: steps.check.outputs.enabled == 'true'
+        # Same bound as the e2e job in ci.yml: setup gets its own budget so
+        # a stalled fetch fails fast rather than consuming the job's.
+        timeout-minutes: 12
         uses: ./.github/actions/e2e-stack
 
       - name: Build and preview test-mode bundle

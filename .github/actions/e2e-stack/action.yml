@@ -14,9 +14,9 @@
 name: Hermetic e2e stack
 description: >
   Node + npm ci, Rust + cargo cache, local MinIO (seeded), the API built
-  and health-polled on localhost:3000, and Playwright's chromium — the
-  full local stack the Playwright e2e tests and visual screenshots run
-  against.
+  and health-polled on localhost:3000, and Playwright's chromium (cached
+  by version) — the full local stack the Playwright e2e tests and visual
+  screenshots run against.
 
 runs:
   using: composite
@@ -82,7 +82,68 @@ runs:
         cat api.log >&2
         exit 1
 
+    # Downloading chromium is the stack's most stall-prone step: it was the
+    # whole of the e2e job's duration tail (one observed run spent ~28 of its
+    # 32 minutes in multi-minute gaps between individual apt downloads from
+    # azure.archive.ubuntu.com). Caching the browser takes that off the
+    # common path — issue #312.
+    #
+    # The key is the Playwright version npm ci actually installed, so a
+    # Renovate bump invalidates the cache on its own and no string here has
+    # to be maintained by hand.
+    - name: Resolve Playwright version
+      id: playwright-version
+      shell: bash
+      working-directory: ui
+      run: |
+        version="$(npx playwright --version | awk '{print $NF}')"
+        if [ -z "$version" ]; then
+          echo "could not read the installed Playwright version" >&2
+          exit 1
+        fi
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Playwright browsers
+      id: playwright-cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        # Exact match only, deliberately: a restore-keys near-miss would
+        # restore a stale browser build that then has to be downloaded
+        # anyway, paying the restore for nothing.
+        key: playwright-browsers-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
     - name: Install Playwright browsers
+      if: steps.playwright-cache.outputs.cache-hit != 'true'
       shell: bash
       working-directory: ui
       run: npx playwright install --with-deps chromium
+
+    # A cache hit restores the browser binary but not the apt packages it
+    # links against — every run gets a fresh VM, so `--with-deps` on the miss
+    # path buys the hit path nothing. In practice ubuntu-latest ships Chrome,
+    # Chromium, Edge and Firefox, so their shared libraries (libnss3, libgbm1,
+    # libasound2, the atk/gtk stack) are already installed and Playwright's
+    # chromium launches without `--with-deps`. That is a property of the
+    # runner image, not a promise, and it cannot be verified from a dev
+    # machine — so verify it here instead of assuming: launching headless
+    # chromium costs ~2s and turns "the image dropped a library" from a
+    # confusing red e2e run into a slower green one.
+    - name: Verify cached browser launches
+      if: steps.playwright-cache.outputs.cache-hit == 'true'
+      shell: bash
+      working-directory: ui
+      run: |
+        launches() {
+          node -e "require('playwright').chromium.launch()
+            .then(b => b.close())"
+        }
+        if launches; then
+          echo "Cached chromium launches"
+        else
+          echo "::warning::Cached chromium could not launch — reinstalling" \
+            "it with its OS dependencies. If this recurs, ubuntu-latest no" \
+            "longer carries the browser libraries and the cache-hit path" \
+            "needs its own \`npx playwright install-deps chromium\`."
+          npx playwright install --with-deps chromium
+        fi
