@@ -37,6 +37,8 @@
 
 .control-group {
   width: 100%;
+  /* anchors the link popover under the toolbar row */
+  position: relative;
 }
 
 .button-group {
@@ -116,6 +118,66 @@
   background-color: rgb(72, 72, 72);
   color: rgb(232, 232, 232);
   cursor: pointer;
+}
+
+/* Link popover: an on-demand panel hanging off the toolbar row. It sits
+   outside .button-group so the toolbar's flex row cannot wrap around it,
+   which is also why its buttons repeat the .button-group button look. */
+.link-popover {
+  position: absolute;
+  top: 100%;
+  left: 8px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 16px);
+  box-sizing: border-box;
+  padding: 8px;
+  border-radius: 3px;
+  background-color: rgb(232, 232, 232);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.link-popover input {
+  /* min-width: 0 lets the input shrink inside the flex row instead of
+     pushing the panel past the editor's width at 390px */
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 5px;
+  font-size: 14px;
+  color: #181818;
+  background-color: white;
+  border: 1px solid var(--admin-field-border);
+  border-radius: 3px;
+}
+
+.link-popover button {
+  padding: 5px;
+  font-size: 14px;
+  background-color: rgb(212, 212, 212);
+  color: rgb(55, 55, 55);
+  border-width: 0px;
+  border-radius: 3px;
+}
+
+.link-popover button:hover {
+  background-color: rgb(72, 72, 72);
+  color: rgb(232, 232, 232);
+}
+
+.link-popover-error {
+  /* full-width row under the input, matching .gc-error's red/white so it
+     stays legible on the grey panel */
+  flex-basis: 100%;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 3px;
+  background-color: #a33327;
+  color: white;
+  font-size: 13px;
+  overflow-wrap: anywhere;
 }
 
 .blog-post-image {

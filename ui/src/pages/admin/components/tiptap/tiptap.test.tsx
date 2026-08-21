@@ -28,6 +28,13 @@ afterEach(() => {
 const getButton = (name: string) =>
   screen.getByRole("button", { name });
 
+// The link panel's input is the only named textbox; the editor itself is a
+// contenteditable textbox with no accessible name.
+const getLinkInput = () =>
+  screen.getByRole("textbox", { name: "link url" });
+const queryLinkInput = () =>
+  screen.queryByRole("textbox", { name: "link url" });
+
 const renderTiptap = (content = "<p>hello</p>") => {
   const setContent = vi.fn();
   const onAddImage = vi.fn();
@@ -170,16 +177,6 @@ describe("Tiptap toolbar", () => {
     expect(getButton("unlink")).toBeDisabled();
   });
 
-  it("does nothing when the link prompt is cancelled", async () => {
-    const user = userEvent.setup();
-    vi.spyOn(window, "prompt").mockReturnValue(null);
-    const { setContent } = renderTiptap();
-
-    await user.click(getButton("link"));
-    expect(window.prompt).toHaveBeenCalledWith("URL", undefined);
-    expect(setContent).not.toHaveBeenCalled();
-  });
-
   it("enables unlink on a link and strips it on click", async () => {
     const user = userEvent.setup();
     const { setContent } = renderTiptap(
@@ -196,40 +193,156 @@ describe("Tiptap toolbar", () => {
     expect(getButton("unlink")).toBeDisabled();
   });
 
-  it("applies the prompted url as a link", async () => {
+  it("opens the link panel from the link button and closes it again", async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, "prompt").mockReturnValue("https://example.com");
+    renderTiptap();
+
+    expect(getButton("link")).toHaveAttribute("aria-expanded", "false");
+    await user.click(getButton("link"));
+    expect(getLinkInput()).toBeInTheDocument();
+    expect(getButton("link")).toHaveAttribute("aria-expanded", "true");
+
+    await user.click(getButton("link"));
+    expect(queryLinkInput()).toBeNull();
+    expect(getButton("link")).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("prefills the panel with the current link's href", async () => {
+    const user = userEvent.setup();
+    renderTiptap('<p><a href="https://x.test/">hello</a></p>');
+
+    await user.click(getButton("link"));
+    expect(getLinkInput()).toHaveValue("https://x.test/");
+  });
+
+  it("opens the panel empty when the cursor is not on a link", async () => {
+    const user = userEvent.setup();
     renderTiptap();
 
     await user.click(getButton("link"));
-    expect(window.prompt).toHaveBeenCalledWith("URL", undefined);
+    expect(getLinkInput()).toHaveValue("");
   });
 
-  it("removes the link when the prompt returns an empty string", async () => {
+  it("applies a typed url as a link", async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, "prompt").mockReturnValue("");
+    const { setContent } = renderTiptap(
+      '<p><a href="https://old.test/">hello</a></p>'
+    );
+
+    await user.click(getButton("link"));
+    await user.clear(getLinkInput());
+    await user.type(getLinkInput(), "https://example.com");
+    await user.click(getButton("apply"));
+
+    expect(setContent).toHaveBeenLastCalledWith(
+      expect.stringContaining('href="https://example.com"')
+    );
+    expect(queryLinkInput()).toBeNull();
+  });
+
+  it("submits the panel with Enter", async () => {
+    const user = userEvent.setup();
+    const { setContent } = renderTiptap(
+      '<p><a href="https://old.test/">hello</a></p>'
+    );
+
+    await user.click(getButton("link"));
+    await user.clear(getLinkInput());
+    await user.type(getLinkInput(), "https://enter.test/{Enter}");
+
+    expect(setContent).toHaveBeenLastCalledWith(
+      expect.stringContaining('href="https://enter.test/"')
+    );
+    expect(queryLinkInput()).toBeNull();
+  });
+
+  it("removes the link when the panel is submitted empty", async () => {
+    const user = userEvent.setup();
+    const { setContent } = renderTiptap(
+      '<p><a href="https://x.test/">hello</a></p>'
+    );
+
+    await user.click(getButton("link"));
+    await user.clear(getLinkInput());
+    await user.click(getButton("apply"));
+
+    expect(setContent).toHaveBeenLastCalledWith("<p>hello</p>");
+    expect(getButton("unlink")).toBeDisabled();
+    expect(queryLinkInput()).toBeNull();
+  });
+
+  it("shows an inline error and keeps the panel open when the url is refused", async () => {
+    const user = userEvent.setup();
+    // Tiptap's Link extension rejects any protocol outside its allow-list,
+    // reporting it by returning false rather than by throwing.
     const { setContent } = renderTiptap();
 
     await user.click(getButton("link"));
-    // unsetLink on a linkless cursor leaves the document unchanged
-    expect(setContent).not.toHaveBeenCalled();
-  });
+    await user.type(getLinkInput(), "javascript:alert(1)");
+    await user.click(getButton("apply"));
 
-  it("reports a url the link extension refuses instead of failing silently", async () => {
-    const user = userEvent.setup();
-    const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    // Tiptap's Link extension rejects any protocol outside its allow-list.
-    vi.spyOn(window, "prompt").mockReturnValue("javascript:alert(1)");
-    const { setContent } = renderTiptap();
-
-    await user.click(getButton("link"));
-
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /only http\(s\), mailto, tel and relative URLs are allowed/
+    );
+    expect(getLinkInput()).toHaveValue("javascript:alert(1)");
     expect(setContent).not.toHaveBeenCalled();
     expect(getButton("link").className).not.toContain("is-active");
-    expect(error).toHaveBeenCalledWith(
-      "Could not set link:",
-      "javascript:alert(1)"
+  });
+
+  it("keeps the panel open when the block cannot hold a link", async () => {
+    const user = userEvent.setup();
+    // A code block allows no marks at all, so the extension refuses a URL
+    // its allow-list is perfectly happy with. can().setLink only judges the
+    // URL, so this refusal is invisible until the chain itself is asked.
+    // Code blocks need no toolbar button to reach: StarterKit's ``` input
+    // rule makes one.
+    const { setContent } = renderTiptap("<pre><code>hello</code></pre>");
+
+    await user.click(getButton("link"));
+    await user.type(getLinkInput(), "https://example.com");
+    await user.click(getButton("apply"));
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /this block cannot hold a link/
     );
+    expect(getLinkInput()).toHaveValue("https://example.com");
+    expect(setContent).not.toHaveBeenCalled();
+  });
+
+  it("clears the error once the url is edited", async () => {
+    const user = userEvent.setup();
+    renderTiptap();
+
+    await user.click(getButton("link"));
+    await user.type(getLinkInput(), "javascript:alert(1)");
+    await user.click(getButton("apply"));
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+
+    await user.type(getLinkInput(), "!");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("closes the panel on Escape without touching the document", async () => {
+    const user = userEvent.setup();
+    const { setContent } = renderTiptap();
+
+    await user.click(getButton("link"));
+    await user.type(getLinkInput(), "https://example.com{Escape}");
+
+    expect(queryLinkInput()).toBeNull();
+    expect(setContent).not.toHaveBeenCalled();
+  });
+
+  it("closes the panel from the cancel button without applying", async () => {
+    const user = userEvent.setup();
+    const { setContent } = renderTiptap();
+
+    await user.click(getButton("link"));
+    await user.type(getLinkInput(), "https://example.com");
+    await user.click(getButton("cancel"));
+
+    expect(queryLinkInput()).toBeNull();
+    expect(setContent).not.toHaveBeenCalled();
   });
 
   it("inserts the picked image with its uuid as the title", async () => {
