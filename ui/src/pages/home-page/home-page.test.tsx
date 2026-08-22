@@ -49,7 +49,7 @@ describe("Home", () => {
     await screen.findByText("Welcome to the site");
     const img = document.querySelector("img");
     expect(img).toBeInTheDocument();
-    expect(img?.src).toMatch(/\/images\/kari\.jpg$/);
+    expect(img?.src).toMatch(/\/images\/kari\.jpg\/original\.jpg$/);
   });
 
   it("renders the blurb after a successful fetch", async () => {

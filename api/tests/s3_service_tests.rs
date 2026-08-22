@@ -6,21 +6,29 @@
 //! credentials. An `#[ignore]`d end-to-end test against a live bucket remains
 //! as the opt-in real-AWS check.
 
+use aws_sdk_s3::operation::copy_object::CopyObjectOutput;
 use aws_sdk_s3::operation::delete_object::DeleteObjectOutput;
 use aws_sdk_s3::operation::get_object::GetObjectOutput;
+use aws_sdk_s3::operation::get_object_tagging::GetObjectTaggingOutput;
 use aws_sdk_s3::operation::list_objects_v2::ListObjectsV2Output;
 use aws_sdk_s3::operation::put_object::PutObjectOutput;
 use aws_sdk_s3::operation::put_object_tagging::PutObjectTaggingOutput;
 use aws_sdk_s3::primitives::ByteStream;
-use aws_sdk_s3::types::Object;
+use aws_sdk_s3::types::{MetadataDirective, Object, Tag};
 use aws_sdk_s3::Client;
 use aws_smithy_mocks::{mock, mock_client, RuleMode};
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef;
+use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::http::StatusCode;
 use aws_smithy_types::body::SdkBody;
+use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::DateTime;
 use kari_website_api::services::object_store::ObjectStore;
 use kari_website_api::services::s3::{S3Error, S3Service};
+use std::sync::{Arc, Mutex};
 
 const BUCKET: &str = "test-bucket";
 
@@ -397,6 +405,220 @@ async fn list_objects_maps_service_error_to_operation_failed() {
         }
         other => panic!("expected OperationFailed, got: {other:?}"),
     }
+}
+
+// --- content type ------------------------------------------------------------
+
+// Objects the public site fetches straight from S3 must carry a real
+// `Content-Type`, so `images/<id>/original.png` renders as an image rather
+// than as `binary/octet-stream` (#273).
+
+#[tokio::test]
+async fn put_object_sets_content_type_from_the_key() {
+    let rule = mock!(Client::put_object)
+        .match_requests(|req| {
+            req.key() == Some("images/x.jpg/original.jpg")
+                && req.content_type() == Some("image/jpeg")
+        })
+        .then_output(|| PutObjectOutput::builder().build());
+    let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
+
+    service
+        .put_object("images/x.jpg/original.jpg", b"jpeg".to_vec(), true)
+        .await
+        .expect("put should succeed");
+
+    assert_eq!(rule.num_calls(), 1);
+}
+
+#[tokio::test]
+async fn put_object_sets_content_type_on_json_documents() {
+    let rule = mock!(Client::put_object)
+        .match_requests(|req| req.content_type() == Some("application/json"))
+        .then_output(|| PutObjectOutput::builder().build());
+    let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
+
+    service
+        .put_object("haiku.json", b"[]".to_vec(), true)
+        .await
+        .expect("put should succeed");
+
+    assert_eq!(rule.num_calls(), 1);
+}
+
+#[tokio::test]
+async fn put_object_leaves_content_type_unset_for_an_unguessable_key() {
+    let rule = mock!(Client::put_object)
+        .match_requests(|req| req.key() == Some("_health") && req.content_type().is_none())
+        .then_output(|| PutObjectOutput::builder().build());
+    let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
+
+    service
+        .put_object("_health", b"ok".to_vec(), false)
+        .await
+        .expect("put should succeed");
+
+    assert_eq!(rule.num_calls(), 1);
+}
+
+// --- copy_object -------------------------------------------------------------
+
+#[tokio::test]
+async fn copy_object_copies_within_the_bucket_and_keeps_tags() {
+    let rule = mock!(Client::copy_object)
+        .match_requests(|req| {
+            req.bucket() == Some(BUCKET)
+                && req.key() == Some("images/x.jpg/original.jpg")
+                && req.copy_source() == Some("test-bucket/images/x.jpg")
+                // The copy replaces metadata so it can gain a real content
+                // type, but the `public=` tag must still be copied — the
+                // default TaggingDirective (COPY) is what keeps migrated
+                // originals as public as their sources.
+                && req.metadata_directive() == Some(&MetadataDirective::Replace)
+                && req.content_type() == Some("image/jpeg")
+                && req.tagging_directive().is_none()
+        })
+        .then_output(|| CopyObjectOutput::builder().build());
+    let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
+
+    service
+        .copy_object("images/x.jpg", "images/x.jpg/original.jpg")
+        .await
+        .expect("copy should succeed");
+
+    assert_eq!(rule.num_calls(), 1);
+}
+
+/// Captures the serialized `x-amz-copy-source` header, so a test can assert on
+/// what actually goes on the wire rather than on the input the SDK was handed.
+#[derive(Debug, Clone, Default)]
+struct CaptureCopySource(Arc<Mutex<Option<String>>>);
+
+impl CaptureCopySource {
+    fn captured(&self) -> Option<String> {
+        self.0.lock().expect("not poisoned").clone()
+    }
+}
+
+impl Intercept for CaptureCopySource {
+    fn name(&self) -> &'static str {
+        "CaptureCopySource"
+    }
+
+    fn read_before_transmit(
+        &self,
+        context: &BeforeTransmitInterceptorContextRef<'_>,
+        _components: &RuntimeComponents,
+        _cfg: &mut ConfigBag,
+    ) -> Result<(), BoxError> {
+        *self.0.lock().expect("not poisoned") = context
+            .request()
+            .headers()
+            .get("x-amz-copy-source")
+            .map(str::to_string);
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn copy_object_percent_encodes_the_source_key() {
+    // `x-amz-copy-source` is a header whose value S3 requires URL-encoded, and
+    // the SDK does not encode it for us. Legacy `images/<name>` keys are raw
+    // client filenames, so they can hold spaces, `%`, `+` and non-ASCII. Left
+    // raw, `%`/`+` are decoded by S3 into a *different* key (NoSuchKey) and
+    // non-ASCII goes out as raw obs-text bytes S3 will not accept — and one
+    // such object is enough to abort the whole `migrate_images` run.
+    let key = "images/café 100%+more.jpg";
+    let rule = mock!(Client::copy_object)
+        .match_requests(move |req| req.key() == Some("images/café 100%+more.jpg/original.jpg"))
+        .then_output(|| CopyObjectOutput::builder().build());
+    let capture = CaptureCopySource::default();
+    let client = mock_client!(aws_sdk_s3, RuleMode::Sequential, [&rule], |conf| conf
+        .interceptor(capture.clone()));
+    let service = S3Service::new(client, BUCKET.to_string());
+
+    service
+        .copy_object(key, &format!("{key}/original.jpg"))
+        .await
+        .expect("copy should succeed");
+
+    // Separators stay literal: the value is `<bucket>/<key>`, and the key's
+    // own slashes are path separators to S3 too.
+    assert_eq!(
+        capture.captured().as_deref(),
+        Some("test-bucket/images/caf%C3%A9%20100%25%2Bmore.jpg")
+    );
+    assert_eq!(rule.num_calls(), 1);
+}
+
+#[tokio::test]
+async fn copy_object_maps_404_to_not_found() {
+    let rule = mock!(Client::copy_object)
+        .then_http_response(|| s3_error_response(404, "NoSuchKey", "The key does not exist."));
+    let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
+
+    let err = service
+        .copy_object("images/missing", "images/missing/original")
+        .await
+        .expect_err("404 should be an error");
+
+    assert!(matches!(err, S3Error::NotFound), "got: {err:?}");
+}
+
+// --- get_object_public -------------------------------------------------------
+
+#[tokio::test]
+async fn get_object_public_reads_the_public_tag() {
+    let rule = mock!(Client::get_object_tagging)
+        .match_requests(|req| req.bucket() == Some(BUCKET) && req.key() == Some("images/x.jpg"))
+        .then_output(|| {
+            GetObjectTaggingOutput::builder()
+                .tag_set(Tag::builder().key("public").value("true").build().unwrap())
+                .build()
+                .unwrap()
+        });
+    let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
+
+    assert!(service
+        .get_object_public("images/x.jpg")
+        .await
+        .expect("tagging should be readable"));
+}
+
+#[tokio::test]
+async fn get_object_public_is_false_for_a_private_or_untagged_object() {
+    for tags in [Some(("public", "false")), Some(("other", "true")), None] {
+        let rule = mock!(Client::get_object_tagging).then_output(move || {
+            let mut builder = GetObjectTaggingOutput::builder().set_tag_set(Some(Vec::new()));
+            if let Some((key, value)) = tags {
+                builder = builder.tag_set(Tag::builder().key(key).value(value).build().unwrap());
+            }
+            builder.build().unwrap()
+        });
+        let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
+
+        assert!(
+            !service
+                .get_object_public("images/x.jpg")
+                .await
+                .expect("tagging should be readable"),
+            "tags {tags:?} should not read as public"
+        );
+    }
+}
+
+#[tokio::test]
+async fn get_object_public_maps_404_to_not_found() {
+    let rule = mock!(Client::get_object_tagging)
+        .then_http_response(|| s3_error_response(404, "NoSuchKey", "The key does not exist."));
+    let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
+
+    let err = service
+        .get_object_public("missing-key")
+        .await
+        .expect_err("404 should be an error");
+
+    assert!(matches!(err, S3Error::NotFound), "got: {err:?}");
 }
 
 // --- live end-to-end (opt-in) -----------------------------------------------

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { HaigaContent } from "./haiga-content";
 import { Haiga } from "../../models";
 
@@ -34,6 +34,26 @@ describe("HaigaContent", () => {
         "winter moon, a bridge without a railing, over the gorge",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("retries the image at the legacy key when the S3 load fails", () => {
+    // The public site reads S3 directly, so an unmigrated bucket gives it a
+    // bare 404 rather than the API's fallback; every public <img> retries.
+    render(<HaigaContent haiga={haiga} />);
+    const image = screen.getByAltText(
+      "winter moon, a bridge without a railing, over the gorge",
+    );
+    expect(image).toHaveAttribute(
+      "src",
+      "https://s3.test.local/images/moon.jpg/original.jpg",
+    );
+
+    fireEvent.error(image);
+
+    expect(image).toHaveAttribute(
+      "src",
+      "https://s3.test.local/images/moon.jpg",
+    );
   });
 
   it("falls back to a generic alt text when there are no lines", () => {

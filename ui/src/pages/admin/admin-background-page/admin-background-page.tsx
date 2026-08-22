@@ -189,7 +189,14 @@ export function AdminBackgroundPage() {
                         onClick={() => pickExisting(name)}
                         aria-label={`Use ${name} as the background`}
                       >
-                        <img src={apiImageUrl(name)} alt={name} />
+                        <img
+                          src={apiImageUrl(name, "thumb")}
+                          alt={name}
+                          loading="lazy"
+                          decoding="async"
+                          width={96}
+                          height={96}
+                        />
                       </button>
                     ))}
                   </div>

@@ -1,13 +1,12 @@
 import { BlogPost } from "../../../models";
 import { TokenGetter } from "../../../services/http";
 import {
+  apiImageUrl,
   changeImageUrlToApi,
   changeImageUrlToS3,
   getImageFileName,
+  s3ImageUrl,
 } from "../../../utils/image-management-helpers";
-
-const S3_URL = import.meta.env.VITE_S3_URL;
-const API_URL = import.meta.env.VITE_API_URL;
 
 // Shown when a failed publish/unpublish could not fully restore the
 // previous state; storage stays mixed until the same save is retried.
@@ -173,7 +172,6 @@ async function uploadAddedImages(
   isPublished: boolean,
   deps: BlogPostSaveDeps,
 ): Promise<void> {
-  const baseUrl = `${isPublished ? S3_URL : API_URL}/images/`;
   for (const newImage of addedImages) {
     // The img's title carries the stable id its pending file is keyed
     // by, so the file stays attached however the image has been moved
@@ -191,7 +189,9 @@ async function uploadAddedImages(
     if (!fileName) {
       throw new Error("Failed to upload image");
     }
-    newImage.src = baseUrl + fileName;
+    // Published content is read straight from S3 (which cannot resolve a
+    // variant from a query parameter), drafts through the API.
+    newImage.src = isPublished ? s3ImageUrl(fileName) : apiImageUrl(fileName);
   }
 }
 

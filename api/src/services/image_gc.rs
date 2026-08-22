@@ -102,14 +102,17 @@ pub fn add_reference(name: &str, refs: &mut HashSet<String>) {
     refs.insert(name.to_string());
 }
 
-/// Extract every `/images/<name>` reference from a stored blog-content HTML
+/// Extract every `/images/<id>` reference from a stored blog-content HTML
 /// document into `refs`.
 ///
-/// The UI embeds images as `<img src="<host>/images/<name>">` where the host
-/// is either the public S3 URL (published posts) or the API URL (drafts), so
-/// matching on the `/images/` path segment covers both without knowing the
-/// hosts. The name ends at the first character that cannot be part of the
-/// path segment in an HTML attribute (quote, whitespace, tag or query
+/// The UI embeds images as `<img src="<host>/images/<id>">` (drafts, through
+/// the API) or `<img src="<host>/images/<id>/original.<ext>">` (published,
+/// straight from S3), so matching on the `/images/` path segment covers both
+/// without knowing the hosts. Only the id is recorded — under the
+/// directory-per-image layout a reference to any rendition is a reference to
+/// the whole image, which is exactly the unit the sweep classifies (#273).
+/// The id ends at the first character that cannot be part of that path
+/// segment in an HTML attribute (`/`, quote, whitespace, tag or query
 /// delimiter).
 pub fn extract_html_image_refs(html: &str, refs: &mut HashSet<String>) {
     const MARKER: &str = "/images/";
@@ -118,7 +121,8 @@ pub fn extract_html_image_refs(html: &str, refs: &mut HashSet<String>) {
         let after = &rest[pos + MARKER.len()..];
         let end = after
             .find(|c: char| {
-                c.is_whitespace() || matches!(c, '"' | '\'' | '`' | '<' | '>' | '?' | '#' | '\\')
+                c.is_whitespace()
+                    || matches!(c, '/' | '"' | '\'' | '`' | '<' | '>' | '?' | '#' | '\\')
             })
             .unwrap_or(after.len());
         add_reference(&after[..end], refs);

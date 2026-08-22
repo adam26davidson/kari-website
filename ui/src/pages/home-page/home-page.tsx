@@ -4,7 +4,10 @@ import { HomePageData } from "../../models";
 import { LoadError } from "../../components/load-error/load-error";
 import { HomePageService } from "../../services/home-page";
 import { useS3Load } from "../../hooks/use-s3-load";
-import { s3ImageUrl } from "../../utils/image-management-helpers";
+import {
+  onS3ImageError,
+  s3ImageUrl,
+} from "../../utils/image-management-helpers";
 
 const EMPTY_HOME_PAGE: HomePageData = {
   photo: "",
@@ -33,6 +36,7 @@ export function Home() {
               <img
                 className="home-page-photo"
                 src={s3ImageUrl(homePageData.photo)}
+                onError={onS3ImageError}
                 alt="Kari Davidson"
               />
             )}

@@ -29,6 +29,7 @@ async-trait = "0.1.92"
 mime_guess = "2.0.5"
 uuid = { version = "1", features = ["v4"] }
 dotenv = "0.15"
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp", "gif"] }
 
 [dev-dependencies]
 tower-test = "0.4.0"

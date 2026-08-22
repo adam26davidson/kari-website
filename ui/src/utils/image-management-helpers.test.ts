@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   changeImageUrlToS3,
   changeImageUrlToApi,
+  fallBackToLegacyS3Image,
   getImageFileName,
+  legacyS3ImageUrl,
+  onS3ImageError,
   s3ImageUrl,
   apiImageUrl,
 } from "./image-management-helpers";
@@ -12,48 +15,129 @@ const API = "https://api.test.local";
 const S3 = "https://s3.test.local";
 
 describe("image-management-helpers", () => {
-  describe("changeImageUrlToS3", () => {
-    it("rewrites an API url to the S3 images path", () => {
-      expect(changeImageUrlToS3(`${API}/images/photo.jpg`)).toBe(
-        `${S3}/images/photo.jpg`,
-      );
-    });
-
-    it("uses only the final path segment as the filename", () => {
-      expect(changeImageUrlToS3("https://whatever/x/y/z/pic.png")).toBe(
-        `${S3}/images/pic.png`,
-      );
-    });
-
-    it("maps a trailing-slash url to an empty filename", () => {
-      expect(changeImageUrlToS3("https://host/images/")).toBe(`${S3}/images/`);
-    });
-  });
-
-  describe("changeImageUrlToApi", () => {
-    it("rewrites an S3 url to the API images path", () => {
-      expect(changeImageUrlToApi(`${S3}/images/photo.jpg`)).toBe(
-        `${API}/images/photo.jpg`,
-      );
-    });
-  });
-
   describe("s3ImageUrl", () => {
-    it("builds an S3 images url from a file name", () => {
-      expect(s3ImageUrl("photo.jpg")).toBe(`${S3}/images/photo.jpg`);
+    it("points at the original inside the image's directory", () => {
+      expect(s3ImageUrl("photo.jpg")).toBe(
+        `${S3}/images/photo.jpg/original.jpg`,
+      );
+    });
+
+    it("lowercases the extension, as the API does when storing it", () => {
+      expect(s3ImageUrl("photo.JPG")).toBe(
+        `${S3}/images/photo.JPG/original.jpg`,
+      );
+    });
+
+    it("omits the extension for an id that has none", () => {
+      expect(s3ImageUrl("photo")).toBe(`${S3}/images/photo/original`);
+    });
+
+    it("ignores an unusable extension, as the API does", () => {
+      expect(s3ImageUrl("photo.averyveryverylongextension")).toBe(
+        `${S3}/images/photo.averyveryverylongextension/original`,
+      );
     });
   });
 
   describe("apiImageUrl", () => {
-    it("builds an API images url from a file name", () => {
+    it("builds an API images url from an image id", () => {
       expect(apiImageUrl("photo.jpg")).toBe(`${API}/images/photo.jpg`);
+    });
+
+    it("asks for a variant with the size query the API accepts", () => {
+      expect(apiImageUrl("photo.jpg", "thumb")).toBe(
+        `${API}/images/photo.jpg?size=thumb`,
+      );
     });
   });
 
   describe("getImageFileName", () => {
-    it("returns the last path segment", () => {
-      expect(getImageFileName("https://host/a/b/file.jpg")).toBe("file.jpg");
+    it("reads the id out of a directory-layout S3 url", () => {
+      expect(getImageFileName(`${S3}/images/photo.jpg/original.jpg`)).toBe(
+        "photo.jpg",
+      );
+    });
+
+    it("reads the id out of an API url carrying a size query", () => {
+      expect(getImageFileName(`${API}/images/photo.jpg?size=thumb`)).toBe(
+        "photo.jpg",
+      );
+    });
+
+    it("ignores a fragment", () => {
+      expect(getImageFileName(`${API}/images/photo.jpg#anchor`)).toBe(
+        "photo.jpg",
+      );
+    });
+
+    it("reads the id out of a legacy single-object url", () => {
+      expect(getImageFileName(`${S3}/images/photo.jpg`)).toBe("photo.jpg");
+    });
+
+    it("falls back to the last segment when there is no images marker", () => {
+      expect(getImageFileName("https://whatever/x/y/pic.png")).toBe("pic.png");
+    });
+
+    it("returns an empty id for a bare images url", () => {
+      expect(getImageFileName(`${S3}/images/`)).toBe("");
+      expect(getImageFileName(`${S3}/images`)).toBe("");
     });
   });
 
+  describe("legacyS3ImageUrl", () => {
+    it("points at the pre-migration single object, with no variant", () => {
+      expect(legacyS3ImageUrl("photo.jpg")).toBe(`${S3}/images/photo.jpg`);
+    });
+  });
+
+  describe("fallBackToLegacyS3Image", () => {
+    const imageWithSrc = (src: string) => {
+      const image = document.createElement("img");
+      image.src = src;
+      return image;
+    };
+
+    it("retries a directory-layout src at the legacy key", () => {
+      // The failure this exists for: the bucket has not been migrated, so
+      // images/<id>/original.<ext> 404s while images/<id> is right there.
+      const image = imageWithSrc(`${S3}/images/photo.jpg/original.jpg`);
+      fallBackToLegacyS3Image(image);
+      expect(image.src).toBe(`${S3}/images/photo.jpg`);
+    });
+
+    it("gives up after one retry rather than looping", () => {
+      const image = imageWithSrc(`${S3}/images/photo.jpg/original.jpg`);
+      fallBackToLegacyS3Image(image);
+      fallBackToLegacyS3Image(image);
+      expect(image.src).toBe(`${S3}/images/photo.jpg`);
+    });
+
+    it("is driven by the onError handler the public pages pass", () => {
+      const image = imageWithSrc(`${S3}/images/photo.jpg/original.jpg`);
+      onS3ImageError({ currentTarget: image });
+      expect(image.src).toBe(`${S3}/images/photo.jpg`);
+    });
+  });
+
+  describe("changeImageUrlToS3", () => {
+    it("rewrites an API url to the public S3 original", () => {
+      expect(changeImageUrlToS3(`${API}/images/photo.jpg`)).toBe(
+        `${S3}/images/photo.jpg/original.jpg`,
+      );
+    });
+
+    it("leaves an already-S3 url pointing at the same object", () => {
+      expect(changeImageUrlToS3(`${S3}/images/photo.jpg/original.jpg`)).toBe(
+        `${S3}/images/photo.jpg/original.jpg`,
+      );
+    });
+  });
+
+  describe("changeImageUrlToApi", () => {
+    it("rewrites a directory-layout S3 url to the API images path", () => {
+      expect(changeImageUrlToApi(`${S3}/images/photo.jpg/original.jpg`)).toBe(
+        `${API}/images/photo.jpg`,
+      );
+    });
+  });
 });

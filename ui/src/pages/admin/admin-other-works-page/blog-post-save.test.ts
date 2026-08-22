@@ -8,8 +8,12 @@ import {
 } from "./blog-post-save";
 import { BlogPost } from "../../../models";
 
-const apiImg = (name: string) => `https://api.test.local/images/${name}`;
-const s3Img = (name: string) => `https://s3.test.local/images/${name}`;
+const apiImg = (id: string) => `https://api.test.local/images/${id}`;
+// Public URLs name the original inside the image's own directory (#273).
+const s3Img = (id: string) => {
+  const extension = /\.[a-zA-Z0-9]+$/.exec(id)?.[0].toLowerCase() ?? "";
+  return `https://s3.test.local/images/${id}/original${extension}`;
+};
 const img = (src: string, title?: string) =>
   `<img src="${src}"${title ? ` title="${title}"` : ""}>`;
 
@@ -242,6 +246,32 @@ describe("saveBlogPost transaction outcomes", () => {
         "b1",
         img(apiImg("uploaded.png"), "pending-1"),
         false,
+        deps.getToken,
+      );
+    });
+
+    it("patches an added img with the S3 original url when publishing", async () => {
+      // A published post's content is read straight from S3, so a freshly
+      // uploaded image must be referenced by its stored key, not by an id
+      // the bucket has no object for.
+      const deps = makeDeps();
+      const result = await saveBlogPost(
+        makeArgs(deps, {
+          post: { isPublished: true },
+          wasPublished: true,
+          originalContent: "",
+          newContent: img("data:image/png;base64,AAAA", "pending-1"),
+          pendingImageFiles: new Map([
+            ["pending-1", new File(["img"], "fresh.png")],
+          ]),
+        }),
+      );
+
+      expect(result.outcome).toBe("saved");
+      expect(deps.updateContent).toHaveBeenCalledWith(
+        "b1",
+        img(s3Img("uploaded.png"), "pending-1"),
+        true,
         deps.getToken,
       );
     });

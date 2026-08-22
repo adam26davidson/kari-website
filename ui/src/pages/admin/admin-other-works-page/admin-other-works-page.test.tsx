@@ -294,7 +294,11 @@ describe("AdminOtherWorksPage content serialization on save", () => {
 
 describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
   const apiImg = (name: string) => `https://api.test.local/images/${name}`;
-  const s3Img = (name: string) => `https://s3.test.local/images/${name}`;
+  // Public URLs name the original inside the image's own directory (#273).
+  const s3Img = (id: string) =>
+    `https://s3.test.local/images/${id}/original${
+      /\.[a-zA-Z0-9]+$/.exec(id)?.[0].toLowerCase() ?? ""
+    }`;
   const draftContent = `<img src="${apiImg("a.png")}"><img src="${apiImg(
     "b.png",
   )}">`;

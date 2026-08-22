@@ -18,8 +18,10 @@ export function PhotographyPostSummary({
           <img
             key={img.image}
             className="photography-post-summary-image"
-            src={apiImageUrl(img.image)}
+            src={apiImageUrl(img.image, "thumb")}
             alt={img.blurb}
+            loading="lazy"
+            decoding="async"
           />
         ))}
       </div>
