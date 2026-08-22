@@ -359,10 +359,19 @@ hands over the kept branch and/or patch.
    posting the same comment again; a human removes it when they refresh
    the issue. Never comment without labelling.
 3. From the ready issues, select up to (MAX_IN_FLIGHT − in-flight)
-   workers. Order: product work first when the machinery is smooth,
-   then oldest first (there is no readiness label to prefer —
-   `has-dependencies` is the only marker, and it is a hard skip in
-   step 1). Concretely:
+   workers. Order: `next-up` first, then product work first when the
+   machinery is smooth, then oldest first (there is no readiness label
+   to prefer — `has-dependencies` is the only marker, and it is a hard
+   skip in step 1). Concretely:
+
+   `next-up` is the backlog groomer's pick
+   (`automation/agents/backlog-grooming.md`): at most three open issues
+   a curating tick judged should go before the ordering below — a
+   visible defect, the prerequisite of several other issues. A ready
+   `next-up` issue is picked ahead of everything else, oldest first
+   among several, whatever the product/tooling lean says; it is still
+   subject to the readiness judgement in step 2 and the file-overlap
+   rule below. Never add or remove the label yourself.
 
    Issues labelled `tooling` are about the machinery — the pipeline,
    CI and workflows, the lint and dev scripts, the test harnesses —
