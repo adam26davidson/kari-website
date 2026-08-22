@@ -74,6 +74,19 @@ fn entity_escaped_ampersands_also_count_in_decoded_form() {
 }
 
 #[test]
+fn directory_layout_urls_reference_the_image_id() {
+    // Under the directory-per-image layout (#273) a public URL names a
+    // rendition inside the image's prefix; the reference is the id, which is
+    // what the sweep groups objects by.
+    let refs = refs_from(r#"<img src="https://h/images/pic.jpg/original.jpg">"#);
+    assert!(refs.contains("pic.jpg"), "got: {refs:?}");
+    assert!(
+        !refs.iter().any(|r| r.contains('/')),
+        "a reference is an id, not a path: {refs:?}"
+    );
+}
+
+#[test]
 fn reference_name_ends_at_query_fragment_or_quote() {
     let refs = refs_from(r#"<img src="https://h/images/pic.jpg?v=2#frag">"#);
     assert!(refs.contains("pic.jpg"));
@@ -245,6 +258,107 @@ fn store_with_orphan() -> InMemoryStore {
         .with_object("images/haiga.jpg", "referenced bytes")
         .with_object("images/blog-pub.jpg", "referenced bytes")
         .with_object("images/orphan.jpg", "orphan bytes")
+}
+
+// The directory layout: an image is swept as a whole prefix, never
+// object by object (#273).
+
+/// Content referencing `haiga.jpg`, with that image and an unreferenced one
+/// both stored in the directory layout, old enough to be outside the safety
+/// margin.
+fn store_with_migrated_orphan() -> InMemoryStore {
+    let old = SystemTime::now() - Duration::from_secs(24 * 60 * 60);
+    seeded_store()
+        .with_object_modified_at("images/haiga.jpg/original.jpg", "referenced", old)
+        .with_object_modified_at("images/haiga.jpg/thumb.jpg", "referenced thumb", old)
+        .with_object_modified_at("images/orphan.jpg/original.jpg", "orphan", old)
+        .with_object_modified_at("images/orphan.jpg/thumb.jpg", "orphan thumb", old)
+}
+
+#[tokio::test]
+async fn gc_keeps_every_rendition_of_a_referenced_image() {
+    let (store, app) = setup_with(store_with_migrated_orphan().with_object(
+        // A half-migrated image: the legacy object is referenced too.
+        "images/haiga.jpg",
+        "legacy",
+    ));
+    let (status, body) = send(app, gc_request(Some(false), true)).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        keys(&body, "referenced"),
+        vec![
+            "images/haiga.jpg",
+            "images/haiga.jpg/original.jpg",
+            "images/haiga.jpg/thumb.jpg",
+        ]
+    );
+    for key in [
+        "images/haiga.jpg",
+        "images/haiga.jpg/original.jpg",
+        "images/haiga.jpg/thumb.jpg",
+    ] {
+        assert!(store.contains(key), "{key} must survive");
+    }
+}
+
+#[tokio::test]
+async fn gc_deletes_an_unreferenced_prefix_whole() {
+    let (store, app) = setup_with(store_with_migrated_orphan());
+    let (status, body) = send(app, gc_request(Some(false), true)).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let expected = vec![
+        "images/orphan.jpg/original.jpg".to_string(),
+        "images/orphan.jpg/thumb.jpg".to_string(),
+    ];
+    assert_eq!(keys(&body, "orphaned"), expected);
+    assert_eq!(keys(&body, "deleted"), expected);
+    assert!(!store.contains("images/orphan.jpg/original.jpg"));
+    assert!(!store.contains("images/orphan.jpg/thumb.jpg"));
+}
+
+#[tokio::test]
+async fn gc_skips_a_whole_prefix_when_any_rendition_is_recent() {
+    // An upload that stored its original and is still writing its thumbnail
+    // must not have the original swept out from under it.
+    let old = SystemTime::now() - Duration::from_secs(24 * 60 * 60);
+    let (store, app) = setup_with(
+        seeded_store()
+            .with_object_modified_at("images/fresh.jpg/original.jpg", "original", old)
+            .with_object_modified_at("images/fresh.jpg/thumb.jpg", "thumb", SystemTime::now()),
+    );
+    let (status, body) = send(app, gc_request(Some(false), true)).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        keys(&body, "skipped_recent"),
+        vec!["images/fresh.jpg/original.jpg", "images/fresh.jpg/thumb.jpg"]
+    );
+    assert!(keys(&body, "deleted").is_empty());
+    assert!(store.contains("images/fresh.jpg/original.jpg"));
+}
+
+#[tokio::test]
+async fn gc_keeps_an_image_referenced_by_a_directory_layout_url() {
+    // Published blog HTML rewritten by the migration points at
+    // `/images/<id>/original.<ext>`; that must protect the whole prefix.
+    let old = SystemTime::now() - Duration::from_secs(24 * 60 * 60);
+    let (store, app) = setup_with(
+        seeded_store()
+            .with_object(
+                // Overrides the seeded published post's content.
+                "blog/post-2.html",
+                r#"<img src="https://s3/images/rewritten.jpg/original.jpg">"#,
+            )
+            .with_object_modified_at("images/rewritten.jpg/original.jpg", "bytes", old)
+            .with_object_modified_at("images/rewritten.jpg/thumb.jpg", "thumb", old),
+    );
+    let (status, body) = send(app, gc_request(Some(false), true)).await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(keys(&body, "deleted").is_empty(), "body: {body}");
+    assert!(store.contains("images/rewritten.jpg/original.jpg"));
 }
 
 #[tokio::test]
