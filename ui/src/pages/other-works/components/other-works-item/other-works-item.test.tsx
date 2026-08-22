@@ -53,6 +53,26 @@ describe("OtherWorksItem", () => {
     );
   });
 
+  it("retries a post image at the legacy key when its S3 load fails", async () => {
+    // The post's HTML is injected, so React never sees these <img>s. On a
+    // bucket that migrate-images has not touched, the directory-layout src
+    // written at publish time 404s and the object is at images/<id>.
+    vi.mocked(BlogService.getSanitizedContentFromS3).mockResolvedValue(
+      '<p>Post body</p><img alt="in post" ' +
+        'src="https://s3.test.local/images/photo.jpg/original.jpg">',
+    );
+    renderItem();
+
+    const image = await screen.findByAltText("in post");
+    // `error` does not bubble; the component listens in the capture phase.
+    image.dispatchEvent(new Event("error"));
+
+    expect(image).toHaveAttribute(
+      "src",
+      "https://s3.test.local/images/photo.jpg",
+    );
+  });
+
   it("shows a loading indicator while the post is being fetched", async () => {
     renderItem();
     expect(screen.getByText("Loading...")).toBeInTheDocument();

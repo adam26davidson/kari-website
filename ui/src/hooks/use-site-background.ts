@@ -1,6 +1,14 @@
 import { useEffect } from "react";
 import { SiteSettingsService } from "../services/site-settings";
-import { s3ImageUrl } from "../utils/image-management-helpers";
+import {
+  legacyS3ImageUrl,
+  s3ImageUrl,
+} from "../utils/image-management-helpers";
+
+const applyBackground = (url: string) => {
+  document.body.style.setProperty("--site-background", `url("${url}")`);
+  document.body.dataset.customBackground = "true";
+};
 
 /**
  * Applies the admin-selected site background photo, if one is set.
@@ -20,11 +28,17 @@ export function useSiteBackground(): void {
       try {
         const settings = await SiteSettingsService.getFromS3();
         if (cancelled || !settings.backgroundPhoto) return;
-        document.body.style.setProperty(
-          "--site-background",
-          `url("${s3ImageUrl(settings.backgroundPhoto)}")`,
-        );
-        document.body.dataset.customBackground = "true";
+        const photo = settings.backgroundPhoto;
+        applyBackground(s3ImageUrl(photo));
+        // CSS has no onError, so probe the directory-layout key separately
+        // and swap to the pre-migration one if this bucket has not been
+        // migrated yet. The probe hits the same URL the background rule
+        // does, so a migrated bucket costs one cached request, not two.
+        const probe = new Image();
+        probe.onerror = () => {
+          if (!cancelled) applyBackground(legacyS3ImageUrl(photo));
+        };
+        probe.src = s3ImageUrl(photo);
       } catch (error) {
         // The default background is a perfectly good page; never let a
         // missing/unreadable settings object break the site.

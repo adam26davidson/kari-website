@@ -16,7 +16,28 @@ beforeEach(() => {
 afterEach(() => {
   delete document.body.dataset.customBackground;
   document.body.style.removeProperty("--site-background");
+  vi.unstubAllGlobals();
 });
+
+/**
+ * Stand-in for the probe image the hook loads to find out whether this
+ * bucket has the directory layout. jsdom never fetches, so the test decides
+ * when the load fails.
+ */
+class ProbeImage {
+  static instances: ProbeImage[] = [];
+  onerror: (() => void) | null = null;
+  src = "";
+  constructor() {
+    ProbeImage.instances.push(this);
+  }
+}
+
+const stubProbeImage = () => {
+  ProbeImage.instances = [];
+  vi.stubGlobal("Image", ProbeImage);
+  return ProbeImage;
+};
 
 describe("useSiteBackground", () => {
   it("applies the custom background named by the settings", async () => {
@@ -32,6 +53,46 @@ describe("useSiteBackground", () => {
     expect(document.body.style.getPropertyValue("--site-background")).toBe(
       'url("https://s3.test.local/images/bg.webp/original.webp")',
     );
+  });
+
+  it("falls back to the legacy key when the directory layout 404s", async () => {
+    // A bucket that migrate-images has not been run against yet: the
+    // background image only exists at images/<id>. CSS cannot retry on its
+    // own, so the hook probes and rewrites the variable.
+    const probe = stubProbeImage();
+    vi.mocked(SiteSettingsService.getFromS3).mockResolvedValue({
+      backgroundPhoto: "bg.webp",
+    });
+
+    renderHook(() => useSiteBackground());
+
+    await waitFor(() => expect(probe.instances).toHaveLength(1));
+    expect(probe.instances[0].src).toBe(
+      "https://s3.test.local/images/bg.webp/original.webp",
+    );
+
+    probe.instances[0].onerror?.();
+
+    expect(document.body.style.getPropertyValue("--site-background")).toBe(
+      'url("https://s3.test.local/images/bg.webp")',
+    );
+    expect(document.body.dataset.customBackground).toBe("true");
+  });
+
+  it("ignores a probe failure that lands after unmount", async () => {
+    const probe = stubProbeImage();
+    vi.mocked(SiteSettingsService.getFromS3).mockResolvedValue({
+      backgroundPhoto: "bg.webp",
+    });
+
+    const { unmount } = renderHook(() => useSiteBackground());
+    await waitFor(() => expect(probe.instances).toHaveLength(1));
+    unmount();
+
+    probe.instances[0].onerror?.();
+
+    expect(document.body.dataset.customBackground).toBeUndefined();
+    expect(document.body.style.getPropertyValue("--site-background")).toBe("");
   });
 
   it("keeps the default background when no photo is configured", async () => {

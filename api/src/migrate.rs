@@ -317,13 +317,21 @@ pub async fn run_migrate_images_command(
     // takes an explicit flag.
     let local = endpoint.contains("localhost") || endpoint.contains("127.0.0.1");
     if local && !args.iter().any(|arg| arg == "--allow-local") {
+        // Note the working directory in the recipe: `dotenv` searches the cwd
+        // and its ancestors, so from `api/` it finds `api/.env` and refills
+        // AWS_ENDPOINT_URL/AWS_REGION/the MinIO keys even when the caller
+        // just unset them with `env -u`. Running cargo from the repo root
+        // (as scripts/dev.sh does, for the same reason) is what actually
+        // leaves the real credential chain in charge.
         eprintln!(
             "Refusing to run against the local endpoint {endpoint} \
              (api/.env sets it). Pass --allow-local to rehearse against \
-             MinIO, or clear AWS_ENDPOINT_URL to target a real bucket:\n  \
-             env -u AWS_ENDPOINT_URL -u AWS_ACCESS_KEY_ID -u \
-             AWS_SECRET_ACCESS_KEY BUCKET_NAME=<bucket> cargo run -- \
-             migrate-images [--apply]"
+             MinIO, or run from the REPO ROOT, where there is no .env to \
+             load, to target a real bucket:\n  \
+             BUCKET_NAME=<bucket> cargo run --manifest-path api/Cargo.toml \
+             -- migrate-images [--apply]\n\
+             (running this from api/ cannot work: dotenv reloads api/.env, \
+             so `env -u` does not stick.)"
         );
         return 2;
     }

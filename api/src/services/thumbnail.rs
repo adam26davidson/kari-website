@@ -15,7 +15,7 @@ use std::error::Error;
 use std::fmt;
 use std::io::Cursor;
 
-use image::{codecs::jpeg::JpegEncoder, ImageDecoder, ImageReader};
+use image::{codecs::jpeg::JpegEncoder, DynamicImage, ImageDecoder, ImageReader, Rgb, RgbImage};
 
 /// Longest edge of a generated thumbnail, in pixels. 480 covers the 96 px
 /// background-picker grid at 2-3x device pixel ratios and the 200 px
@@ -44,9 +44,10 @@ impl Error for ThumbnailError {}
 ///
 /// The EXIF orientation of the source is applied first, so a camera photo
 /// that displays upright thanks to its orientation tag produces an upright
-/// thumbnail rather than a sideways one. Images already within the limit are
-/// re-encoded at their own size — never enlarged, which would only waste
-/// bytes.
+/// thumbnail rather than a sideways one. Any alpha channel is then
+/// composited onto white (JPEG has none), and only after that is the image
+/// scaled. Images already within the limit are re-encoded at their own size
+/// — never enlarged, which would only waste bytes.
 pub fn make_thumbnail(bytes: &[u8]) -> Result<Vec<u8>, ThumbnailError> {
     let mut decoder = ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
@@ -61,6 +62,11 @@ pub fn make_thumbnail(bytes: &[u8]) -> Result<Vec<u8>, ThumbnailError> {
         .map_err(|e| ThumbnailError(format!("undecodable image: {e}")))?;
     image.apply_orientation(orientation);
 
+    // Flatten transparency BEFORE scaling: `image`'s resize filters work on
+    // straight (non-premultiplied) alpha, so scaling first would smear the
+    // RGB hiding under transparent pixels into the visible edges.
+    let image = flatten_onto_white(image);
+
     // `DynamicImage::thumbnail` scales UP as readily as down, so clamp the
     // target to the source's own size first.
     let scaled = image.thumbnail(
@@ -74,4 +80,34 @@ pub fn make_thumbnail(bytes: &[u8]) -> Result<Vec<u8>, ThumbnailError> {
         .encode_image(&rgb)
         .map_err(|e| ThumbnailError(format!("could not encode JPEG: {e}")))?;
     Ok(out)
+}
+
+/// Composite `image` over an opaque white canvas, returning an image with no
+/// alpha channel.
+///
+/// JPEG cannot store transparency, so a transparent-background upload (a
+/// drawn haiga, a logo) has to be flattened onto something. Simply dropping
+/// the channel keeps whatever RGB the encoder stored under the transparent
+/// pixels — usually black — so the admin grid would show the artwork on a
+/// black slab while the public site renders the original correctly. White
+/// matches the page the previews sit on.
+///
+/// Images without alpha are returned untouched, which is every camera
+/// photograph, so the common path pays nothing.
+fn flatten_onto_white(image: DynamicImage) -> DynamicImage {
+    if !image.color().has_alpha() {
+        return image;
+    }
+    let rgba = image.to_rgba8();
+    let flattened = RgbImage::from_fn(rgba.width(), rgba.height(), |x, y| {
+        let [r, g, b, a] = rgba.get_pixel(x, y).0;
+        // `image` stores straight alpha, so the source colour is used as-is:
+        // out = src * a + white * (1 - a), in 0..=255 fixed point.
+        let over = |c: u8| {
+            let a = u32::from(a);
+            (((u32::from(c) * a) + (255 * (255 - a)) + 127) / 255) as u8
+        };
+        Rgb([over(r), over(g), over(b)])
+    });
+    DynamicImage::ImageRgb8(flattened)
 }

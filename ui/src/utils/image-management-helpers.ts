@@ -40,6 +40,39 @@ export const s3ImageUrl = (id: string) =>
   `${S3_URL}/images/${id}/original${imageExtension(id)}`;
 
 /**
+ * Public URL of an image at the PRE-migration key, where every image was a
+ * single object at `images/<id>` with no variants at all.
+ *
+ * Both layouts are live at once and neither is a superset of the other: a
+ * bucket the `migrate-images` command has not been run against yet holds
+ * only this key, while an image uploaded after this code shipped holds only
+ * the directory. So the public site — which reads S3 directly, and so gets
+ * a bare 404 rather than the API's own fallback — asks for the directory
+ * and falls back here. Retire it with the legacy layout itself (#452).
+ */
+export const legacyS3ImageUrl = (id: string) => `${S3_URL}/images/${id}`;
+
+/**
+ * Point an `<img>` whose S3 source failed to load at the legacy key
+ * instead, so a public page keeps working against an unmigrated bucket.
+ *
+ * The element is marked once, so an image that is genuinely missing fails
+ * the second time rather than looping between the two URLs forever.
+ */
+export const fallBackToLegacyS3Image = (image: HTMLImageElement) => {
+  if (image.dataset.s3Fallback) return;
+  image.dataset.s3Fallback = "legacy";
+  image.src = legacyS3ImageUrl(getImageFileName(image.src));
+};
+
+/**
+ * `onError` handler for any public `<img>` whose src came from
+ * {@link s3ImageUrl}. Typed structurally so it needs no React import.
+ */
+export const onS3ImageError = (event: { currentTarget: HTMLImageElement }) =>
+  fallBackToLegacyS3Image(event.currentTarget);
+
+/**
  * API URL of an image. Without a variant this serves the original; with one
  * it serves that rendition, falling back to the original when it does not
  * exist — so `"thumb"` is always safe to ask for.

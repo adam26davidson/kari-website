@@ -5,7 +5,9 @@
 //! but they are the contract every image key in the bucket is built from,
 //! so they are pinned down explicitly rather than only through the handlers.
 
-use image::{codecs::jpeg::JpegEncoder, ColorType, DynamicImage, ImageEncoder, RgbImage};
+use image::{
+    codecs::jpeg::JpegEncoder, ColorType, DynamicImage, ImageEncoder, RgbImage, RgbaImage,
+};
 use kari_website_api::services::image_keys::{
     id_from_key, legacy_key, original_key, prefix, sanitized_extension, variant_key, ImageVariant,
     THUMB_FILE,
@@ -119,6 +121,67 @@ fn thumbnail_never_enlarges_an_image_smaller_than_the_max_edge() {
     let jpeg = make_thumbnail(&png_bytes(120, 90)).expect("thumbnail");
     let decoded = image::load_from_memory(&jpeg).expect("thumbnail decodes");
     assert_eq!((decoded.width(), decoded.height()), (120, 90));
+}
+
+/// A real encoded PNG whose left half is fully transparent and whose right
+/// half is opaque black — the transparent pixels deliberately carry black
+/// RGB underneath, which is exactly what a naive `to_rgb8()` would keep.
+fn transparent_png_bytes(width: u32, height: u32) -> Vec<u8> {
+    let image = DynamicImage::ImageRgba8(RgbaImage::from_fn(width, height, |x, _| {
+        image::Rgba([0, 0, 0, if x < width / 2 { 0 } else { 255 }])
+    }));
+    let mut out = Vec::new();
+    image
+        .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+        .expect("png encodes");
+    out
+}
+
+#[test]
+fn thumbnail_composites_transparency_onto_white_rather_than_black() {
+    // JPEG has no alpha channel, so a transparent-background PNG (a drawn
+    // haiga, a logo) has to be flattened onto SOMETHING. Dropping the
+    // channel keeps whatever RGB sat under the transparent pixels, which
+    // for most encoders is black — the admin grid would show the artwork on
+    // a black slab. White matches the page it is previewed on.
+    let jpeg = make_thumbnail(&transparent_png_bytes(200, 100)).expect("thumbnail");
+    let decoded = image::load_from_memory(&jpeg)
+        .expect("thumbnail decodes")
+        .to_rgb8();
+
+    // Sample well inside each half: JPEG is lossy and rings at the edge.
+    let transparent = decoded.get_pixel(20, 50);
+    let opaque = decoded.get_pixel(180, 50);
+    assert!(
+        transparent.0.iter().all(|&c| c > 240),
+        "the transparent half should be white, got {transparent:?}"
+    );
+    assert!(
+        opaque.0.iter().all(|&c| c < 20),
+        "the opaque half should stay black, got {opaque:?}"
+    );
+}
+
+#[test]
+fn thumbnail_of_a_partly_transparent_pixel_blends_towards_white() {
+    // Straight (non-premultiplied) alpha: a 50%-opaque black pixel over
+    // white is mid grey, not black and not white.
+    let image =
+        DynamicImage::ImageRgba8(RgbaImage::from_pixel(120, 120, image::Rgba([0, 0, 0, 128])));
+    let mut png = Vec::new();
+    image
+        .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .expect("png encodes");
+
+    let jpeg = make_thumbnail(&png).expect("thumbnail");
+    let decoded = image::load_from_memory(&jpeg)
+        .expect("thumbnail decodes")
+        .to_rgb8();
+    let pixel = decoded.get_pixel(60, 60);
+    assert!(
+        pixel.0.iter().all(|&c| (100..=155).contains(&c)),
+        "expected mid grey, got {pixel:?}"
+    );
 }
 
 #[test]
