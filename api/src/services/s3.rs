@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use aws_sdk_s3::error::SdkError;
-use aws_sdk_s3::{primitives::ByteStream, Client};
+use aws_sdk_s3::{primitives::ByteStream, types::MetadataDirective, Client};
 use std::error::Error;
 use std::fmt;
 use std::time::SystemTime;
@@ -70,6 +70,19 @@ fn cache_control_for(key: &str) -> Option<&'static str> {
     }
 }
 
+/// `Content-Type` to store on a newly written object, guessed from its key.
+///
+/// The public site reads images and manifests straight from S3, so the type
+/// S3 replies with is the type the browser sees. Without this, every object
+/// this API writes is `binary/octet-stream`. `None` when the key carries no
+/// recognisable extension (e.g. the `_health` write probe), which leaves the
+/// SDK's own default in place.
+fn content_type_for(key: &str) -> Option<String> {
+    mime_guess::from_path(key)
+        .first()
+        .map(|mime| mime.to_string())
+}
+
 impl S3Service {
     pub fn new(client: Client, bucket_name: String) -> Self {
         Self {
@@ -105,6 +118,7 @@ impl ObjectStore for S3Service {
             .key(key)
             .body(ByteStream::from(data))
             .set_cache_control(cache_control_for(key).map(String::from))
+            .set_content_type(content_type_for(key))
             .set_tagging(Some(format!("public={}", public)))
             .send()
             .await?;
@@ -133,6 +147,41 @@ impl ObjectStore for S3Service {
                         S3Error::OperationFailed(format!("Failed to build tagging: {e}"))
                     })?,
             )
+            .send()
+            .await?;
+
+        Ok(())
+    }
+
+    async fn get_object_public(&self, key: &str) -> Result<bool, S3Error> {
+        let response = self
+            .client
+            .get_object_tagging()
+            .bucket(&self.bucket_name)
+            .key(key)
+            .send()
+            .await?;
+
+        Ok(response
+            .tag_set()
+            .iter()
+            .any(|tag| tag.key() == "public" && tag.value() == "true"))
+    }
+
+    async fn copy_object(&self, from: &str, to: &str) -> Result<(), S3Error> {
+        // `MetadataDirective::Replace` is what lets the copy gain a real
+        // content type (S3 otherwise carries the source's over, and legacy
+        // image objects were written without one). The tagging directive is
+        // deliberately left at its default of COPY so the `public=` tag —
+        // which is what the bucket policy exposes objects on — comes along.
+        self.client
+            .copy_object()
+            .bucket(&self.bucket_name)
+            .key(to)
+            .copy_source(format!("{}/{}", self.bucket_name, from))
+            .metadata_directive(MetadataDirective::Replace)
+            .set_cache_control(cache_control_for(to).map(String::from))
+            .set_content_type(content_type_for(to))
             .send()
             .await?;
 

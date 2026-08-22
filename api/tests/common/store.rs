@@ -41,6 +41,8 @@ pub struct InMemoryStore {
     fail_puts_after: Mutex<Option<usize>>,
     /// `Some(n)`: the next `n` deletes succeed, every later one fails.
     fail_deletes_after: Mutex<Option<usize>>,
+    /// `Some(n)`: the next `n` copies succeed, every later one fails.
+    fail_copies_after: Mutex<Option<usize>>,
 }
 
 impl InMemoryStore {
@@ -110,6 +112,31 @@ impl InMemoryStore {
     /// simulates an outage starting partway through a GC sweep's deletes.
     pub fn set_failing_deletes_after(&self, count: usize) {
         *self.fail_deletes_after.lock().unwrap() = Some(count);
+    }
+
+    /// Let the next `count` copies succeed and fail every one after that —
+    /// simulates an outage starting partway through the image migration.
+    pub fn set_failing_copies_after(&self, count: usize) {
+        *self.fail_copies_after.lock().unwrap() = Some(count);
+    }
+
+    /// Seed an object with an explicit `public` tag and last-modified time.
+    pub fn with_object_tagged(
+        self,
+        key: &str,
+        data: impl Into<Vec<u8>>,
+        public: bool,
+        last_modified: SystemTime,
+    ) -> Self {
+        self.objects.lock().unwrap().insert(
+            key.to_string(),
+            StoredObject {
+                data: data.into(),
+                public,
+                last_modified: Some(last_modified),
+            },
+        );
+        self
     }
 
     /// Make `get_object` fail with `OperationFailed` for one specific key,
@@ -196,6 +223,30 @@ impl ObjectStore for InMemoryStore {
             }
             None => Err(S3Error::NotFound),
         }
+    }
+
+    async fn get_object_public(&self, key: &str) -> Result<bool, S3Error> {
+        self.check_fail()?;
+        self.objects
+            .lock()
+            .unwrap()
+            .get(key)
+            .map(|object| object.public)
+            .ok_or(S3Error::NotFound)
+    }
+
+    async fn copy_object(&self, from: &str, to: &str) -> Result<(), S3Error> {
+        self.check_fail()?;
+        Self::check_budget(&self.fail_copies_after, "copy")?;
+        let mut objects = self.objects.lock().unwrap();
+        // Like a real server-side copy: the bytes and the `public=` tag come
+        // along, but the copy is a fresh write, so it gets a fresh
+        // last-modified (which is what keeps the GC's safety margin honest
+        // about migrated objects).
+        let mut copied = objects.get(from).cloned().ok_or(S3Error::NotFound)?;
+        copied.last_modified = Some(SystemTime::now());
+        objects.insert(to.to_string(), copied);
+        Ok(())
     }
 
     async fn delete_object(&self, key: &str) -> Result<(), S3Error> {
