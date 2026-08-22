@@ -3,6 +3,7 @@
 // exactly what ships (rather than a second, separately-compiled copy).
 use aws_sdk_s3::Client;
 use kari_website_api::middleware::auth::{fetch_jwks, JwksCache, AUTH0_JWKS_URL};
+use kari_website_api::migrate::run_migrate_images_command;
 use kari_website_api::routes::create_router;
 use kari_website_api::routes::health::HealthCache;
 use kari_website_api::services::object_store::ObjectStore;
@@ -40,6 +41,15 @@ async fn main() {
 
     // Create S3 service
     let s3_service: Arc<dyn ObjectStore> = Arc::new(S3Service::new(s3_client, bucket_name));
+
+    // `migrate-images` is a one-shot maintenance command, not a server: it
+    // needs the same S3 client and nothing else (no JWKS, no listener).
+    if std::env::args().nth(1).as_deref() == Some("migrate-images") {
+        let args: Vec<String> = std::env::args().collect();
+        let endpoint = std::env::var("AWS_ENDPOINT_URL").unwrap_or_default();
+        let code = run_migrate_images_command(s3_service.as_ref(), &args, &endpoint).await;
+        std::process::exit(code);
+    }
 
     // Fetch JWKS and store in shared state
     let jwks = fetch_jwks(AUTH0_JWKS_URL)

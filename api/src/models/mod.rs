@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::services::image_keys::ImageVariant;
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Haiku {
     pub id: String,
@@ -68,6 +70,16 @@ pub struct BlogPostUpdate {
 pub struct IsPublishedQuery {
     #[serde(rename = "isPublished")]
     pub is_published: bool,
+}
+
+/// Query for `GET /images/:id`. Without `size` the untouched original is
+/// served; with it, the named rendition (falling back to the original when
+/// that rendition does not exist). The variant set is closed, so an unknown
+/// value is a 400 rather than a lookup of a client-supplied key.
+#[derive(Deserialize)]
+pub struct ImageQuery {
+    #[serde(default)]
+    pub size: Option<ImageVariant>,
 }
 
 /// Query for `POST /images/gc`. Dry-run unless the caller explicitly passes

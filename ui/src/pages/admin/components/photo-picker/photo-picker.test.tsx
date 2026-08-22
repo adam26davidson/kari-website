@@ -32,7 +32,9 @@ describe("PhotoPicker", () => {
     expect(screen.getByText("Select Image")).toBeInTheDocument();
   });
 
-  it("previews an already-uploaded image from the API by fileName", () => {
+  it("previews an already-uploaded image from its thumbnail", () => {
+    // The preview is 200px wide; downloading the camera original for it is
+    // what made the editors laggy (#273).
     render(
       <PhotoPicker
         imageFile={null}
@@ -40,10 +42,13 @@ describe("PhotoPicker", () => {
         setImageFile={() => {}}
       />
     );
-    expect(screen.getByAltText("Selected")).toHaveAttribute(
+    const preview = screen.getByAltText("Selected");
+    expect(preview).toHaveAttribute(
       "src",
-      "https://api.test.local/images/cat.png"
+      "https://api.test.local/images/cat.png?size=thumb"
     );
+    expect(preview).toHaveAttribute("loading", "lazy");
+    expect(preview).toHaveAttribute("decoding", "async");
     expect(createObjectURL).not.toHaveBeenCalled();
   });
 

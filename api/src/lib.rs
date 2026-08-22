@@ -1,5 +1,6 @@
 pub mod error;
 pub mod middleware;
+pub mod migrate;
 pub mod models;
 pub mod routes;
 pub mod services;

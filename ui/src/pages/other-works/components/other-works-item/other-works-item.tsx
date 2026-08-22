@@ -1,10 +1,11 @@
 import "./other-works-item.css";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { BlogService } from "../../../../services/blog";
 import { BlogPost as BlogPostData } from "../../../../models";
 import { LoadError } from "../../../../components/load-error/load-error";
 import { formatPostDate } from "../../../../utils/date-helpers";
+import { fallBackToLegacyS3Image } from "../../../../utils/image-management-helpers";
 
 export function OtherWorksItem({ id }: { id: string }) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -12,6 +13,7 @@ export function OtherWorksItem({ id }: { id: string }) {
   const [notFound, setNotFound] = useState(false);
   const [postContent, setPostContent] = useState<string>("");
   const [post, setPost] = useState<BlogPostData>();
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -41,6 +43,22 @@ export function OtherWorksItem({ id }: { id: string }) {
   useEffect(() => {
     load();
   }, [load]);
+
+  // A published post's images are injected HTML, so there is no per-<img>
+  // onError to attach: catch their load failures here instead and retry at
+  // the pre-migration key, the same fallback the site's React-rendered
+  // images get. `error` does not bubble, hence the capture phase.
+  useEffect(() => {
+    const container = contentRef.current;
+    if (!container) return;
+    const onError = (event: Event) => {
+      if (event.target instanceof HTMLImageElement) {
+        fallBackToLegacyS3Image(event.target);
+      }
+    };
+    container.addEventListener("error", onError, true);
+    return () => container.removeEventListener("error", onError, true);
+  }, [postContent]);
 
   if (isLoading) {
     return <div className="loading">Loading...</div>;
@@ -73,6 +91,7 @@ export function OtherWorksItem({ id }: { id: string }) {
         {formatPostDate(post.date)}
       </div>
       <div
+        ref={contentRef}
         className="other-works-item-content"
         dangerouslySetInnerHTML={{ __html: postContent }}
       ></div>

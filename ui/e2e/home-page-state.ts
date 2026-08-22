@@ -1,5 +1,10 @@
 import { DeleteObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
-import { S3_BUCKET, TEST_S3_URL, createS3Client } from "./config.mjs";
+import {
+  S3_BUCKET,
+  TEST_S3_URL,
+  createS3Client,
+  originalKey,
+} from "./config.mjs";
 
 // Snapshot/restore for the home page. Unlike every other admin section, the
 // home page is a single shared document (home-page.json) plus one referenced
@@ -23,7 +28,7 @@ export interface HomePageSnapshot {
   json: string;
   /** Photo filename referenced by the snapshot ("" when none). */
   photo: string;
-  /** Raw bytes of images/<photo>; null when that object was missing. */
+  /** Raw bytes of the photo's original; null when that object was missing. */
   photoBody: Buffer | null;
   photoContentType: string;
 }
@@ -47,7 +52,7 @@ export async function snapshotHomePage(): Promise<HomePageSnapshot> {
   let photoBody: Buffer | null = null;
   let photoContentType = "image/png";
   if (photo) {
-    const photoResponse = await fetch(`${TEST_S3_URL}/images/${photo}`);
+    const photoResponse = await fetch(`${TEST_S3_URL}/${originalKey(photo)}`);
     if (photoResponse.ok) {
       photoBody = Buffer.from(await photoResponse.arrayBuffer());
       photoContentType =
@@ -90,7 +95,7 @@ export async function restoreHomePage(snapshot: HomePageSnapshot) {
     await client.send(
       new PutObjectCommand({
         Bucket: S3_BUCKET,
-        Key: `images/${snapshot.photo}`,
+        Key: originalKey(snapshot.photo),
         Body: snapshot.photoBody,
         ContentType: snapshot.photoContentType,
       }),
@@ -99,15 +104,16 @@ export async function restoreHomePage(snapshot: HomePageSnapshot) {
 
   // Delete the photo the journey uploaded: the editor mints a fresh filename
   // on every save, so a referenced photo that differs from the snapshot's is
-  // test debris. Best-effort — an orphaned image object is invisible to the
-  // site. (Known gap: a run that dies between the editor's image upload and
+  // test debris. Only the original is removed; a leftover thumbnail is
+  // invisible to the site and the GC sweeps the prefix. Best-effort — an
+  // orphaned image object is invisible to the site. (Known gap: a run that dies between the editor's image upload and
   // its home-page.json PUT leaves an unreferenced upload we cannot name.)
   if (leftoverPhoto && leftoverPhoto !== snapshot.photo) {
     try {
       await client.send(
         new DeleteObjectCommand({
           Bucket: S3_BUCKET,
-          Key: `images/${leftoverPhoto}`,
+          Key: originalKey(leftoverPhoto),
         }),
       );
     } catch {
@@ -124,10 +130,12 @@ export async function restoreHomePage(snapshot: HomePageSnapshot) {
     );
   }
   if (snapshot.photo && snapshot.photoBody) {
-    const photoResponse = await fetch(`${TEST_S3_URL}/images/${snapshot.photo}`);
+    const photoResponse = await fetch(
+      `${TEST_S3_URL}/${originalKey(snapshot.photo)}`,
+    );
     if (!photoResponse.ok) {
       throw new Error(
-        `Home page restore failed: images/${snapshot.photo} is not readable`,
+        `Home page restore failed: ${originalKey(snapshot.photo)} is not readable`,
       );
     }
   }

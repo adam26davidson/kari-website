@@ -1,5 +1,8 @@
 import { Haiga } from "../../models";
-import { s3ImageUrl } from "../../utils/image-management-helpers";
+import {
+  onS3ImageError,
+  s3ImageUrl,
+} from "../../utils/image-management-helpers";
 import "./haiga-content.css";
 
 export function HaigaContent({
@@ -18,6 +21,7 @@ export function HaigaContent({
       <div className="haiga-list-item-content-compact">
         <img
           src={s3ImageUrl(haiga.image)}
+          onError={onS3ImageError}
           alt={altText}
           className="haiga-list-item-thumbnail"
         />
@@ -32,6 +36,7 @@ export function HaigaContent({
       <div className="haiga-list-item-image-box">
         <img
           src={s3ImageUrl(haiga.image)}
+          onError={onS3ImageError}
           alt={altText}
           className="haiga-list-item-image"
         />

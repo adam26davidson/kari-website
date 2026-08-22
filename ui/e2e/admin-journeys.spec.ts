@@ -6,6 +6,7 @@ import {
   expectGoneFromPublicPage,
   iconButton,
   openAdminSection,
+  originalKey,
   pngFixturePath,
   TEST_S3_URL,
   uniqueMarker,
@@ -534,7 +535,7 @@ test.describe("home page", () => {
     const src = await photo.getAttribute("src");
     // Saving uploads under a freshly minted filename — the public page must
     // now reference it, not the snapshot's photo.
-    expect(src).not.toBe(`${TEST_S3_URL}/images/${snapshot!.photo}`);
+    expect(src).not.toBe(`${TEST_S3_URL}/${originalKey(snapshot!.photo)}`);
     expect((await page.request.get(src!)).status()).toBe(200);
 
     // afterEach restores the snapshot (blurb, photo reference, and the
