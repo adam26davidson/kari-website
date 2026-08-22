@@ -20,6 +20,7 @@ import {
   S3_ENDPOINT,
   createS3Client,
   makeSolidPng,
+  originalKey,
 } from "./config.mjs";
 
 const client = createS3Client();
@@ -112,9 +113,16 @@ const SEED_OBJECTS = [
     body: "<p>Seeded published post content.</p>",
     type: "text/html",
   },
-  { key: "images/seed-home.png", body: HOME_PHOTO_PNG, type: "image/png" },
-  { key: "images/seed-haiga.png", body: HAIGA_PNG, type: "image/png" },
-  { key: "images/seed-photo.png", body: PHOTO_PNG, type: "image/png" },
+  // Originals only, no thumbnails: the admin previews then exercise the
+  // API's fall-back-to-the-original path, which is what a not-yet-migrated
+  // or failed-to-generate image relies on (#273).
+  {
+    key: originalKey("seed-home.png"),
+    body: HOME_PHOTO_PNG,
+    type: "image/png",
+  },
+  { key: originalKey("seed-haiga.png"), body: HAIGA_PNG, type: "image/png" },
+  { key: originalKey("seed-photo.png"), body: PHOTO_PNG, type: "image/png" },
 ];
 
 /** The browser fetches these objects unsigned, so the bucket is public-read. */

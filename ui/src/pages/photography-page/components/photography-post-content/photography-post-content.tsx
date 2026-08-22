@@ -1,5 +1,8 @@
 import { PhotographyPost } from "../../../../models";
-import { s3ImageUrl } from "../../../../utils/image-management-helpers";
+import {
+  onS3ImageError,
+  s3ImageUrl,
+} from "../../../../utils/image-management-helpers";
 import "./photography-post-content.css";
 
 export function PhotographyPostContent({ post }: { post: PhotographyPost }) {
@@ -15,6 +18,7 @@ export function PhotographyPostContent({ post }: { post: PhotographyPost }) {
           <div key={idx} className="photography-post-image-container">
             <img
               src={s3ImageUrl(image.image)}
+              onError={onS3ImageError}
               alt={image.blurb}
               className="photography-post-image"
             />

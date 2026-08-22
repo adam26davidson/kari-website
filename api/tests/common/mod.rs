@@ -3,6 +3,12 @@
 //! Files inside a subdirectory of `tests/` are NOT compiled as their own test
 //! binaries, so this module can be pulled into each integration test crate with
 //! `mod common;` without producing duplicate `#[test]` runs.
+//!
+//! Every test crate gets the WHOLE module, but each uses only the part it
+//! needs (the migration tests need only the store, the auth tests only the
+//! token helpers), so unused-item warnings here say nothing about the code
+//! under test — hence the file-level allow, as in `store.rs`.
+#![allow(dead_code)]
 
 pub mod store;
 
@@ -137,9 +143,6 @@ pub fn signed_token(opts: TokenOptions) -> String {
 /// operation; tests that do reach a handler (e.g. a valid token hitting a
 /// secure route) fail the S3 call instantly and locally instead of sending
 /// signed requests to real AWS, so the suite stays hermetic and fast offline.
-// Not every test binary that includes `common` uses these state builders
-// (handler_tests builds its state from `store` instead), so allow dead_code.
-#[allow(dead_code)]
 pub fn dummy_s3_client() -> Client {
     let conf = aws_sdk_s3::config::Builder::new()
         .behavior_version(BehaviorVersion::latest())
@@ -159,14 +162,12 @@ pub fn dummy_s3_client() -> Client {
 /// Build a real [`AppState`] with the given JWKS and a dummy S3 client. The
 /// JWKS refresh URL is unroutable (like the S3 endpoint) so the unknown-kid
 /// refresh path fails fast and locally instead of calling the real Auth0.
-#[allow(dead_code)]
 pub fn test_state(jwks: JwkSet) -> AppState {
     test_state_with_jwks_url(jwks, "http://127.0.0.1:1/jwks.json".to_string())
 }
 
 /// Build a real [`AppState`] whose `JwksCache` refreshes from `jwks_url`, so
 /// refresh tests can point it at a local HTTP endpoint they control.
-#[allow(dead_code)]
 pub fn test_state_with_jwks_url(jwks: JwkSet, jwks_url: String) -> AppState {
     let client = dummy_s3_client();
     let s3_service: Arc<dyn ObjectStore> =
@@ -182,7 +183,6 @@ pub fn test_state_with_jwks_url(jwks: JwkSet, jwks_url: String) -> AppState {
 /// code under test are actually evaluated (they are no-ops otherwise, which
 /// also leaves them uncounted by coverage). Hold the returned guard for the
 /// duration of the test.
-#[allow(dead_code)]
 pub fn capture_tracing() -> tracing::subscriber::DefaultGuard {
     tracing::subscriber::set_default(
         tracing_subscriber::fmt()

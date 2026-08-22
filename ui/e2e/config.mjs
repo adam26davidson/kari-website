@@ -48,6 +48,23 @@ export const S3_ENDPOINT = s3Url.origin;
 export const S3_BUCKET = s3Url.pathname.replace(/^\//, "");
 
 /**
+ * S3 key of an uploaded image's untouched original. Each image id owns a
+ * key prefix holding the original plus derived renditions (#273), and the
+ * public site fetches variants by full path, so the seeds and the state
+ * helpers must build the same key the app asks for.
+ *
+ * Mirrors `s3ImageUrl` in ui/src/utils/image-management-helpers.ts; the e2e
+ * suite is its own TypeScript project and cannot import from `src/`.
+ *
+ * @param {string} id
+ * @returns {string}
+ */
+export function originalKey(id) {
+  const extension = /\.[a-zA-Z0-9]{1,16}$/.exec(id)?.[0].toLowerCase() ?? "";
+  return `images/${id}/original${extension}`;
+}
+
+/**
  * A tiny valid 1x1 PNG (base64); enough for <img> naturalWidth checks.
  * Decode with Buffer.from(TINY_PNG_BASE64, "base64").
  */

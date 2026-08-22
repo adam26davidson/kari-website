@@ -153,17 +153,39 @@ const explicitRoutes = argValue("--routes")?.split(",").map(toEntry);
 const routes = explicitRoutes ?? DEFAULT_ROUTES;
 
 /**
- * Waits until every <img> on the page has finished loading (or failed —
- * a broken image is itself worth seeing in the screenshot).
+ * Waits until every <img> on the page has finished loading, having first
+ * promoted `loading="lazy"` images to eager.
+ *
+ * The promotion is what makes the wait terminate at all. A lazy image the
+ * browser has decided not to fetch yet — one far below the fold, or inside a
+ * collapsed container such as the background picker's `<details>`, which is
+ * `display: none` while closed — never becomes `complete`, so waiting for it
+ * would hang until the timeout no matter how long we waited. Promoting it
+ * resumes the load immediately (setting `loading` to eager runs the spec's
+ * lazy-load resumption steps), which is also what the capture needs: this
+ * script screenshots the *whole* page, so an image left unloaded because it
+ * was off-screen would be photographed blank.
+ *
+ * The predicate itself is unchanged and still fails a genuinely broken
+ * image: a load error leaves the element `complete` with `naturalWidth === 0`
+ * and `currentSrc` set, so the route times out rather than being quietly
+ * captured. The `!img.currentSrc` arm passes elements with no source at all.
  *
  * @param {import("@playwright/test").Page} page
  */
 async function waitForImages(page) {
   await page.waitForFunction(
-    () =>
-      Array.from(document.images).every(
+    () => {
+      const images = Array.from(document.images);
+      // Re-promote on every poll, not once up front: the app may mount more
+      // images (or swap a src) while we are waiting.
+      for (const img of images) {
+        if (img.loading === "lazy") img.loading = "eager";
+      }
+      return images.every(
         (img) => img.complete && (img.naturalWidth > 0 || !img.currentSrc),
-      ),
+      );
+    },
     undefined,
     { timeout: 30_000 },
   );

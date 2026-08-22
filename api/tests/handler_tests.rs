@@ -18,6 +18,7 @@ use common::store::{state_with_store, InMemoryStore};
 use common::{build_jwks, signed_token, TokenOptions};
 use http_body_util::BodyExt;
 use kari_website_api::routes::create_router;
+use kari_website_api::services::image_keys::{original_key, variant_key, ImageVariant};
 use kari_website_api::services::object_store::ObjectStore;
 use serde_json::{json, Value};
 use tower::ServiceExt;
@@ -409,13 +410,21 @@ async fn update_site_settings_store_outage_is_500() {
 // ---------------------------------------------------------------- image list
 
 #[tokio::test]
-async fn list_images_returns_names_newest_first_without_folder_marker() {
+async fn list_images_returns_ids_newest_first_without_folder_marker() {
     use std::time::{Duration, SystemTime};
     let now = SystemTime::now();
     let store = InMemoryStore::default()
-        .with_object_modified_at("images/older.jpg", "x", now - Duration::from_secs(300))
-        .with_object_modified_at("images/newest.webp", "x", now)
-        .with_object_modified_at("images/oldest.png", "x", now - Duration::from_secs(600))
+        .with_object_modified_at(
+            "images/older.jpg/original.jpg",
+            "x",
+            now - Duration::from_secs(300),
+        )
+        .with_object_modified_at("images/newest.webp/original.webp", "x", now)
+        .with_object_modified_at(
+            "images/oldest.png/original.png",
+            "x",
+            now - Duration::from_secs(600),
+        )
         // The bare folder marker and non-image objects must not appear.
         .with_object("images/", "")
         .with_object("home-page.json", "{}");
@@ -427,6 +436,29 @@ async fn list_images_returns_names_newest_first_without_folder_marker() {
     assert_eq!(
         body,
         json!({"images": ["newest.webp", "older.jpg", "oldest.png"]})
+    );
+}
+
+#[tokio::test]
+async fn list_images_reports_each_id_once_across_both_layouts() {
+    use std::time::{Duration, SystemTime};
+    let now = SystemTime::now();
+    // A migrated image (prefix with two objects), plus one that has not been
+    // migrated yet — each must appear exactly once, and a prefix is as new as
+    // its newest object.
+    let store = InMemoryStore::default()
+        .with_object_modified_at(
+            "images/a.jpg/original.jpg",
+            "x",
+            now - Duration::from_secs(600),
+        )
+        .with_object_modified_at("images/a.jpg/thumb.jpg", "x", now)
+        .with_object_modified_at("images/b.png", "x", now - Duration::from_secs(300));
+    let (_, app) = setup_with(store);
+
+    assert_eq!(
+        send(app, get_auth("/images")).await,
+        (StatusCode::OK, json!({"images": ["a.jpg", "b.png"]}))
     );
 }
 
@@ -660,22 +692,85 @@ async fn delete_blog_post_content_store_outage_is_500() {
 
 // ---------------------------------------------------------------- images
 
-#[tokio::test]
-async fn get_image_serves_bytes_with_guessed_content_type() {
-    let png = vec![0x89u8, b'P', b'N', b'G'];
-    let (_, app) =
-        setup_with(InMemoryStore::default().with_object("images/photo.png", png.clone()));
-    let response = app.oneshot(get("/images/photo.png")).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(
-        response
-            .headers()
-            .get(header::CONTENT_TYPE)
-            .expect("content-type set"),
-        "image/png"
-    );
+/// Run a GET and return (status, content-type, body bytes).
+async fn get_bytes(app: axum::Router, uri: &str) -> (StatusCode, String, Vec<u8>) {
+    let response = app.oneshot(get(uri)).await.unwrap();
+    let status = response.status();
+    let content_type = response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .map(|value| value.to_str().unwrap().to_string())
+        .unwrap_or_default();
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
-    assert_eq!(bytes.as_ref(), png.as_slice());
+    (status, content_type, bytes.to_vec())
+}
+
+#[tokio::test]
+async fn get_image_serves_the_original_with_guessed_content_type() {
+    let png = vec![0x89u8, b'P', b'N', b'G'];
+    let (_, app) = setup_with(
+        InMemoryStore::default().with_object("images/photo.png/original.png", png.clone()),
+    );
+
+    let (status, content_type, bytes) = get_bytes(app, "/images/photo.png").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(content_type, "image/png");
+    assert_eq!(bytes, png);
+}
+
+#[tokio::test]
+async fn get_image_size_thumb_serves_the_thumbnail_as_jpeg() {
+    let (_, app) = setup_with(
+        InMemoryStore::default()
+            .with_object("images/photo.png/original.png", "ORIGINAL")
+            .with_object("images/photo.png/thumb.jpg", "THUMB"),
+    );
+
+    let (status, content_type, bytes) = get_bytes(app, "/images/photo.png?size=thumb").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(content_type, "image/jpeg");
+    assert_eq!(bytes, b"THUMB");
+}
+
+#[tokio::test]
+async fn get_image_size_thumb_falls_back_to_the_original_when_no_thumbnail_exists() {
+    // Covers both a not-yet-migrated image and one whose thumbnail could not
+    // be generated: the admin sees the (slower) original, never a broken tile.
+    let (_, app) = setup_with(
+        InMemoryStore::default().with_object("images/photo.png/original.png", "ORIGINAL"),
+    );
+
+    let (status, content_type, bytes) = get_bytes(app, "/images/photo.png?size=thumb").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(content_type, "image/png");
+    assert_eq!(bytes, b"ORIGINAL");
+}
+
+#[tokio::test]
+async fn get_image_falls_back_to_the_legacy_single_object_layout() {
+    // Pre-migration buckets still store one object per image; both the
+    // default and the thumbnail request must serve it.
+    for uri in ["/images/photo.png", "/images/photo.png?size=thumb"] {
+        let (_, app) =
+            setup_with(InMemoryStore::default().with_object("images/photo.png", "LEGACY"));
+        let (status, content_type, bytes) = get_bytes(app, uri).await;
+        assert_eq!(status, StatusCode::OK, "for {uri}");
+        assert_eq!(content_type, "image/png", "for {uri}");
+        assert_eq!(bytes, b"LEGACY", "for {uri}");
+    }
+}
+
+#[tokio::test]
+async fn get_image_with_an_unknown_size_is_400() {
+    let (_, app) = setup_with(
+        InMemoryStore::default().with_object("images/photo.png/original.png", "ORIGINAL"),
+    );
+    let (status, body) = send(app, get("/images/photo.png?size=enormous")).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body, json!({"error": "Unknown image size"}));
 }
 
 #[tokio::test]
@@ -714,10 +809,11 @@ async fn upload_image_stores_file_under_returned_unique_name() {
     let (status, body) = send(app, req).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["message"], "File uploaded successfully");
-    // The key is NOT the client's filename — it's the returned unique name.
+    // The key is NOT the client's filename — it's the returned unique name,
+    // and it lives under that name's own prefix (#273).
     assert!(!store.contains("images/photo.png"));
     let file_name = uploaded_file_name(&body, ".png");
-    let stored = store.get(&format!("images/{file_name}")).expect("stored");
+    let stored = store.get(&original_key(&file_name)).expect("stored");
     assert_eq!(stored.data, b"PNGDATA");
     assert!(stored.public);
 }
@@ -733,14 +829,8 @@ async fn uploads_with_identical_client_filenames_never_collide() {
     let name_b = uploaded_file_name(&body_b, ".png");
     assert_ne!(name_a, name_b);
     // Both objects exist with their own data — nothing was overwritten.
-    assert_eq!(
-        store.get(&format!("images/{name_a}")).unwrap().data,
-        b"FIRST"
-    );
-    assert_eq!(
-        store.get(&format!("images/{name_b}")).unwrap().data,
-        b"SECOND"
-    );
+    assert_eq!(store.get(&original_key(&name_a)).unwrap().data, b"FIRST");
+    assert_eq!(store.get(&original_key(&name_b)).unwrap().data, b"SECOND");
 }
 
 #[tokio::test]
@@ -750,7 +840,7 @@ async fn upload_unpublished_image_is_tagged_private() {
     let (status, body) = send(app, req).await;
     assert_eq!(status, StatusCode::OK);
     let file_name = uploaded_file_name(&body, ".jpg");
-    assert!(!store.get(&format!("images/{file_name}")).unwrap().public);
+    assert!(!store.get(&original_key(&file_name)).unwrap().public);
 }
 
 #[tokio::test]
@@ -759,7 +849,7 @@ async fn upload_preserves_extension_lowercased() {
     let req = multipart_upload("/images?isPublished=true", Some("photo.PNG"), b"PNG");
     let (_, body) = send(app, req).await;
     let file_name = uploaded_file_name(&body, ".png");
-    assert!(store.contains(&format!("images/{file_name}")));
+    assert!(store.contains(&original_key(&file_name)));
 }
 
 #[tokio::test]
@@ -777,7 +867,7 @@ async fn upload_without_filename_gets_uuid_key_with_no_extension() {
     let (status, body) = send(app, req).await;
     assert_eq!(status, StatusCode::OK);
     let file_name = uploaded_file_name(&body, "");
-    assert!(store.contains(&format!("images/{file_name}")));
+    assert!(store.contains(&original_key(&file_name)));
 }
 
 #[tokio::test]
@@ -885,8 +975,125 @@ async fn upload_image_store_outage_is_500() {
     assert_eq!(body, json!({"error": "Failed to upload image"}));
 }
 
+// --- upload thumbnails ------------------------------------------------------
+
+/// A real encoded PNG of the given size — the thumbnail generator needs
+/// bytes it can actually decode.
+fn png_bytes(width: u32, height: u32) -> Vec<u8> {
+    let image = image::DynamicImage::ImageRgb8(image::RgbImage::from_fn(width, height, |x, _| {
+        image::Rgb([(x % 256) as u8, 30, 200])
+    }));
+    let mut out = Vec::new();
+    image
+        .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+        .expect("png encodes");
+    out
+}
+
 #[tokio::test]
-async fn set_image_published_updates_tag() {
+async fn upload_image_also_stores_a_thumbnail_next_to_the_original() {
+    let (store, app) = setup();
+    let req = multipart_upload(
+        "/images?isPublished=true",
+        Some("photo.png"),
+        &png_bytes(1200, 800),
+    );
+    let (status, body) = send(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let file_name = uploaded_file_name(&body, ".png");
+
+    let thumb = store
+        .get(&variant_key(&file_name, ImageVariant::Thumb))
+        .expect("thumbnail stored");
+    // Same visibility as the original: a public image's thumbnail must be
+    // readable by the public site, a private one's must not.
+    assert!(thumb.public);
+    let decoded = image::load_from_memory(&thumb.data).expect("thumbnail decodes");
+    assert_eq!((decoded.width(), decoded.height()), (480, 320));
+    assert_eq!(
+        image::guess_format(&thumb.data).expect("format"),
+        image::ImageFormat::Jpeg
+    );
+}
+
+#[tokio::test]
+async fn upload_of_a_private_image_stores_a_private_thumbnail() {
+    let (store, app) = setup();
+    let req = multipart_upload(
+        "/images?isPublished=false",
+        Some("photo.png"),
+        &png_bytes(200, 200),
+    );
+    let (_, body) = send(app, req).await;
+    let file_name = uploaded_file_name(&body, ".png");
+    assert!(
+        !store
+            .get(&variant_key(&file_name, ImageVariant::Thumb))
+            .expect("thumbnail stored")
+            .public
+    );
+}
+
+#[tokio::test]
+async fn upload_of_undecodable_bytes_still_succeeds_without_a_thumbnail() {
+    // A file the decoder cannot read (or a format we do not support) must
+    // not fail the upload — `?size=thumb` falls back to the original.
+    let _tracing = common::capture_tracing();
+    let (store, app) = setup();
+    let req = multipart_upload("/images?isPublished=true", Some("photo.png"), b"PNGDATA");
+    let (status, body) = send(app, req).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let file_name = uploaded_file_name(&body, ".png");
+    assert_eq!(
+        store.get(&original_key(&file_name)).expect("stored").data,
+        b"PNGDATA"
+    );
+    assert!(!store.contains(&variant_key(&file_name, ImageVariant::Thumb)));
+}
+
+#[tokio::test]
+async fn upload_survives_a_failed_thumbnail_write() {
+    // The original is stored by the first put; the thumbnail's put fails.
+    // The upload still succeeds and the original is kept.
+    let _tracing = common::capture_tracing();
+    let (store, app) = setup();
+    store.set_failing_puts_after(1);
+    let req = multipart_upload(
+        "/images?isPublished=true",
+        Some("photo.png"),
+        &png_bytes(600, 400),
+    );
+    let (status, body) = send(app, req).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let file_name = uploaded_file_name(&body, ".png");
+    assert!(store.contains(&original_key(&file_name)));
+    assert!(!store.contains(&variant_key(&file_name, ImageVariant::Thumb)));
+}
+
+#[tokio::test]
+async fn set_image_published_updates_every_object_under_the_prefix() {
+    // A public reference to any variant needs THAT object tagged, so the
+    // whole directory flips together (#273).
+    let (store, app) = setup_with(
+        InMemoryStore::default()
+            .with_object("images/photo.png/original.png", "PNG")
+            .with_object("images/photo.png/thumb.jpg", "JPG"),
+    );
+    let (status, body) = send(
+        app,
+        put_auth("/images/photo.png/set-published?isPublished=false"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!({"message": "Image published status updated"}));
+    assert!(!store.get("images/photo.png/original.png").unwrap().public);
+    assert!(!store.get("images/photo.png/thumb.jpg").unwrap().public);
+}
+
+#[tokio::test]
+async fn set_image_published_updates_a_legacy_single_object() {
     let (store, app) = setup_with(InMemoryStore::default().with_object("images/photo.png", "PNG"));
     let (status, body) = send(
         app,
@@ -896,6 +1103,31 @@ async fn set_image_published_updates_tag() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body, json!({"message": "Image published status updated"}));
     assert!(!store.get("images/photo.png").expect("stored").public);
+}
+
+#[tokio::test]
+async fn set_image_published_updates_both_layouts_when_both_exist() {
+    // Mid-migration: the copy exists and the legacy object has not been
+    // cleaned up yet. Neither may be left behind with the wrong visibility.
+    let (store, app) = setup_with(
+        InMemoryStore::default()
+            .with_object("images/photo.png", "PNG")
+            .with_object("images/photo.png/original.png", "PNG")
+            .with_object("images/photo.png/thumb.jpg", "JPG"),
+    );
+    let (status, _) = send(
+        app,
+        put_auth("/images/photo.png/set-published?isPublished=false"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    for key in [
+        "images/photo.png",
+        "images/photo.png/original.png",
+        "images/photo.png/thumb.jpg",
+    ] {
+        assert!(!store.get(key).unwrap().public, "{key} should be private");
+    }
 }
 
 #[tokio::test]
@@ -912,7 +1144,8 @@ async fn set_image_published_missing_is_404() {
 
 #[tokio::test]
 async fn set_image_published_store_outage_is_500() {
-    let (store, app) = setup_with(InMemoryStore::default().with_object("images/photo.png", "PNG"));
+    let (store, app) =
+        setup_with(InMemoryStore::default().with_object("images/photo.png/original.png", "PNG"));
     store.set_failing(true);
     let (status, body) = send(
         app,

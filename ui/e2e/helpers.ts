@@ -9,7 +9,7 @@ const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 // The test-environment backend URLs. e2e/config.mjs owns the .env.test
 // parsing and precedence rules; re-exported here for the specs' convenience.
-export { TEST_API_URL, TEST_S3_URL } from "./config.mjs";
+export { TEST_API_URL, TEST_S3_URL, originalKey } from "./config.mjs";
 
 /**
  * A unique marker for content created by a test, so parallel or retried runs
