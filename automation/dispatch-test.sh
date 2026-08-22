@@ -802,6 +802,74 @@ expect_eq "$(tail -n1 "$log")" "tick exited 1" \
 expect_eq "$(grep -c "You've hit your session limit" "$log")" 1 \
   "the unterminated last line survives the newline guard"
 
+# Usage capture (#467): the session runs with --output-format json, and
+#     its result object is folded back into the log -- the result text
+#     (so the log reads as before), a "usage:" line, one "usage <model>:"
+#     line per model -- with the raw object kept under state/usage/ for
+#     a cost review to sum. Output that is not a result object (a
+#     usage-limit message, a crash) lands in the log verbatim with a
+#     "usage: unavailable" line and no record.
+STUB_JSON="$STUB_DIR/claude-json-stub"
+cat >"$STUB_JSON" <<'EOF'
+#!/usr/bin/env bash
+echo "ARGS: $*" >"$STUB_OUT"
+cat >/dev/null
+echo "a warning on stderr" >&2
+cat <<'JSON'
+{"type":"result","subtype":"success","is_error":false,"duration_ms":61500,
+ "num_turns":7,"result":"Run summary: merged #1, claimed #2.",
+ "total_cost_usd":1.25,
+ "usage":{"input_tokens":10,"cache_creation_input_tokens":200,
+  "cache_read_input_tokens":3000,"output_tokens":40},
+ "modelUsage":{"claude-fable-5":{"inputTokens":10,"outputTokens":40,
+  "cacheReadInputTokens":3000,"cacheCreationInputTokens":200,
+  "costUSD":1.25}}}
+JSON
+EOF
+chmod +x "$STUB_JSON"
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+STUB_CLAUDE="$STUB_JSON" run_launch "$w"
+log="$(only_log "$w")"
+expect_contains "$w/stub-out" "--output-format json" \
+  "the session is asked for a JSON result"
+expect_contains "$log" "a warning on stderr" "stderr still streams to the log"
+expect_contains "$log" "Run summary: merged #1, claimed #2." \
+  "the result text is folded into the log"
+expect_contains "$log" \
+  "usage: cost_usd=1.25 turns=7 duration_s=61 input=10 output=40 cache_read=3000 cache_create=200 error=false" \
+  "the usage line sums the session"
+expect_contains "$log" \
+  "usage claude-fable-5: cost_usd=1.25 input=10 output=40 cache_read=3000 cache_create=200" \
+  "one usage line per model"
+expect_eq "$(tail -n1 "$log")" "tick exited 0" \
+  "the trailer still closes the log after the usage lines"
+expect_eq "$(find "$w/state/usage" -name 'issue-pipeline-*.json' | wc -l)" 1 \
+  "the raw result object is kept as a usage record"
+expect_eq "$(find "$w/state/logs" -name '*.stdout' | wc -l)" 0 \
+  "the stdout sidecar is removed once folded in"
+run_dispatch "$w" --status
+expect_eq "$(status_line "$w" issue-pipeline usage)" \
+  "1 runs, \$1.25 total, \$1.25 mean (180d)" \
+  "--status sums the usage records"
+
+# Non-JSON output: kept verbatim, usage declared unavailable, no record.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+STUB_CLAUDE="$STUB_LIMIT" run_launch "$w"
+log="$(only_log "$w")"
+expect_contains "$log" "You've hit your session limit" \
+  "non-JSON output survives in the log"
+expect_contains "$log" "usage: unavailable" \
+  "non-JSON output is reported as no usage"
+expect_eq "$(find "$w/state/usage" -name '*.json' | wc -l)" 0 \
+  "no usage record for non-JSON output"
+run_dispatch "$w" --status
+expect_eq "$(status_line "$w" issue-pipeline usage)" "(no usage records yet)" \
+  "--status says when there is nothing to sum"
+
 # Killed by a signal (a scope stop, or the timer's KillMode): bash runs no
 # EXIT trap on an untrapped fatal signal, so TERM/HUP/INT are trapped into
 # a normal exit and the log still gets a trailer.
