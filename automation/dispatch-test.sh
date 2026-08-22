@@ -44,6 +44,7 @@ run_dispatch() { # <workdir> [args...] — output in <workdir>/out
   KARI_AUTOMATION_AGENTS_DIR="$work/agents" \
   KARI_AUTOMATION_PAUSE_FILE="$work/PAUSE" \
   KARI_AUTOMATION_CLAUDE_BIN="${STUB_CLAUDE:-claude}" \
+  KARI_AUTOMATION_JQ_BIN="${STUB_JQ:-jq}" \
   KARI_AUTOMATION_DUE_TOLERANCE="${DUE_TOLERANCE:-}" \
   KARI_AUTOMATION_INHIBIT_BIN="${KARI_AUTOMATION_INHIBIT_BIN:-/nonexistent/systemd-inhibit}" \
   KARI_AUTOMATION_SYSTEMD_RUN_BIN="${KARI_AUTOMATION_SYSTEMD_RUN_BIN:-/nonexistent/systemd-run}" \
@@ -869,6 +870,33 @@ expect_eq "$(find "$w/state/usage" -name '*.json' | wc -l)" 0 \
 run_dispatch "$w" --status
 expect_eq "$(status_line "$w" issue-pipeline usage)" "(no usage records yet)" \
   "--status says when there is nothing to sum"
+
+# No jq on the host: the raw output is kept verbatim and usage declared
+# unavailable -- and, as in the trailer's case (#322), the "usage:" line
+# must not be glued onto output that ended mid-line. The limit stub is
+# exactly that shape, so this covers both at once.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+STUB_JQ=/nonexistent/jq STUB_CLAUDE="$STUB_LIMIT" run_launch "$w"
+log="$(only_log "$w")"
+expect_eq "$(grep -c "^You've hit your session limit$" "$log")" 1 \
+  "without jq the unterminated output still ends up on its own line"
+expect_eq \
+  "$(grep -c '^usage: unavailable (jq not installed; raw output above)$' \
+    "$log")" 1 \
+  "without jq the usage line starts a line of its own"
+expect_eq "$(tail -n1 "$log")" "tick exited 1" \
+  "the trailer still closes a jq-less log"
+expect_eq "$(find "$w/state/usage" -name '*.json' | wc -l)" 0 \
+  "no usage record is written without jq"
+# ...and --status says why it cannot sum records rather than claiming none.
+mkdir -p "$w/state/usage"
+echo '{}' >"$w/state/usage/issue-pipeline-20260101-000000.json"
+STUB_JQ=/nonexistent/jq run_dispatch "$w" --status
+expect_eq "$(status_line "$w" issue-pipeline usage)" \
+  "(1 records; jq needed to sum them)" \
+  "--status reports records it cannot sum without jq"
 
 # Killed by a signal (a scope stop, or the timer's KillMode): bash runs no
 # EXIT trap on an untrapped fatal signal, so TERM/HUP/INT are trapped into

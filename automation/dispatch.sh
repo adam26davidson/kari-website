@@ -30,6 +30,8 @@
 #   KARI_AUTOMATION_AGENTS_DIR  default <repo>/automation/agents
 #   KARI_AUTOMATION_PAUSE_FILE  default <repo>/automation/PAUSE
 #   KARI_AUTOMATION_CLAUDE_BIN  default claude
+#   KARI_AUTOMATION_JQ_BIN      default jq; record_usage/usage_summary
+#                               degrade gracefully when it is absent
 #   KARI_AUTOMATION_INHIBIT_BIN default systemd-inhibit (skipped if absent)
 #   KARI_AUTOMATION_SYSTEMD_RUN_BIN default systemd-run (skipped if absent);
 #   KARI_AUTOMATION_SYSTEMCTL_BIN   default systemctl — see launch()
@@ -50,6 +52,7 @@ AGENTS_DIR="${KARI_AUTOMATION_AGENTS_DIR:-$REPO_ROOT/automation/agents}"
 STATE_DIR="${KARI_AUTOMATION_STATE_DIR:-$HOME/.local/state/kari-website-automation}"
 PAUSE_FILE="${KARI_AUTOMATION_PAUSE_FILE:-$REPO_ROOT/automation/PAUSE}"
 CLAUDE_BIN="${KARI_AUTOMATION_CLAUDE_BIN:-claude}"
+JQ_BIN="${KARI_AUTOMATION_JQ_BIN:-jq}"
 SELF_UPDATE="${KARI_AUTOMATION_SELF_UPDATE:-1}"
 INHIBIT_BIN="${KARI_AUTOMATION_INHIBIT_BIN:-systemd-inhibit}"
 SYSTEMD_RUN_BIN="${KARI_AUTOMATION_SYSTEMD_RUN_BIN:-systemd-run}"
@@ -244,10 +247,19 @@ interval_seconds() { # interval_seconds <Nm|Nh|Nd>
   esac
 }
 
+# A session can die mid-line — claude prints its usage-limit message with
+# no trailing newline — so everything the dispatcher appends to a log has
+# to open its own line first. Without that the message and whatever
+# follows it merge into one unmatchable line (#322). Every append below
+# goes through this rather than repeating the guard.
+end_line() { # end_line <file> — a newline unless <file> is empty or ends in one
+  if [ -s "$1" ] && [ -n "$(tail -c1 "$1")" ]; then echo >>"$1"; fi
+}
+
 # shellcheck disable=SC2329  # invoked from launch()'s EXIT trap
 tick_trailer() { # tick_trailer <log> <code> — the last line of every run log
   local log="$1" code="$2"
-  if [ -s "$log" ] && [ -n "$(tail -c1 "$log")" ]; then echo >>"$log"; fi
+  end_line "$log"
   echo "tick exited $code" >>"$log"
 }
 
@@ -266,26 +278,29 @@ tick_trailer() { # tick_trailer <log> <code> — the last line of every run log
 record_usage() { # record_usage <name> <stamp> <raw-stdout-file> <log>
   local name="$1" stamp="$2" raw="$3" log="$4"
   local record="$STATE_DIR/usage/$name-$stamp.json"
+  # stderr streamed into the log live and may have ended mid-line too.
+  end_line "$log"
   if [ ! -s "$raw" ]; then
     echo "usage: unavailable (session printed nothing)" >>"$log"
     return 0
   fi
-  if ! command -v jq >/dev/null 2>&1; then
+  if ! command -v "$JQ_BIN" >/dev/null 2>&1; then
     cat "$raw" >>"$log"
+    end_line "$log"
     echo "usage: unavailable (jq not installed; raw output above)" >>"$log"
     return 0
   fi
-  if ! jq -e 'type == "object" and has("result") and has("usage")' \
+  if ! "$JQ_BIN" -e 'type == "object" and has("result") and has("usage")' \
     "$raw" >/dev/null 2>&1
   then
     cat "$raw" >>"$log"
-    [ -n "$(tail -c1 "$raw")" ] && echo >>"$log"
+    end_line "$log"
     echo "usage: unavailable (session output was not a result object)" \
       >>"$log"
     return 0
   fi
-  jq -r '.result // ""' "$raw" >>"$log"
-  jq -r '
+  "$JQ_BIN" -r '.result // ""' "$raw" >>"$log"
+  "$JQ_BIN" -r '
     def n(x): x // 0;
     "usage: cost_usd=\(n(.total_cost_usd)) turns=\(n(.num_turns)) " +
     "duration_s=\((n(.duration_ms) / 1000) | floor) " +
@@ -313,11 +328,12 @@ usage_summary() { # usage_summary <name>
     echo "(no usage records yet)"
     return 0
   fi
-  if ! command -v jq >/dev/null 2>&1; then
+  if ! command -v "$JQ_BIN" >/dev/null 2>&1; then
     echo "(${#files[@]} records; jq needed to sum them)"
     return 0
   fi
-  jq -rs --arg days "$USAGE_RETENTION_DAYS" '
+  # shellcheck disable=SC2016  # jq program: $days comes from --arg, not bash
+  "$JQ_BIN" -rs --arg days "$USAGE_RETENTION_DAYS" '
     map(.total_cost_usd // 0) |
     "\(length) runs, $\(add * 100 | round / 100) total, " +
     "$\(add / length * 100 | round / 100) mean (\($days)d)"

@@ -97,7 +97,11 @@ token counts — plus one `usage <model>:` line per model),
 returned (`claude -p --output-format json`), kept 180 days
 (`KARI_AUTOMATION_USAGE_RETENTION_DAYS`) as the dataset for spend
 analysis; a session whose output was not a result object (usage-limit
-message, crash) gets `usage: unavailable` in its log and no record —
+message, crash) gets `usage: unavailable` in its log and no record;
+reading and summing those records needs `jq`, the dispatcher's one
+optional dependency — without it a tick still runs and still logs, the
+session output is kept verbatim, and both the log line and `--status`
+say so (`KARI_AUTOMATION_JQ_BIN` points at a different binary) —
 and `wip/<slug>-<timestamp>.patch` diffs rescued from dead
 workers' worktrees (see Usage limits). Token figures count the session's
 own API calls as Claude Code reports them; whether background subagents
