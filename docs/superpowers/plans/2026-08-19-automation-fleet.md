@@ -178,5 +178,7 @@
   public GitHub API; compare to `VITE_COMMIT_SHA` baked in by a new env
   line in `deploy.yml`'s build job for both builds; list squash-merge PR
   titles/links in between; empty state "test == prod"; unauthenticated
-  API OK, repo public, 60 req/hr limit fine). Label `parallel-safe`.
+  API OK, repo public, 60 req/hr limit fine). Label `parallel-safe`
+  (retired in #324 — readiness is now judged per batch from file
+  overlap, not from a label; see CLAUDE.md).
   Note in the body that this is the automation pipeline's shakedown task.

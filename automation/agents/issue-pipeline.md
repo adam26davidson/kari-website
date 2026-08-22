@@ -180,86 +180,77 @@ Liveness, in order:
    while a dispatcher-started tick runs no earlier issue-pipeline tick —
    and none of its workers — can still be alive. Workers this tick
    dispatched are alive; leave them alone and skip the rest.
-2. **Otherwise, alive if ANY of these shows life; stale only if ALL are
-   silent.** The lock only serializes `dispatch.sh` ticks. It says
-   nothing about the playbook run by hand or interactively (how the
-   fleet was exercised before the timer existed, and how #319's live
+2. **Otherwise, run `automation/claim-liveness.sh <slug> <issue numbers
+   claimed on the branch>` and act on the `verdict=` line it prints.**
+   The lock only serializes `dispatch.sh` ticks. It says nothing about
+   the playbook run by hand or interactively (how the fleet was
+   exercised before the timer existed, and how #319's live
    `agent/admin-visual-polish` worker coexisted with a running tick), so
    a branch this tick did not dispatch may still have a live worker.
-   Window = 2 hours, measured from now; `W=../kari-website-<slug>`:
 
-   - **Open PR on the branch:** `gh pr list --state open --head
-     agent/<slug>` — ANY open PR, labelled or not (the Phase A ownership
-     filter must not hide an unlabelled PR from this check). A PR means
-     the claim is simply not stale; it belongs to Phase A.
-   - **Worktree written within the window:**
-     `find "$W" \( -name node_modules -o -name target \) -prune -o
-     -mmin -120 -print -quit` prints anything. This sees only the
-     working files: a linked worktree's `.git` is a one-line gitdir
-     file, and its index, HEAD and refs live under the main clone's
-     `.git/worktrees/<slug>/`, which `find "$W"` never visits. So also
-     run `find "$(git -C "$W" rev-parse --git-dir)" -mmin -120 -print
-     -quit`, which catches git-metadata-only activity (index-only
-     staging, a `git fetch`/`git merge` that moved no files). A missing
-     worktree prints nothing — it is silent, not dead, on its own.
-   - **Branch tip within the window:** `git fetch origin` first, then
-     `git log -1 --format=%ct agent/<slug>` and
-     `git log -1 --format=%ct origin/agent/<slug>` (skip a ref that does
-     not exist); a committer time inside the window is life.
-   - **Issue activity within the window:** for each issue claimed on the
-     branch, `gh issue view <n> --json updatedAt`. Any label change,
-     comment or edit counts — including the claim comment itself, which
-     is what gives a just-claimed branch its grace period.
-   - **A `claude` process working in the worktree right now:** a
-     worker's tool calls (bash, node, cargo, git) run with their cwd
-     inside `$W`, so look for any process whose cwd is in that worktree
-     and whose ancestry contains a `claude` process:
+   The helper prints one `key=value` line per signal, then `alive_by=`
+   and `verdict=ALIVE|DEAD`. It is the conjunction below in script form,
+   window included (`window_min=`), so the window is not restated here.
+   Pass the issue numbers you already grouped by claim comment — the
+   helper does not go looking for them, because a `gh issue list
+   --search` would be a second, lagging source that can disagree with
+   the grouping this verdict is meant to cover. Read the verdict, not
+   the exit status.
 
-     ```
-     alive=0
-     for d in /proc/[0-9]*; do
-       case "$(readlink "$d/cwd" 2>/dev/null)" in
-         */kari-website-<slug>|*/kari-website-<slug>/*) ;; *) continue ;;
-       esac
-       p=${d#/proc/}
-       while [ "${p:-1}" -gt 1 ]; do
-         [ "$(cat /proc/$p/comm 2>/dev/null)" = claude ] && alive=1 && break 2
-         p=$(awk '/^PPid/{print $2}' /proc/$p/status 2>/dev/null)
-       done
-     done
-     ```
+   What each signal means, and why it counts as life:
 
-     `alive=1` is life. `alive=0` proves nothing on its own: a healthy
-     worker spends most of its wall time between tool calls (model
-     turns, `Read`/`Edit`), and each Bash call is a one-shot shell that
-     exits when the command does, so a snapshot usually finds no
-     process at all. This check exists only to catch a worker that is
-     mid-command at the instant the tick samples. The ancestry
-     requirement separates a live worker from the debris a dead one
-     leaves behind — an orphaned dev server or MinIO from the worktree
-     reparented to PID 1 matches the cwd but has no `claude` ancestor,
-     and is itself a trace of death.
+   - `open_pr=` — ANY open PR on the branch, labelled or not (the Phase
+     A ownership filter must not hide an unlabelled PR from this check).
+     A PR means the claim is simply not stale; it belongs to Phase A.
+   - `worktree_recent=` — a working file written inside the window.
+     `missing` is a worktree that is not there: silent, not dead, on its
+     own.
+   - `gitdir_recent=` — the same question asked of the main clone's
+     `.git/worktrees/<slug>/`, where a linked worktree's index, HEAD and
+     refs actually live. `find` over the worktree never visits it, so
+     this is the only signal that sees index-only staging or a
+     `fetch`/`merge` that moved no files.
+   - `local_tip_recent=` / `remote_tip_recent=` — a committer time
+     inside the window on either ref, after the helper's own
+     `git fetch origin`. A worker that pushed WIP and died leaves this
+     as the only trace.
+   - `issue_<n>_recent=` — any label change, comment or edit on a
+     claimed issue. This includes the claim comment itself, which is
+     what gives a just-claimed branch its grace period.
+   - `claude_process=` — a process whose cwd is inside the worktree and
+     whose ancestry reaches a `claude`. `yes` is life; `no` proves
+     nothing on its own, because a healthy worker spends most of its
+     wall time between tool calls and each Bash call is a one-shot
+     shell, so a snapshot usually finds no process at all. It catches
+     only a worker that is mid-command at the instant the tick samples.
+     The ancestry requirement separates a live worker from the debris a
+     dead one leaves behind — an orphaned dev server or MinIO
+     reparented to PID 1 matches the cwd but has no `claude` above it.
+   - `fetch=failed`, `open_pr=error`, `issue_<n>_updated=error` — a
+     probe that could not answer. These count as life (`alive_by`
+     carries `fetch-error` / `gh-error`): the asymmetry applies to
+     tooling failure too, so a gh outage can never release a claim.
 
-- **Alive:** check 1 passes, or any signal in check 2 shows life. Leave
-  the branch alone; if only the window kept it alive, say so in the run
-  summary so a pattern of "alive on mtime alone, tick after tick" is
-  visible to a human.
-- **Dead — release this tick:** no open PR AND nothing written in the
-  worktree for 2h AND no commit on either ref for 2h AND no activity on
-  any claimed issue for 2h AND no `claude` process working there now. A
-  live worker cannot satisfy that conjunction: to go 2h without a PR,
-  an edit, a commit or a comment it would have to be doing nothing. The
-  cost of the window is that a worker killed right after a push (the
-  #322 sequence: push at 10:00, tick killed by the spend limit at 10:05)
-  is released at the first tick after 12:00 rather than at 10:15 — one
-  slot idle for under two hours, the price of never deleting a live
-  worker's worktree. Do not shorten the window on corroborating traces
-  (the dispatching tick's log under `$STATE/logs/issue-pipeline-*.log`
-  ending in an error or a usage/spend-limit message; an orphaned dev
-  server reparented to PID 1): those confirm a verdict the conjunction
-  already reached and make a good run-summary note, but are not a
-  release criterion. (#325 proposes a `claim-liveness.sh` helper that prints
-  these facts one per line; until it exists, run them by hand.)
+- **Alive (`verdict=ALIVE`):** check 1 passes, or the helper found any
+  signal. Leave the branch alone; if only the window kept it alive,
+  quote `alive_by=` in the run summary so a pattern of "alive on mtime
+  alone, tick after tick" is visible to a human.
+- **Dead — release this tick (`verdict=DEAD`):** no open PR AND nothing
+  written in the worktree AND no commit on either ref AND no activity on
+  any claimed issue AND no `claude` process working there now, for the
+  whole window. A live worker cannot satisfy that conjunction: to go
+  two hours without a PR, an edit, a commit or a comment it would have
+  to be doing nothing. The cost of the window is that a worker killed
+  right after a push (the #322 sequence: push at 10:00, tick killed by
+  the spend limit at 10:05) is released at the first tick after 12:00
+  rather than at 10:15 — one slot idle for under two hours, the price of
+  never deleting a live worker's worktree. Do not shorten the window on
+  corroborating traces. The helper prints two of them —
+  `tick_log`/`tick_log_last`/`tick_log_trailer` (the dispatching tick's
+  log; the trailer is its exit code, `none` meaning SIGKILLed or still
+  running) and `uncommitted=` — but neither moves the verdict. They are
+  for the run summary and, in the case of `uncommitted=yes`, for the
+  rescue step below.
 
 The release steps below — label removal, worktree removal, branch
 deletion — run ONLY on a branch the conjunction declared dead. Never run
@@ -269,7 +260,9 @@ To release, save everything the worker left behind BEFORE anything is
 deleted — there are two kinds of leftovers and each needs its own
 rescue:
 
-- **Uncommitted changes.** If the worktree `../kari-website-<slug>`
+- **Uncommitted changes.** `uncommitted=yes` from the helper is the cue.
+  Confirm it here (the release has already been decided, so a probe that
+  writes no longer matters): if the worktree `../kari-website-<slug>`
   exists and `git -C ../kari-website-<slug> status --porcelain` shows ANY
   uncommitted change — modified or untracked — save all of it:
   `git -C ../kari-website-<slug> add -A -N &&

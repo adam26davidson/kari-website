@@ -25,8 +25,18 @@ Design and decisions:
 - `templates/*.md` — subagent prompt templates the issue-pipeline fills
   in (`{{PLACEHOLDER}}` slots): `plan-brief.md`, `worker-brief.md`,
   `fix-brief.md`, `review-brief.md`.
-- `dispatch-test.sh` — test harness for the dispatcher; runs in CI (the
-  `shell-lint` job) and locally. Run it whenever `dispatch.sh` changes.
+- `claim-liveness.sh <slug> [issue ...]` — read-only probe behind the
+  playbook's stale-claim step: prints one `key=value` line per liveness
+  signal for `agent/<slug>` (open PR, worktree and git-dir mtimes,
+  branch tips, claimed-issue activity, a `claude` process in the
+  worktree), then `alive_by=` and `verdict=ALIVE|DEAD`. Read the
+  verdict, not the exit status. Every probe is read-only by design — a
+  `git status` that refreshed the index would leave a fresh mtime and no
+  claim would ever go stale again — and a probe that fails counts as
+  life, so a gh outage cannot release anything.
+- `dispatch-test.sh` — test harness for the dispatcher and
+  `claim-liveness.sh`; runs in CI (the `shell-lint` job) and locally.
+  Run it whenever either script changes.
 - `systemd/` — the timer's unit files (source of truth, see
   Installation), installed by `install-timer.sh`. Its test harness,
   `install-timer-test.sh`, runs in the same CI job.
@@ -79,8 +89,10 @@ When the two signals disagree, the pipeline never merges:
 `~/.local/state/kari-website-automation/` (override:
 `KARI_AUTOMATION_STATE_DIR`): `<name>.last-run` timestamps,
 `<name>.lock` flock files, `logs/<name>-<timestamp>.log` per run
-(pruned after 30 days), and `wip/<slug>-<timestamp>.patch` diffs rescued
-from dead workers' worktrees (see Usage limits). The repo defines *what
+(pruned after 30 days; every one of them ends in a `tick exited <code>`
+line, so no trailer means the tick was SIGKILLed — an OOM — or is still
+running), and `wip/<slug>-<timestamp>.patch` diffs rescued from dead
+workers' worktrees (see Usage limits). The repo defines *what
 and how often*; the machine tracks *when last*.
 
 ## Pausing
@@ -109,6 +121,13 @@ and how often*; the machine tracks *when last*.
 - `--wait` — a tick that blocks until every launched agent finishes and
   exits non-zero if any failed. For running a tick by hand (and the test
   harness); the timer must not use it.
+
+Whatever the mode, a tick that creates a log finishes it with a
+`tick exited <code>` line — written from an EXIT trap, with TERM/HUP/INT
+routed through it, so a scope stop or a timer kill is recorded too.
+"Did the tick die, and how?" is then a test on the last line rather than
+a guess about what claude printed last; `claim-liveness.sh` reports it as
+`tick_log_trailer=`.
 
 ## Installation (systemd user timer)
 
@@ -371,9 +390,11 @@ is released only when every sign of life has been silent for a full
 liveness window at once: no open PR on the branch, nothing written in
 its `../kari-website-<slug>` worktree, no commit on the branch, no
 activity on the claimed issues, and no `claude` process working in the
-worktree right now. No single instantaneous sample can declare a worker
-dead; the cost is that a tick killed right after a push holds its slot
-until that window elapses. See `agents/issue-pipeline.md` for the window
+worktree right now — `automation/claim-liveness.sh <slug> <issues>`
+prints all of that, one fact per line, and the verdict they add up to.
+No single instantaneous sample can declare a worker dead; the cost is
+that a tick killed right after a push holds its slot until that window
+elapses. See `agents/issue-pipeline.md` for the window
 itself. A slug released in a tick is never re-dispatched in that same
 tick. On release, uncommitted work in the worktree is saved to
 `wip/<slug>-<timestamp>.patch` in the state directory, and an

@@ -15,6 +15,12 @@
 #                          # included), lock state, observed inter-run gaps
 #   dispatch.sh --wait     # a tick that blocks until its launches finish
 #
+# Every per-run log ends in a "tick exited <code>" line (written by an
+# EXIT trap, signals included), so a reader — automation/claim-liveness.sh
+# in particular — can tell a finished tick from one that was killed hard
+# without guessing at claude's last line. No trailer = SIGKILLed or still
+# running.
+#
 # Env overrides (used by dispatch-test.sh):
 #   KARI_AUTOMATION_STATE_DIR   default ~/.local/state/kari-website-automation
 #   KARI_AUTOMATION_AGENTS_DIR  default <repo>/automation/agents
@@ -230,6 +236,13 @@ interval_seconds() { # interval_seconds <Nm|Nh|Nd>
   esac
 }
 
+# shellcheck disable=SC2329  # invoked from launch()'s EXIT trap
+tick_trailer() { # tick_trailer <log> <code> — the last line of every run log
+  local log="$1" code="$2"
+  if [ -s "$log" ] && [ -n "$(tail -c1 "$log")" ]; then echo >>"$log"; fi
+  echo "tick exited $code" >>"$log"
+}
+
 launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
   local name="$1" model="$2" fallback="$3" agent_file="$4"
   local stamp log
@@ -240,6 +253,22 @@ launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
       echo "skip $name: previous run still holds the lock"
       exit 0
     }
+    # Every log this run creates ends in a "tick exited <code>" line, so
+    # "did the tick die, and how?" is a test on the last line rather than
+    # pattern-matching whatever claude happened to print last (#325). The
+    # traps are installed AFTER the flock so the skip path above — which
+    # never creates a log — writes nothing. TERM/HUP/INT are turned into
+    # a normal exit because bash does not run an EXIT trap on an
+    # untrapped fatal signal, and a scope stop or a timer kill arrives
+    # that way. SIGKILL (the OOM killer) can never write a trailer: a log
+    # without one means "killed hard, or still running".
+    # $? is passed as an argument so it is read before anything else in
+    # the trap can clobber it — the newline guard below runs a command.
+    # The guard exists because a session killed mid-line (claude prints
+    # "You've hit your session limit" with no trailing newline) would
+    # otherwise get the trailer glued onto that message, hiding both.
+    trap 'tick_trailer "$log" "$?"' EXIT
+    trap 'exit 143' TERM HUP INT
     date +%s >"$STATE_DIR/$name.last-run"
     echo "run $name -> $log"
     cd "$REPO_ROOT"
