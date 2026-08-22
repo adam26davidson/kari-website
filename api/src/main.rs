@@ -46,7 +46,9 @@ async fn main() {
     // needs the same S3 client and nothing else (no JWKS, no listener).
     if std::env::args().nth(1).as_deref() == Some("migrate-images") {
         let args: Vec<String> = std::env::args().collect();
-        std::process::exit(run_migrate_images_command(s3_service.as_ref(), &args).await);
+        let endpoint = std::env::var("AWS_ENDPOINT_URL").unwrap_or_default();
+        let code = run_migrate_images_command(s3_service.as_ref(), &args, &endpoint).await;
+        std::process::exit(code);
     }
 
     // Fetch JWKS and store in shared state

@@ -19,6 +19,15 @@
 //! pointing at `/images/<id>/…` is left alone — so it is safe (and expected)
 //! to run again after the deploy, to catch anything uploaded in between.
 //!
+//! MinIO caveat: the local dev/e2e stack is MinIO, which is filesystem-backed
+//! and will not LIST `images/<id>/…` while an object exists at the exact key
+//! `images/<id>` (the objects are stored and readable — `HeadObject` finds
+//! them — they just do not appear in a listing). Real S3 has a flat keyspace
+//! and lists both, which is what the deployed buckets are. So a `--allow-local`
+//! rehearsal against MinIO cannot exercise the both-layouts-coexist paths, and
+//! re-running it there looks non-idempotent for exactly those images. The
+//! in-memory store in the tests models S3, not MinIO.
+//!
 //! Failure model, deliberately asymmetric: a failed list, copy, put, or an
 //! unreadable/corrupt blog manifest ABORTS, because carrying on would write
 //! into a bucket whose state we no longer know. A thumbnail that cannot be
@@ -289,18 +298,23 @@ pub async fn migrate_images(
 /// the footguns, run the migration and print the report. Returns the process
 /// exit code.
 ///
-/// Lives here rather than in `main.rs` so the integration tests cover it.
-/// Flags: `--apply` performs the writes (the default is a dry run, so a
-/// mistyped bucket cannot damage anything), `--allow-local` permits running
+/// Lives here rather than in `main.rs` so the integration tests cover it, and
+/// takes `endpoint` (the caller's `AWS_ENDPOINT_URL`) as an argument rather
+/// than reading the environment itself, so those tests need no process-wide
+/// state. Flags: `--apply` performs the writes (the default is a dry run, so
+/// a mistyped bucket cannot damage anything), `--allow-local` permits running
 /// against a local endpoint.
-pub async fn run_migrate_images_command(store: &dyn ObjectStore, args: &[String]) -> i32 {
+pub async fn run_migrate_images_command(
+    store: &dyn ObjectStore,
+    args: &[String],
+    endpoint: &str,
+) -> i32 {
     let apply = args.iter().any(|arg| arg == "--apply");
 
     // `dotenv` has already loaded api/.env, which points at the local MinIO
     // — running the migration against a dev stack while believing it is
     // pointed at a real bucket is the easiest mistake to make here, so it
     // takes an explicit flag.
-    let endpoint = std::env::var("AWS_ENDPOINT_URL").unwrap_or_default();
     let local = endpoint.contains("localhost") || endpoint.contains("127.0.0.1");
     if local && !args.iter().any(|arg| arg == "--allow-local") {
         eprintln!(

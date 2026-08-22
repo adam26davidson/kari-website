@@ -285,34 +285,19 @@ async fn the_bare_images_folder_marker_is_ignored() {
 
 // ------------------------------------------------- the CLI entry point
 
-/// The subcommand reads `AWS_ENDPOINT_URL`, which is process-wide, so the
-/// tests that depend on it take turns.
-static ENDPOINT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-/// Run the subcommand with `AWS_ENDPOINT_URL` set to `endpoint` (or unset
-/// when `None`), restoring the previous value afterwards.
-async fn run_command(store: &InMemoryStore, args: &[&str], endpoint: Option<&str>) -> i32 {
-    let _guard = ENDPOINT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let previous = std::env::var("AWS_ENDPOINT_URL").ok();
-    match endpoint {
-        Some(url) => std::env::set_var("AWS_ENDPOINT_URL", url),
-        None => std::env::remove_var("AWS_ENDPOINT_URL"),
-    }
+/// Run the subcommand as `main` would, with the given `AWS_ENDPOINT_URL`
+/// (empty for "targeting real AWS").
+async fn run_command(store: &InMemoryStore, args: &[&str], endpoint: &str) -> i32 {
     let argv: Vec<String> = std::iter::once("migrate-images".to_string())
         .chain(args.iter().map(|a| a.to_string()))
         .collect();
-    let code = run_migrate_images_command(store, &argv).await;
-    match previous {
-        Some(url) => std::env::set_var("AWS_ENDPOINT_URL", url),
-        None => std::env::remove_var("AWS_ENDPOINT_URL"),
-    }
-    code
+    run_migrate_images_command(store, &argv, endpoint).await
 }
 
 #[tokio::test]
 async fn the_command_defaults_to_a_dry_run() {
     let store = legacy_store();
-    assert_eq!(run_command(&store, &[], None).await, 0);
+    assert_eq!(run_command(&store, &[], "").await, 0);
     assert!(
         !store.contains("images/pub.png/original.png"),
         "a dry run must not write"
@@ -322,7 +307,7 @@ async fn the_command_defaults_to_a_dry_run() {
 #[tokio::test]
 async fn the_command_writes_only_with_apply() {
     let store = legacy_store();
-    assert_eq!(run_command(&store, &["--apply"], None).await, 0);
+    assert_eq!(run_command(&store, &["--apply"], "").await, 0);
     assert!(store.contains("images/pub.png/original.png"));
 }
 
@@ -333,7 +318,7 @@ async fn the_command_refuses_a_local_endpoint_without_allow_local() {
     // migrating a real bucket must not be one typo away.
     let store = legacy_store();
     assert_eq!(
-        run_command(&store, &["--apply"], Some("http://localhost:9000")).await,
+        run_command(&store, &["--apply"], "http://localhost:9000").await,
         2
     );
     assert!(!store.contains("images/pub.png/original.png"));
@@ -346,7 +331,7 @@ async fn the_command_rehearses_against_a_local_endpoint_when_allowed() {
         run_command(
             &store,
             &["--apply", "--allow-local"],
-            Some("http://127.0.0.1:9000"),
+            "http://127.0.0.1:9000"
         )
         .await,
         0
@@ -358,5 +343,5 @@ async fn the_command_rehearses_against_a_local_endpoint_when_allowed() {
 async fn the_command_reports_a_failed_migration_as_a_nonzero_exit() {
     let store = legacy_store();
     store.set_failing(true);
-    assert_eq!(run_command(&store, &["--apply"], None).await, 1);
+    assert_eq!(run_command(&store, &["--apply"], "").await, 1);
 }

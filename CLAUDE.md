@@ -301,3 +301,32 @@ cover admin pages without Auth0 credentials.
   Dry-run by default; pass `?dry_run=false` to actually delete. Objects
   modified within the last hour are always skipped (in-flight uploads), and
   any manifest fetch/parse failure aborts the sweep before anything is deleted.
+  It classifies per IMAGE, not per object (below), so a whole prefix is kept,
+  skipped or deleted together.
+- Image storage layout: every uploaded image owns a key PREFIX, not one
+  object — `images/<id>/original.<ext>` (the untouched upload) plus
+  `images/<id>/thumb.jpg` (generated server-side at upload time; admin grids
+  and previews render it). The id is still the `<uuid>.<ext>` name
+  `POST /images` returns, so every stored reference (`backgroundPhoto`,
+  `haiga.image`, ...) is unchanged and only URL construction knows about
+  variants: the API takes `GET /images/<id>?size=thumb` (falling back to the
+  original when a variant is missing), while the public site, reading S3
+  directly, fetches the full path. `api/src/services/image_keys.rs` is the
+  ONE place key shapes live — build keys there, never by string-formatting.
+- Bucket migration: `migrate-images`, a subcommand of the API binary, copies
+  legacy `images/<name>` objects into the new layout, backfills thumbnails
+  and rewrites the S3 URLs in published blog HTML. Dry-run by default, and
+  idempotent, so run it, deploy, then run it again to catch uploads in
+  between. From `api/`:
+  `env -u AWS_ENDPOINT_URL -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY
+  BUCKET_NAME=test.karidavidson.com cargo run -- migrate-images [--apply]`
+  (the `env -u` matters: `dotenv` loads `api/.env`, which points at the dev
+  stack's MinIO — the command refuses a localhost endpoint unless you pass
+  `--allow-local` to rehearse there deliberately). It is copy-only: the
+  legacy objects stay, and the API still reads them, so deploy order is not
+  load-bearing. Don't press "Image cleanup" between migrating a bucket and
+  deploying the code that understands it. Caveat for local rehearsals: MinIO
+  is filesystem-backed and will not LIST `images/<id>/…` while an object
+  exists at the exact key `images/<id>`, so a rehearsal there cannot exercise
+  the both-layouts-coexist paths (real S3, which the deployed buckets are,
+  lists both).
