@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use aws_sdk_s3::error::SdkError;
 use aws_sdk_s3::{primitives::ByteStream, types::MetadataDirective, Client};
+use aws_smithy_http::label::{fmt_string, EncodingStrategy};
 use std::error::Error;
 use std::fmt;
 use std::time::SystemTime;
@@ -178,7 +179,19 @@ impl ObjectStore for S3Service {
             .copy_object()
             .bucket(&self.bucket_name)
             .key(to)
-            .copy_source(format!("{}/{}", self.bucket_name, from))
+            // S3 requires `x-amz-copy-source` URL-encoded and the SDK does
+            // not encode it for us. Legacy `images/<name>` keys are raw
+            // client filenames, so they can hold anything S3 allows in a key:
+            // left raw, `%`/`+` are decoded by S3 into a *different* key
+            // (NoSuchKey), non-ASCII goes out as raw obs-text bytes S3 will
+            // not accept, and a control character fails header construction
+            // outright. `Greedy` percent-encodes each path segment while
+            // leaving `/` literal, which is what S3 wants for `<bucket>/<key>`.
+            .copy_source(format!(
+                "{}/{}",
+                self.bucket_name,
+                fmt_string(from, EncodingStrategy::Greedy)
+            ))
             .metadata_directive(MetadataDirective::Replace)
             .set_cache_control(cache_control_for(to).map(String::from))
             .set_content_type(content_type_for(to))

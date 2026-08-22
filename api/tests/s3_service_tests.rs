@@ -17,12 +17,18 @@ use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::types::{MetadataDirective, Object, Tag};
 use aws_sdk_s3::Client;
 use aws_smithy_mocks::{mock, mock_client, RuleMode};
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef;
+use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::http::StatusCode;
 use aws_smithy_types::body::SdkBody;
+use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::DateTime;
 use kari_website_api::services::object_store::ObjectStore;
 use kari_website_api::services::s3::{S3Error, S3Service};
+use std::sync::{Arc, Mutex};
 
 const BUCKET: &str = "test-bucket";
 
@@ -480,6 +486,68 @@ async fn copy_object_copies_within_the_bucket_and_keeps_tags() {
         .await
         .expect("copy should succeed");
 
+    assert_eq!(rule.num_calls(), 1);
+}
+
+/// Captures the serialized `x-amz-copy-source` header, so a test can assert on
+/// what actually goes on the wire rather than on the input the SDK was handed.
+#[derive(Debug, Clone, Default)]
+struct CaptureCopySource(Arc<Mutex<Option<String>>>);
+
+impl CaptureCopySource {
+    fn captured(&self) -> Option<String> {
+        self.0.lock().expect("not poisoned").clone()
+    }
+}
+
+impl Intercept for CaptureCopySource {
+    fn name(&self) -> &'static str {
+        "CaptureCopySource"
+    }
+
+    fn read_before_transmit(
+        &self,
+        context: &BeforeTransmitInterceptorContextRef<'_>,
+        _components: &RuntimeComponents,
+        _cfg: &mut ConfigBag,
+    ) -> Result<(), BoxError> {
+        *self.0.lock().expect("not poisoned") = context
+            .request()
+            .headers()
+            .get("x-amz-copy-source")
+            .map(str::to_string);
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn copy_object_percent_encodes_the_source_key() {
+    // `x-amz-copy-source` is a header whose value S3 requires URL-encoded, and
+    // the SDK does not encode it for us. Legacy `images/<name>` keys are raw
+    // client filenames, so they can hold spaces, `%`, `+` and non-ASCII. Left
+    // raw, `%`/`+` are decoded by S3 into a *different* key (NoSuchKey) and
+    // non-ASCII goes out as raw obs-text bytes S3 will not accept — and one
+    // such object is enough to abort the whole `migrate_images` run.
+    let key = "images/café 100%+more.jpg";
+    let rule = mock!(Client::copy_object)
+        .match_requests(move |req| req.key() == Some("images/café 100%+more.jpg/original.jpg"))
+        .then_output(|| CopyObjectOutput::builder().build());
+    let capture = CaptureCopySource::default();
+    let client = mock_client!(aws_sdk_s3, RuleMode::Sequential, [&rule], |conf| conf
+        .interceptor(capture.clone()));
+    let service = S3Service::new(client, BUCKET.to_string());
+
+    service
+        .copy_object(key, &format!("{key}/original.jpg"))
+        .await
+        .expect("copy should succeed");
+
+    // Separators stay literal: the value is `<bucket>/<key>`, and the key's
+    // own slashes are path separators to S3 too.
+    assert_eq!(
+        capture.captured().as_deref(),
+        Some("test-bucket/images/caf%C3%A9%20100%25%2Bmore.jpg")
+    );
     assert_eq!(rule.num_calls(), 1);
 }
 
