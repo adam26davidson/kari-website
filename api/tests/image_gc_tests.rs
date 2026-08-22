@@ -333,7 +333,10 @@ async fn gc_skips_a_whole_prefix_when_any_rendition_is_recent() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         keys(&body, "skipped_recent"),
-        vec!["images/fresh.jpg/original.jpg", "images/fresh.jpg/thumb.jpg"]
+        vec![
+            "images/fresh.jpg/original.jpg",
+            "images/fresh.jpg/thumb.jpg"
+        ]
     );
     assert!(keys(&body, "deleted").is_empty());
     assert!(store.contains("images/fresh.jpg/original.jpg"));

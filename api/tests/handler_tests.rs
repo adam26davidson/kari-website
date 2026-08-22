@@ -1144,9 +1144,8 @@ async fn set_image_published_missing_is_404() {
 
 #[tokio::test]
 async fn set_image_published_store_outage_is_500() {
-    let (store, app) = setup_with(
-        InMemoryStore::default().with_object("images/photo.png/original.png", "PNG"),
-    );
+    let (store, app) =
+        setup_with(InMemoryStore::default().with_object("images/photo.png/original.png", "PNG"));
     store.set_failing(true);
     let (status, body) = send(
         app,
