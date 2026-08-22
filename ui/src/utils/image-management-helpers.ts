@@ -53,17 +53,19 @@ export const apiImageUrl = (id: string, variant?: ImageVariant) =>
  * holds. Falls back to the last path segment for a URL with no `/images/`
  * marker at all.
  */
-export const getImageFileName = (url: string) => {
+export const getImageFileName = (url: string): string => {
   const path = url.split(/[?#]/)[0];
-  const marker = path.indexOf("/images/");
-  if (marker === -1) {
-    return path.split("/").pop();
-  }
-  return path.slice(marker + "/images/".length).split("/")[0];
+  const segments = path.split("/");
+  const marker = segments.indexOf("images");
+  // Splitting always yields at least one segment, so both branches return a
+  // string — "" for a url that ends at the marker.
+  return marker === -1
+    ? segments[segments.length - 1]
+    : (segments[marker + 1] ?? "");
 };
 
 export const changeImageUrlToS3 = (url: string) =>
-  s3ImageUrl(getImageFileName(url) ?? "");
+  s3ImageUrl(getImageFileName(url));
 
 export const changeImageUrlToApi = (url: string) =>
-  apiImageUrl(getImageFileName(url) ?? "");
+  apiImageUrl(getImageFileName(url));

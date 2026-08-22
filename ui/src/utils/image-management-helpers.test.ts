@@ -77,6 +77,7 @@ describe("image-management-helpers", () => {
 
     it("returns an empty id for a bare images url", () => {
       expect(getImageFileName(`${S3}/images/`)).toBe("");
+      expect(getImageFileName(`${S3}/images`)).toBe("");
     });
   });
 
