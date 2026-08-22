@@ -131,6 +131,20 @@ describe("AdminBackgroundPage initial load", () => {
       screen.getByLabelText("Use other.jpg as the background"),
     ).toBeInTheDocument();
   });
+
+  it("renders the picker grid from thumbnails, lazily", async () => {
+    // The grid shows one tile per uploaded image; rendering the full-size
+    // originals here downloaded and decoded megabytes per tile (#273).
+    await renderLoaded();
+
+    const thumb = screen.getByAltText("other.jpg");
+    expect(thumb).toHaveAttribute(
+      "src",
+      "https://api.test.local/images/other.jpg?size=thumb",
+    );
+    expect(thumb).toHaveAttribute("loading", "lazy");
+    expect(thumb).toHaveAttribute("decoding", "async");
+  });
 });
 
 describe("AdminBackgroundPage saving", () => {

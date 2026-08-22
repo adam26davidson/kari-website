@@ -30,7 +30,7 @@ describe("useSiteBackground", () => {
       expect(document.body.dataset.customBackground).toBe("true"),
     );
     expect(document.body.style.getPropertyValue("--site-background")).toBe(
-      'url("https://s3.test.local/images/bg.webp")',
+      'url("https://s3.test.local/images/bg.webp/original.webp")',
     );
   });
 

@@ -50,9 +50,11 @@ export function PhotoPicker({
       {(previewUrl || fileName !== "") && (
         <div className="photo-picker-selection">
           <img
-            src={previewUrl ?? apiImageUrl(fileName)}
+            src={previewUrl ?? apiImageUrl(fileName, "thumb")}
             alt="Selected"
             className="photo-picker-image"
+            loading="lazy"
+            decoding="async"
           />
         </div>
       )}
