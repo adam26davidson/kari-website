@@ -365,9 +365,11 @@ hands over the kept branch and/or patch.
    skip in step 1). Concretely:
 
    `next-up` is the backlog groomer's pick
-   (`automation/agents/backlog-grooming.md`): at most three open issues
-   a curating tick judged should go before the ordering below — a
-   visible defect, the prerequisite of several other issues. A ready
+   (`automation/agents/backlog-grooming.md`): at most three open,
+   unclaimed issues a curating tick judged should go before the
+   ordering below — a visible defect, the prerequisite of several other
+   issues. (An issue keeps `next-up` once you claim it, so a `next-up`
+   issue carrying `in progress` is simply one already in flight.) A ready
    `next-up` issue is picked ahead of everything else, oldest first
    among several, whatever the product/tooling lean says; it is still
    subject to the readiness judgement in step 2 and the file-overlap

@@ -1,7 +1,7 @@
 ---
 name: backlog-grooming
 enabled: true
-every: 2d
+every: 46h # deliberately not a multiple of issue-pipeline's 4h
 model: opus
 fallback: sonnet
 ---
@@ -23,6 +23,15 @@ already said and not say it again.
 
 - Never touch an issue labelled `in progress`: no labels, no comments,
   no closing. A worker is on it and the pipeline owns its labels.
+- Labels go stale mid-tick. The issue-pipeline runs every 4h and the
+  dispatcher backgrounds the two of you independently, so it can claim
+  an issue (`in progress` + a branch comment) minutes after you listed
+  the backlog. Step 1's snapshot therefore decides what you CONSIDER,
+  never what you DO: immediately before EVERY mutation (label add or
+  remove, comment, close) re-read that one issue —
+  `gh issue view <N> --json labels,state` — and skip it, silently and
+  without retrying, if `in progress` has appeared or it has since
+  closed. One cheap read per mutation, not per candidate.
 - Never edit an issue's title or body, never reopen a closed issue,
   never touch pull requests, branches, or labels on PRs.
 - Never remove `blocked`, `needs-clarification`, or `in progress` —
@@ -33,12 +42,16 @@ already said and not say it again.
   (the canonical issue, or the merged PR / commit). When the evidence
   is anything short of plain, comment instead of closing: a wrong
   close costs a human a reopen and a wrong comment costs nothing.
-- `next-up` is never on more than 3 open issues at once, and never on
-  an issue carrying `in progress`, `has-dependencies`,
-  `needs-clarification`, `blocked`, or `idea`.
+- Never ADD `next-up` to an issue carrying `in progress`,
+  `has-dependencies`, `needs-clarification`, `blocked`, or `idea`, and
+  never leave more than 3 open issues carrying it. An issue that picks
+  up `in progress` after you labelled it keeps `next-up` until its PR
+  merges (rail 1 — not your call) and does not count against the 3: the
+  pipeline is already working it, so the cap is on issues still waiting
+  to be picked.
 - Create the labels you rely on if they are missing, and keep the
   descriptions exact:
-  `gh label create next-up --color FBCA04 --description "Backlog groomer's pick: the pipeline works these first (at most 3 open)"`;
+  `gh label create next-up --color FBCA04 --description "Backlog groomer's pick: the pipeline works these first (at most 3 unclaimed)"`;
   `gh label create duplicate --color CFD3D7 --description "This issue or pull request already exists"`.
 
 ## Tick
@@ -57,10 +70,12 @@ already said and not say it again.
    claim, if either has one), and close the other with a comment
    `backlog-grooming: duplicate of #N — <one line on why they are the
    same>` plus the `duplicate` label. Issues that merely overlap get a
-   comment on the newer one naming the overlap and nothing else. If
-   the duplicate has detail the canonical lacks, quote that detail in a
-   comment on the canonical before closing the duplicate, so nothing is
-   lost.
+   comment on the newer one naming the overlap and nothing else. If the
+   duplicate has detail the canonical lacks, quote that detail so it is
+   not lost — in a comment on the canonical, or, when the canonical
+   carries `in progress` and rail 1 puts it out of reach, in the
+   closing comment on the duplicate instead, where the `duplicate of
+   #N` link keeps it reachable from the canonical.
 3. **Already done.** An issue whose desired outcome has plainly landed
    on `main` — the PR closing a sibling issue did it, or a commit in
    the log says so and `git ls-files`/`grep` confirms it — gets closed
@@ -90,14 +105,16 @@ already said and not say it again.
    worked soon; otherwise the small fix ships first and that is fine.
 6. **`next-up`.** Decide which (at most 3) ready issues the pipeline
    should work before its default ordering. Ready means none of the
-   labels in the rails above. Prefer, in order: a `bug` or anything a
-   visitor or the admin would notice; the prerequisite of several other
-   issues; product work over `tooling` (the pipeline already leans this
-   way — see its Phase B — so `next-up` is for the cases its ordering
-   would get wrong, not a restatement of it). Remove `next-up` from
-   issues that no longer qualify (closed ones shed it automatically;
-   a newly labelled `in progress` one keeps it until the PR merges —
-   that is not your call). Each add or removal gets a one-line
+   labels in the rails above, re-checked at mutation time (rail 2).
+   Prefer, in order: a `bug` or anything a visitor or the admin would
+   notice; the prerequisite of several other issues; product work over
+   `tooling` (the pipeline already leans this way — see its Phase B —
+   so `next-up` is for the cases its ordering would get wrong, not a
+   restatement of it). Remove `next-up` from
+   issues that no longer qualify and that you may still touch (closed
+   ones shed it automatically; a newly labelled `in progress` one keeps
+   it until the PR merges — that is not your call, and it does not
+   count against the 3). Each add or removal gets a one-line
    `backlog-grooming:` comment with the reason, so a human disagreeing
    has something to reply to.
 7. **Run summary.** Print: issues closed (with reasons), dependencies
