@@ -91,8 +91,23 @@ When the two signals disagree, the pipeline never merges:
 `<name>.lock` flock files, `logs/<name>-<timestamp>.log` per run
 (pruned after 30 days; every one of them ends in a `tick exited <code>`
 line, so no trailer means the tick was SIGKILLed — an OOM — or is still
-running), and `wip/<slug>-<timestamp>.patch` diffs rescued from dead
-workers' worktrees (see Usage limits). The repo defines *what
+running, and just above it a `usage:` line — cost, turns, duration and
+token counts — plus one `usage <model>:` line per model),
+`usage/<name>-<timestamp>.json` — the raw result object each session
+returned (`claude -p --output-format json`), kept 180 days
+(`KARI_AUTOMATION_USAGE_RETENTION_DAYS`) as the dataset for spend
+analysis; a session whose output was not a result object (usage-limit
+message, crash) gets `usage: unavailable` in its log and no record;
+reading and summing those records needs `jq`, the dispatcher's one
+optional dependency — without it a tick still runs and still logs, the
+session output is kept verbatim, and both the log line and `--status`
+say so (`KARI_AUTOMATION_JQ_BIN` points at a different binary) —
+and `wip/<slug>-<timestamp>.patch` diffs rescued from dead
+workers' worktrees (see Usage limits). Token figures count the session's
+own API calls as Claude Code reports them; whether background subagents
+are folded in is not something the dispatcher can verify, so compare
+`--status` totals against the subscription's usage page before trusting
+them as absolute. The repo defines *what
 and how often*; the machine tracks *when last*.
 
 ## Pausing
@@ -110,9 +125,11 @@ and how often*; the machine tracks *when last*.
   run, the next due time (tolerance included, see Timing), whether its
   lock is held (a run in progress), and the observed inter-run gaps —
   recovered from the `logs/<name>-<timestamp>.log` filenames, so the
-  history is the 30-day log window. Drift shows up as gaps creeping past
-  `every`; a stuck agent as a next-due far in the past flagged `overdue`,
-  or a lock held long after its last run.
+  history is the 30-day log window — and runs, total and mean cost
+  summed over the retained usage records. Drift shows up as gaps
+  creeping past `every`; a stuck agent as a next-due far in the past
+  flagged `overdue`, or a lock held long after its last run; a tick
+  that cost several times the mean is worth opening the log for.
 - `dispatch.sh --dry-run` — launches nothing; one tab-separated
   `<decision> <name> <detail>` line per agent, where the decision is
   `run`, `not-due`, `disabled`, `invalid` or (fleet-wide) `paused`. This
