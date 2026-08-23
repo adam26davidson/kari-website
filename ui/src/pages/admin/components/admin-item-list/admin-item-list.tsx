@@ -1,5 +1,4 @@
 import "./admin-item-list.css";
-import { useState } from "react";
 import {
   faArrowDown,
   faArrowUp,
@@ -8,6 +7,14 @@ import {
   faTrash,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { useSearchParams } from "react-router-dom";
+
+/**
+ * The query lives in the URL rather than in component state so it survives
+ * the trip through an editor (which unmounts the list) and so a filtered
+ * view can be bookmarked or shared.
+ */
+const SEARCH_PARAM = "q";
 
 export interface AdminItemListProps<T extends { id: string }> {
   items: Array<T>;
@@ -38,7 +45,8 @@ export interface AdminItemListProps<T extends { id: string }> {
  * an add button, and one row per item keyed by the item's stable id, with
  * first/last aware move controls. Searching filters the list in place
  * (never re-sorts — the order is hand-curated) and hides the move controls,
- * since "up" is meaningless relative to a partial view. Forked from the
+ * since "up" is meaningless relative to a partial view. The query is held
+ * in the `?q=` search parameter (see SEARCH_PARAM). Forked from the
  * public DataList/DataListItem so the admin tree has no public-component
  * imports (slated for a shadcn replacement).
  */
@@ -54,7 +62,22 @@ export function AdminItemList<T extends { id: string }>({
   getSearchText,
   noun = "items",
 }: AdminItemListProps<T>) {
-  const [query, setQuery] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const query = searchParams.get(SEARCH_PARAM) ?? "";
+  // Typing replaces the current history entry instead of pushing one, so
+  // the back button leaves the list rather than undoing keystrokes.
+  const setQuery = (value: string) =>
+    setSearchParams(
+      (params) => {
+        if (value) {
+          params.set(SEARCH_PARAM, value);
+        } else {
+          params.delete(SEARCH_PARAM);
+        }
+        return params;
+      },
+      { replace: true },
+    );
   const needle = query.trim().toLowerCase();
   const filtering = !!getSearchText && needle.length > 0;
   const visibleItems = filtering
@@ -73,6 +96,11 @@ export function AdminItemList<T extends { id: string }>({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
+        )}
+        {filtering && visibleItems.length > 0 && (
+          <p className="admin-data-list-count">
+            Showing {visibleItems.length} of {items.length} {noun}
+          </p>
         )}
         <button
           type="button"

@@ -15,6 +15,7 @@ import { LoadError } from "../../../components/load-error/load-error";
 import { AdminItemList } from "../components/admin-item-list/admin-item-list";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
+import { useListUrls } from "../use-list-urls";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 
 const LIST_PATH = "/admin/haiku";
@@ -23,6 +24,7 @@ export function AdminHaikuPage() {
   const { confirm } = useAdminUi();
   const { id } = useParams();
   const navigate = useNavigate();
+  const { listUrl, itemUrl } = useListUrls(LIST_PATH);
   const {
     list: haikuList,
     loaded,
@@ -49,9 +51,9 @@ export function AdminHaikuPage() {
     if (item) {
       setOpenHaiku({ ...item });
     } else {
-      navigate(LIST_PATH, { replace: true });
+      navigate(listUrl, { replace: true });
     }
-  }, [id, openHaiku, loaded, haikuList, navigate]);
+  }, [id, openHaiku, loaded, haikuList, navigate, listUrl]);
 
   // The open copy is dirty when it differs from its saved list entry;
   // navigating away then requires confirmation.
@@ -79,7 +81,7 @@ export function AdminHaikuPage() {
     const newHaiku: Haiku = { lines: [], publisher: "", id: uuidv4() };
     const newHaikuList = [...haikuList, { ...newHaiku }];
     if (await saveList(newHaikuList, "New haiku created")) {
-      navigate(`${LIST_PATH}/${newHaiku.id}`);
+      navigate(itemUrl(newHaiku.id));
     }
   };
 
@@ -95,7 +97,7 @@ export function AdminHaikuPage() {
   };
 
   const onEdit = (id: string) => {
-    navigate(`${LIST_PATH}/${id}`);
+    navigate(itemUrl(id));
   };
 
   // Editor functions ---------------------------------------------------------
@@ -124,7 +126,7 @@ export function AdminHaikuPage() {
         openHaiku.lines.length === 0 || openHaiku.lines[0].length === 0
       }
       onSave={saveOpenHaiku}
-      onClose={() => navigate(LIST_PATH)}
+      onClose={() => navigate(listUrl)}
     />
   ) : (
     <AdminItemList

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { AdminItemList } from "./admin-item-list";
 
 const items = [
@@ -8,31 +9,47 @@ const items = [
   { id: "c", name: "gamma" },
 ];
 
+/**
+ * Mounts the list on a memory router, since the search query lives in the
+ * URL. `entries` is the history stack (last entry is the current one), so
+ * a test can assert what the browser back button does.
+ */
 function renderList(overrides?: {
   onEdit?: (id: string) => void;
   hideEdit?: boolean;
   compact?: boolean;
   getSearchText?: (item: { id: string; name: string }) => string;
   noun?: string;
+  entries?: Array<string>;
 }) {
   const onNewItem = vi.fn();
   const onDelete = vi.fn();
   const onMove = vi.fn();
-  const utils = render(
-    <AdminItemList
-      items={items}
-      onNewItem={onNewItem}
-      onDelete={onDelete}
-      onMove={onMove}
-      onEdit={overrides?.onEdit}
-      hideEdit={overrides?.hideEdit}
-      compact={overrides?.compact}
-      getSearchText={overrides?.getSearchText}
-      noun={overrides?.noun}
-      renderItem={(item) => <span>{item.name}</span>}
-    />,
+  const router = createMemoryRouter(
+    [
+      {
+        path: "/admin/things",
+        element: (
+          <AdminItemList
+            items={items}
+            onNewItem={onNewItem}
+            onDelete={onDelete}
+            onMove={onMove}
+            onEdit={overrides?.onEdit}
+            hideEdit={overrides?.hideEdit}
+            compact={overrides?.compact}
+            getSearchText={overrides?.getSearchText}
+            noun={overrides?.noun}
+            renderItem={(item) => <span>{item.name}</span>}
+          />
+        ),
+      },
+      { path: "*", element: <p>elsewhere</p> },
+    ],
+    { initialEntries: overrides?.entries ?? ["/admin/things"] },
   );
-  return { ...utils, onNewItem, onDelete, onMove };
+  const utils = render(<RouterProvider router={router} />);
+  return { ...utils, onNewItem, onDelete, onMove, router };
 }
 
 const searchable = {
@@ -168,6 +185,83 @@ describe("AdminItemList", () => {
       renderList({ getSearchText: searchable.getSearchText });
       expect(
         screen.getByRole("searchbox", { name: "Search items" }),
+      ).toBeInTheDocument();
+    });
+  });
+
+  describe("the query in the URL", () => {
+    it("filters from the ?q= the page was opened with", () => {
+      renderList({ ...searchable, entries: ["/admin/things?q=beta"] });
+      expect(
+        screen.getByRole("searchbox", { name: "Search things" }),
+      ).toHaveValue("beta");
+      expect(screen.getByText("beta")).toBeInTheDocument();
+      expect(screen.queryByText("alpha")).toBeNull();
+    });
+
+    it("writes what was typed to the URL", () => {
+      const { router } = renderList(searchable);
+      search("gam");
+      expect(router.state.location.search).toBe("?q=gam");
+    });
+
+    it("drops ?q= entirely when the box is cleared", () => {
+      const { router } = renderList({
+        ...searchable,
+        entries: ["/admin/things?q=beta"],
+      });
+      search("");
+      expect(router.state.location.search).toBe("");
+    });
+
+    it("leaves any other query parameter alone", () => {
+      const { router } = renderList({
+        ...searchable,
+        entries: ["/admin/things?ref=email"],
+      });
+      search("beta");
+      expect(router.state.location.search).toBe("?ref=email&q=beta");
+    });
+
+    it("replaces history while typing, so back leaves the list", () => {
+      const { router } = renderList({
+        ...searchable,
+        entries: ["/somewhere-else", "/admin/things"],
+      });
+      search("b");
+      search("be");
+      search("bet");
+      act(() => {
+        void router.navigate(-1);
+      });
+      expect(router.state.location.pathname).toBe("/somewhere-else");
+    });
+
+    it("ignores ?q= when the list has no search box", () => {
+      renderList({ entries: ["/admin/things?q=beta"] });
+      expect(screen.getByText("alpha")).toBeInTheDocument();
+      expect(screen.getByText("gamma")).toBeInTheDocument();
+    });
+  });
+
+  describe("match count", () => {
+    it("says how many of the items match", () => {
+      renderList(searchable);
+      search("beta");
+      expect(screen.getByText("Showing 1 of 3 things")).toBeInTheDocument();
+    });
+
+    it("stays out of the way until something is searched for", () => {
+      renderList(searchable);
+      expect(screen.queryByText(/Showing/)).toBeNull();
+    });
+
+    it("leaves the count out when nothing matches", () => {
+      renderList(searchable);
+      search("nothing here");
+      expect(screen.queryByText(/Showing/)).toBeNull();
+      expect(
+        screen.getByText('No things match "nothing here"'),
       ).toBeInTheDocument();
     });
   });

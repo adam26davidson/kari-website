@@ -1038,6 +1038,19 @@ describe("AdminOtherWorksPage closing the editor", () => {
 });
 
 describe("AdminOtherWorksPage routing", () => {
+  it("keeps the search filter through the editor round trip", async () => {
+    const { container, router } = await renderPage("/admin/other-works?q=post");
+
+    fireEvent.click(iconButton(container, "pencil"));
+    await screen.findByPlaceholderText("post content");
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    await waitFor(() =>
+      expect(screen.queryByPlaceholderText("post content")).toBeNull(),
+    );
+    expect(router.state.location.search).toBe("?q=post");
+  });
+
   it("opens the editor at /admin/other-works/:id when editing", async () => {
     const { container, router } = await renderPage();
 

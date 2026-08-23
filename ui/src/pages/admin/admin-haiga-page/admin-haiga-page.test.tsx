@@ -446,6 +446,20 @@ describe("AdminHaigaPage routing", () => {
     ).toBeInTheDocument();
   });
 
+  it("keeps the search filter through the editor round trip", async () => {
+    const { router } = renderPage("/admin/haiga?q=kari");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    await screen.findByRole("button", { name: "Save" });
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    // Back on the list she was looking at, filter and all.
+    expect(
+      await screen.findByRole("button", { name: "Edit" }),
+    ).toBeInTheDocument();
+    expect(router.state.location.search).toBe("?q=kari");
+  });
+
   it("treats a freshly picked image as unsaved changes on Close", async () => {
     const { container, adminUi } = renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Edit" }));

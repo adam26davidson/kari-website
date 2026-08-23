@@ -18,6 +18,7 @@ import { AdminItemList } from "../components/admin-item-list/admin-item-list";
 import { useAdminToken } from "../../../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
+import { useListUrls } from "../use-list-urls";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 import { saveBlogPost } from "./blog-post-save";
 
@@ -28,6 +29,7 @@ export function AdminOtherWorksPage() {
   const { showLoading, hideLoading, confirm, notify } = useAdminUi();
   const { id } = useParams();
   const navigate = useNavigate();
+  const { listUrl, itemUrl } = useListUrls(LIST_PATH);
   const {
     list: postList,
     setList: setPostList,
@@ -76,7 +78,7 @@ export function AdminOtherWorksPage() {
       // overwrite the real content.
       console.error(error);
       notify("Failed to load content", "error");
-      navigate(LIST_PATH, { replace: true });
+      navigate(listUrl, { replace: true });
     } finally {
       hideLoading();
     }
@@ -98,7 +100,7 @@ export function AdminOtherWorksPage() {
     if (openPost?.id === id || !loaded || loadingIdRef.current === id) return;
     const item = postList.find((post) => post.id === id);
     if (!item) {
-      navigate(LIST_PATH, { replace: true });
+      navigate(listUrl, { replace: true });
       return;
     }
     loadingIdRef.current = id;
@@ -107,7 +109,7 @@ export function AdminOtherWorksPage() {
     });
     // openPostFromList depends on stable services/context only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, openPost, loaded, postList, navigate]);
+  }, [id, openPost, loaded, postList, navigate, listUrl]);
 
   // Dirty when the open copy's fields, its content, or its pending image
   // files differ from what is saved.
@@ -173,7 +175,7 @@ export function AdminOtherWorksPage() {
       hideLoading();
     }
     notify("New other works item created");
-    navigate(`${LIST_PATH}/${newPost.id}`);
+    navigate(itemUrl(newPost.id));
   };
 
   const onDelete = (id: string) => {
@@ -188,7 +190,7 @@ export function AdminOtherWorksPage() {
   };
 
   const onEdit = (id: string) => {
-    navigate(`${LIST_PATH}/${id}`);
+    navigate(itemUrl(id));
   };
 
   // Editor functions ---------------------------------------------------------
@@ -241,7 +243,7 @@ export function AdminOtherWorksPage() {
       if (result.outcome === "saved") {
         // The dirty flag still reflects the pre-save state until the next
         // render, so close the editor via the guard bypass.
-        navigateWithoutGuard(LIST_PATH);
+        navigateWithoutGuard(listUrl);
       }
     } finally {
       hideLoading();
@@ -249,7 +251,7 @@ export function AdminOtherWorksPage() {
   };
 
   const closeOpenPost = () => {
-    navigate(LIST_PATH);
+    navigate(listUrl);
   };
 
   const openPostIsValid = () => {

@@ -28,9 +28,11 @@
   margin: 4px 8px;
 }
 
-/* Empty-result notice on the same near-solid backing as the rows so it
-   stays legible over whatever photo is behind it. */
-.admin-data-list-empty {
+/* Search feedback -- the empty-result notice and the match count -- on the
+   same near-solid backing as the rows so it stays legible over whatever
+   photo is behind it. */
+.admin-data-list-empty,
+.admin-data-list-count {
   box-sizing: border-box;
   width: calc(100% - 16px);
   margin: 4px 8px;
@@ -40,6 +42,13 @@
   color: var(--muted-text);
   font-family: "Roboto", sans-serif;
   font-weight: 300;
+}
+
+/* The count sits under the search box and should stay quiet: it is a
+   reassurance, not a heading. */
+.admin-data-list-count {
+  padding: 6px 14px;
+  font-size: 0.9rem;
 }
 
 .admin-data-list-item {
