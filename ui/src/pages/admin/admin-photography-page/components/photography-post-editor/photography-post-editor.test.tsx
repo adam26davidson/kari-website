@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { PhotographyPostEditor } from "./photography-post-editor";
 import { EditorImage, newEditorImage } from "./editor-image";
 import { PhotographyPost } from "../../../../../models";
@@ -35,16 +36,20 @@ function renderEditor(overrides?: {
   const setImages = vi.fn();
   const onSave = vi.fn();
   const onClose = vi.fn();
+  // A router, because the image list is an AdminItemList and that reads
+  // its search query from the URL.
   const utils = render(
-    <PhotographyPostEditor
-      post={post}
-      setPost={setPost}
-      saveDisabled={overrides?.saveDisabled ?? false}
-      onSave={onSave}
-      onClose={onClose}
-      images={images}
-      setImages={setImages}
-    />,
+    <MemoryRouter>
+      <PhotographyPostEditor
+        post={post}
+        setPost={setPost}
+        saveDisabled={overrides?.saveDisabled ?? false}
+        onSave={onSave}
+        onClose={onClose}
+        images={images}
+        setImages={setImages}
+      />
+    </MemoryRouter>,
   );
   return { ...utils, post, images, setPost, setImages, onSave, onClose };
 }
@@ -230,7 +235,11 @@ describe("PhotographyPostEditor", () => {
     }
 
     it("keeps a typed blurb and its DOM node with the item when moved", async () => {
-      render(<StatefulEditor />);
+      render(
+        <MemoryRouter>
+          <StatefulEditor />
+        </MemoryRouter>,
+      );
 
       const firstBlurb = imageBlurbs()[0];
       fireEvent.change(firstBlurb, { target: { value: "typed caption" } });

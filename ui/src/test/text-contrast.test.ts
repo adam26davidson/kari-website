@@ -23,15 +23,19 @@ import { readFileSync } from "node:fs";
 const read = (path: string) =>
   readFileSync(`src/${path}`, "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
 
-/** The declarations of the rule for exactly `selector` (no other selector). */
+/**
+ * The declarations of the first rule whose selector list contains exactly
+ * `selector` — so a rule shared by grouped selectors (`.a, .b { ... }`)
+ * counts for each of them, while a descendant or compound selector that
+ * merely mentions it (`.a .b`, `.a.compact`) does not.
+ */
 function ruleBlock(css: string, selector: string): string {
-  const match = css.match(
-    new RegExp(
-      `(^|\\})\\s*${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`,
-    ),
-  );
-  if (!match) throw new Error(`No rule found for "${selector}"`);
-  return match[2];
+  for (const [, selectors, block] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    if (selectors.split(",").some((one) => one.trim() === selector)) {
+      return block;
+    }
+  }
+  throw new Error(`No rule found for "${selector}"`);
 }
 
 function declaration(css: string, selector: string, property: string): string {
@@ -186,6 +190,7 @@ describe("secondary text on the public cards", () => {
 const ADMIN_SECONDARY_TEXT_RULES: ReadonlyArray<[string, string, string]> = [
   ["sidebar menu item", adminCss, ".admin-menu-item"],
   ["empty-result notice", adminItemListCss, ".admin-data-list-empty"],
+  ["search match count", adminItemListCss, ".admin-data-list-count"],
   ["haiku list publisher", adminHaikuCss, ".admin-haiku-list-publisher"],
 ];
 
@@ -193,6 +198,7 @@ const ADMIN_SECONDARY_TEXT_RULES: ReadonlyArray<[string, string, string]> = [
 const ADMIN_PANELS: ReadonlyArray<[string, string, string]> = [
   ["sidebar", adminCss, ".admin-menu"],
   ["empty-result notice", adminItemListCss, ".admin-data-list-empty"],
+  ["search match count", adminItemListCss, ".admin-data-list-count"],
   ["list row", adminItemListCss, ".admin-data-list-item"],
 ];
 
