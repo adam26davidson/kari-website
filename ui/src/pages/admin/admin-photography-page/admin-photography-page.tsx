@@ -20,6 +20,7 @@ import { AdminItemList } from "../components/admin-item-list/admin-item-list";
 import { useAdminToken } from "../../../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
+import { useListUrls } from "../use-list-urls";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 
 const LIST_PATH = "/admin/photography";
@@ -35,6 +36,7 @@ export function AdminPhotographyPage() {
   const { showLoading, hideLoading, confirm, notify } = useAdminUi();
   const { id } = useParams();
   const navigate = useNavigate();
+  const { listUrl, itemUrl } = useListUrls(LIST_PATH);
   const {
     list: postList,
     loaded,
@@ -73,9 +75,9 @@ export function AdminPhotographyPage() {
       );
       setOpenPost(openItem);
     } else {
-      navigate(LIST_PATH, { replace: true });
+      navigate(listUrl, { replace: true });
     }
-  }, [id, openPost, loaded, postList, navigate]);
+  }, [id, openPost, loaded, postList, navigate, listUrl]);
 
   // Dirty when the open copy's fields differ from the saved list entry, or
   // the editor's image entries differ from the saved images (reorder,
@@ -124,7 +126,7 @@ export function AdminPhotographyPage() {
 
     const newPostList = [...postList, copyPost(newPost)];
     if (await saveList(newPostList, "New photography post created")) {
-      navigate(`${LIST_PATH}/${newPost.id}`);
+      navigate(itemUrl(newPost.id));
     }
   };
 
@@ -140,7 +142,7 @@ export function AdminPhotographyPage() {
   };
 
   const onEdit = (id: string) => {
-    navigate(`${LIST_PATH}/${id}`);
+    navigate(itemUrl(id));
   };
 
   // Editor functions ---------------------------------------------------------
@@ -199,11 +201,11 @@ export function AdminPhotographyPage() {
     if (!(await saveList(newPostList, "Photography post saved"))) return;
     // The dirty flag still reflects the pre-save state until the next
     // render, so close the editor via the guard bypass.
-    navigateWithoutGuard(LIST_PATH);
+    navigateWithoutGuard(listUrl);
   };
 
   const closeOpenPost = () => {
-    navigate(LIST_PATH);
+    navigate(listUrl);
   };
 
   if (loadFailed) {

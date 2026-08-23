@@ -335,6 +335,20 @@ describe("AdminHaikuPage routing", () => {
     expect(adminUi.confirm).not.toHaveBeenCalled();
   });
 
+  it("keeps the search filter through the editor round trip", async () => {
+    const { router } = renderPage("/admin/haiku?q=frog");
+    expect(await screen.findByText("old pond")).toBeInTheDocument();
+    expect(screen.queryByText("summer grass")).toBeNull();
+
+    await openFirstHaiku();
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    // Back on the list, still filtered to what she was looking at.
+    expect(await screen.findByText("old pond")).toBeInTheDocument();
+    expect(screen.queryByText("summer grass")).toBeNull();
+    expect(router.state.location.search).toBe("?q=frog");
+  });
+
   it("asks before discarding unsaved edits and stays on No", async () => {
     const { adminUi } = renderPage();
     const textarea = await openFirstHaiku();

@@ -16,6 +16,7 @@ import { AdminItemList } from "../components/admin-item-list/admin-item-list";
 import { useAdminToken } from "../../../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
+import { useListUrls } from "../use-list-urls";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 
 const LIST_PATH = "/admin/haiga";
@@ -25,6 +26,7 @@ export function AdminHaigaPage() {
   const { showLoading, hideLoading, confirm, notify } = useAdminUi();
   const { id } = useParams();
   const navigate = useNavigate();
+  const { listUrl, itemUrl } = useListUrls(LIST_PATH);
   const {
     list: haigaList,
     loaded,
@@ -54,9 +56,9 @@ export function AdminHaigaPage() {
       setOpenHaiga({ ...item });
       setImageFile(null);
     } else {
-      navigate(LIST_PATH, { replace: true });
+      navigate(listUrl, { replace: true });
     }
-  }, [id, openHaiga, loaded, haigaList, navigate]);
+  }, [id, openHaiga, loaded, haigaList, navigate, listUrl]);
 
   // The open copy is dirty when it differs from its saved list entry or a
   // replacement image has been picked but not saved.
@@ -95,7 +97,7 @@ export function AdminHaigaPage() {
     };
     const newHaigaList = [...haigaList, { ...newHaiga }];
     if (await saveList(newHaigaList, "New haiga created")) {
-      navigate(`${LIST_PATH}/${newHaiga.id}`);
+      navigate(itemUrl(newHaiga.id));
     }
   };
 
@@ -111,7 +113,7 @@ export function AdminHaigaPage() {
   };
 
   const onEdit = (id: string) => {
-    navigate(`${LIST_PATH}/${id}`);
+    navigate(itemUrl(id));
   };
 
   // Editor functions ---------------------------------------------------------
@@ -176,7 +178,7 @@ export function AdminHaigaPage() {
       setImageFile={setImageFile}
       imageFile={imageFile}
       onSave={saveOpenHaiga}
-      onClose={() => navigate(LIST_PATH)}
+      onClose={() => navigate(listUrl)}
     />
   ) : (
     <AdminItemList

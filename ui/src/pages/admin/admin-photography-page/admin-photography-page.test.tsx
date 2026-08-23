@@ -443,6 +443,18 @@ describe("AdminPhotographyPage closing the editor", () => {
 });
 
 describe("AdminPhotographyPage routing", () => {
+  it("keeps the search filter through the editor round trip", async () => {
+    const { container, router } = await renderPage("/admin/photography?q=post");
+
+    fireEvent.click(iconButton(container, "pencil"));
+    await screen.findByLabelText("Title");
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    await waitFor(() => expect(screen.queryByLabelText("Title")).toBeNull());
+    expect(router.state.location.search).toBe("?q=post");
+  });
+
+
   it("opens the editor at /admin/photography/:id when editing", async () => {
     const { container, router } = await renderPage();
 
