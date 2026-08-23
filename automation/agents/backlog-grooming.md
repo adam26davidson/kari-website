@@ -1,7 +1,7 @@
 ---
 name: backlog-grooming
 enabled: true
-every: 46h # deliberately not a multiple of issue-pipeline's 4h
+every: 46h # ~2 days; overlapping a pipeline tick is safe (rail 2)
 model: opus
 fallback: sonnet
 ---
@@ -44,11 +44,12 @@ already said and not say it again.
   close costs a human a reopen and a wrong comment costs nothing.
 - Never ADD `next-up` to an issue carrying `in progress`,
   `has-dependencies`, `needs-clarification`, `blocked`, or `idea`, and
-  never leave more than 3 open issues carrying it. An issue that picks
-  up `in progress` after you labelled it keeps `next-up` until its PR
-  merges (rail 1 — not your call) and does not count against the 3: the
-  pipeline is already working it, so the cap is on issues still waiting
-  to be picked.
+  never leave more than 3 open issues that are NOT `in progress`
+  carrying it. The cap counts only issues still waiting to be picked:
+  one that picks up `in progress` after you labelled it keeps `next-up`
+  until its PR merges (rail 1 — not your call) and drops out of the
+  count. So four open issues carrying the label, three of them
+  unclaimed, is the cap being honoured — not a violation to fix.
 - Create the labels you rely on if they are missing, and keep the
   descriptions exact:
   `gh label create next-up --color FBCA04 --description "Backlog groomer's pick: the pipeline works these first (at most 3 unclaimed)"`;
@@ -67,10 +68,14 @@ already said and not say it again.
    closed blocker, a relevant merge), never to restate the same verdict.
 2. **Duplicates.** Two open issues asking for the same outcome: keep the
    older, more fully specified one (or the one with an `in progress`
-   claim, if either has one), and close the other with a comment
+   claim, if either has one), and close the other AS A DUPLICATE —
+   `gh issue close <dup> --duplicate-of <N>`, so the closure records
+   `stateReason` `DUPLICATE` rather than `COMPLETED` — with a comment
    `backlog-grooming: duplicate of #N — <one line on why they are the
-   same>` plus the `duplicate` label. Issues that merely overlap get a
-   comment on the newer one naming the overlap and nothing else. If the
+   same>` plus the `duplicate` label. Step 4 reads that reason: a
+   duplicate-closed issue is a blocker that MOVED, not one that is
+   resolved. Issues that merely overlap get a comment on the newer one
+   naming the overlap and nothing else. If the
    duplicate has detail the canonical lacks, quote that detail so it is
    not lost — in a comment on the canonical, or, when the canonical
    carries `in progress` and rail 1 puts it out of reach, in the
@@ -88,11 +93,25 @@ already said and not say it again.
    needs a tool the other introduces), add `has-dependencies` to the
    dependent one with a comment `backlog-grooming: depends on #N —
    <why>`. Where an issue carries `has-dependencies` and every blocker
-   its comments name is now closed, remove the label and say so in a
-   comment — this is the one label you remove, and only when the
-   comments name the blockers and all of them are closed. An issue
-   whose `has-dependencies` has no named blocker: comment asking which
-   issue it waits on and leave the label.
+   its comments name is now closed AS COMPLETED — the work landed, via
+   a merged PR or your own step-3 close — remove the label and say so
+   in a comment. This is the one label you remove, and only when the
+   comments name the blockers and every one clears that bar:
+   `gh issue view <N> --json state,stateReason,labels` must show
+   `stateReason` `COMPLETED` and no `duplicate` label. Closed is not
+   the test — a blocker closed any other way moved or was abandoned,
+   and the label stays on, because the pipeline's Phase B hard-skips
+   ONLY on this label and would otherwise dispatch a worker on work
+   that still cannot be built:
+   - closed as a duplicate (`stateReason` `DUPLICATE`, or a
+     `duplicate` label from an older close): the dependency now waits
+     on the canonical issue. Re-point it — `backlog-grooming: #N was
+     closed as a duplicate of #M, so this now depends on #M` — and
+     clear the label only once #M itself closes as completed.
+   - closed as `NOT_PLANNED`: comment saying so and leave the label;
+     whether the dependent is now moot or stuck is a human's call.
+   An issue whose `has-dependencies` has no named blocker: comment
+   asking which issue it waits on and leave the label.
    Also name collisions the pipeline should know about: two ready
    issues that would edit the same files should be worked in one branch
    per CLAUDE.md. Comment once on the newer one naming the pair and
