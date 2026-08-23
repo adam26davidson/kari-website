@@ -12,20 +12,26 @@
 #                          # (run | not-due | disabled | invalid | paused),
 #                          # launching nothing — stable for scripts and tests
 #   dispatch.sh --status   # per agent: last run, next due (tolerance
-#                          # included), lock state, observed inter-run gaps
+#                          # included), lock state, observed inter-run gaps,
+#                          # and runs/cost over the retained usage records
 #   dispatch.sh --wait     # a tick that blocks until its launches finish
 #
 # Every per-run log ends in a "tick exited <code>" line (written by an
 # EXIT trap, signals included), so a reader — automation/claim-liveness.sh
 # in particular — can tell a finished tick from one that was killed hard
 # without guessing at claude's last line. No trailer = SIGKILLed or still
-# running.
+# running. Just above the trailer sits a "usage:" line — cost, turns,
+# duration and token counts for the session — and the raw JSON it came
+# from is kept under $STATE_DIR/usage/ (see record_usage) so spend can be
+# analysed rather than guessed at.
 #
 # Env overrides (used by dispatch-test.sh):
 #   KARI_AUTOMATION_STATE_DIR   default ~/.local/state/kari-website-automation
 #   KARI_AUTOMATION_AGENTS_DIR  default <repo>/automation/agents
 #   KARI_AUTOMATION_PAUSE_FILE  default <repo>/automation/PAUSE
 #   KARI_AUTOMATION_CLAUDE_BIN  default claude
+#   KARI_AUTOMATION_JQ_BIN      default jq; record_usage/usage_summary
+#                               degrade gracefully when it is absent
 #   KARI_AUTOMATION_INHIBIT_BIN default systemd-inhibit (skipped if absent)
 #   KARI_AUTOMATION_SYSTEMD_RUN_BIN default systemd-run (skipped if absent);
 #   KARI_AUTOMATION_SYSTEMCTL_BIN   default systemctl — see launch()
@@ -37,6 +43,8 @@
 #                               subagents after the main turn ends
 #   KARI_AUTOMATION_SELF_UPDATE default 1; 0 skips the fast-forward of the
 #                               clone at the start of a tick (see self_update)
+#   KARI_AUTOMATION_USAGE_RETENTION_DAYS default 180; how long the per-run
+#                               usage JSON under $STATE_DIR/usage/ is kept
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -44,6 +52,7 @@ AGENTS_DIR="${KARI_AUTOMATION_AGENTS_DIR:-$REPO_ROOT/automation/agents}"
 STATE_DIR="${KARI_AUTOMATION_STATE_DIR:-$HOME/.local/state/kari-website-automation}"
 PAUSE_FILE="${KARI_AUTOMATION_PAUSE_FILE:-$REPO_ROOT/automation/PAUSE}"
 CLAUDE_BIN="${KARI_AUTOMATION_CLAUDE_BIN:-claude}"
+JQ_BIN="${KARI_AUTOMATION_JQ_BIN:-jq}"
 SELF_UPDATE="${KARI_AUTOMATION_SELF_UPDATE:-1}"
 INHIBIT_BIN="${KARI_AUTOMATION_INHIBIT_BIN:-systemd-inhibit}"
 SYSTEMD_RUN_BIN="${KARI_AUTOMATION_SYSTEMD_RUN_BIN:-systemd-run}"
@@ -58,6 +67,7 @@ MEMORY_MAX="${KARI_AUTOMATION_MEMORY_MAX:-50%}"
 # PR. Deliberately not 0 ("wait indefinitely"): a hung worker would then
 # hold the agent's flock forever and stall every later tick.
 BG_WAIT_CEILING_MS="${KARI_AUTOMATION_BG_WAIT_CEILING_MS:-5400000}"
+USAGE_RETENTION_DAYS="${KARI_AUTOMATION_USAGE_RETENTION_DAYS:-180}"
 # Slack on the "has the interval elapsed?" test. Polls happen on a coarse
 # grid (cron every 15m) while last-run is stamped at the moment a run
 # starts, so without slack each cycle's start creeps later into the
@@ -203,6 +213,7 @@ status_report() { # <name> <enabled> <every> <model> <last> <due_at> <now>
   fi
   echo "  lock:     $lock_state"
   echo "  gaps:     $(observed_gaps "$name")"
+  echo "  usage:    $(usage_summary "$name")"
 }
 
 # First "key: value" between the first two --- lines of an agent file.
@@ -236,18 +247,105 @@ interval_seconds() { # interval_seconds <Nm|Nh|Nd>
   esac
 }
 
+# A session can die mid-line — claude prints its usage-limit message with
+# no trailing newline — so everything the dispatcher appends to a log has
+# to open its own line first. Without that the message and whatever
+# follows it merge into one unmatchable line (#322). Every append below
+# goes through this rather than repeating the guard.
+end_line() { # end_line <file> — a newline unless <file> is empty or ends in one
+  if [ -s "$1" ] && [ -n "$(tail -c1 "$1")" ]; then echo >>"$1"; fi
+}
+
 # shellcheck disable=SC2329  # invoked from launch()'s EXIT trap
 tick_trailer() { # tick_trailer <log> <code> — the last line of every run log
   local log="$1" code="$2"
-  if [ -s "$log" ] && [ -n "$(tail -c1 "$log")" ]; then echo >>"$log"; fi
+  end_line "$log"
   echo "tick exited $code" >>"$log"
+}
+
+# The session's stdout is claude's single JSON result object
+# (--output-format json): the same final text a plain `-p` prints, as
+# `.result`, plus `usage`, per-model `modelUsage` (tokens and costUSD),
+# `total_cost_usd`, `num_turns` and `duration_ms`. This folds it back into
+# the log so the log reads as before — the result text, then one
+# "usage:" line and one "usage <model>:" line per model — and keeps the
+# raw object under $STATE_DIR/usage/ as the dataset a cost review reads.
+# Anything that is not that object (a usage-limit message, a crash, a
+# claude too old for the flag) goes into the log verbatim with a
+# "usage: unavailable" line, and no usage record is written: a record
+# that cannot be summed is worse than a gap. Needs jq; without it the raw
+# output is kept verbatim in the log too, so nothing is ever lost.
+record_usage() { # record_usage <name> <stamp> <raw-stdout-file> <log>
+  local name="$1" stamp="$2" raw="$3" log="$4"
+  local record="$STATE_DIR/usage/$name-$stamp.json"
+  # stderr streamed into the log live and may have ended mid-line too.
+  end_line "$log"
+  if [ ! -s "$raw" ]; then
+    echo "usage: unavailable (session printed nothing)" >>"$log"
+    return 0
+  fi
+  if ! command -v "$JQ_BIN" >/dev/null 2>&1; then
+    cat "$raw" >>"$log"
+    end_line "$log"
+    echo "usage: unavailable (jq not installed; raw output above)" >>"$log"
+    return 0
+  fi
+  if ! "$JQ_BIN" -e 'type == "object" and has("result") and has("usage")' \
+    "$raw" >/dev/null 2>&1
+  then
+    cat "$raw" >>"$log"
+    end_line "$log"
+    echo "usage: unavailable (session output was not a result object)" \
+      >>"$log"
+    return 0
+  fi
+  "$JQ_BIN" -r '.result // ""' "$raw" >>"$log"
+  "$JQ_BIN" -r '
+    def n(x): x // 0;
+    "usage: cost_usd=\(n(.total_cost_usd)) turns=\(n(.num_turns)) " +
+    "duration_s=\((n(.duration_ms) / 1000) | floor) " +
+    "input=\(n(.usage.input_tokens)) output=\(n(.usage.output_tokens)) " +
+    "cache_read=\(n(.usage.cache_read_input_tokens)) " +
+    "cache_create=\(n(.usage.cache_creation_input_tokens)) " +
+    "error=\(.is_error // false)",
+    ((.modelUsage // {}) | to_entries[] |
+      "usage \(.key): cost_usd=\(n(.value.costUSD)) " +
+      "input=\(n(.value.inputTokens)) output=\(n(.value.outputTokens)) " +
+      "cache_read=\(n(.value.cacheReadInputTokens)) " +
+      "cache_create=\(n(.value.cacheCreationInputTokens))")
+  ' "$raw" >>"$log"
+  cp "$raw" "$record"
+}
+
+# "12 runs, $38.20 total, $3.18 mean (180d)" from the usage records, or
+# why there is nothing to sum.
+usage_summary() { # usage_summary <name>
+  local name="$1" files=()
+  while IFS= read -r f; do files+=("$f"); done < <(
+    find "$STATE_DIR/usage" -maxdepth 1 -type f -name "$name-*.json" \
+      2>/dev/null | sort)
+  if [ "${#files[@]}" -eq 0 ]; then
+    echo "(no usage records yet)"
+    return 0
+  fi
+  if ! command -v "$JQ_BIN" >/dev/null 2>&1; then
+    echo "(${#files[@]} records; jq needed to sum them)"
+    return 0
+  fi
+  # shellcheck disable=SC2016  # jq program: $days comes from --arg, not bash
+  "$JQ_BIN" -rs --arg days "$USAGE_RETENTION_DAYS" '
+    map(.total_cost_usd // 0) |
+    "\(length) runs, $\(add * 100 | round / 100) total, " +
+    "$\(add / length * 100 | round / 100) mean (\($days)d)"
+  ' "${files[@]}"
 }
 
 launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
   local name="$1" model="$2" fallback="$3" agent_file="$4"
-  local stamp log
+  local stamp log raw
   stamp="$(date +%Y%m%dT%H%M%S)"
   log="$STATE_DIR/logs/$name-$stamp.log"
+  raw="$log.stdout"
   (
     flock -n 9 || {
       echo "skip $name: previous run still holds the lock"
@@ -338,6 +436,12 @@ launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
     # Unquoted ${var:+...} is deliberate: no flag at all when unset.
     # `|| rc=$?` rather than a bare status read: under set -e a failing
     # session would otherwise end the subshell here, before the reap.
+    # stdout is the JSON result object (one write, at the end); stderr
+    # keeps streaming into the log as before, so warnings and a
+    # usage-limit message land there live. record_usage then folds the
+    # result text and a usage line into the log. The .stdout sidecar is
+    # removed once folded in -- a sidecar left behind means the session
+    # died before record_usage ran.
     local rc=0
     # shellcheck disable=SC2086
     prompt_body "$agent_file" |
@@ -345,8 +449,11 @@ launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
       CI=true \
       "${scope[@]}" "${inhibit[@]}" "$CLAUDE_BIN" -p \
         --dangerously-skip-permissions \
+        --output-format json \
         ${model:+--model "$model"} \
-        ${fallback:+--fallback-model "$fallback"} >"$log" 2>&1 || rc=$?
+        ${fallback:+--fallback-model "$fallback"} >"$raw" 2>>"$log" || rc=$?
+    record_usage "$name" "$stamp" "$raw" "$log"
+    rm -f "$raw"
     # Only a scope that still has processes in it is "stopped"; an empty
     # one was already collected, and a session that cleaned up after
     # itself deserves a quiet exit.
@@ -415,7 +522,7 @@ if [ -e "$PAUSE_FILE" ]; then
   esac
 fi
 
-mkdir -p "$STATE_DIR/logs"
+mkdir -p "$STATE_DIR/logs" "$STATE_DIR/usage"
 
 # Only a real tick updates: --dry-run and --status are diagnostics and
 # must not change the tree under the operator reading them.
@@ -477,6 +584,10 @@ for agent_file in "$AGENTS_DIR"/*.md; do
 done
 
 find "$STATE_DIR/logs" -type f -mtime +30 -delete 2>/dev/null || true
+# Usage records outlive logs: they are a few KB each and a cost review
+# wants months, not weeks, of history.
+find "$STATE_DIR/usage" -type f -mtime +"$USAGE_RETENTION_DAYS" -delete \
+  2>/dev/null || true
 
 # --wait: block on every launch (and fail if any did), for manual ticks and
 # the test harness; a timer-driven tick exits as soon as they are forked.
