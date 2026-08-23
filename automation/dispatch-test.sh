@@ -721,6 +721,18 @@ expect_eq "$(status_line "$w" issue-pipeline last-run)" never \
 # the output instead and print it when git exits non-zero, so a fixture
 # that cannot be built names itself and counts as a failure of its own
 # rather than as a puzzle three assertions later.
+#
+# That count lives on disk rather than in FAILURES, because fixtures get
+# built inside subshells and command substitutions, and a
+# `FAILURES=$((FAILURES + 1))` there dies with the subshell: the FAIL
+# line prints, nothing counts it, and the harness still exits 0. The
+# tally at the end of the file adds this record in, so a fixture that
+# cannot be built turns the harness red no matter where it was built.
+FIXTURE_FAIL_DIR="$(mktemp -d)"
+WORKDIRS+=("$FIXTURE_FAIL_DIR")
+FIXTURE_FAILURES="$FIXTURE_FAIL_DIR/fixture-failures"
+: >"$FIXTURE_FAILURES"
+
 git_q() {
   local out status
   out="$(git -c user.name=t -c user.email=t@t -c init.defaultBranch=main \
@@ -729,7 +741,7 @@ git_q() {
   if [ "$status" -ne 0 ]; then
     echo "FAIL: fixture command failed (exit $status): git $*"
     printf '%s\n' "$out" | sed 's/^/    /'
-    FAILURES=$((FAILURES + 1))
+    printf 'git %s\n' "$*" >>"$FIXTURE_FAILURES"
   fi
   return "$status"
 }
@@ -1071,22 +1083,22 @@ new_liveness() { # <workdir> <slug> — origin/clone pair + linked worktree
 # worktree's git dir under the main clone (the commit writes there, so it
 # has to happen before the touch).
 age_liveness() {
-  local gitdir
+  local gitdir aged
   gitdir="$(git -C "$LIVE_W" rev-parse --absolute-git-dir)"
-  # A subshell with real exports: `VAR=x func` does not put VAR in the
-  # environment of the commands the function runs, so git would ignore it
-  # and date the commit now — silently making every "aged" fixture alive.
-  (
-    # RFC 2822, not "3 hours ago": git rejects approxidate in these
-    # variables outright ("fatal: invalid date format"), leaving the
-    # fixture's tip at the seed commit's timestamp — fresh. git_q now
-    # prints git's stderr on failure (#430), so that mistake names
-    # itself instead of surfacing as unrelated verdict assertions.
-    GIT_AUTHOR_DATE="$(date -R -d '3 hours ago')"
-    GIT_COMMITTER_DATE="$GIT_AUTHOR_DATE"
-    export GIT_AUTHOR_DATE GIT_COMMITTER_DATE
+  # RFC 2822, not "3 hours ago": git rejects approxidate in these
+  # variables outright ("fatal: invalid date format"), leaving the
+  # fixture's tip at the seed commit's timestamp — fresh. git_q prints
+  # git's stderr and records a failure on a non-zero exit (#430), so that
+  # mistake names itself instead of surfacing as unrelated verdict
+  # assertions.
+  # Prefixed onto the call, not exported inside a `( … )` around it: bash
+  # does put a prefix assignment in the environment of the commands a
+  # function runs, and unsets it again when the function returns, so no
+  # later fixture is dated by accident — and, unlike a subshell, a
+  # failure here is still on the same shell's books.
+  aged="$(date -R -d '3 hours ago')"
+  GIT_AUTHOR_DATE="$aged" GIT_COMMITTER_DATE="$aged" \
     git_q -C "$LIVE_W" commit --allow-empty -m "old work"
-  )
   find "$LIVE_W" -exec touch -d '3 hours ago' {} +
   find "$gitdir" -exec touch -d '3 hours ago' {} +
 }
@@ -1431,6 +1443,32 @@ run_liveness "$w"
 expect_eq "$(cat "$w/exit-code")" 2 "no slug exits 2"
 expect_eq "$(fact_of "$w" verdict)" "" "no slug prints no verdict"
 
+# 15. Harness self-tests: the harness's own red is a property worth
+#     pinning. A fixture command that cannot run has to turn this file
+#     red from anywhere it is called, including inside a subshell —
+#     where an increment of FAILURES dies with the subshell and prints a
+#     FAIL line nothing counts (the shape #430's own fixture had). So
+#     git_q records on disk, and these read that record directly; the
+#     line above the exit check is what turns it into the exit status.
+w="$(new_work)"
+selftest_before="$(wc -l <"$FIXTURE_FAILURES")"
+
+( git_q -C "$w/not-a-repo" rev-parse HEAD ) >/dev/null
+expect_eq "$(($(wc -l <"$FIXTURE_FAILURES") - selftest_before))" 1 \
+  "a fixture command failing inside a subshell is counted"
+
+( git_q init --bare "$w/selftest.git" ) >/dev/null
+expect_eq "$(($(wc -l <"$FIXTURE_FAILURES") - selftest_before))" 1 \
+  "a fixture command that works counts nothing more"
+
+# The failure above is this file testing itself, so trim it back out
+# instead of letting the tally count it. Truncating to the pre-test line
+# count keeps any genuine fixture failure from earlier in the run.
+head -n "$selftest_before" "$FIXTURE_FAILURES" >"$w/trimmed-record"
+mv "$w/trimmed-record" "$FIXTURE_FAILURES"
+expect_eq "$(wc -l <"$FIXTURE_FAILURES")" "$selftest_before" \
+  "the self-test's own fixture failure is not tallied"
+
 # A backstop for every test that did not assert launch-free-ness itself:
 # no test in this file should ever reach a launch without naming a stub,
 # so a tripwire record surviving to here is a failure wherever it came
@@ -1439,6 +1477,10 @@ expect_eq "$(fact_of "$w" verdict)" "" "no slug prints no verdict"
 expect_no_launch "no test reached an unstubbed launch"
 
 echo
+# git_q counts its failures on disk (see its definition): they can happen
+# inside a subshell, where an increment of this variable would not
+# survive the subshell's exit.
+FAILURES=$((FAILURES + $(wc -l <"$FIXTURE_FAILURES")))
 if [ "$FAILURES" -gt 0 ]; then
   echo "$FAILURES test(s) FAILED"
   exit 1
