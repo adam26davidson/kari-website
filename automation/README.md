@@ -22,6 +22,18 @@ Design and decisions:
     and an automated code-review gate, then squash-merges them serially
     into `main` (which auto-deploys to test). How fast it does that is
     tuned by the two values in its agent file — see Throughput below.
+  - `backlog-grooming` — roughly every two days (`46h`; the cadence is
+    about how often the backlog needs a pass, not about dodging the
+    pipeline — both agents are due off the same 15-minute poll grid, so
+    no choice of interval reliably keeps them out of the same poll, and
+    the re-read below is what makes an overlap safe), curates the open
+    issues the pipeline picks from: closes duplicates and already-landed
+    work, adds/clears `has-dependencies`, flags file-overlap pairs, and
+    keeps the `next-up` label on at most three issues not yet claimed —
+    the pipeline's Phase B works those first. Never touches
+    `in progress` issues (it re-reads an issue's labels immediately
+    before each mutation, since the pipeline can claim one mid-tick),
+    never files issues, signs every comment `backlog-grooming:`.
 - `templates/*.md` — subagent prompt templates the issue-pipeline fills
   in (`{{PLACEHOLDER}}` slots): `plan-brief.md`, `worker-brief.md`,
   `fix-brief.md`, `review-brief.md`.
