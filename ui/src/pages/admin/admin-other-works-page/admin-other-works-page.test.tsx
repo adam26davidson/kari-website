@@ -1051,7 +1051,6 @@ describe("AdminOtherWorksPage routing", () => {
     expect(router.state.location.search).toBe("?q=post");
   });
 
-
   it("opens the editor at /admin/other-works/:id when editing", async () => {
     const { container, router } = await renderPage();
 

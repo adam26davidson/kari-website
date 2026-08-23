@@ -454,7 +454,6 @@ describe("AdminPhotographyPage routing", () => {
     expect(router.state.location.search).toBe("?q=post");
   });
 
-
   it("opens the editor at /admin/photography/:id when editing", async () => {
     const { container, router } = await renderPage();
 

@@ -192,9 +192,9 @@ describe("AdminItemList", () => {
   describe("the query in the URL", () => {
     it("filters from the ?q= the page was opened with", () => {
       renderList({ ...searchable, entries: ["/admin/things?q=beta"] });
-      expect(screen.getByRole("searchbox", { name: "Search things" })).toHaveValue(
-        "beta",
-      );
+      expect(
+        screen.getByRole("searchbox", { name: "Search things" }),
+      ).toHaveValue("beta");
       expect(screen.getByText("beta")).toBeInTheDocument();
       expect(screen.queryByText("alpha")).toBeNull();
     });
