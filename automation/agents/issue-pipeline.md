@@ -338,8 +338,17 @@ next tick see the branch as it was left, not as a race. The released
 issues are ordinary candidates from the next tick on, when step 6
 hands over the kept branch and/or patch.
 
-1. `gh issue list --state open --json number,title,labels,body`. Discard
-   issues with any of these labels: `in progress`, `has-dependencies`,
+1. `gh issue list --state open --limit 500 --json
+   number,title,labels,body,createdAt`. Both flags are load-bearing and
+   neither is optional: `gh issue list` defaults to **30** results
+   ordered newest-first, so without `--limit` the older half of an
+   88-issue backlog is never in the list at all — not evaluated and
+   rejected, simply unseen — and without `createdAt` the only ordering
+   signal in the JSON is the issue number, which leaves step 3's
+   "oldest first" resting on an inference rather than on the data
+   (#484). Never drop either one, and never substitute a smaller limit:
+   the whole open backlog is the candidate set. Discard issues with any
+   of these labels: `in progress`, `has-dependencies`,
    `needs-clarification`, `idea`, `blocked` — and issues whose claim was
    released this tick (above).
 2. Read the remaining candidates fully (`gh issue view <n> --comments`).
@@ -362,7 +371,11 @@ hands over the kept branch and/or patch.
    workers. Order: `next-up` first, then product work first when the
    machinery is smooth, then oldest first (there is no readiness label
    to prefer — `has-dependencies` is the only marker, and it is a hard
-   skip in step 1). Concretely:
+   skip in step 1). "Oldest" everywhere below means the earliest
+   `createdAt` from step 1, never the lowest issue number: the number
+   is a proxy that happens to be monotonic, and reading it as the
+   ordering key is what let a truncated candidate list look like a
+   working oldest-first rule for three days (#484). Concretely:
 
    `next-up` is the backlog groomer's pick
    (`automation/agents/backlog-grooming.md`): at most three open,
@@ -541,6 +554,15 @@ hands over the kept branch and/or patch.
    ownership-signal mismatches left for a human (Phase A), orphaned
    kept branches (step 2), anything skipped and why. This lands in the
    dispatcher's log for the human.
+   Include one line naming the candidate-set size Phase B step 1
+   returned, plus the OLDEST ready issue this tick did not pick and the
+   reason (lost to `next-up`, lost to the product lean, judged unready,
+   file overlap, no capacity). A backlog tail that is being passed over
+   tick after tick should be visible in one summary — until #484 that
+   took reconstructing the pick order across thirty merged PRs, because
+   a tick whose candidate list was silently truncated logged exactly
+   what a tick that considered everything logged. If the tick claimed
+   nothing, say which issue was next in line anyway.
 
 ## Dispatching subagents
 
