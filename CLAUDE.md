@@ -306,7 +306,10 @@ cover admin pages without Auth0 credentials.
   modified within the last hour are always skipped (in-flight uploads), and
   any manifest fetch/parse failure aborts the sweep before anything is deleted.
   It classifies per IMAGE, not per object (below), so a whole prefix is kept,
-  skipped or deleted together.
+  skipped or deleted together — and reports that way too: `referenced`,
+  `orphaned`, `skipped_recent` and `deleted` each hold one
+  `{ id, keys }` entry per image, id-sorted, so the admin page's counts are
+  counts of pictures rather than of storage objects (#454).
 - Image storage layout: every uploaded image owns a key PREFIX, not one
   object — `images/<id>/original.<ext>` (the untouched upload) plus
   `images/<id>/thumb.jpg` (generated server-side at upload time; admin grids

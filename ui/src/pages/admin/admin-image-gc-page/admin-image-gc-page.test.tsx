@@ -15,20 +15,29 @@ vi.mock("../../../hooks/use-admin-token", () => ({
   useAdminToken: () => async () => "token",
 }));
 
+/// One image, two stored objects — the shape that made the page count
+/// objects and report twice as many images as it swept (#454).
+function image(id: string) {
+  return {
+    id,
+    keys: [`images/${id}/original.png`, `images/${id}/thumb.jpg`],
+  };
+}
+
+const orphans = [image("orphan-1.png"), image("orphan-2.png")];
+
 const dryRunReport: GcReport = {
   dry_run: true,
-  referenced: ["images/kept-1.png", "images/kept-2.png"],
-  orphaned: ["images/orphan-1.png", "images/orphan-2.png"],
-  skipped_recent: ["images/fresh.png"],
+  referenced: [image("kept-1.png"), image("kept-2.png")],
+  orphaned: orphans,
+  skipped_recent: [image("fresh.png")],
   deleted: [],
 };
 
 const realRunReport: GcReport = {
+  ...dryRunReport,
   dry_run: false,
-  referenced: ["images/kept-1.png", "images/kept-2.png"],
-  orphaned: ["images/orphan-1.png", "images/orphan-2.png"],
-  skipped_recent: ["images/fresh.png"],
-  deleted: ["images/orphan-1.png", "images/orphan-2.png"],
+  deleted: orphans,
 };
 
 function renderPage() {
@@ -60,23 +69,39 @@ describe("AdminImageGcPage dry run", () => {
 
     expect(ImageService.gc).toHaveBeenCalledOnce();
     expect(ImageService.gc).toHaveBeenCalledWith(true, expect.any(Function));
+    // Counts are IMAGES, not the objects each image stores: five images
+    // across the three categories, ten objects between them.
     expect(
       screen.getByText(
         "Preview: 2 orphaned, 2 referenced, 1 skipped as recent. " +
           "Nothing has been deleted.",
       ),
     ).toBeTruthy();
-    // Every key of every category is listed.
-    expect(screen.getByText("images/orphan-1.png")).toBeTruthy();
-    expect(screen.getByText("images/orphan-2.png")).toBeTruthy();
-    expect(screen.getByText("images/kept-1.png")).toBeTruthy();
-    expect(screen.getByText("images/kept-2.png")).toBeTruthy();
-    expect(screen.getByText("images/fresh.png")).toBeTruthy();
     expect(screen.getByText("Orphaned (would be deleted) (2)")).toBeTruthy();
     expect(screen.getByText("Referenced (kept) (2)")).toBeTruthy();
     expect(
       screen.getByText("Skipped — uploaded within the last hour (1)"),
     ).toBeTruthy();
+    // Every image is named once...
+    for (const id of [
+      "orphan-1.png",
+      "orphan-2.png",
+      "kept-1.png",
+      "kept-2.png",
+      "fresh.png",
+    ]) {
+      expect(screen.getByText(id)).toBeTruthy();
+    }
+    // ...with its stored objects nested underneath it.
+    for (const key of [
+      "images/orphan-1.png/original.png",
+      "images/orphan-1.png/thumb.jpg",
+      "images/orphan-2.png/original.png",
+      "images/orphan-2.png/thumb.jpg",
+      "images/fresh.png/original.png",
+    ]) {
+      expect(screen.getByText(key)).toBeTruthy();
+    }
   });
 
   it("shows no delete button when the preview finds no orphans", async () => {
