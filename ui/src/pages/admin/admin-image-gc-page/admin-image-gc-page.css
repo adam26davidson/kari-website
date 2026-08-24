@@ -80,8 +80,11 @@
 /* The files an image is made of: present but quiet, so the image names
    stay the thing being counted. */
 .gc-keys {
-  margin: 2px 0 0 0;
-  padding-left: 18px;
+  margin: 4px 0 0 0;
+  /* A rule rather than an indent alone: at 390px both the image name and
+     its keys wrap, and the line is what keeps the nesting legible. */
+  padding-left: 10px;
+  border-left: 2px solid rgba(24, 24, 24, 0.15);
   list-style-type: none;
   font-size: 13px;
   color: #4a4a4a;
