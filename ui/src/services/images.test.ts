@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { ImageService } from "./images";
+import { GcReport, ImageService } from "./images";
 import { getToken, mockFetchOnce, setupServiceTestHooks } from "./test-helpers";
 
 const API_IMAGES_URL = "https://api.test.local/images";
@@ -154,10 +154,17 @@ describe("ImageService.setPublished", () => {
 });
 
 describe("ImageService.gc", () => {
-  const report = {
+  // Typed, so the compiler holds the client to the endpoint's per-image
+  // report shape: one entry per image, listing that image's objects.
+  const report: GcReport = {
     dry_run: true,
-    referenced: ["images/kept.png"],
-    orphaned: ["images/orphan.png"],
+    referenced: [{ id: "kept.png", keys: ["images/kept.png/original.png"] }],
+    orphaned: [
+      {
+        id: "orphan.png",
+        keys: ["images/orphan.png/original.png", "images/orphan.png/thumb.jpg"],
+      },
+    ],
     skipped_recent: [],
     deleted: [],
   };
@@ -168,10 +175,13 @@ describe("ImageService.gc", () => {
     const result = await ImageService.gc(true, getToken);
 
     expect(result).toEqual(report);
-    expect(fetchMock).toHaveBeenCalledWith(`${API_IMAGES_URL}/gc?dry_run=true`, {
-      method: "POST",
-      headers: { Authorization: "Bearer test-token" },
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${API_IMAGES_URL}/gc?dry_run=true`,
+      {
+        method: "POST",
+        headers: { Authorization: "Bearer test-token" },
+      },
+    );
   });
 
   it("passes dry_run=false through for the real sweep", async () => {

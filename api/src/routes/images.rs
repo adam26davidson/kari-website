@@ -292,6 +292,18 @@ fn within_safety_margin(last_modified: Option<SystemTime>, now: SystemTime) -> b
     }
 }
 
+/// One image in a GC report: the id the admin UI counts, and every object
+/// key that image stores.
+///
+/// The sweep classifies per image, so the report does too — an image in the
+/// directory layout stores an original and a thumbnail, and reporting bare
+/// keys made the admin page say "2 orphaned images" for one picture (#454).
+#[derive(serde::Serialize, Clone)]
+struct GcImageGroup {
+    id: String,
+    keys: Vec<String>,
+}
+
 /// `POST /images/gc?dry_run=<bool>` — sweep the `images/` prefix and delete
 /// objects no longer referenced by any content manifest or blog post.
 ///
@@ -299,6 +311,10 @@ fn within_safety_margin(last_modified: Option<SystemTime>, now: SystemTime) -> b
 /// response only reports what a real run would do. Any failure to read a
 /// manifest or blog content aborts the sweep with a 500 before any delete —
 /// see `services::image_gc` for the safety model.
+///
+/// `referenced`, `orphaned`, `skipped_recent` and `deleted` each list one
+/// `{ id, keys }` entry per IMAGE, in id order, with that image's object
+/// keys sorted within it.
 pub async fn gc_images_handler(
     State(state): State<AppState>,
     Query(query): Query<GcQuery>,
@@ -321,37 +337,46 @@ pub async fn gc_images_handler(
     // orphaned) as a whole, and one recent member — an original whose
     // thumbnail is still being written — protects the entire prefix from a
     // half-written state being swept.
+    // Groups arrive in id order from the BTreeMap, so no sort over them.
     for (id, objects) in group_by_image_id(objects) {
-        let keys = objects.iter().map(|object| object.key.clone());
+        let mut keys: Vec<String> = objects.iter().map(|object| object.key.clone()).collect();
+        keys.sort();
+        let group = GcImageGroup {
+            id: id.clone(),
+            keys,
+        };
         if refs.contains(&id) {
-            referenced.extend(keys);
+            referenced.push(group);
         } else if objects
             .iter()
             .any(|object| within_safety_margin(object.last_modified, now))
         {
-            skipped_recent.extend(keys);
+            skipped_recent.push(group);
         } else {
-            orphaned.extend(keys);
+            orphaned.push(group);
         }
     }
-    referenced.sort();
-    orphaned.sort();
-    skipped_recent.sort();
 
-    let mut deleted = Vec::new();
+    let mut deleted: Vec<GcImageGroup> = Vec::new();
     if !query.dry_run {
-        for key in &orphaned {
-            // Abort on the first failed delete. Everything already deleted
-            // was a proven orphan, so a partial sweep is safe; the next run
-            // picks up where this one stopped.
-            state.s3_service.delete_object(key).await.map_err(|e| {
-                AppError::internal("Image GC: delete failed partway; re-run to finish", e)
-            })?;
-            deleted.push(key.clone());
+        for image in &orphaned {
+            for key in &image.keys {
+                // Abort on the first failed delete. Everything already
+                // deleted was a proven orphan, so a partial sweep is safe;
+                // the next run picks up where this one stopped.
+                state.s3_service.delete_object(key).await.map_err(|e| {
+                    AppError::internal("Image GC: delete failed partway; re-run to finish", e)
+                })?;
+            }
+            // Reported only once the whole image is gone: a partly deleted
+            // image is not a deleted image.
+            deleted.push(image.clone());
         }
+        let objects: usize = deleted.iter().map(|image| image.keys.len()).sum();
         tracing::info!(
-            "Image GC deleted {} orphaned object(s) ({} referenced, {} skipped as recent)",
+            "Image GC deleted {} orphaned image(s), {} object(s) ({} referenced, {} skipped as recent)",
             deleted.len(),
+            objects,
             referenced.len(),
             skipped_recent.len()
         );

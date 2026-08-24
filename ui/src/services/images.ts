@@ -4,13 +4,28 @@ import { TokenGetter, authorizedFetch, ensureOk, readErrorText } from "./http";
 
 const API_IMAGES_URL = import.meta.env.VITE_API_URL + "/images";
 
-/** Response of `POST /images/gc` — keys are full S3 keys (`images/...`). */
+/**
+ * One image in a GC report: the image's file name and every object it
+ * stores (an image is a directory of renditions, so usually the original
+ * plus a thumbnail).
+ */
+export interface GcImage {
+  id: string;
+  /** Full S3 keys (`images/...`) of this image's stored objects. */
+  keys: Array<string>;
+}
+
+/**
+ * Response of `POST /images/gc`. Every category lists one entry per IMAGE,
+ * so `orphaned.length` is a number of pictures — what the page tells Kari —
+ * rather than a number of storage objects.
+ */
 export interface GcReport {
   dry_run: boolean;
-  referenced: Array<string>;
-  orphaned: Array<string>;
-  skipped_recent: Array<string>;
-  deleted: Array<string>;
+  referenced: Array<GcImage>;
+  orphaned: Array<GcImage>;
+  skipped_recent: Array<GcImage>;
+  deleted: Array<GcImage>;
 }
 
 export class ImageService {

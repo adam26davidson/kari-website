@@ -55,16 +55,17 @@
   font-weight: 400;
 }
 
-.gc-key-list {
+.gc-image-list {
   width: 100%;
 }
 
-.gc-key-list summary {
+.gc-image-list summary {
   cursor: pointer;
   font-weight: 400;
 }
 
-.gc-key-list ul {
+/* One entry per image; its storage files nest inside. */
+.gc-images {
   margin: 8px 0 0 0;
   padding-left: 24px;
   font-size: 14px;
@@ -72,6 +73,23 @@
   overflow-wrap: anywhere;
 }
 
-.gc-key-list li {
+.gc-images > li {
+  margin: 6px 0;
+}
+
+/* The files an image is made of: present but quiet, so the image names
+   stay the thing being counted. */
+.gc-keys {
+  margin: 4px 0 0 0;
+  /* A rule rather than an indent alone: at 390px both the image name and
+     its keys wrap, and the line is what keeps the nesting legible. */
+  padding-left: 10px;
+  border-left: 2px solid rgba(24, 24, 24, 0.15);
+  list-style-type: none;
+  font-size: 13px;
+  color: #4a4a4a;
+}
+
+.gc-keys > li {
   margin: 2px 0;
 }

@@ -2,20 +2,38 @@ import { useState } from "react";
 import "./admin-image-gc-page.css";
 import "../admin.css";
 import { useAdminToken } from "../../../hooks/use-admin-token";
-import { GcReport, ImageService } from "../../../services/images";
+import { GcImage, GcReport, ImageService } from "../../../services/images";
 import { AdminButton } from "../components/admin-button/admin-button";
 import { useAdminUi } from "../admin-ui-context";
 
-function KeyList({ title, keys }: { title: string; keys: Array<string> }) {
+/**
+ * One line per image, with the storage files that image is made of tucked
+ * underneath it — so the count in the heading is a count of pictures and
+ * matches every other number on the page (#454).
+ */
+function ImageList({
+  title,
+  images,
+}: {
+  title: string;
+  images: Array<GcImage>;
+}) {
   return (
-    <details className="gc-key-list" open={keys.length > 0}>
+    <details className="gc-image-list" open={images.length > 0}>
       <summary>
-        {title} ({keys.length})
+        {title} ({images.length})
       </summary>
-      {keys.length > 0 && (
-        <ul>
-          {keys.map((key) => (
-            <li key={key}>{key}</li>
+      {images.length > 0 && (
+        <ul className="gc-images">
+          {images.map((image) => (
+            <li key={image.id}>
+              {image.id}
+              <ul className="gc-keys">
+                {image.keys.map((key) => (
+                  <li key={key}>{key}</li>
+                ))}
+              </ul>
+            </li>
           ))}
         </ul>
       )}
@@ -103,14 +121,17 @@ export function AdminImageGcPage() {
             </AdminButton>
           )}
           {report.dry_run ? (
-            <KeyList title="Orphaned (would be deleted)" keys={report.orphaned} />
+            <ImageList
+              title="Orphaned (would be deleted)"
+              images={report.orphaned}
+            />
           ) : (
-            <KeyList title="Deleted" keys={report.deleted} />
+            <ImageList title="Deleted" images={report.deleted} />
           )}
-          <KeyList title="Referenced (kept)" keys={report.referenced} />
-          <KeyList
+          <ImageList title="Referenced (kept)" images={report.referenced} />
+          <ImageList
             title="Skipped — uploaded within the last hour"
-            keys={report.skipped_recent}
+            images={report.skipped_recent}
           />
         </div>
       )}
