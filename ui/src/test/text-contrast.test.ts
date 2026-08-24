@@ -49,7 +49,15 @@ function declaration(css: string, selector: string, property: string): string {
 
 type Rgb = [number, number, number];
 
+/** The handful of CSS keyword colours this stylesheet set actually uses. */
+const NAMED_COLORS: Record<string, Rgb> = {
+  white: [255, 255, 255],
+  black: [0, 0, 0],
+};
+
 function parseColor(value: string): Rgb {
+  const named = NAMED_COLORS[value.toLowerCase()];
+  if (named) return named;
   const hex = value.match(/^#([0-9a-f]{6})$/i);
   if (hex) {
     const n = parseInt(hex[1], 16);
@@ -87,6 +95,7 @@ function contrastRatio(a: Rgb, b: Rgb): number {
 
 const indexCss = read("index.css");
 const dataListCss = read("components/data-list/data-list.css");
+const headerCss = read("components/header/header.css");
 const haikuCss = read("components/haiku-content/haiku-content.css");
 const haigaCss = read("components/haiga-content/haiga-content.css");
 const photographyCss = read(
@@ -118,25 +127,29 @@ function resolveColor(value: string): Rgb {
 
 const mutedText = () => resolveColor("var(--muted-text)");
 
-// The card as it actually renders: a translucent panel over the background
-// layer, which is itself a photo at partial opacity over the white page. The
-// photo can be anything (admins choose it), so the card's lightness spans a
-// range; `cardOver(photo)` gives the rendered card colour for a given photo.
-const cardOver = (photo: Rgb): Rgb => {
-  const card = declaration(dataListCss, ".data-list", "background-color");
-  const backgroundLayerOpacity = Number(
-    declaration(indexCss, "body::before", "opacity"),
-  );
-  return composite(
-    parseColor(card),
-    composite(photo, [255, 255, 255], backgroundLayerOpacity),
-    parseAlpha(card),
-  );
-};
-
 const BLACK: Rgb = [0, 0, 0];
 const WHITE: Rgb = [255, 255, 255];
 const MID_GREY: Rgb = [128, 128, 128];
+
+/** What every translucent surface sits on: the photo at partial opacity
+    over the white page. Admins choose the photo, so this spans the full
+    range from `backgroundLayerOver(BLACK)` to `backgroundLayerOver(WHITE)`. */
+const backgroundLayerOver = (photo: Rgb): Rgb =>
+  composite(
+    photo,
+    WHITE,
+    Number(declaration(indexCss, "body::before", "opacity")),
+  );
+
+/** A translucent surface as it actually renders over a given photo. */
+const surfaceOver = (photo: Rgb, tint: string): Rgb =>
+  composite(parseColor(tint), backgroundLayerOver(photo), parseAlpha(tint));
+
+// The card as it actually renders: a translucent panel over the background
+// layer. The photo can be anything, so the card's lightness spans a range;
+// `cardOver(photo)` gives the rendered card colour for a given photo.
+const cardOver = (photo: Rgb): Rgb =>
+  surfaceOver(photo, declaration(dataListCss, ".data-list", "background-color"));
 
 describe("secondary text on the public cards", () => {
   it.each(SECONDARY_TEXT_RULES)(
@@ -239,4 +252,60 @@ describe("the admin icon buttons", () => {
       contrastRatio(resolveColor(foreground()), fill),
     ).toBeGreaterThanOrEqual(4.5);
   });
+});
+
+// The header bar is translucent over the same background layer, so the same
+// argument applies -- with one extra twist: the bar spans the full width, so
+// its contrast depended not just on WHICH photo is set but on which PART of
+// it happened to land underneath. At 834px a bright patch sat under the
+// right-hand end and the last nav links ("Other works", "Photography") read
+// white-on-pale while the rest of the nav read fine (#392); the admin
+// header's user name and logout icon sit in that same right-hand end.
+//
+// So the floor here is pinned at the extreme: the tint has to carry the
+// contrast on its own over a pure-white photo, rather than borrowing it
+// from the dark part of whichever photo is currently set.
+const HEADER_BARS: ReadonlyArray<[string, string]> = [
+  ["public header", ".header"],
+  ["admin header", ".admin-header"],
+];
+
+const headerOver = (photo: Rgb, selector: string): Rgb =>
+  surfaceOver(photo, declaration(headerCss, selector, "background-color"));
+
+describe("the header bar over the background photo", () => {
+  it("puts its nav links in the header's own foreground colour", () => {
+    expect(declaration(headerCss, ".pages a", "color")).toBe(
+      declaration(headerCss, ".header", "color"),
+    );
+  });
+
+  it.each(HEADER_BARS)(
+    "%s keeps white text at WCAG AAA over the lightest possible photo",
+    (_name, selector) => {
+      expect(
+        contrastRatio(WHITE, headerOver(WHITE, selector)),
+      ).toBeGreaterThanOrEqual(7);
+    },
+  );
+
+  it("keeps the admin user name at WCAG AA over the lightest possible photo", () => {
+    expect(
+      contrastRatio(
+        resolveColor(declaration(headerCss, ".header-user-name", "color")),
+        headerOver(WHITE, ".admin-header"),
+      ),
+    ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it.each(HEADER_BARS)(
+    "%s renders as much the same bar over a light photo as a dark one",
+    (_name, selector) => {
+      // Not just legible everywhere but evenly so: a bar whose two ends
+      // read as different shades is what made the nav look patchy.
+      expect(
+        contrastRatio(headerOver(WHITE, selector), headerOver(BLACK, selector)),
+      ).toBeLessThanOrEqual(1.5);
+    },
+  );
 });
