@@ -1,27 +1,37 @@
-.header {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 25px;
-  padding: 15px 0px 15px 0px;
-  width: 100%;
-  background-color: rgba(28, 49, 0, 0.7);
-  backdrop-filter: blur(10px);
-  color: white;
-}
+/* One surface for both header bars. The bar floats over the background
+   photo, so how much of the photo shows through it decides how the nav
+   links, the admin user name and the logout icon read -- and because the
+   bar spans the full width, that used to vary along its own length: at
+   834px a bright patch of the photo sat under the right-hand end and the
+   last nav links ("Other works", "Photography") read white-on-pale while
+   the rest of the nav read fine (#392).
 
+   The tint is therefore opaque enough to carry the contrast on its own
+   rather than borrowing it from the dark part of whichever photo is set:
+   even over a pure-white photo the white text clears WCAG AAA and the grey
+   user name clears AA, and the bar renders as near enough the same shade
+   over a light photo as a dark one. The blur still lets a hint of the photo
+   through. Enforced by src/test/text-contrast.test.ts. */
+.header,
 .admin-header {
   display: flex;
   flex-direction: row;
   justify-content: space-between;
   align-items: center;
-  font-size: 16px;
-  padding: 10px 0px 10px 0px;
   width: 100%;
-  background-color: rgba(28, 49, 0, 0.7);
+  background-color: rgba(28, 49, 0, 0.86);
   backdrop-filter: blur(10px);
   color: white;
+}
+
+.header {
+  font-size: 25px;
+  padding: 15px 0px 15px 0px;
+}
+
+.admin-header {
+  font-size: 16px;
+  padding: 10px 0px 10px 0px;
 }
 
 .header-user-section {
