@@ -25,6 +25,35 @@ new_work() {
   echo "$work"
 }
 
+# The claude binary run_dispatch uses unless a test opts in to a stub.
+# It used to default to the REAL `claude`, on the theory that the
+# launch-free tests (--dry-run, --status, bad flags) never reach a
+# launch — which is the very property those tests exist to verify. When a
+# launch path regressed, the harness therefore ran a real
+# `claude -p --dangerously-skip-permissions` in this checkout, detached,
+# with its log inside a temp dir the cleanup trap then deleted. That is
+# not hypothetical: it is how #374 was filed, and re-regressing the
+# --status parse today still spawns six of them.
+# So the unsafe path is now the one you have to opt into. Anything that
+# reaches a launch without naming a stub hits this instead: it records
+# the invocation, says so on stderr (which dispatch.sh streams into the
+# run log), and exits non-zero so --wait reports a failure too.
+TRIPWIRE_DIR="$(mktemp -d)"
+WORKDIRS+=("$TRIPWIRE_DIR")
+TRIPWIRE_CLAUDE="$TRIPWIRE_DIR/claude-tripwire"
+TRIPWIRE_RECORD="$TRIPWIRE_DIR/launches"
+: >"$TRIPWIRE_RECORD"
+# Unquoted heredoc on purpose: the record path is baked in, so the
+# tripwire does not depend on an env var surviving the launch.
+cat >"$TRIPWIRE_CLAUDE" <<EOF
+#!/usr/bin/env bash
+cat >/dev/null
+echo "UNEXPECTED LAUNCH: \$* (cwd=\$PWD)" >>"$TRIPWIRE_RECORD"
+echo "dispatch-test.sh tripwire: a real launch was reached" >&2
+exit 97
+EOF
+chmod +x "$TRIPWIRE_CLAUDE"
+
 write_agent() { # <workdir> <filename> <name> <enabled> <every> <model>
   cat >"$1/agents/$2" <<EOF
 ---
@@ -43,7 +72,7 @@ run_dispatch() { # <workdir> [args...] — output in <workdir>/out
   KARI_AUTOMATION_STATE_DIR="$work/state" \
   KARI_AUTOMATION_AGENTS_DIR="$work/agents" \
   KARI_AUTOMATION_PAUSE_FILE="$work/PAUSE" \
-  KARI_AUTOMATION_CLAUDE_BIN="${STUB_CLAUDE:-claude}" \
+  KARI_AUTOMATION_CLAUDE_BIN="${STUB_CLAUDE:-$TRIPWIRE_CLAUDE}" \
   KARI_AUTOMATION_JQ_BIN="${STUB_JQ:-jq}" \
   KARI_AUTOMATION_DUE_TOLERANCE="${DUE_TOLERANCE:-}" \
   KARI_AUTOMATION_INHIBIT_BIN="${KARI_AUTOMATION_INHIBIT_BIN:-/nonexistent/systemd-inhibit}" \
@@ -126,12 +155,28 @@ expect_file_absent() { # <path> <test-name>
   fi
 }
 
+# Asserts launch-free-ness positively, rather than inferring it from the
+# absence of a .last-run file: the tripwire above records every launch no
+# test asked for, so this reads that record and clears it, leaving each
+# check independent of the ones before it.
+expect_no_launch() { # <test-name>
+  if [ -s "$TRIPWIRE_RECORD" ]; then
+    echo "FAIL: $1 — the dispatcher reached a real launch:"
+    sed 's/^/    /' "$TRIPWIRE_RECORD"
+    FAILURES=$((FAILURES + 1))
+    : >"$TRIPWIRE_RECORD"
+  else
+    echo "ok: $1"
+  fi
+}
+
 # 1. Enabled agent that has never run is due.
 w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
 run_dispatch "$w" --dry-run
 expect_eq "$(decision_of "$w" issue-pipeline)" run \
   "dry-run: never-run enabled agent is due"
+expect_no_launch "dry-run launches nothing"
 
 # 2. Disabled agent is skipped.
 w="$(new_work)"
@@ -233,6 +278,7 @@ run_dispatch "$w" --dry-run
 expect_eq "$(decisions "$w")" paused "PAUSE file is the only decision"
 expect_eq "$(decision_of "$w" issue-pipeline)" "" \
   "PAUSE file prevents launches"
+expect_no_launch "a paused fleet launches nothing"
 
 # 6. Agent file missing required frontmatter warns but doesn't fail the run.
 w="$(new_work)"
@@ -551,6 +597,7 @@ run_dispatch "$w" --bogus
 expect_eq "$(cat "$w/exit-code")" 2 "unknown flag exits 2"
 expect_file_absent "$w/state/issue-pipeline.last-run" \
   "unknown flag launches nothing"
+expect_no_launch "unknown flag reaches no launch"
 
 # 11. --status (#292): per-agent last-run, next-due (tolerance included),
 #     lock state, and the observed inter-run gaps. Gaps come from the
@@ -598,6 +645,7 @@ expect_eq "$(status_line "$w" demo-agent next-due)" "n/a (disabled)" \
   "disabled agents have no next-due"
 expect_file_absent "$w/state/fresh-agent.last-run" \
   "status launches nothing"
+expect_no_launch "status reaches no launch"
 
 # 11d. Long histories are summarised: only the newest 12 gaps are listed,
 #      while the run count and mean still cover every logged run.
@@ -664,8 +712,39 @@ expect_eq "$(status_line "$w" issue-pipeline last-run)" never \
 # on the next tick instead of waiting for a human to pull (#399). Exercised
 # against a throwaway bare "origin" and a clone of it carrying a copy of
 # dispatch.sh, because REPO_ROOT is derived from the script's own location.
-git_q() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main \
-  -c commit.gpgsign=false "$@" >/dev/null 2>&1; }
+# Quiet on success, loud on failure (#430). Discarding git's stderr made
+# a broken fixture invisible: `GIT_COMMITTER_DATE='3 hours ago'` is
+# rejected outright ("fatal: invalid date format" — approxidate is not
+# accepted in those variables, only @<epoch> or an RFC 2822 / ISO date),
+# so the commit never happened, the "aged" fixture stayed fresh, and the
+# resulting assertion failures pointed nowhere near the cause. Capture
+# the output instead and print it when git exits non-zero, so a fixture
+# that cannot be built names itself and counts as a failure of its own
+# rather than as a puzzle three assertions later.
+#
+# That count lives on disk rather than in FAILURES, because fixtures get
+# built inside subshells and command substitutions, and a
+# `FAILURES=$((FAILURES + 1))` there dies with the subshell: the FAIL
+# line prints, nothing counts it, and the harness still exits 0. The
+# tally at the end of the file adds this record in, so a fixture that
+# cannot be built turns the harness red no matter where it was built.
+FIXTURE_FAIL_DIR="$(mktemp -d)"
+WORKDIRS+=("$FIXTURE_FAIL_DIR")
+FIXTURE_FAILURES="$FIXTURE_FAIL_DIR/fixture-failures"
+: >"$FIXTURE_FAILURES"
+
+git_q() {
+  local out status
+  out="$(git -c user.name=t -c user.email=t@t -c init.defaultBranch=main \
+    -c commit.gpgsign=false "$@" 2>&1)"
+  status=$?
+  if [ "$status" -ne 0 ]; then
+    echo "FAIL: fixture command failed (exit $status): git $*"
+    printf '%s\n' "$out" | sed 's/^/    /'
+    printf 'git %s\n' "$*" >>"$FIXTURE_FAILURES"
+  fi
+  return "$status"
+}
 new_repo_pair() { # <workdir> — sets ORIGIN (bare) and CLONE (on main)
   local work="$1"
   ORIGIN="$work/origin.git"
@@ -751,6 +830,7 @@ write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
 DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=1 run_dispatch "$w" --dry-run
 DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=1 run_dispatch "$w" --status
 expect_eq "$(head_of "$CLONE")" "$before" "diagnostic modes do not update"
+expect_no_launch "diagnostic modes reach no launch"
 
 # 12g. KARI_AUTOMATION_SELF_UPDATE=0 opts out entirely.
 DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=0 run_launch "$w"
@@ -1003,21 +1083,22 @@ new_liveness() { # <workdir> <slug> — origin/clone pair + linked worktree
 # worktree's git dir under the main clone (the commit writes there, so it
 # has to happen before the touch).
 age_liveness() {
-  local gitdir
+  local gitdir aged
   gitdir="$(git -C "$LIVE_W" rev-parse --absolute-git-dir)"
-  # A subshell with real exports: `VAR=x func` does not put VAR in the
-  # environment of the commands the function runs, so git would ignore it
-  # and date the commit now — silently making every "aged" fixture alive.
-  (
-    # RFC 2822, not "3 hours ago": git rejects approxidate in these
-    # variables outright ("fatal: invalid date format"), and git_q hides
-    # stderr, so a relative value here would leave the fixture's tip at
-    # the seed commit's timestamp — fresh — with nothing on screen.
-    GIT_AUTHOR_DATE="$(date -R -d '3 hours ago')"
-    GIT_COMMITTER_DATE="$GIT_AUTHOR_DATE"
-    export GIT_AUTHOR_DATE GIT_COMMITTER_DATE
+  # RFC 2822, not "3 hours ago": git rejects approxidate in these
+  # variables outright ("fatal: invalid date format"), leaving the
+  # fixture's tip at the seed commit's timestamp — fresh. git_q prints
+  # git's stderr and records a failure on a non-zero exit (#430), so that
+  # mistake names itself instead of surfacing as unrelated verdict
+  # assertions.
+  # Prefixed onto the call, not exported inside a `( … )` around it: bash
+  # does put a prefix assignment in the environment of the commands a
+  # function runs, and unsets it again when the function returns, so no
+  # later fixture is dated by accident — and, unlike a subshell, a
+  # failure here is still on the same shell's books.
+  aged="$(date -R -d '3 hours ago')"
+  GIT_AUTHOR_DATE="$aged" GIT_COMMITTER_DATE="$aged" \
     git_q -C "$LIVE_W" commit --allow-empty -m "old work"
-  )
   find "$LIVE_W" -exec touch -d '3 hours ago' {} +
   find "$gitdir" -exec touch -d '3 hours ago' {} +
 }
@@ -1362,7 +1443,44 @@ run_liveness "$w"
 expect_eq "$(cat "$w/exit-code")" 2 "no slug exits 2"
 expect_eq "$(fact_of "$w" verdict)" "" "no slug prints no verdict"
 
+# 15. Harness self-tests: the harness's own red is a property worth
+#     pinning. A fixture command that cannot run has to turn this file
+#     red from anywhere it is called, including inside a subshell —
+#     where an increment of FAILURES dies with the subshell and prints a
+#     FAIL line nothing counts (the shape #430's own fixture had). So
+#     git_q records on disk, and these read that record directly; the
+#     line above the exit check is what turns it into the exit status.
+w="$(new_work)"
+selftest_before="$(wc -l <"$FIXTURE_FAILURES")"
+
+( git_q -C "$w/not-a-repo" rev-parse HEAD ) >/dev/null
+expect_eq "$(($(wc -l <"$FIXTURE_FAILURES") - selftest_before))" 1 \
+  "a fixture command failing inside a subshell is counted"
+
+( git_q init --bare "$w/selftest.git" ) >/dev/null
+expect_eq "$(($(wc -l <"$FIXTURE_FAILURES") - selftest_before))" 1 \
+  "a fixture command that works counts nothing more"
+
+# The failure above is this file testing itself, so trim it back out
+# instead of letting the tally count it. Truncating to the pre-test line
+# count keeps any genuine fixture failure from earlier in the run.
+head -n "$selftest_before" "$FIXTURE_FAILURES" >"$w/trimmed-record"
+mv "$w/trimmed-record" "$FIXTURE_FAILURES"
+expect_eq "$(wc -l <"$FIXTURE_FAILURES")" "$selftest_before" \
+  "the self-test's own fixture failure is not tallied"
+
+# A backstop for every test that did not assert launch-free-ness itself:
+# no test in this file should ever reach a launch without naming a stub,
+# so a tripwire record surviving to here is a failure wherever it came
+# from. Fails late and unattributed by design — the point is that the
+# escape can no longer be silent, not that this is the best diagnostic.
+expect_no_launch "no test reached an unstubbed launch"
+
 echo
+# git_q counts its failures on disk (see its definition): they can happen
+# inside a subshell, where an increment of this variable would not
+# survive the subshell's exit.
+FAILURES=$((FAILURES + $(wc -l <"$FIXTURE_FAILURES")))
 if [ "$FAILURES" -gt 0 ]; then
   echo "$FAILURES test(s) FAILED"
   exit 1
