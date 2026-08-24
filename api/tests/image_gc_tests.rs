@@ -241,12 +241,39 @@ async fn send(app: axum::Router, req: Request<Body>) -> (StatusCode, Value) {
     (status, body)
 }
 
-fn keys(body: &Value, field: &str) -> Vec<String> {
+/// The per-image groups of one report field. Each element is
+/// `{"id": "<image id>", "keys": ["<object key>", ...]}` — the report counts
+/// IMAGES, and names the objects each one stores.
+fn groups<'a>(body: &'a Value, field: &str) -> &'a Vec<Value> {
     body[field]
         .as_array()
         .unwrap_or_else(|| panic!("{field} should be an array, body: {body}"))
+}
+
+/// The image ids of one report field, in report order.
+fn ids(body: &Value, field: &str) -> Vec<String> {
+    groups(body, field)
         .iter()
-        .map(|v| v.as_str().unwrap().to_string())
+        .map(|group| {
+            group["id"]
+                .as_str()
+                .unwrap_or_else(|| panic!("{field} group needs an id, body: {body}"))
+                .to_string()
+        })
+        .collect()
+}
+
+/// Every object key of one report field, flattened across its image groups.
+fn flat_keys(body: &Value, field: &str) -> Vec<String> {
+    groups(body, field)
+        .iter()
+        .flat_map(|group| {
+            group["keys"]
+                .as_array()
+                .unwrap_or_else(|| panic!("{field} group needs keys, body: {body}"))
+                .iter()
+                .map(|key| key.as_str().unwrap().to_string())
+        })
         .collect()
 }
 
@@ -285,8 +312,10 @@ async fn gc_keeps_every_rendition_of_a_referenced_image() {
     let (status, body) = send(app, gc_request(Some(false), true)).await;
 
     assert_eq!(status, StatusCode::OK);
+    // A half-migrated image is ONE image, whichever layouts it stores.
+    assert_eq!(ids(&body, "referenced"), vec!["haiga.jpg"]);
     assert_eq!(
-        keys(&body, "referenced"),
+        flat_keys(&body, "referenced"),
         vec![
             "images/haiga.jpg",
             "images/haiga.jpg/original.jpg",
@@ -312,8 +341,12 @@ async fn gc_deletes_an_unreferenced_prefix_whole() {
         "images/orphan.jpg/original.jpg".to_string(),
         "images/orphan.jpg/thumb.jpg".to_string(),
     ];
-    assert_eq!(keys(&body, "orphaned"), expected);
-    assert_eq!(keys(&body, "deleted"), expected);
+    // Two objects, but ONE image: the report counts images so the admin page
+    // can say "1 orphaned image" rather than "2" (#454).
+    assert_eq!(ids(&body, "orphaned"), vec!["orphan.jpg"]);
+    assert_eq!(ids(&body, "deleted"), vec!["orphan.jpg"]);
+    assert_eq!(flat_keys(&body, "orphaned"), expected);
+    assert_eq!(flat_keys(&body, "deleted"), expected);
     assert!(!store.contains("images/orphan.jpg/original.jpg"));
     assert!(!store.contains("images/orphan.jpg/thumb.jpg"));
 }
@@ -331,14 +364,15 @@ async fn gc_skips_a_whole_prefix_when_any_rendition_is_recent() {
     let (status, body) = send(app, gc_request(Some(false), true)).await;
 
     assert_eq!(status, StatusCode::OK);
+    assert_eq!(ids(&body, "skipped_recent"), vec!["fresh.jpg"]);
     assert_eq!(
-        keys(&body, "skipped_recent"),
+        flat_keys(&body, "skipped_recent"),
         vec![
             "images/fresh.jpg/original.jpg",
             "images/fresh.jpg/thumb.jpg"
         ]
     );
-    assert!(keys(&body, "deleted").is_empty());
+    assert!(ids(&body, "deleted").is_empty());
     assert!(store.contains("images/fresh.jpg/original.jpg"));
 }
 
@@ -360,7 +394,7 @@ async fn gc_keeps_an_image_referenced_by_a_directory_layout_url() {
     let (status, body) = send(app, gc_request(Some(false), true)).await;
 
     assert_eq!(status, StatusCode::OK);
-    assert!(keys(&body, "deleted").is_empty(), "body: {body}");
+    assert!(ids(&body, "deleted").is_empty(), "body: {body}");
     assert!(store.contains("images/rewritten.jpg/original.jpg"));
 }
 
@@ -379,12 +413,14 @@ async fn gc_defaults_to_dry_run_and_deletes_nothing() {
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["dry_run"], json!(true));
-    assert_eq!(keys(&body, "orphaned"), vec!["images/orphan.jpg"]);
+    assert_eq!(ids(&body, "orphaned"), vec!["orphan.jpg"]);
+    assert_eq!(flat_keys(&body, "orphaned"), vec!["images/orphan.jpg"]);
     assert_eq!(
-        keys(&body, "referenced"),
-        vec!["images/blog-pub.jpg", "images/haiga.jpg"]
+        ids(&body, "referenced"),
+        vec!["blog-pub.jpg", "haiga.jpg"],
+        "groups arrive in id order"
     );
-    assert_eq!(keys(&body, "deleted"), Vec::<String>::new());
+    assert_eq!(ids(&body, "deleted"), Vec::<String>::new());
     assert!(
         store.contains("images/orphan.jpg"),
         "dry run must not delete anything"
@@ -396,7 +432,7 @@ async fn gc_explicit_dry_run_true_deletes_nothing() {
     let (store, app) = setup_with(store_with_orphan());
     let (status, body) = send(app, gc_request(Some(true), true)).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(keys(&body, "deleted"), Vec::<String>::new());
+    assert_eq!(ids(&body, "deleted"), Vec::<String>::new());
     assert!(store.contains("images/orphan.jpg"));
 }
 
@@ -409,7 +445,8 @@ async fn gc_real_run_deletes_orphans_and_never_referenced_files() {
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["dry_run"], json!(false));
-    assert_eq!(keys(&body, "deleted"), vec!["images/orphan.jpg"]);
+    assert_eq!(ids(&body, "deleted"), vec!["orphan.jpg"]);
+    assert_eq!(flat_keys(&body, "deleted"), vec!["images/orphan.jpg"]);
     assert!(
         !store.contains("images/orphan.jpg"),
         "orphan should be gone"
@@ -435,7 +472,7 @@ async fn gc_protects_references_from_all_manifest_sources() {
     let (status, body) = send(app, gc_request(Some(false), true)).await;
 
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(keys(&body, "orphaned"), Vec::<String>::new());
+    assert_eq!(ids(&body, "orphaned"), Vec::<String>::new());
     for key in [
         "images/haiga.jpg",
         "images/home.jpg",
@@ -466,8 +503,8 @@ async fn gc_never_deletes_the_site_background_photo() {
     let (status, body) = send(app, gc_request(Some(false), true)).await;
 
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(keys(&body, "referenced"), vec!["images/bg.webp"]);
-    assert_eq!(keys(&body, "deleted"), vec!["images/orphan.jpg"]);
+    assert_eq!(ids(&body, "referenced"), vec!["bg.webp"]);
+    assert_eq!(ids(&body, "deleted"), vec!["orphan.jpg"]);
     assert!(
         store.contains("images/bg.webp"),
         "the site background must never be treated as an orphan"
@@ -513,8 +550,8 @@ async fn gc_skips_recent_uploads_via_safety_margin() {
     let (status, body) = send(app, gc_request(Some(false), true)).await;
 
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(keys(&body, "skipped_recent"), vec!["images/inflight.jpg"]);
-    assert_eq!(keys(&body, "deleted"), vec!["images/orphan.jpg"]);
+    assert_eq!(ids(&body, "skipped_recent"), vec!["inflight.jpg"]);
+    assert_eq!(ids(&body, "deleted"), vec!["orphan.jpg"]);
     assert!(store.contains("images/inflight.jpg"));
 }
 
@@ -530,7 +567,7 @@ async fn gc_deletes_unreferenced_objects_just_outside_the_margin() {
     let (status, body) = send(app, gc_request(Some(false), true)).await;
 
     assert_eq!(status, StatusCode::OK);
-    assert!(keys(&body, "deleted").contains(&"images/barely-old.jpg".to_string()));
+    assert!(flat_keys(&body, "deleted").contains(&"images/barely-old.jpg".to_string()));
     assert!(!store.contains("images/barely-old.jpg"));
 }
 
@@ -544,7 +581,7 @@ async fn gc_treats_unknown_last_modified_as_recent() {
     let (status, body) = send(app, gc_request(Some(false), true)).await;
 
     assert_eq!(status, StatusCode::OK);
-    assert!(keys(&body, "skipped_recent").contains(&"images/no-mtime.jpg".to_string()));
+    assert!(flat_keys(&body, "skipped_recent").contains(&"images/no-mtime.jpg".to_string()));
     assert!(store.contains("images/no-mtime.jpg"));
 }
 
@@ -562,7 +599,7 @@ async fn gc_ignores_bare_images_folder_marker() {
     assert!(store.contains("images/"), "folder marker must survive");
     for field in ["referenced", "orphaned", "skipped_recent", "deleted"] {
         assert!(
-            !keys(&body, field).contains(&"images/".to_string()),
+            !flat_keys(&body, field).contains(&"images/".to_string()),
             "{field} contained the folder marker"
         );
     }
@@ -582,8 +619,8 @@ async fn gc_treats_future_last_modified_as_recent() {
     let (status, body) = send(app, gc_request(Some(false), true)).await;
 
     assert_eq!(status, StatusCode::OK);
-    assert!(keys(&body, "skipped_recent").contains(&"images/from-the-future.jpg".to_string()));
-    assert_eq!(keys(&body, "deleted"), vec!["images/orphan.jpg"]);
+    assert!(flat_keys(&body, "skipped_recent").contains(&"images/from-the-future.jpg".to_string()));
+    assert_eq!(ids(&body, "deleted"), vec!["orphan.jpg"]);
     assert!(store.contains("images/from-the-future.jpg"));
 }
 
@@ -669,7 +706,7 @@ async fn gc_ignores_objects_outside_the_images_prefix() {
     assert!(store.contains("haiga.json"));
     assert!(store.contains("blog/post-1.html"));
     for field in ["referenced", "orphaned", "skipped_recent", "deleted"] {
-        for key in keys(&body, field) {
+        for key in flat_keys(&body, field) {
             assert!(key.starts_with("images/"), "{field} contained {key}");
         }
     }
