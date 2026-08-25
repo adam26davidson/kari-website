@@ -40,6 +40,30 @@
       "automerge": true
     },
     {
+      "description": [
+        "Below 1.0.0 a minor bump is a BREAKING change under both cargo and",
+        "npm convention, but Renovate still types it 'minor', so the rule",
+        "above would auto-merge it. Two such bumps landed as PRs that could",
+        "not build at all (axum 0.7->0.8 rejected the ':param' route syntax,",
+        "reqwest 0.12->0.13 renamed the rustls-tls feature; both fixed in",
+        "#519), and tower-http 0.6->0.7 auto-merged in #493 purely because",
+        "CI happened to stay green. CI is the backstop for the first kind;",
+        "nothing catches a silent behavioural change, which is what this",
+        "rule is for.",
+        "Placement matters: Renovate applies packageRules in order and later",
+        "matches win, so this MUST stay after the auto-merge rule it",
+        "narrows. Patch bumps on 0.x (0.8.8 -> 0.8.9) keep auto-merging --",
+        "only the 0.x -> 0.y shape is held.",
+        "Measured over the repo's whole history before adding this: 6 of 37",
+        "version changes in api/Cargo.toml and 1 of 33 in ui/package.json",
+        "would have been held, so this is a handful of reviews, not a queue."
+      ],
+      "matchUpdateTypes": ["minor"],
+      "matchCurrentVersion": "<1.0.0",
+      "automerge": false,
+      "addLabels": ["major-update"]
+    },
+    {
       "description": "Require manual review for major updates",
       "matchUpdateTypes": ["major"],
       "automerge": false,

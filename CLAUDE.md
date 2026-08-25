@@ -121,7 +121,10 @@ Coverage thresholds are a ratchet: floors pinned just below current numbers
 in the coverage CI job). When coverage rises meaningfully, bump the floors in
 the same PR — never lower them to make a PR pass.
 Dependency updates are managed by Renovate (`renovate.json`); non-major updates
-auto-merge once these checks pass. To validate that file, pin the version —
+auto-merge once these checks pass. The exception is a package still below
+1.0.0, where a "minor" bump is breaking by convention (cargo and npm alike):
+those are labelled `major-update` and wait for a human, while 0.x patch bumps
+still auto-merge. To validate that file, pin the version —
 `npx --yes --package renovate@latest renovate-config-validator renovate.json`.
 A bare `--package renovate` can resolve a stale cached major that rejects
 current config keys (a renovate 37 in the npx cache rejected
