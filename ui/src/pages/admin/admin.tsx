@@ -1,6 +1,6 @@
 import "./admin.css";
 import { Suspense } from "react";
-import { Navigate, NavLink, Route, Routes } from "react-router-dom";
+import { Navigate, NavLink, Route, Routes } from "react-router";
 import { AdminHaikuPage } from "./admin-haiku-page/admin-haiku-page";
 import { useAuth0 } from "@auth0/auth0-react";
 import { AdminHaigaPage } from "./admin-haiga-page/admin-haiga-page";

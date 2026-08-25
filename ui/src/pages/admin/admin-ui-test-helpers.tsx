@@ -1,6 +1,6 @@
 import { Mock, vi } from "vitest";
 import { act, render } from "@testing-library/react";
-import { createMemoryRouter, RouterProvider } from "react-router-dom";
+import { createMemoryRouter, RouterProvider } from "react-router";
 import { AdminUi, AdminUiContext } from "./admin-ui-context";
 
 /** AdminUi with every function mocked, for asserting page behavior. */

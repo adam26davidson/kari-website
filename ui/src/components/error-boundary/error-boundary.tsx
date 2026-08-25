@@ -1,5 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation } from "react-router";
 import { isChunkLoadError } from "./lazy-with-retry";
 import "./error-boundary.css";
 

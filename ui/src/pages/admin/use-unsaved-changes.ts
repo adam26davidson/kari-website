@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import { To, useBlocker, useNavigate } from "react-router-dom";
+import { To, useBlocker, useNavigate } from "react-router";
 import { useAdminUi } from "./admin-ui-context";
 
 /**

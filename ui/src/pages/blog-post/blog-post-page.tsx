@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useParams } from "react-router";
 import { ContentPage } from "../../components/content-page/content-page";
 import { DataList } from "../../components/data-list/data-list";
 import { OtherWorksItem } from "../other-works/components/other-works-item/other-works-item";

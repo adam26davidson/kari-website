@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import "./admin-other-works-page.css";
 import "../admin.css";
 import { v4 as uuidv4 } from "uuid";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router";
 import { BlogPost } from "../../../models";
 import {
   moveItemByIdByOne,

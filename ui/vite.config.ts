@@ -15,7 +15,7 @@ export default defineConfig({
     // in the PR.
     //
     // - "index" is the entry chunk every visitor downloads, public pages
-    //   included (currently ~296 kB). Keep admin-only dependencies out of
+    //   included (currently ~322 kB). Keep admin-only dependencies out of
     //   it.
     // - "admin" is the admin shell and its tiptap editor stack (~363 kB),
     //   fetched only once a maintainer opens /admin.
@@ -26,6 +26,14 @@ export default defineConfig({
     // into a red build. 25 kB is small enough that a new dependency or an
     // admin-only import leaking into the entry chunk still trips it, and
     // large enough that ordinary version drift does not.
-    bundleBudget({ index: 320, admin: 385 }),
+    // index moved 294 -> 322 kB migrating react-router-dom 6 to
+    // react-router 7 (#460). The growth is v7's core, not anything of
+    // ours: "admin" came out byte-identical, so there is no admin-only
+    // import to move out of the entry chunk. Of that 322 kB, ~56 kB is
+    // data-router machinery pulled in by createBrowserRouter, which
+    // exists only so the admin unsaved-changes guard can call useBlocker
+    // -- a build with <BrowserRouter> measures 265 kB. Getting that back
+    // means restructuring where the router is mounted; #533 tracks it.
+    bundleBudget({ index: 347, admin: 385 }),
   ],
 });
