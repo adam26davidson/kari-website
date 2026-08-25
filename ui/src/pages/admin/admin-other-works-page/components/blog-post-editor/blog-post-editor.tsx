@@ -1,4 +1,5 @@
 import { BlogPost } from "../../../../../models";
+import { toPostDate } from "../../../../../utils/date-helpers";
 import { DataEditor } from "../../../components/data-editor/data-editor";
 import { Tiptap } from "../../../components/tiptap/tiptap";
 import "./blog-post-editor.css";
@@ -31,12 +32,13 @@ export function BlogPostEditor({
   onAddImage: (image: File, id: string) => void;
 }) {
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const date = new Date(e.target.value);
-    // Clearing the input yields "" and so an Invalid Date; ignore it and
-    // keep the post's last valid date instead of crashing on
-    // toISOString() or corrupting post.date (#154).
-    if (isNaN(date.getTime())) return;
-    setPost({ ...post, date: date.toISOString() });
+    // toPostDate pins the picked day to UTC midnight, the one shape
+    // stored post dates take (#379), and returns null for a value that
+    // names no day — clearing the input yields "". Ignore that and keep
+    // the post's last valid date rather than corrupting post.date (#154).
+    const date = toPostDate(e.target.value);
+    if (date === null) return;
+    setPost({ ...post, date });
   };
 
   return (

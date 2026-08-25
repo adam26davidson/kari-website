@@ -3,6 +3,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BlogPostEditor } from "./blog-post-editor";
 import { BlogPost } from "../../../../../models";
+import {
+  applyTimeZone,
+  restoreHostTimeZoneAfterEach,
+} from "../../../../../test/timezone";
 
 // The rich-text editor pulls in the whole tiptap stack; stub it with a
 // plain textarea so the tests exercise only BlogPostEditor's own logic.
@@ -69,6 +73,26 @@ describe("BlogPostEditor", () => {
     expect(setPost).toHaveBeenCalledWith({
       ...post,
       date: "2025-01-15T00:00:00.000Z",
+    });
+  });
+
+  describe("the date it stores", () => {
+    restoreHostTimeZoneAfterEach();
+
+    it("is UTC midnight of the picked day, west of UTC", () => {
+      // Stored dates are read back as plain UTC calendar days (#379), so
+      // the author's zone must not leak into what is written — an author
+      // in Los Angeles picking Jan 1 stores Jan 1, not Dec 31.
+      applyTimeZone("America/Los_Angeles");
+      const { setPost } = renderEditor();
+      fireEvent.change(
+        screen.getByDisplayValue("2024-05-01") as HTMLInputElement,
+        { target: { value: "2026-01-01" } },
+      );
+      expect(setPost).toHaveBeenCalledWith({
+        ...post,
+        date: "2026-01-01T00:00:00.000Z",
+      });
     });
   });
 
