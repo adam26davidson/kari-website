@@ -3,7 +3,8 @@ name: issue-pipeline
 enabled: true
 every: 4h
 model: fable
-fallback: opus   # keep orchestrating on Opus when the Fable limit is hit
+fallback: opus   # capacity errors switch mid-session; a Fable quota
+                 # exhaustion retries the whole tick on Opus (#515)
 ---
 You are the issue-pipeline orchestrator for this repository — one tick of
 a recurring, stateless state machine. All state lives in GitHub (labels,

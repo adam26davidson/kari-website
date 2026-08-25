@@ -45,6 +45,10 @@
 #                               clone at the start of a tick (see self_update)
 #   KARI_AUTOMATION_USAGE_RETENTION_DAYS default 180; how long the per-run
 #                               usage JSON under $STATE_DIR/usage/ is kept
+#   KARI_AUTOMATION_RETRY_COST_LIMIT default 2 (USD); a usage-limited
+#                               attempt that already spent more than this
+#                               is not retried on the fallback model —
+#                               see retry_on_fallback
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -68,6 +72,7 @@ MEMORY_MAX="${KARI_AUTOMATION_MEMORY_MAX:-50%}"
 # hold the agent's flock forever and stall every later tick.
 BG_WAIT_CEILING_MS="${KARI_AUTOMATION_BG_WAIT_CEILING_MS:-5400000}"
 USAGE_RETENTION_DAYS="${KARI_AUTOMATION_USAGE_RETENTION_DAYS:-180}"
+RETRY_COST_LIMIT="${KARI_AUTOMATION_RETRY_COST_LIMIT:-2}"
 # Slack on the "has the interval elapsed?" test. Polls happen on a coarse
 # grid (cron every 15m) while last-run is stamped at the moment a run
 # starts, so without slack each cycle's start creeps later into the
@@ -340,6 +345,36 @@ usage_summary() { # usage_summary <name>
   ' "${files[@]}"
 }
 
+# A usage limit is the one failure worth immediately re-running on the
+# other model. `--fallback-model` covers capacity/overload errors only, so
+# quota exhaustion exits the session without ever trying the fallback --
+# `fallback: opus` promised "keep orchestrating on Opus when the Fable
+# limit is hit" and never once did it (#515). Everything else stays
+# un-retried: a timed-out tick (api_error_status null, 2026-08-24 16:00)
+# and a CLI that segfaults before printing anything (2.1.243, which cost
+# three ticks on 2026-08-25) must not be multiplied.
+# Keyed on the status code, NOT the message: #322 recorded this same
+# failure as "You've hit your monthly spend limit" and today it reads
+# "You've reached your Fable 5 limit". The wording has already changed
+# once; 429 has not. Anything unreadable -- no jq, empty output, output
+# that is not a result object, a garbage cost limit -- fails the jq test
+# and means "do not retry", so the fail-safe is always the cheap one.
+retry_on_fallback() { # <rc> <raw> <model> <fallback> — exit 0 = do retry
+  local rc="$1" raw="$2" model="$3" fallback="$4"
+  [ "$rc" -ne 0 ] || return 1
+  [ -n "$fallback" ] && [ "$fallback" != "$model" ] || return 1
+  [ -s "$raw" ] || return 1
+  command -v "$JQ_BIN" >/dev/null 2>&1 || return 1
+  # Failing at session start costs ~2s and $0, which is the case that
+  # recurs for the rest of a quota period; a limit hit deep into a tick
+  # has already paid for that work, and re-running bills it twice with
+  # the next tick only a cadence away.
+  # shellcheck disable=SC2016  # jq program: $limit comes from --argjson
+  "$JQ_BIN" -e --argjson limit "$RETRY_COST_LIMIT" '
+    (.api_error_status? == 429) and ((.total_cost_usd // 0) <= $limit)
+  ' "$raw" >/dev/null 2>&1
+}
+
 launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
   local name="$1" model="$2" fallback="$3" agent_file="$4"
   local stamp log raw
@@ -406,11 +441,13 @@ launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
     # too. Same optionality as the inhibitor: no systemd-run, or one that
     # cannot reach a user manager (CI runners, containers), means the
     # session simply runs unscoped rather than not at all.
-    local scope=() unit=""
+    # Probed once, but the unit is named per attempt below: a retry
+    # reusing $stamp would collide with a first scope not yet reaped.
+    local scope_ok=0
     if command -v "$SYSTEMD_RUN_BIN" >/dev/null 2>&1; then
       if "$SYSTEMD_RUN_BIN" --user --scope --quiet -- true >/dev/null 2>&1
       then
-        unit="kari-agent-$name-$stamp"
+        scope_ok=1
         # OOMPolicy: systemd's default for a scope is `stop`, which turned
         # one OOM-killed vitest worker into the death of the whole tick
         # (2026-08-21, #412) -- the opposite of what the scope is for.
@@ -420,8 +457,6 @@ launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
         # picks the biggest process in the scope, not whatever it finds
         # on the host. Half the machine leaves the desktop breathing
         # room on a host with no swap.
-        scope=("$SYSTEMD_RUN_BIN" --user --scope --quiet --unit="$unit"
-          --property=OOMPolicy=continue --property="MemoryMax=$MEMORY_MAX" --)
       else
         echo "warn: $SYSTEMD_RUN_BIN cannot create a scope;" \
           "running $name uncontained" >&2
@@ -442,27 +477,59 @@ launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
     # result text and a usage line into the log. The .stdout sidecar is
     # removed once folded in -- a sidecar left behind means the session
     # died before record_usage ran.
-    local rc=0
-    # shellcheck disable=SC2086
-    prompt_body "$agent_file" |
-      CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS="$BG_WAIT_CEILING_MS" \
-      CI=true \
-      "${scope[@]}" "${inhibit[@]}" "$CLAUDE_BIN" -p \
-        --dangerously-skip-permissions \
-        --output-format json \
-        ${model:+--model "$model"} \
-        ${fallback:+--fallback-model "$fallback"} >"$raw" 2>>"$log" || rc=$?
-    record_usage "$name" "$stamp" "$raw" "$log"
+    # At most two passes: the configured model, then the fallback if the
+    # first died on a usage limit (see retry_on_fallback). $suffix is both
+    # the "have we already retried?" flag and what keeps the second
+    # attempt's scope unit and usage record from overwriting the first's.
+    local rc=0 try_model="$model" try_fallback="$fallback" suffix="" msg=""
+    while :; do
+      local scope=() unit=""
+      if [ "$scope_ok" = 1 ]; then
+        unit="kari-agent-$name-$stamp$suffix"
+        scope=("$SYSTEMD_RUN_BIN" --user --scope --quiet --unit="$unit"
+          --property=OOMPolicy=continue --property="MemoryMax=$MEMORY_MAX" --)
+      fi
+      rc=0
+      # shellcheck disable=SC2086
+      prompt_body "$agent_file" |
+        CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS="$BG_WAIT_CEILING_MS" \
+        CI=true \
+        "${scope[@]}" "${inhibit[@]}" "$CLAUDE_BIN" -p \
+          --dangerously-skip-permissions \
+          --output-format json \
+          ${try_model:+--model "$try_model"} \
+          ${try_fallback:+--fallback-model "$try_fallback"} \
+          >"$raw" 2>>"$log" || rc=$?
+      record_usage "$name" "$stamp$suffix" "$raw" "$log"
+      # Only a scope that still has processes in it is "stopped"; an empty
+      # one was already collected, and a session that cleaned up after
+      # itself deserves a quiet exit. Reaped per attempt so a retry never
+      # inherits the debris of the attempt before it.
+      if [ -n "$unit" ] &&
+        "$SYSTEMCTL_BIN" --user is-active --quiet "$unit.scope" 2>/dev/null
+      then
+        echo "reap $name: stopping leftover processes in $unit.scope"
+        "$SYSTEMCTL_BIN" --user stop "$unit.scope" 2>/dev/null || true
+      fi
+      if [ -n "$suffix" ] ||
+        ! retry_on_fallback "$rc" "$raw" "$model" "$fallback"
+      then
+        break
+      fi
+      # Both destinations on purpose: the journal is where a human
+      # notices, the log is what the next tick and claim-liveness read.
+      msg="retry $name: $try_model hit a usage limit; retrying on $fallback"
+      echo "$msg"
+      end_line "$log"
+      echo "$msg" >>"$log"
+      rm -f "$raw"
+      suffix="-retry"
+      try_model="$fallback"
+      # Already running as the fallback; passing it again would make the
+      # session its own fallback.
+      try_fallback=""
+    done
     rm -f "$raw"
-    # Only a scope that still has processes in it is "stopped"; an empty
-    # one was already collected, and a session that cleaned up after
-    # itself deserves a quiet exit.
-    if [ -n "$unit" ] &&
-      "$SYSTEMCTL_BIN" --user is-active --quiet "$unit.scope" 2>/dev/null
-    then
-      echo "reap $name: stopping leftover processes in $unit.scope"
-      "$SYSTEMCTL_BIN" --user stop "$unit.scope" 2>/dev/null || true
-    fi
     exit "$rc"
   ) 9>"$STATE_DIR/$name.lock" &
   if $WAIT; then

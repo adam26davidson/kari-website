@@ -64,9 +64,9 @@ enabled: true         # anything else disables the agent
 every: 1h             # required; Nm / Nh / Nd since last *started* run
                       # (approximate — see "Timing" below)
 model: opus           # optional; passed to claude --model
-fallback: sonnet      # optional; passed to claude --fallback-model, so a
-                      # tick can continue on a smaller model when the
-                      # primary's usage limit is hit
+fallback: sonnet      # optional; passed to claude --fallback-model AND
+                      # used to retry the tick once when the primary is
+                      # out of quota — see "Fallback model" below
 ---
 The agent's full prompt.
 ```
@@ -432,5 +432,42 @@ rather than deleted; a `Claim released:` comment on each issue names
 both, and the next tick that picks the issue reads that comment, reuses
 the kept branch's slug and hands the material to the worker. The
 `fallback` model keeps orchestration running through an outage of the
-primary, and the playbook postpones stronger-tier subagent work (never
-silently downgrades it) until the limit window resets.
+primary (see "Fallback model" below), and the playbook postpones
+stronger-tier subagent work (never silently downgrades it) until the
+limit window resets.
+
+### Fallback model
+
+`fallback:` covers two different failures, because one flag was not
+enough.
+
+`--fallback-model` handles the capacity case: the API is overloaded, and
+claude switches models mid-session on its own.
+
+It does **not** handle running out of quota. There the session just
+prints the limit and exits, which is how `fallback: opus` sat in
+`issue-pipeline.md` for weeks under the comment "keep orchestrating on
+Opus when the Fable limit is hit" without once doing so — on 2026-08-25
+the Fable quota went at 00:12 and every tick failed for the rest of the
+day while Opus was healthy the whole time. So `dispatch.sh` also
+**retries the tick once on the fallback model**, and the run log records
+a `retry <name>:` line when it does.
+
+Three things bound that retry:
+
+- It fires only on `api_error_status: 429` in the session's result
+  object — not on the message text, which has already changed once
+  ("You've hit your monthly spend limit" in #322, "You've reached your
+  Fable 5 limit" today). A timed-out or crashed tick is never re-run.
+- It happens at most once. A *spend* cap is account-wide rather than
+  per-model, so the fallback is limited too and the second attempt
+  fails as well; without the bound that is an infinite loop.
+- It is skipped when the failed attempt already spent more than
+  `KARI_AUTOMATION_RETRY_COST_LIMIT` (default $2). Failing at session
+  start costs ~2s and $0, so that retry is free; a limit hit deep into
+  a tick has already paid for the work, and re-running bills it twice
+  with the next tick only a cadence away.
+
+Each attempt keeps its own usage record (`<name>-<stamp>.json` and
+`<name>-<stamp>-retry.json`), so `--status` sums what both actually
+spent.
