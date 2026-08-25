@@ -35,14 +35,14 @@ pub fn create_router(state: AppState) -> Router {
         .route("/images", get(images::list_images_handler))
         .route("/images/gc", post(images::gc_images_handler))
         .route(
-            "/images/:filename/set-published",
+            "/images/{filename}/set-published",
             put(images::set_image_published_handler),
         )
         .route("/blog", get(blog::list_blog_posts_handler))
         .route("/blog", put(blog::update_blog_posts_handler))
         .route("/blog-content", put(blog::update_blog_post_content))
-        .route("/blog-content/:id", get(blog::get_blog_post_content))
-        .route("/blog-content/:id", delete(blog::delete_blog_post_content))
+        .route("/blog-content/{id}", get(blog::get_blog_post_content))
+        .route("/blog-content/{id}", delete(blog::delete_blog_post_content))
         .layer(DefaultBodyLimit::disable())
         .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024 /* 10mb */))
         .layer(middleware::from_fn_with_state(
@@ -51,7 +51,7 @@ pub fn create_router(state: AppState) -> Router {
         ));
 
     let public_routes = Router::new()
-        .route("/images/:filename", get(images::get_image_handler))
+        .route("/images/{filename}", get(images::get_image_handler))
         .route("/haiku", get(haiku::get_haiku_handler))
         .route("/haiga", get(haiga::get_haiga_handler))
         .route("/home-page", get(home::get_home_page_handler))
