@@ -33,23 +33,22 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.30.6",
-    "uuid": "^10.0.0"
+    "uuid": "^11.1.1"
   },
   "devDependencies": {
     "@aws-sdk/client-s3": "^3.1116.0",
     "@eslint/compat": "^2.1.0",
-    "@eslint/js": "^9.39.5",
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.62.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.6",
-    "@types/node": "^22.20.1",
+    "@types/node": "^24.13.3",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
-    "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react-swc": "^4.3.3",
     "@vitest/coverage-v8": "^2.1.9",
-    "eslint": "^9.39.5",
+    "eslint": "^10.9.1",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.4",
@@ -57,7 +56,7 @@
     "jsdom": "^25.0.1",
     "prettier": "^3.9.6",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.67.0",
+    "typescript-eslint": "^8.68.0",
     "vite": "^5.4.21",
     "vitest": "^2.1.9"
   },
@@ -69,5 +68,10 @@
     "@swc/core": false,
     "browser-tabs-lock": false,
     "esbuild": false
+  },
+  "overrides": {
+    "eslint-plugin-jsx-a11y": {
+      "eslint": "$eslint"
+    }
   }
 }

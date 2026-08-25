@@ -51,6 +51,18 @@ run) and commit the `package.json` change. Never silence it with
 `--dangerously-allow-all-scripts`. CI is on Node 22 / npm 10, which predates
 the field and ignores it, so this is about local output and local intent.
 
+## The eslint-plugin-jsx-a11y Peer Override
+`overrides` in `ui/package.json` pins `eslint-plugin-jsx-a11y`'s `eslint`
+peer to `$eslint` (whatever the root resolves). Without it `npm ci` fails
+`ERESOLVE`: the plugin's last release (6.10.2, October 2024) declares
+`eslint@^3 || … || ^9`, and this package is on eslint 10. The plugin itself
+runs fine under 10 — `jsx-a11y/alt-text`, the one rule the config enables,
+still fires; #528 tracks removing the override once upstream ships a release
+that accepts eslint 10. This is a stale peer RANGE, not a stale plugin, so
+prefer the override to dropping the plugin (that would silently lose the
+alt-text check). Don't reach for `--legacy-peer-deps` — it would have to be
+threaded through every `npm ci` in CI.
+
 ## Test Commands
 - UI: `npm run test` - Vitest in watch mode
 - UI: `npm run test:run` - Vitest once (used in CI)

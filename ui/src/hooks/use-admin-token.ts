@@ -17,7 +17,9 @@ export function useAdminToken() {
       await loginWithRedirect();
       // loginWithRedirect navigates away; throw so in-flight callers abort
       // instead of proceeding without a token.
-      throw new Error("Session expired — redirecting to login");
+      throw new Error("Session expired — redirecting to login", {
+        cause: error,
+      });
     }
   }, [getAccessTokenSilently, loginWithRedirect]);
 }
