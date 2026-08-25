@@ -138,8 +138,14 @@ opening a PR:
    fails without it (details under Parallel Sessions below). Then, with the
    dev stack running (`./scripts/dev.sh`), run `node e2e/screenshots.mjs` in
    `ui/` (add `--routes /,/haiku` to limit to affected pages; `--base-url`
-   to target a non-default server). Full-page desktop + tablet + mobile PNGs
-   land in `ui/e2e/screenshots/`, and the script asserts no horizontal
+   to target a non-default server). The `in ui/` is load-bearing, and it
+   applies to any ad-hoc Playwright probe you write too: Node resolves
+   `@playwright/test` upward from the SCRIPT's own directory, not from the
+   cwd, so a probe dropped in `/tmp` or at the repo root dies with
+   `ERR_MODULE_NOT_FOUND` instead of finding `ui/node_modules`. Put
+   throwaway probes under `ui/e2e/` and run them from `ui/`.
+   Full-page desktop + tablet + mobile PNGs land in
+   `ui/e2e/screenshots/`, and the script asserts no horizontal
    overflow at each captured width plus a few assert-only widths (exits
    non-zero, naming the widest element, if a page overflows). Admin pages
    (lists, editors, image cleanup) are captured too when

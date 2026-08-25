@@ -1,14 +1,8 @@
 import { BlogPost } from "../../../../../models";
+import { toDateInputValue } from "../../../../../utils/date-helpers";
 import { DataEditor } from "../../../components/data-editor/data-editor";
 import { Tiptap } from "../../../components/tiptap/tiptap";
 import "./blog-post-editor.css";
-
-// The yyyy-mm-dd value the date input needs, or "" when the stored date
-// is malformed — an Invalid Date's toISOString() would throw (#154).
-function toDateInputValue(value: string): string {
-  const date = new Date(value);
-  return isNaN(date.getTime()) ? "" : date.toISOString().split("T")[0];
-}
 
 export function BlogPostEditor({
   post,

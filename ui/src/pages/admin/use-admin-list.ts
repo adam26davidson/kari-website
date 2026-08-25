@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAdminToken } from "../../hooks/use-admin-token";
+import { TokenGetter } from "../../services/http";
 import { useAdminUi } from "./admin-ui-context";
-
-type TokenGetter = () => Promise<string>;
 
 export interface UseAdminListOptions<T> {
   /** Plural noun used in overlay messages, e.g. "haiku" or "other works". */

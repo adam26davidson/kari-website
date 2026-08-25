@@ -24,3 +24,15 @@ export function todayAsPostDate(): string {
     Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()),
   ).toISOString();
 }
+
+/**
+ * The yyyy-mm-dd an `<input type="date">` needs, from a stored post date.
+ * The read-back counterpart of todayAsPostDate: stored dates are UTC
+ * midnight, so the ISO string's own date part is the calendar day to show
+ * — no conversion. A malformed stored value yields "" rather than
+ * throwing out of an Invalid Date's toISOString() (#154).
+ */
+export function toDateInputValue(value: string): string {
+  const date = new Date(value);
+  return isNaN(date.getTime()) ? "" : date.toISOString().split("T")[0];
+}
