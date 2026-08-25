@@ -373,6 +373,177 @@ run_launch "$w"
 expect_not_contains "$w/stub-out" "--fallback-model" \
   "no fallback flag when frontmatter omits it"
 
+# 9b. Usage-limit retry (#515). --fallback-model only covers capacity
+#     errors, so a quota-exhausted session exits 1 without ever trying the
+#     fallback — `fallback: opus` promised "keep orchestrating on Opus
+#     when the Fable limit is hit" and never did it. dispatch.sh now
+#     retries the tick once on the fallback model.
+#     Keyed on the result object's api_error_status, NOT on the message:
+#     #322 recorded this same failure as "You've hit your monthly spend
+#     limit" and it reads "You've reached your Fable 5 limit" today. The
+#     wording has already changed once; the status code has not.
+#     The stubs append one INVOKED line per attempt (sequential within a
+#     launch, so no interleaving) and emit the result-object shape
+#     record_usage insists on.
+STUB_LIMIT="$STUB_DIR/claude-limit-stub"
+cat >"$STUB_LIMIT" <<'EOF'
+#!/usr/bin/env bash
+cat >/dev/null
+echo "INVOKED: $*" >>"$STUB_OUT"
+case "$*" in
+  *"--model opus"*)
+    printf '{"type":"result","result":"retry ok","usage":{},'
+    printf '"is_error":false,"total_cost_usd":0.5}\n'
+    ;;
+  *)
+    printf '{"type":"result","result":"limit reached","usage":{},'
+    printf '"is_error":true,"api_error_status":429,"total_cost_usd":%s}\n' \
+      "${STUB_COST:-0.01}"
+    exit 1
+    ;;
+esac
+EOF
+chmod +x "$STUB_LIMIT"
+
+# The 2026-08-24 16:00 tick's real shape: is_error with a null status. A
+# timed-out tick must not be re-run — only the quota case may retry.
+STUB_NON429="$STUB_DIR/claude-non429-stub"
+cat >"$STUB_NON429" <<'EOF'
+#!/usr/bin/env bash
+cat >/dev/null
+echo "INVOKED: $*" >>"$STUB_OUT"
+printf '{"type":"result","result":"Request timed out","usage":{},'
+printf '"is_error":true,"api_error_status":null,"total_cost_usd":0}\n'
+exit 1
+EOF
+chmod +x "$STUB_NON429"
+
+# The 2.1.243 segfault shape: killed before printing anything, so there is
+# no result object to read a status out of.
+STUB_SILENT="$STUB_DIR/claude-silent-stub"
+cat >"$STUB_SILENT" <<'EOF'
+#!/usr/bin/env bash
+cat >/dev/null
+echo "INVOKED: $*" >>"$STUB_OUT"
+exit 139
+EOF
+chmod +x "$STUB_SILENT"
+
+write_fallback_agent() { # <workdir> — model fable, fallback opus
+  cat >"$1/agents/issue-pipeline.md" <<'EOF'
+---
+name: issue-pipeline
+enabled: true
+every: 1h
+model: fable
+fallback: opus
+---
+This is the issue-pipeline prompt body.
+EOF
+}
+
+attempts_of() { # <workdir> — how many times the stub was invoked
+  grep -c '^INVOKED:' "$1/stub-out" 2>/dev/null || true
+}
+
+w="$(new_work)"
+write_fallback_agent "$w"
+export STUB_OUT="$w/stub-out"
+STUB_CLAUDE="$STUB_LIMIT" run_launch "$w"
+expect_eq "$(attempts_of "$w")" 2 \
+  "a usage-limited session is retried once"
+grep '^INVOKED:' "$w/stub-out" | tail -1 >"$w/retry-args"
+expect_contains "$w/retry-args" "--model opus" \
+  "the retry runs on the fallback model"
+# Already running as the fallback: passing it again is noise at best and a
+# self-referential fallback at worst.
+expect_not_contains "$w/retry-args" "--fallback-model" \
+  "the retry drops --fallback-model"
+RETRY_LOG="$(find "$w/state/logs" -name 'issue-pipeline-*.log' | head -1)"
+expect_contains "$RETRY_LOG" "retry issue-pipeline" \
+  "the run log says the tick was retried"
+expect_contains "$RETRY_LOG" "tick exited 0" \
+  "a retry that succeeds makes the tick succeed"
+expect_eq "$(cat "$w/exit-code")" 0 \
+  "--wait exits 0 when the retry succeeds"
+# Spend is the reason the cost guard below can be trusted, so both
+# attempts have to be on the record; usage_summary globs "<name>-*.json".
+expect_eq \
+  "$(find "$w/state/usage" -name 'issue-pipeline-*.json' | wc -l)" 2 \
+  "each attempt keeps its own usage record"
+
+# The retry is bounded at one, and the case that proves it is the one the
+# fleet will actually meet: a SPEND cap is account-wide rather than
+# per-model, so the fallback is limited too and every attempt returns 429.
+# Unbounded, that is an infinite loop inside a backgrounded tick.
+# The stub stops claiming a limit after 5 calls so a regression fails this
+# assertion on the count instead of hanging the suite forever.
+STUB_ALWAYS_LIMITED="$STUB_DIR/claude-always-limited-stub"
+cat >"$STUB_ALWAYS_LIMITED" <<'EOF'
+#!/usr/bin/env bash
+cat >/dev/null
+echo "INVOKED: $*" >>"$STUB_OUT"
+if [ "$(grep -c '^INVOKED:' "$STUB_OUT")" -ge 5 ]; then
+  printf '{"type":"result","result":"runaway guard","usage":{},'
+  printf '"is_error":true,"api_error_status":null,"total_cost_usd":0}\n'
+  exit 1
+fi
+printf '{"type":"result","result":"limit reached","usage":{},'
+printf '"is_error":true,"api_error_status":429,"total_cost_usd":0.01}\n'
+exit 1
+EOF
+chmod +x "$STUB_ALWAYS_LIMITED"
+
+w="$(new_work)"
+write_fallback_agent "$w"
+export STUB_OUT="$w/stub-out"
+STUB_CLAUDE="$STUB_ALWAYS_LIMITED" run_launch "$w"
+expect_eq "$(attempts_of "$w")" 2 \
+  "the retry is bounded at one even when the fallback is limited too"
+expect_eq "$(cat "$w/exit-code")" 1 \
+  "--wait still reports failure when the retry fails too"
+
+w="$(new_work)"
+write_fallback_agent "$w"
+export STUB_OUT="$w/stub-out"
+STUB_CLAUDE="$STUB_NON429" run_launch "$w"
+expect_eq "$(attempts_of "$w")" 1 \
+  "a non-429 failure is not retried"
+
+w="$(new_work)"
+write_fallback_agent "$w"
+export STUB_OUT="$w/stub-out"
+STUB_CLAUDE="$STUB_SILENT" run_launch "$w"
+expect_eq "$(attempts_of "$w")" 1 \
+  "a session that printed no result object is not retried"
+
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+export STUB_OUT="$w/stub-out"
+STUB_CLAUDE="$STUB_LIMIT" run_launch "$w"
+expect_eq "$(attempts_of "$w")" 1 \
+  "no retry when the agent configures no fallback"
+
+# Cost guard. Failing at session start costs ~2s and $0, so that retry is
+# free; a limit hit deep into a tick has already paid for the work and
+# re-running bills it twice with the next tick only a cadence away.
+w="$(new_work)"
+write_fallback_agent "$w"
+export STUB_OUT="$w/stub-out"
+STUB_COST=5 STUB_CLAUDE="$STUB_LIMIT" run_launch "$w"
+expect_eq "$(attempts_of "$w")" 1 \
+  "no retry once the failed attempt has already spent real money"
+unset STUB_COST
+
+w="$(new_work)"
+write_fallback_agent "$w"
+export STUB_OUT="$w/stub-out"
+STUB_COST=5 KARI_AUTOMATION_RETRY_COST_LIMIT=10 \
+  STUB_CLAUDE="$STUB_LIMIT" run_launch "$w"
+expect_eq "$(attempts_of "$w")" 2 \
+  "KARI_AUTOMATION_RETRY_COST_LIMIT raises the cost guard"
+unset STUB_COST
+
 # --wait's other half: a tick blocks until its launches finish AND reports
 # their failure. A failed agent is otherwise invisible — the launch is
 # backgrounded, so without propagating the wait status a manual tick (or the
@@ -528,6 +699,23 @@ expect_contains "$w/stub-out.systemctl" "stop kari-agent-issue-pipeline-" \
   "leftover scope is stopped after the agent exits"
 expect_contains "$w/out" "reap issue-pipeline" \
   "tick reports that it reaped leftovers"
+
+# A retried tick (#515) is two sessions, so it needs two scopes. Reusing
+# the unit name would collide with the first scope whenever the reap has
+# not collected it yet, and systemd refuses a duplicate unit — which
+# would take out the very retry that is meant to rescue the tick.
+w="$(new_work)"
+write_fallback_agent "$w"
+export STUB_OUT="$w/stub-out"
+KARI_AUTOMATION_SYSTEMD_RUN_BIN="$STUB_SYSTEMD_RUN" \
+KARI_AUTOMATION_SYSTEMCTL_BIN="$STUB_SYSTEMCTL" \
+  STUB_CLAUDE="$STUB_LIMIT" run_launch "$w"
+expect_eq "$(attempts_of "$w")" 2 "the retry also happens inside a scope"
+expect_eq \
+  "$(grep -o -- '--unit=[^ ]*' "$w/stub-out.scope" | sort -u | wc -l)" 2 \
+  "each attempt gets its own scope unit"
+expect_contains "$w/stub-out.scope" "-retry" \
+  "the retry's scope unit is marked as the retry"
 
 w="$(new_work)"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
