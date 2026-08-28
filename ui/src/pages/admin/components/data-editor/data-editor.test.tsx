@@ -8,6 +8,7 @@ function renderEditor(overrides?: { disableSave?: boolean }) {
   const onClose = vi.fn();
   const utils = render(
     <DataEditor
+      title="Edit haiku"
       disableSave={overrides?.disableSave}
       onSave={onSave}
       onClose={onClose}
@@ -19,6 +20,13 @@ function renderEditor(overrides?: { disableSave?: boolean }) {
 }
 
 describe("DataEditor", () => {
+  it("names what is being edited in a heading", () => {
+    renderEditor();
+    expect(
+      screen.getByRole("heading", { name: "Edit haiku" }),
+    ).toBeInTheDocument();
+  });
+
   it("renders its children", () => {
     renderEditor();
     expect(screen.getByText("editor content")).toBeInTheDocument();
@@ -33,7 +41,6 @@ describe("DataEditor", () => {
   it("does not call onSave when the disabled save button is clicked", async () => {
     const { onSave } = renderEditor({ disableSave: true });
     const save = screen.getByRole("button", { name: "Save" });
-    expect(save).toHaveClass("disabled");
     expect(save).toBeDisabled();
     await userEvent.click(save);
     expect(onSave).not.toHaveBeenCalled();

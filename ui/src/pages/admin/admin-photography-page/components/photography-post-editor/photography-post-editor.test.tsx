@@ -62,10 +62,22 @@ beforeEach(() => {
 
 // The per-image blurb textareas, in list order.
 function imageBlurbs(): Array<HTMLElement> {
-  return screen.getAllByRole("textbox", { name: "image blurb or caption" });
+  return screen.getAllByRole("textbox", { name: "Caption (optional)" });
 }
 
 describe("PhotographyPostEditor", () => {
+  it("says what it is editing and labels every field", () => {
+    renderEditor();
+    expect(
+      screen.getByRole("heading", { name: "Edit photography post" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Title")).toHaveValue("Trip");
+    expect(screen.getByLabelText("Subtitle")).toHaveValue("Coast");
+    expect(screen.getByLabelText("Blurb (optional)")).toBeInTheDocument();
+    // One "Photo" group label per image row.
+    expect(screen.getAllByText("Photo")).toHaveLength(3);
+  });
+
   it("updates the title without touching the images", () => {
     const { setPost, setImages } = renderEditor();
     fireEvent.change(screen.getByRole("textbox", { name: "Title" }), {
@@ -82,7 +94,7 @@ describe("PhotographyPostEditor", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Subtitle" }), {
       target: { value: "Inland" },
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "Optional blurb" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Blurb (optional)" }), {
       target: { value: "New blurb" },
     });
     expect(setPost.mock.calls[0][0].subtitle).toBe("Inland");
@@ -92,7 +104,7 @@ describe("PhotographyPostEditor", () => {
   it("appends an empty entry with a fresh id on new item", async () => {
     const { setImages } = renderEditor();
 
-    await userEvent.click(screen.getByRole("button", { name: "Add item" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add an image" }));
 
     const updated = setImages.mock.calls[0][0] as Array<EditorImage>;
     expect(updated).toHaveLength(4);

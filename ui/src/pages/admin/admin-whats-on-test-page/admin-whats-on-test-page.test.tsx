@@ -66,7 +66,7 @@ describe("AdminWhatsOnTestPage", () => {
     render(<AdminWhatsOnTestPage />);
 
     expect(
-      await screen.findByText(/unknown build — comparison unavailable/i),
+      await screen.findByText(/isn't a deployed build, so there's nothing/i),
     ).toBeInTheDocument();
     expect(DeployStatusService.getLatestProdDeploy).not.toHaveBeenCalled();
     expect(DeployStatusService.getPendingCommits).not.toHaveBeenCalled();
@@ -119,7 +119,9 @@ describe("AdminWhatsOnTestPage", () => {
     render(<AdminWhatsOnTestPage />);
 
     expect(
-      await screen.findByText("test == prod — nothing awaiting promotion."),
+      await screen.findByText(
+        /the test site and the live site are the same right now/i,
+      ),
     ).toBeInTheDocument();
     expect(DeployStatusService.getPendingCommits).not.toHaveBeenCalled();
   });
@@ -133,7 +135,9 @@ describe("AdminWhatsOnTestPage", () => {
     render(<AdminWhatsOnTestPage />);
 
     expect(
-      await screen.findByText("test == prod — nothing awaiting promotion."),
+      await screen.findByText(
+        /the test site and the live site are the same right now/i,
+      ),
     ).toBeInTheDocument();
   });
 
@@ -145,7 +149,7 @@ describe("AdminWhatsOnTestPage", () => {
     render(<AdminWhatsOnTestPage />);
 
     expect(
-      await screen.findByText(/no successful production deployment/i),
+      await screen.findByText(/hasn't been published from here yet/i),
     ).toBeInTheDocument();
     expect(DeployStatusService.getPendingCommits).not.toHaveBeenCalled();
   });
@@ -158,10 +162,12 @@ describe("AdminWhatsOnTestPage", () => {
     render(<AdminWhatsOnTestPage />);
 
     expect(
-      await screen.findByText(/couldn't determine what production is running/i),
+      await screen.findByText(
+        /couldn't work out which version the live site is running/i,
+      ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText(/no successful production deployment/i),
+      screen.queryByText(/hasn't been published from here yet/i),
     ).toBeNull();
     expect(DeployStatusService.getPendingCommits).not.toHaveBeenCalled();
   });

@@ -52,7 +52,7 @@ function renderPage() {
 
 async function clickPreview() {
   await act(async () => {
-    fireEvent.click(screen.getByText("Preview cleanup (dry run)"));
+    fireEvent.click(screen.getByText("Preview cleanup"));
   });
 }
 
@@ -73,14 +73,17 @@ describe("AdminImageGcPage dry run", () => {
     // across the three categories, ten objects between them.
     expect(
       screen.getByText(
-        "Preview: 2 orphaned, 2 referenced, 1 skipped as recent. " +
-          "Nothing has been deleted.",
+        "Preview: 2 images are no longer used by any page and would be " +
+          "deleted, 2 still in use, 1 uploaded in the last hour and left " +
+          "alone. Nothing has been deleted.",
       ),
     ).toBeTruthy();
-    expect(screen.getByText("Orphaned (would be deleted) (2)")).toBeTruthy();
-    expect(screen.getByText("Referenced (kept) (2)")).toBeTruthy();
     expect(
-      screen.getByText("Skipped — uploaded within the last hour (1)"),
+      screen.getByText("No longer used (would be deleted) (2)"),
+    ).toBeTruthy();
+    expect(screen.getByText("Still in use (kept) (2)")).toBeTruthy();
+    expect(
+      screen.getByText("Uploaded in the last hour (kept) (1)"),
     ).toBeTruthy();
     // Every image is named once...
     for (const id of [
@@ -102,6 +105,29 @@ describe("AdminImageGcPage dry run", () => {
     ]) {
       expect(screen.getByText(key)).toBeTruthy();
     }
+  });
+
+  // "1 images are no longer used" would be the plainest possible way to
+  // sound like a machine, so the wording agrees with the count.
+  it("says it in the singular when exactly one image is unused", async () => {
+    vi.mocked(ImageService.gc).mockResolvedValue({
+      ...dryRunReport,
+      orphaned: [image("orphan-1.png")],
+      referenced: [],
+      skipped_recent: [],
+    });
+    renderPage();
+
+    await clickPreview();
+
+    expect(
+      screen.getByText(
+        "Preview: 1 image is no longer used by any page and would be " +
+          "deleted, 0 still in use, 0 uploaded in the last hour and left " +
+          "alone. Nothing has been deleted.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText("Delete 1 unused image")).toBeTruthy();
   });
 
   it("shows no delete button when the preview finds no orphans", async () => {
@@ -136,13 +162,13 @@ describe("AdminImageGcPage real run", () => {
     const { notify, adminUi } = renderPage();
     await clickPreview();
 
-    fireEvent.click(screen.getByText("Delete 2 orphaned images"));
+    fireEvent.click(screen.getByText("Delete 2 unused images"));
 
     // No deletion happens before the dialog is confirmed.
     expect(ImageService.gc).toHaveBeenCalledOnce();
     expect(ImageService.gc).toHaveBeenCalledWith(true, expect.any(Function));
     expect(adminUi.confirm).toHaveBeenCalledWith(
-      expect.stringContaining("permanently delete 2 orphaned images"),
+      expect.stringContaining("permanently delete 2 unused images"),
       expect.any(Function),
     );
 
@@ -153,11 +179,11 @@ describe("AdminImageGcPage real run", () => {
       false,
       expect.any(Function),
     );
-    expect(notify).toHaveBeenCalledWith("Deleted 2 orphaned images");
-    expect(screen.getByText("Deleted 2 orphaned images.")).toBeTruthy();
+    expect(notify).toHaveBeenCalledWith("Deleted 2 unused images");
+    expect(screen.getByText("Deleted 2 unused images.")).toBeTruthy();
     expect(screen.getByText("Deleted (2)")).toBeTruthy();
     // The real run replaces the preview's delete button and orphan list.
-    expect(screen.queryByText("Delete 2 orphaned images")).toBeNull();
+    expect(screen.queryByText("Delete 2 unused images")).toBeNull();
   });
 
   it("does not run the sweep until the dialog is confirmed", async () => {
@@ -165,7 +191,7 @@ describe("AdminImageGcPage real run", () => {
     const { adminUi } = renderPage();
     await clickPreview();
 
-    fireEvent.click(screen.getByText("Delete 2 orphaned images"));
+    fireEvent.click(screen.getByText("Delete 2 unused images"));
 
     // The page only hands the dialog to confirm(); the sweep runs only
     // when the provider invokes the Yes callback.

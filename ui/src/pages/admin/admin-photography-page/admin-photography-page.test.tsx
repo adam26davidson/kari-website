@@ -34,6 +34,20 @@ function iconButton(container: HTMLElement, icon: string): HTMLElement {
   return button;
 }
 
+/**
+ * The editor's Save control. A floppy-disk icon circle until #457 made it
+ * a labelled text button; it is the first control in the editor header.
+ */
+function saveButton(container: HTMLElement): HTMLElement {
+  const button = container.querySelector(
+    ".data-editor-item-controls .admin-button",
+  );
+  if (!(button instanceof HTMLElement)) {
+    throw new Error("no save button in the editor");
+  }
+  return button;
+}
+
 // The saved post as it exists in the published list before the edit.
 let savedPost: PhotographyPost;
 
@@ -90,7 +104,7 @@ describe("AdminPhotographyPage image replacement", () => {
     );
     const { container, notify } = await openEditorAndReplaceImage();
 
-    fireEvent.click(iconButton(container, "floppy-disk"));
+    fireEvent.click(saveButton(container));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
@@ -113,7 +127,7 @@ describe("AdminPhotographyPage image replacement", () => {
     vi.mocked(ImageService.upload).mockResolvedValue("");
     const { container, notify } = await openEditorAndReplaceImage();
 
-    fireEvent.click(iconButton(container, "floppy-disk"));
+    fireEvent.click(saveButton(container));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
@@ -131,7 +145,7 @@ describe("AdminPhotographyPage image replacement", () => {
     );
     const { container, notify } = await openEditorAndReplaceImage();
 
-    fireEvent.click(iconButton(container, "floppy-disk"));
+    fireEvent.click(saveButton(container));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
@@ -146,7 +160,7 @@ describe("AdminPhotographyPage image replacement", () => {
   it("saves the new image and leaves the replaced object in storage", async () => {
     const { container, notify } = await openEditorAndReplaceImage();
 
-    fireEvent.click(iconButton(container, "floppy-disk"));
+    fireEvent.click(saveButton(container));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Photography post saved"),
@@ -192,7 +206,7 @@ describe("AdminPhotographyPage reordering in the editor", () => {
     // control, so the first arrow-down on the page is item 0's.
     fireEvent.click(iconButton(container, "arrow-down"));
 
-    fireEvent.click(iconButton(container, "floppy-disk"));
+    fireEvent.click(saveButton(container));
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Photography post saved"),
     );
@@ -259,7 +273,7 @@ describe("AdminPhotographyPage creation", () => {
   // dialog has been handed to confirm().
   async function openCreateConfirmation() {
     const { container, notify, adminUi } = await renderPage();
-    fireEvent.click(screen.getByRole("button", { name: "Add item" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add a photography post" }));
     return { container, notify, adminUi };
   }
 
@@ -418,7 +432,7 @@ describe("AdminPhotographyPage load failure", () => {
 
     await screen.findByText("Failed to load photography posts.");
     // No editable list — saving one would overwrite the real data.
-    expect(screen.queryByRole("button", { name: "Add item" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add a photography post" })).toBeNull();
 
     // Retry reloads and shows the list.
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
@@ -539,7 +553,7 @@ describe("AdminPhotographyPage routing", () => {
   it("returns to the list after a successful save without asking", async () => {
     const { container, notify } = await openEditorAndReplaceImage();
 
-    fireEvent.click(iconButton(container, "floppy-disk"));
+    fireEvent.click(saveButton(container));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Photography post saved"),

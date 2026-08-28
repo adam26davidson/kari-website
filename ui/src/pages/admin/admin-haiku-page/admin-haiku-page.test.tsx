@@ -72,7 +72,7 @@ describe("AdminHaikuPage loading", () => {
     // No editable (and saveable) empty list — saving it would overwrite
     // the real data.
     expect(
-      screen.queryByRole("button", { name: "Add item" }),
+      screen.queryByRole("button", { name: "Add a haiku" }),
     ).not.toBeInTheDocument();
   });
 
@@ -93,7 +93,7 @@ describe("AdminHaikuPage loading", () => {
 describe("AdminHaikuPage new haiku", () => {
   it("creates and opens a new empty haiku on Yes", async () => {
     const { adminUi } = renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "Add item" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add a haiku" }));
 
     await answerYes(adminUi);
 
@@ -109,7 +109,7 @@ describe("AdminHaikuPage new haiku", () => {
 
   it("does nothing until the confirmation is answered", async () => {
     const { adminUi } = renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "Add item" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add a haiku" }));
 
     // The page only hands the dialog to confirm(); nothing is created
     // unless the provider runs the Yes callback.
@@ -120,7 +120,7 @@ describe("AdminHaikuPage new haiku", () => {
     expect(HaikuService.updateList).not.toHaveBeenCalled();
     // Still on the list view, not in the editor.
     expect(
-      screen.getByRole("button", { name: "Add item" }),
+      screen.getByRole("button", { name: "Add a haiku" }),
     ).toBeInTheDocument();
   });
 
@@ -129,7 +129,7 @@ describe("AdminHaikuPage new haiku", () => {
       new Error("PUT failed"),
     );
     const { adminUi } = renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "Add item" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add a haiku" }));
 
     await answerYes(adminUi);
 
@@ -143,7 +143,7 @@ describe("AdminHaikuPage new haiku", () => {
       screen.queryByRole("button", { name: "Save" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Add item" }),
+      screen.getByRole("button", { name: "Add a haiku" }),
     ).toBeInTheDocument();
   });
 });

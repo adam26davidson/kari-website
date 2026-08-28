@@ -32,6 +32,13 @@ describe("PhotoPicker", () => {
     expect(screen.getByText("Select Image")).toBeInTheDocument();
   });
 
+  it("stays secondary to the editor's Save button", () => {
+    render(<PhotoPicker imageFile={null} fileName="" setImageFile={() => {}} />);
+    expect(screen.getByRole("button", { name: /Select Image/ })).toHaveClass(
+      "secondary",
+    );
+  });
+
   it("previews an already-uploaded image from its thumbnail", () => {
     // The preview is 200px wide; downloading the camera original for it is
     // what made the editors laggy (#273).

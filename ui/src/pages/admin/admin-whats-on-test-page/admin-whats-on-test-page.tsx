@@ -3,7 +3,6 @@ import "./admin-whats-on-test-page.css";
 import { LoadError } from "../../../components/load-error/load-error";
 import { useS3Load } from "../../../hooks/use-s3-load";
 import {
-  DEPLOYMENTS_SCAN_LIMIT,
   DeployStatusService,
   PendingCommit,
   ProdDeployLookup,
@@ -99,9 +98,14 @@ export function AdminWhatsOnTestPage() {
         what to check on test before approving the prod deploy.
       </p>
       {!headSha && (
+        // No VITE_COMMIT_SHA is baked in, which is the normal case outside
+        // a deployed environment (local dev, the test-mode bundle) — there
+        // is no version to compare against, so say that rather than name
+        // the build variable.
         <p className="whats-on-test-note">
-          Unknown build — comparison unavailable. This build has no
-          VITE_COMMIT_SHA baked in (expected outside deployed environments).
+          This copy of the site isn&apos;t a deployed build, so there&apos;s
+          nothing to compare. On the test site this page lists what&apos;s
+          ready to check before it goes live.
         </p>
       )}
       {headSha && isLoading && <div className="loading">Loading...</div>}
@@ -115,25 +119,26 @@ export function AdminWhatsOnTestPage() {
         <>
           {data.prod.kind === "none" && (
             <p className="whats-on-test-note">
-              No successful production deployment found — everything on test
-              is awaiting promotion.
+              The live site hasn&apos;t been published from here yet, so
+              everything on the test site is waiting to go live.
             </p>
           )}
           {data.prod.kind === "indeterminate" && (
+            // The live site doesn't report its own version yet (that
+            // arrives with the next promotion) and the GitHub fallback
+            // found no promoted deployment among the newest
+            // DEPLOYMENTS_SCAN_LIMIT — the rest are unpromoted candidates,
+            // not failures — without scanning older ones, each of which
+            // costs a GitHub API request against a 60/hour limit.
             <p className="whats-on-test-note">
-              Couldn&apos;t determine what production is running. Production
-              doesn&apos;t report its version yet (that arrives with the next
-              promotion), and the GitHub fallback found no promoted
-              deployment among the newest {DEPLOYMENTS_SCAN_LIMIT} — the
-              rest are unpromoted candidates, not failures — without
-              scanning older ones (each scan is a GitHub API request
-              against a 60/hour limit). Approving a production deploy
-              fixes this for good.
+              Couldn&apos;t work out which version the live site is running.
+              This fixes itself once the next production deploy is approved.
             </p>
           )}
           {data.prod.kind === "found" && data.commits.length === 0 && (
             <p className="whats-on-test-note">
-              test == prod — nothing awaiting promotion.
+              The test site and the live site are the same right now —
+              nothing is waiting to go live.
             </p>
           )}
           {truncated && (

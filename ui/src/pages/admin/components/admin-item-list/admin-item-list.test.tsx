@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { AdminItemList } from "./admin-item-list";
 
@@ -32,6 +32,7 @@ function renderList(overrides?: {
         element: (
           <AdminItemList
             items={items}
+            addLabel="Add a thing"
             onNewItem={onNewItem}
             onDelete={onDelete}
             onMove={onMove}
@@ -70,9 +71,30 @@ describe("AdminItemList", () => {
     expect(screen.getByText("gamma")).toBeInTheDocument();
   });
 
+  it("puts edit first and delete last in each row's controls", () => {
+    const { container } = renderList({ onEdit: vi.fn() });
+    // The middle row: it has all four controls (both move directions).
+    const row = container.querySelectorAll(".admin-data-list-item")[1];
+    const labels = within(row as HTMLElement)
+      .getAllByRole("button")
+      .map((button) => button.getAttribute("aria-label"));
+    expect(labels).toEqual(["Edit", "Move up", "Move down", "Delete"]);
+  });
+
+  it("dresses delete as the destructive control it is", () => {
+    renderList();
+    for (const button of screen.getAllByRole("button", { name: "Delete" })) {
+      expect(button).toHaveClass("danger");
+    }
+    // The non-destructive controls emphatically do not.
+    for (const button of screen.getAllByRole("button", { name: "Move up" })) {
+      expect(button).not.toHaveClass("danger");
+    }
+  });
+
   it("fires onNewItem from the add control", () => {
     const { onNewItem } = renderList();
-    fireEvent.click(screen.getByRole("button", { name: "Add item" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add a thing" }));
     expect(onNewItem).toHaveBeenCalledOnce();
   });
 
@@ -168,7 +190,7 @@ describe("AdminItemList", () => {
     it("keeps the add control available while filtered", () => {
       const { onNewItem } = renderList(searchable);
       search("gamma");
-      fireEvent.click(screen.getByRole("button", { name: "Add item" }));
+      fireEvent.click(screen.getByRole("button", { name: "Add a thing" }));
       expect(onNewItem).toHaveBeenCalledOnce();
     });
 

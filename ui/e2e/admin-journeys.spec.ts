@@ -31,19 +31,26 @@ import {
 const editorControls = (page: Page) =>
   page.locator(".data-editor-item-controls");
 
+const saveButton = (page: Page) =>
+  editorControls(page).getByRole("button", { name: "Save" });
+
 async function saveEditor(page: Page) {
-  const save = iconButton(editorControls(page), "floppy-disk");
-  await expect(save).not.toHaveClass(/disabled/);
+  const save = saveButton(page);
+  await expect(save).toBeEnabled();
   await save.click();
 }
 
 async function closeEditor(page: Page) {
-  await iconButton(editorControls(page), "xmark").click();
+  await editorControls(page).getByRole("button", { name: "Close" }).click();
   await expect(page.locator(".data-editor")).toBeHidden();
 }
 
 async function createNewItem(page: Page) {
-  await iconButton(page, "plus").first().click();
+  // Every list's add control is a labelled "Add a <thing>" button (#457).
+  await page
+    .getByRole("button", { name: /^Add a/ })
+    .first()
+    .click();
   await confirmDialog(page, "Yes");
   await waitForIdle(page, 120_000);
   await expect(page.locator(".data-editor")).toBeVisible({ timeout: 60_000 });
@@ -144,7 +151,7 @@ test.describe("haiku", () => {
     await page
       .locator(".data-editor textarea")
       .fill(`${marker}\nsecond line\nthird line`);
-    await page.getByPlaceholder("Publisher").fill("e2e publisher");
+    await page.getByLabel("Publisher").fill("e2e publisher");
     await saveEditor(page);
     await expectToast(page, "Haiku saved");
     await closeEditor(page);
@@ -207,10 +214,8 @@ test.describe("haiga", () => {
     // Saving is disabled until an image is picked — the image is the
     // content of a haiga.
     await createNewItem(page);
-    await expect(iconButton(editorControls(page), "floppy-disk")).toHaveClass(
-      /disabled/,
-    );
-    await page.getByPlaceholder("Publisher").fill(marker);
+    await expect(saveButton(page)).toBeDisabled();
+    await page.getByLabel("Publisher").fill(marker);
     await page
       .locator('.data-editor input[type="file"]')
       .setInputFiles(pngFixturePath());
@@ -225,7 +230,7 @@ test.describe("haiga", () => {
     // Edit: the publisher and the uploaded image persisted (the image is
     // served through the API on the admin side).
     await iconButton(row, "pencil").click();
-    const publisher = page.getByPlaceholder("Publisher");
+    const publisher = page.getByLabel("Publisher");
     await expect(publisher).toHaveValue(marker);
     await expect(
       page.locator('.photo-picker-image[src*="/images/"]'),
@@ -285,7 +290,7 @@ test.describe("blog (other works)", () => {
   }) => {
     await openAdminSection(page, "Other works");
     await createNewItem(page);
-    await page.getByPlaceholder("Title", { exact: true }).fill(marker);
+    await page.getByLabel("Title", { exact: true }).fill(marker);
     // Leave "Published" unchecked: this is a draft.
     await expect(
       page.locator(".blog-post-editor-status-checkbox"),
@@ -319,7 +324,7 @@ test.describe("blog (other works)", () => {
 
     // Create a draft with rich-text content and an embedded image.
     await createNewItem(page);
-    await page.getByPlaceholder("Title", { exact: true }).fill(marker);
+    await page.getByLabel("Title", { exact: true }).fill(marker);
     const prose = page.locator(".tiptap-container .ProseMirror");
     await prose.click();
     await page.keyboard.type(`Body ${marker} content`);
@@ -408,21 +413,21 @@ test.describe("photography", () => {
 
     // Create
     await createNewItem(page);
-    await page.getByPlaceholder("Title", { exact: true }).fill(marker);
-    await page.getByPlaceholder("Subtitle").fill("e2e subtitle");
-    await page.getByPlaceholder("Optional blurb").fill("e2e blurb");
+    await page.getByLabel("Title", { exact: true }).fill(marker);
+    await page.getByLabel("Subtitle").fill("e2e subtitle");
+    await page.getByLabel("Blurb (optional)").fill("e2e blurb");
 
     // Add an image: new picker slot, then pick the PNG fixture.
     const imagesSection = page.locator(".photography-post-editor-images");
-    await iconButton(imagesSection, "plus").click();
+    await imagesSection
+      .getByRole("button", { name: "Add an image" })
+      .click();
     await imagesSection.locator('input[type="file"]').setInputFiles(
       pngFixturePath(),
     );
     // The chosen image shows up in the photo picker as a preview.
     await expect(imagesSection.locator(".photo-picker-image")).toBeVisible();
-    await page
-      .getByPlaceholder("image blurb or caption")
-      .fill("e2e caption");
+    await page.getByLabel("Caption (optional)").fill("e2e caption");
 
     await saveEditor(page);
     await expect(page.locator(".data-editor")).toBeHidden({
@@ -443,7 +448,7 @@ test.describe("photography", () => {
       imagesSection.locator('.photo-picker-image[src*="/images/"]'),
     ).toBeVisible();
     // Edit the subtitle and save.
-    await page.getByPlaceholder("Subtitle").fill("e2e subtitle edited");
+    await page.getByLabel("Subtitle").fill("e2e subtitle edited");
     await saveEditor(page);
     await expect(page.locator(".data-editor")).toBeHidden({
       timeout: 180_000,

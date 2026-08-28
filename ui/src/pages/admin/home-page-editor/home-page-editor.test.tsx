@@ -76,7 +76,21 @@ describe("HomePageEditor initial load", () => {
     ).toBeInTheDocument();
     // Never show an empty editor after a failed load — saving it would
     // overwrite the real data.
-    expect(screen.queryByPlaceholderText("Blurb")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Welcome text")).not.toBeInTheDocument();
+  });
+
+  it("names the page and both of its fields", async () => {
+    renderPage();
+
+    expect(
+      await screen.findByRole("heading", { name: "Home page" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/the photo and welcome text at the top/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Photo")).toBeInTheDocument();
+    // Wired to the textarea, not merely sitting above it.
+    expect(screen.getByLabelText("Welcome text")).toHaveValue("hello");
   });
 
   it("retries the load and recovers when Retry is clicked", async () => {
