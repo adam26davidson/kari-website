@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ComponentType } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { App } from "./app";
 import { SiteSettingsService } from "./services/site-settings";
 import { CHUNK_RELOAD_FLAG } from "./components/error-boundary/lazy-with-retry";

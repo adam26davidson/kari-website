@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { PhotographyPostEditor } from "./photography-post-editor";
 import { EditorImage, newEditorImage } from "./editor-image";
 import { PhotographyPost } from "../../../../../models";

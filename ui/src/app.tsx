@@ -1,6 +1,6 @@
 import { Header } from "./components/header/header";
 import "./app.css";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router";
 import { useIsMobile } from "./hooks/use-is-mobile";
 import { useSiteBackground } from "./hooks/use-site-background";
 import { MobileMenu } from "./components/mobile-menu/mobile-menu";

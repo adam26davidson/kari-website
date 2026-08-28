@@ -1,6 +1,6 @@
 import "./other-works-item.css";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { BlogService } from "../../../../services/blog";
 import { BlogPost as BlogPostData } from "../../../../models";
 import { LoadError } from "../../../../components/load-error/load-error";

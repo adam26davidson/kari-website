@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
-import type { RouteObject } from "react-router-dom";
-import { RouterProvider } from "react-router-dom";
+import type { RouteObject } from "react-router";
+// Deliberately the DOM entry point, matching main.tsx: react-router and
+// react-router/dom export DIFFERENT RouterProvider functions, so importing
+// the wrong one would make the identity assertion below silently vacuous.
+import { RouterProvider } from "react-router/dom";
 
 // main.tsx is the entry point: importing it mounts the app. Stub the DOM
 // renderer so the import is observable without actually booting React,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import "../admin.css";
 import { v4 as uuidv4 } from "uuid";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router";
 import { PhotographyPost } from "../../../models";
 import {
   moveItemByIdByOne,

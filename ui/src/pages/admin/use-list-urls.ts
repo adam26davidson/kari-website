@@ -1,4 +1,4 @@
-import { useLocation } from "react-router-dom";
+import { useLocation } from "react-router";
 
 /**
  * The URLs of one admin section's list and its item editors, carrying the
