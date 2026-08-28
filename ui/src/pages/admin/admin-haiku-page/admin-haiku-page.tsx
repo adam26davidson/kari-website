@@ -132,6 +132,7 @@ export function AdminHaikuPage() {
     <AdminItemList
       items={haikuList}
       noun="haiku"
+      addLabel="Add a haiku"
       getSearchText={(haiku) => [...haiku.lines, haiku.publisher].join(" ")}
       compact={true}
       onNewItem={onNewItem}

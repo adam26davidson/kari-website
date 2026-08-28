@@ -4,6 +4,12 @@
      background showing through the card (#308). */
   --admin-field-bg: rgb(240, 240, 240);
   --admin-field-border: rgba(0, 0, 0, 0.15);
+  /* The one red in the admin. Destructive controls have to LOOK
+     destructive and must never be mistaken for the brown primary (#457),
+     and an error toast is the same statement in a different shape — so
+     both spend this token rather than repeating the hex. */
+  --admin-danger: #a33327;
+  --admin-danger-hover: #872a20;
 }
 
 .admin-container {
@@ -107,7 +113,11 @@ textarea {
   border: 1px solid var(--admin-field-border);
   background-color: var(--admin-field-bg);
   color: #181818;
-  font-family: "Courier New", Courier, monospace;
+  /* Sans-serif, like the rest of the admin: the monospace this used to be
+     made every search box and editor field read like a code editor rather
+     than a writing surface (#457). Nothing here is code — it is haiku,
+     titles and captions. */
+  font-family: "Roboto", sans-serif;
   font-size: 14px;
   /* The 400px default above must never push a field past its card,
      whatever the viewport (#259). */
@@ -130,6 +140,25 @@ textarea:active {
 textarea {
   height: 100px;
   resize: none;
+}
+
+/* A labelled form field: the visible label sitting above its control.
+   Shared by every admin editor so no box is left for her to guess at
+   (#457). */
+.admin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.admin-field-label {
+  font-family: "Roboto", sans-serif;
+  /* Regular, never the display hairline: this is 14px text (#356). */
+  font-weight: 400;
+  font-size: 14px;
+  color: var(--muted-text);
 }
 
 /* Narrow viewports: the fixed-width sidebar would leave too little room
@@ -209,6 +238,17 @@ textarea {
   cursor: pointer;
 }
 
+/* Delete and friends. Placed after the hover rule above so the red wins
+   over the brown hover at equal specificity — a delete button must not
+   turn into the primary colour under the pointer (#457). */
+.admin-icon-button.danger {
+  background-color: var(--admin-danger);
+}
+
+.admin-icon-button.danger:hover {
+  background-color: var(--admin-danger-hover);
+}
+
 /* Fixed overlays so they are visible regardless of list scroll position */
 .admin-loading {
   display: flex;
@@ -276,7 +316,7 @@ textarea {
 }
 
 .admin-toast-error {
-  background-color: #a33327;
+  background-color: var(--admin-danger);
 }
 
 @keyframes admin-toast-in {

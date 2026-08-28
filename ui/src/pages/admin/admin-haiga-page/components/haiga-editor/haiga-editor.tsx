@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { Haiga } from "../../../../../models";
 import { DataEditor } from "../../../components/data-editor/data-editor";
 import { PhotoPicker } from "../../../components/photo-picker/photo-picker";
@@ -20,20 +21,36 @@ export function HaigaEditor({
   onSave: () => void;
   onClose: () => void;
 }) {
+  const publisherId = useId();
   return (
-    <DataEditor onSave={onSave} onClose={onClose} disableSave={saveDisabled}>
+    <DataEditor
+      title="Edit haiga"
+      onSave={onSave}
+      onClose={onClose}
+      disableSave={saveDisabled}
+    >
       <div className="haiga-editor">
-        <PhotoPicker
-          imageFile={imageFile}
-          fileName={haiga.image}
-          setImageFile={setImageFile}
-        />
-        <input
-          type="text"
-          placeholder="Publisher"
-          value={haiga.publisher}
-          onChange={(e) => setHaiga({ ...haiga, publisher: e.target.value })}
-        />
+        <div className="admin-field">
+          {/* The picker is a composite (preview + file input + button), so
+              this labels the group rather than pointing at one control. */}
+          <span className="admin-field-label">Image</span>
+          <PhotoPicker
+            imageFile={imageFile}
+            fileName={haiga.image}
+            setImageFile={setImageFile}
+          />
+        </div>
+        <div className="admin-field">
+          <label className="admin-field-label" htmlFor={publisherId}>
+            Publisher
+          </label>
+          <input
+            id={publisherId}
+            type="text"
+            value={haiga.publisher}
+            onChange={(e) => setHaiga({ ...haiga, publisher: e.target.value })}
+          />
+        </div>
       </div>
     </DataEditor>
   );

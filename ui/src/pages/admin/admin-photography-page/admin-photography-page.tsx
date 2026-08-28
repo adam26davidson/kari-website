@@ -228,6 +228,7 @@ export function AdminPhotographyPage() {
     <AdminItemList
       items={postList}
       noun="photography posts"
+      addLabel="Add a photography post"
       getSearchText={(post) =>
         [
           post.title,

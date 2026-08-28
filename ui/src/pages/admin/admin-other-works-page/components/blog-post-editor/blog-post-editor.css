@@ -15,9 +15,19 @@
 .blog-post-editor-input-line {
   display: flex;
   flex-direction: row;
-  align-items: center;
+  /* The date now carries a label above it and the Published checkbox does
+     not, so align on the controls' baseline row rather than the boxes'
+     centres — otherwise the checkbox floats up beside the "Date" label. */
+  align-items: flex-end;
   justify-content: flex-start;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+/* The checkbox sits on the same row as the date input, not level with its
+   label. */
+.blog-post-editor-status {
+  padding-bottom: 6px;
 }
 
 .blog-post-editor-input-line input[type="date"] {

@@ -162,7 +162,7 @@ export function AdminBackgroundPage() {
                   <span>Default background</span>
                 </div>
               ) : (
-                <AdminButton onClick={useDefault}>
+                <AdminButton variant="secondary" onClick={useDefault}>
                   Use default background
                 </AdminButton>
               )}

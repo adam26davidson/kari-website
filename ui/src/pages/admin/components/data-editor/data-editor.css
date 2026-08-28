@@ -53,14 +53,37 @@
   box-sizing: border-box;
 }
 
+/* Heading on the left, Save/Close on the right, both in flow. The controls
+   used to be absolutely positioned in the card's top-right corner, which
+   worked only while they were 30px circles; labelled text buttons need
+   room, and a heading needs somewhere to be (#457). Wraps so the widest
+   title ("Edit photography post") plus both buttons still fit a 390px
+   card. */
+.data-editor-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.data-editor-title {
+  margin: 0;
+  font-size: 20px;
+  font-family: "Roboto", sans-serif;
+  font-weight: 400;
+  color: #181818;
+}
+
 .data-editor-item-controls {
-  position: absolute;
-  top: 5px;
-  right: 5px;
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: flex-end;
+  gap: 8px;
 }
 
 /* Narrow viewports: the card takes the full width so the save/close
@@ -91,14 +114,5 @@
   .data-list-item-inputs {
     width: 100%;
     max-height: none;
-  }
-
-  /* On desktop the save/close buttons float in the card's top-right
-     corner beside the (narrower) fields; here the fields span the full
-     card, so keep the buttons in flow on their own row above the form
-     instead of overlapping it. */
-  .data-editor-item-controls {
-    position: static;
-    align-self: flex-end;
   }
 }

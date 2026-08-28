@@ -50,6 +50,12 @@
   font-size: 0.9rem;
 }
 
+/* The list's one primary action, written out. Lines up with the search box
+   and the rows below it. */
+.admin-data-list-add {
+  margin: 4px 8px 8px;
+}
+
 .admin-data-list-item {
   background-color: rgba(226, 226, 226, 0.8);
   display: flex;

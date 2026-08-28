@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Card } from "../components/card/card";
 import "./home-page-editor.css";
 import { useAdminToken } from "../../../hooks/use-admin-token";
@@ -26,6 +26,7 @@ export function HomePageEditor() {
   const getAccessTokenSilently = useAdminToken();
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
+  const blurbId = useId();
 
   // The form is dirty when its fields differ from the loaded data or a
   // replacement photo is pending; navigating away then requires
@@ -107,21 +108,36 @@ export function HomePageEditor() {
         <div className="home-page-editor">
           <Card>
             <div className="home-page-editor-card-content">
-              <PhotoPicker
-                imageFile={imageFile}
-                fileName={homePageData.photo}
-                setImageFile={setImageFile}
-              />
-              <textarea
-                value={homePageData.blurb}
-                placeholder="Blurb"
-                onChange={(e) => {
-                  setHomePageData({
-                    ...homePageData,
-                    blurb: e.target.value,
-                  });
-                }}
-              />
+              <h2>Home page</h2>
+              <p className="home-page-editor-explanation">
+                The photo and welcome text at the top of the site&apos;s home
+                page.
+              </p>
+              <div className="admin-field">
+                {/* Group label: the picker is a composite, not one
+                    control, so there is nothing to point `for` at. */}
+                <span className="admin-field-label">Photo</span>
+                <PhotoPicker
+                  imageFile={imageFile}
+                  fileName={homePageData.photo}
+                  setImageFile={setImageFile}
+                />
+              </div>
+              <div className="admin-field">
+                <label className="admin-field-label" htmlFor={blurbId}>
+                  Welcome text
+                </label>
+                <textarea
+                  id={blurbId}
+                  value={homePageData.blurb}
+                  onChange={(e) => {
+                    setHomePageData({
+                      ...homePageData,
+                      blurb: e.target.value,
+                    });
+                  }}
+                />
+              </div>
               <AdminButton onClick={saveData}>Save</AdminButton>
             </div>
           </Card>

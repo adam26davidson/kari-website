@@ -58,7 +58,10 @@ export function PhotoPicker({
           />
         </div>
       )}
-      <AdminButton htmlFor={inputId}>
+      {/* Secondary: picking a photo is a step towards saving, not the
+          screen's primary action — the two used to carry identical
+          weight (#457). */}
+      <AdminButton htmlFor={inputId} variant="secondary">
         <FontAwesomeIcon icon={faArrowPointer} />
         {imageFile ? "Select Different Image" : "Select Image"}
       </AdminButton>

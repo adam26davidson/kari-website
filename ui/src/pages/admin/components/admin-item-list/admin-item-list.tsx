@@ -3,11 +3,11 @@ import {
   faArrowDown,
   faArrowUp,
   faPencil,
-  faPlus,
   faTrash,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useSearchParams } from "react-router";
+import { AdminButton } from "../admin-button/admin-button";
 
 /**
  * The query lives in the URL rather than in component state so it survives
@@ -20,6 +20,12 @@ export interface AdminItemListProps<T extends { id: string }> {
   items: Array<T>;
   renderItem: (item: T) => React.ReactNode;
   onNewItem: () => void;
+  /**
+   * The add button's visible text, in the site's vocabulary — "Add a
+   * haiku", not a bare "+". Required, so no list can ship with a generic
+   * or invisible add affordance (#457).
+   */
+  addLabel: string;
   /**
    * Every item callback receives the item's id, never its position: the
    * rendered list may be a filtered subset, so an index into it would
@@ -54,6 +60,7 @@ export function AdminItemList<T extends { id: string }>({
   items,
   renderItem,
   onNewItem,
+  addLabel,
   onDelete,
   onMove,
   onEdit,
@@ -102,14 +109,9 @@ export function AdminItemList<T extends { id: string }>({
             Showing {visibleItems.length} of {items.length} {noun}
           </p>
         )}
-        <button
-          type="button"
-          className="admin-icon-button"
-          aria-label="Add item"
-          onClick={onNewItem}
-        >
-          <FontAwesomeIcon icon={faPlus} />
-        </button>
+        <div className="admin-data-list-add">
+          <AdminButton onClick={onNewItem}>{addLabel}</AdminButton>
+        </div>
         {filtering && visibleItems.length === 0 && (
           <p className="admin-data-list-empty">
             No {noun} match &quot;{query.trim()}&quot;
@@ -125,7 +127,21 @@ export function AdminItemList<T extends { id: string }>({
             <div className="admin-data-list-item-content">
               {renderItem(item)}
             </div>
+            {/* Order matters: edit (the one she reaches for most) first,
+                delete last and in the danger red. Delete used to sit
+                first, immediately beside edit, and wear the identical
+                brown circle (#457, design brief §2). */}
             <div className="admin-data-list-item-controls">
+              {!hideEdit && (
+                <button
+                  type="button"
+                  className="admin-icon-button"
+                  aria-label="Edit"
+                  onClick={onEdit && (() => onEdit(item.id))}
+                >
+                  <FontAwesomeIcon icon={faPencil} />
+                </button>
+              )}
               {!filtering && idx !== 0 && (
                 <button
                   type="button"
@@ -148,22 +164,12 @@ export function AdminItemList<T extends { id: string }>({
               )}
               <button
                 type="button"
-                className="admin-icon-button"
+                className="admin-icon-button danger"
                 aria-label="Delete"
                 onClick={() => onDelete(item.id)}
               >
                 <FontAwesomeIcon icon={faTrash} />
               </button>
-              {!hideEdit && (
-                <button
-                  type="button"
-                  className="admin-icon-button"
-                  aria-label="Edit"
-                  onClick={onEdit && (() => onEdit(item.id))}
-                >
-                  <FontAwesomeIcon icon={faPencil} />
-                </button>
-              )}
             </div>
           </div>
         ))}

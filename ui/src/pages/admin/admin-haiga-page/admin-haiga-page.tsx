@@ -184,6 +184,7 @@ export function AdminHaigaPage() {
     <AdminItemList
       items={haigaList}
       noun="haiga"
+      addLabel="Add a haiga"
       getSearchText={(haiga) => [...haiga.lines, haiga.publisher].join(" ")}
       compact={true}
       onNewItem={onNewItem}
