@@ -30,9 +30,15 @@
   overflow-wrap: anywhere;
 }
 
+/* The one deliberate opt-out from the site-wide focus ring (#501): a
+   contenteditable matches :focus-visible for as long as it has focus, so
+   the ring would frame the whole editor the entire time the admin is
+   writing. The caret already says where typing goes. The box-shadow has to
+   be reset too, or the dark halo hangs there with no white ring inside it. */
 .tiptap:focus,
 .tiptap:active {
   outline: none;
+  box-shadow: none;
 }
 
 .control-group {
@@ -107,11 +113,6 @@
   padding: 5px;
   border-radius: 3px;
   border-width: 0px;
-}
-
-.button-group select:focus,
-.button-group select:active {
-  outline: none;
 }
 
 .button-group select:hover {

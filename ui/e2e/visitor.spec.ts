@@ -152,3 +152,30 @@ test("photography page renders at least one seeded post", async ({ page }) => {
   expect((await header.innerText()).trim().length).toBeGreaterThan(0);
   await expect(page.locator(".photography-post-image").first()).toBeVisible();
 });
+
+// The site-wide keyboard focus ring (#501). jsdom cannot decide
+// :focus-visible, so the unit tests can only pin the declared colours and
+// widths; whether a real browser actually applies the rule to whatever the
+// first tab stop happens to be is only answerable here. Deliberately loose
+// about WHICH element that is — the assertion is that keyboard focus is
+// never left with the bare UA outline.
+test("keyboard focus draws the site's two-layer ring", async ({ page }) => {
+  await page.goto("/");
+  await page.locator(".header").waitFor();
+  await page.keyboard.press("Tab");
+  const ring = await page.evaluate(() => {
+    const focused = document.activeElement;
+    if (!focused || focused === document.body) return null;
+    const style = getComputedStyle(focused);
+    return {
+      tag: focused.tagName,
+      outlineStyle: style.outlineStyle,
+      outlineWidth: Number.parseFloat(style.outlineWidth),
+      boxShadow: style.boxShadow,
+    };
+  });
+  expect(ring, "nothing took focus on the first Tab").not.toBeNull();
+  expect(ring?.outlineStyle).toBe("solid");
+  expect(ring?.outlineWidth).toBeGreaterThanOrEqual(2);
+  expect(ring?.boxShadow).not.toBe("none");
+});

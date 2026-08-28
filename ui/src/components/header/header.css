@@ -61,6 +61,7 @@
   font-size: clamp(30px, 3.6vw, 40px);
   margin: 0px 20px 0px clamp(16px, 2.5vw, 40px);
   color: white;
+  font-weight: var(--display-weight);
   white-space: nowrap;
 }
 
@@ -68,11 +69,33 @@
   font-size: 20px;
   margin: 0px 20px 0px 40px;
   color: white;
+  font-weight: var(--display-weight);
 }
 
+/* Below 768px the title div swaps to this class ALONE — neither
+   .header-title nor .admin-header-title applies — so its weight is decided
+   here or not at all, and the two bars want different answers. Each declares
+   the size it would otherwise inherit from its bar, so the weight is stated
+   next to the size that justifies it (and the type-scale guard can see the
+   pair). */
 .header-title-mobile {
   flex: 1;
   margin-left: 20px;
+}
+
+/* Public bar: 25px carries the light display weight just as the desktop
+   title's 30-40px does, so the site title reads the same at every width. */
+.header .header-title-mobile {
+  font-size: 25px;
+  font-weight: var(--display-weight);
+}
+
+/* Admin bar: 16px, well under the 18px the token is allowed at, so this one
+   keeps the 400 default — it is the only title that changes weight in this
+   PR, and it changes because a 16px hairline is the #356 defect itself. */
+.admin-header .header-title-mobile {
+  font-size: 16px;
+  font-weight: 400;
 }
 
 /* Real <button> for keyboard access; neutralize default button chrome
