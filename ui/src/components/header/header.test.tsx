@@ -84,6 +84,29 @@ describe("Header on mobile", () => {
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
+  // The mobile title swaps to .header-title-mobile ALONE — neither
+  // .header-title nor .admin-header-title applies — so header.css styles it
+  // through `.header`/`.admin-header` descendant rules, which are the only
+  // thing declaring its font-weight. If this class or the bar around it
+  // drifts, the title silently falls back to the body default (it did: the
+  // #356 opt-ins were enumerated per desktop class and missed this one).
+  it.each([
+    ["/", "header"],
+    ["/admin", "admin-header"],
+  ])(
+    "styles the title through the %s bar's mobile class",
+    async (path, bar) => {
+      const { container } = renderHeader(path);
+      // Let the admin bar's lazy user section settle, as the /admin tests
+      // below do, so its resolution doesn't land outside act().
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      const title = container.querySelector(`.${bar} > .header-title-mobile`);
+      expect(title).toHaveTextContent("Kari Davidson");
+    },
+  );
+
   it("toggles the mobile menu open when the hamburger is clicked", async () => {
     const { setShowingMobileMenu } = renderHeader("/", {
       showingMobileMenu: false,

@@ -155,7 +155,12 @@ textarea {
   .admin-menu-item {
     width: auto;
     padding: 8px 12px;
+    /* Smaller so five items fit the wrapping bar on a 390px phone — which
+       drops below the 18px the base rule's --display-weight is allowed at,
+       so the weight comes back to the 400 default here. A 16px hairline in
+       Noto Serif JP is precisely what #356 is about. */
     font-size: 16px;
+    font-weight: 400;
   }
 
   .admin-content {

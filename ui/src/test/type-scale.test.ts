@@ -78,6 +78,32 @@ function isRegularOrHeavier(value: string): boolean {
   return Number.isFinite(numeric) && numeric >= 400;
 }
 
+/**
+ * The smallest px value a `font-size` names, or undefined if it names none.
+ * A fluid size (clamp/min/max) is judged on its smallest px value — that is
+ * the width at which its stems are thinnest.
+ */
+function smallestPx(size: string | undefined): number | undefined {
+  const pxValues = size
+    ?.match(/([\d.]+)px/g)
+    ?.map((px) => Number.parseFloat(px));
+  return pxValues?.length ? Math.min(...pxValues) : undefined;
+}
+
+/** A selector's comma-separated parts, with whitespace normalized. */
+const selectorParts = (selector: string): string[] =>
+  selector
+    .split(",")
+    .map((part) => part.trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+
+/** The selector parts some rule spends the display weight on. */
+const SPENT_ON = new Set(
+  RULES.filter((rule) =>
+    declaration(rule.block, "font-weight")?.includes(DISPLAY_TOKEN),
+  ).flatMap((rule) => selectorParts(rule.selector)),
+);
+
 describe("the weight axis of the type scale", () => {
   it("leaves body text at regular weight, not the hairline 300", () => {
     const body = RULES.find(
@@ -106,17 +132,40 @@ describe("the weight axis of the type scale", () => {
   )(
     "%s spends the display weight on text of at least 18px",
     (_label, block) => {
-      const size = declaration(block, "font-size");
-      expect(size).toBeDefined();
-      // A fluid size (clamp/min/max) is judged on its smallest px value —
-      // that is the width at which its stems are thinnest.
-      const pxValues = (size as string)
-        .match(/([\d.]+)px/g)
-        ?.map((px) => Number.parseFloat(px));
-      expect(pxValues?.length).toBeGreaterThan(0);
-      expect(Math.min(...(pxValues as number[]))).toBeGreaterThanOrEqual(
-        DISPLAY_SIZE_FLOOR_PX,
-      );
+      const smallest = smallestPx(declaration(block, "font-size"));
+      expect(smallest).toBeDefined();
+      expect(smallest as number).toBeGreaterThanOrEqual(DISPLAY_SIZE_FLOOR_PX);
+    },
+  );
+
+  // The check above only sees the rule that spends the token, which is not
+  // where this regresses. A media override resizes a selector without
+  // re-declaring its weight, so `.admin-menu-item { font-size: 18px;
+  // font-weight: var(--display-weight) }` plus `@media (max-width: 767.98px)
+  // { .admin-menu-item { font-size: 16px } }` renders 16px hairline text on
+  // every phone — the exact defect the floor exists to prevent, invisible to
+  // a per-rule check because the rule doing the shrinking spends nothing.
+  //
+  // So every rule that sizes a selector some other rule spends the token on
+  // is held to the same floor. A rule may go smaller, but only by declaring
+  // a regular-or-heavier weight of its own, which puts the light stems this
+  // floor protects out of play.
+  it.each(
+    RULES.filter(
+      (rule) =>
+        declaration(rule.block, "font-size") !== undefined &&
+        !declaration(rule.block, "font-weight")?.includes(DISPLAY_TOKEN) &&
+        selectorParts(rule.selector).some((part) => SPENT_ON.has(part)),
+    ).map((rule): [string, string] => [label(rule), rule.block]),
+  )(
+    "%s resizes display-weight text without dropping it below 18px",
+    (_label, block) => {
+      const weight = declaration(block, "font-weight");
+      // Opted out of the light weight; any size is legible at 400.
+      if (weight !== undefined && isRegularOrHeavier(weight)) return;
+      const smallest = smallestPx(declaration(block, "font-size"));
+      expect(smallest).toBeDefined();
+      expect(smallest as number).toBeGreaterThanOrEqual(DISPLAY_SIZE_FLOOR_PX);
     },
   );
 
