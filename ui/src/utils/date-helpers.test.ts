@@ -6,6 +6,7 @@ import {
 import {
   formatPostDate,
   toDateInputValue,
+  toPostDate,
   todayAsPostDate,
 } from "./date-helpers";
 
@@ -81,6 +82,82 @@ describe("todayAsPostDate", () => {
     expect(formatPostDate(todayAsPostDate())).toBe(
       new Date().toLocaleDateString(),
     );
+  });
+});
+
+describe("toPostDate", () => {
+  restoreHostTimeZoneAfterEach();
+
+  it("pins a date-input value to UTC midnight west of UTC", () => {
+    // The editors' <input type="date"> hands over a bare calendar day.
+    // Whatever zone the author sits in, the day they picked is the day
+    // that must be stored — formatPostDate reads it back as UTC.
+    applyTimeZone("America/Los_Angeles");
+    expect(toPostDate("2026-01-01")).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  it("pins a date-input value to UTC midnight east of UTC", () => {
+    applyTimeZone("Pacific/Kiritimati");
+    expect(toPostDate("2026-01-01")).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  it("strips the time of day from an already-stored timestamp", () => {
+    // The case the helper exists for: a timestamp that is not midnight
+    // keeps the day its own offset names, rather than shifting.
+    expect(toPostDate("2026-01-01T23:30:00.000Z")).toBe(
+      "2026-01-01T00:00:00.000Z",
+    );
+  });
+
+  it("keeps the calendar day named by a local-offset timestamp", () => {
+    // 17:00 on Jan 1 in PST is Jan 2 in UTC. The author wrote "Jan 1", so
+    // that is the day to store — not the UTC day of the same instant.
+    expect(toPostDate("2026-01-01T17:00:00.000-08:00")).toBe(
+      "2026-01-01T00:00:00.000Z",
+    );
+  });
+
+  it("reads a Date as the calendar day in the author's own zone", () => {
+    applyTimeZone("America/Los_Angeles");
+    expect(toPostDate(new Date(2026, 0, 1, 17, 0, 0))).toBe(
+      "2026-01-01T00:00:00.000Z",
+    );
+  });
+
+  it("reads a non-ISO date string as its local calendar day", () => {
+    applyTimeZone("America/Los_Angeles");
+    expect(toPostDate("January 1, 2026")).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  it("returns null for an empty value instead of throwing", () => {
+    // Clearing a date input fires a change with "" (#154).
+    expect(toPostDate("")).toBeNull();
+  });
+
+  it("returns null for a malformed string", () => {
+    expect(toPostDate("not-a-date")).toBeNull();
+  });
+
+  it("returns null for an out-of-range calendar day", () => {
+    // Rather than the March 2nd that a bare `new Date` would roll it to.
+    expect(toPostDate("2026-02-30")).toBeNull();
+  });
+
+  it("returns null for an out-of-range month", () => {
+    expect(toPostDate("2026-13-01")).toBeNull();
+  });
+
+  it("returns null for an Invalid Date", () => {
+    expect(toPostDate(new Date(NaN))).toBeNull();
+  });
+
+  it("is idempotent", () => {
+    const once = toPostDate("2026-01-01") as string;
+    expect(toPostDate(once)).toBe(once);
+  });
+
+  it("agrees with todayAsPostDate on today", () => {
+    expect(toPostDate(new Date())).toBe(todayAsPostDate());
   });
 });
 
