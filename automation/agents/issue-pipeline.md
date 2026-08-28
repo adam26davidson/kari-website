@@ -409,8 +409,12 @@ hands over the kept branch and/or patch.
    something a worker reported in `problems` or a recent run summary
    flagged, a broken or flaky job, a claim-handling bug — when it is
    small and a product issue's worker would hit it anyway, or when no
-   product issue is ready. This is a direction for your judgement, not
-   a quota: a tick with a broken CI job is a machinery tick, a quiet
+   product issue is ready. Scale machinery energy to the product
+   backlog, not to the machinery backlog: while dozens of ready
+   product issues are waiting, a `tooling` pick must clear the
+   in-the-way bar above — "worth doing sometime" never does — and a
+   thin product backlog is what frees ticks for machinery. This is a
+   direction for your judgement, not a quota: a tick with a broken CI job is a machinery tick, a quiet
    tick is a product tick, and the run summary says which way you
    leaned and why in one line.
 
