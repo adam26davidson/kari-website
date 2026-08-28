@@ -25,17 +25,16 @@ report. You finish at push — never merge, never wait for checks to rerun.
 ## How to work
 
 - For each feedback item, decide honestly: is it right?
-  - If yes: fix it. Use `superpowers:systematic-debugging` for CI
-    failures — find the actual cause before changing code; never blindly
-    tweak until green. Use `superpowers:test-driven-development` when the
-    fix is behavioral: failing test first.
+  - If yes: fix it. For CI failures, find the actual cause before
+    changing code — reproduce and read the failing output; never blindly
+    tweak until green. When the fix is behavioral: failing test first.
   - If no (works as intended, reviewer misread, out of scope): do NOT
     change code to appease it. Reply on the PR with
     `gh pr comment {{PR_NUMBER}} --body "..."` explaining the dismissal
     concretely — visual-review findings and code-review findings are
     advisory and a reasoned dismissal is a valid resolution.
-- Use `superpowers:receiving-code-review` to keep yourself rigorous:
-  verify claims against the code before implementing or dismissing.
+- Verify every claim in the feedback against the actual code before
+  implementing or dismissing it — reviewers misread, and so do you.
 - Re-run every verification relevant to what you changed, per CLAUDE.md:
   `npm run test:coverage` + `npm run lint` for UI changes (never just
   `test:run`); `cargo test` / clippy / fmt for API changes; re-capture and
