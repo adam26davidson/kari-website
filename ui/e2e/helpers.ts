@@ -34,8 +34,10 @@ export function pngFixturePath(): string {
 }
 
 // --- Admin UI helpers -------------------------------------------------------
-// The admin controls are icon-only buttons (FontAwesome renders
-// <svg data-icon="...">), so selectors go through the icon name.
+// Save, Close and Add are labelled text buttons and are located by their
+// accessible name. The per-row edit/move/delete controls are still icon-only
+// (FontAwesome renders <svg data-icon="...">), so those go through the icon
+// name.
 
 export function iconButton(scope: Page | Locator, icon: string): Locator {
   return scope.locator(`.admin-icon-button:has(svg[data-icon="${icon}"])`);

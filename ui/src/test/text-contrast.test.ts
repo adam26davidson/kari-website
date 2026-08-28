@@ -245,6 +245,27 @@ describe("the admin icon buttons", () => {
       contrastRatio(resolveColor(foreground()), fill),
     ).toBeGreaterThanOrEqual(4.5);
   });
+
+  // The delete circles wear a red fill instead of the brown one (#457), and
+  // inherit their foreground from the base rule — so the same argument has
+  // to hold over the red, or "destructive looks destructive" would be paid
+  // for with an illegible trash icon.
+  it("keep the destructive fill legible under the same icon colour", () => {
+    const danger = parseColor(declaration(adminCss, ":root", "--admin-danger"));
+    expect(
+      contrastRatio(resolveColor(foreground()), danger),
+    ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("make the destructive fill distinguishable from the primary one", () => {
+    const danger = parseColor(declaration(adminCss, ":root", "--admin-danger"));
+    const primary = parseColor(
+      declaration(adminCss, ".admin-icon-button", "background-color"),
+    );
+    // Not a WCAG rule — just "these must not read as the same button".
+    // Delete and edit sat side by side in identical brown circles (#457).
+    expect(danger).not.toEqual(primary);
+  });
 });
 
 // The header bar is translucent over the same background layer, so the same
