@@ -56,7 +56,7 @@
   transition: color 0.2s;
   font-size: 18px;
   font-family: "Roboto", sans-serif;
-  font-weight: 300;
+  font-weight: var(--display-weight);
   font-style: normal;
 }
 
@@ -115,12 +115,16 @@ textarea {
   box-sizing: border-box;
 }
 
+/* No `outline: none` here: it used to suppress the browser's default ring,
+   and would now beat the global :focus-visible rule on specificity. Text
+   fields match :focus-visible whenever they are focused, so a focused field
+   wears the site ring — which is the point, the admin can always see where
+   typing will land (#501). */
 input:focus,
 input:active,
 textarea:focus,
 textarea:active {
   border: 1px solid rgba(0, 0, 0, 0.3);
-  outline: none;
 }
 
 textarea {

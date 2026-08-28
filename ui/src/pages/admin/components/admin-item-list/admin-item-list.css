@@ -41,7 +41,6 @@
   background-color: rgba(226, 226, 226, 0.8);
   color: var(--muted-text);
   font-family: "Roboto", sans-serif;
-  font-weight: 300;
 }
 
 /* The count sits under the search box and should stay quiet: it is a

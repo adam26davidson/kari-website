@@ -61,6 +61,7 @@
   font-size: clamp(30px, 3.6vw, 40px);
   margin: 0px 20px 0px clamp(16px, 2.5vw, 40px);
   color: white;
+  font-weight: var(--display-weight);
   white-space: nowrap;
 }
 
@@ -68,6 +69,7 @@
   font-size: 20px;
   margin: 0px 20px 0px 40px;
   color: white;
+  font-weight: var(--display-weight);
 }
 
 .header-title-mobile {

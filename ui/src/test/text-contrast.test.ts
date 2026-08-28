@@ -8,15 +8,17 @@ import { readFileSync } from "node:fs";
 // declared colours alone — the card's rendered lightness moves with whatever
 // photo is behind it.
 //
-// These tests pin the contract that came out of #343: one shared colour
-// token for all of that secondary text, dark enough to stay comfortably
-// legible across the whole range of card lightness, and not set in the
-// body's hairline 300 weight (which is what made 14-16px grey text read as
-// washed out even at a nominally passing ratio).
+// These tests pin the colour half of the contract that came out of #343:
+// one shared token for all of that secondary text, dark enough to stay
+// comfortably legible across the whole range of card lightness. The weight
+// half — the hairline 300 that made 14-16px grey text read as washed out
+// even at a nominally passing ratio — now lives in the body default and the
+// --display-weight token, pinned by type-scale.test.ts (#356).
 //
 // The admin side reuses the same token on the same translucent backing
 // (#354), and the file also pins foregrounds that must not be left to
-// inheritance to come out legible (#347).
+// inheritance to come out legible (#347) and the keyboard focus ring, whose
+// job is to read on every one of these surfaces at once (#501).
 
 // Comments are stripped so an explanatory `/* ... */` between declarations
 // can't hide the declaration that follows it from the regexes below.
@@ -186,15 +188,6 @@ describe("secondary text on the public cards", () => {
       contrastRatio(bodyText, card),
     );
   });
-
-  it.each(SECONDARY_TEXT_RULES)(
-    "%s opts out of the body's hairline weight",
-    (_name, css, selector) => {
-      expect(
-        Number(declaration(css, selector, "font-weight")),
-      ).toBeGreaterThanOrEqual(400);
-    },
-  );
 });
 
 // The admin panels are the same translucent grey over the same background
@@ -308,4 +301,80 @@ describe("the header bar over the background photo", () => {
       ).toBeLessThanOrEqual(1.5);
     },
   );
+});
+
+// The keyboard focus ring has the hardest job on the site: one rule has to
+// stay visible on the near-black-green header bar AND on the near-white
+// cards and admin panels floating over an admin-chosen photo. A single
+// colour cannot do that, so the ring is two layers — a light inner outline
+// inside a dark halo — and what these tests pin is that the two layers
+// contrast with EACH OTHER, and that each one carries the ring on the
+// surfaces where the other one would disappear (#501).
+describe("the keyboard focus ring", () => {
+  const outline = () => declaration(indexCss, ":focus-visible", "outline");
+  const boxShadow = () => declaration(indexCss, ":focus-visible", "box-shadow");
+
+  /** The px lengths of a value, in order. */
+  const lengths = (value: string): number[] =>
+    (value.match(/-?[\d.]+px/g) ?? []).map(Number.parseFloat);
+
+  /** The one colour in a shorthand value. */
+  const colorIn = (value: string): Rgb =>
+    parseColor(
+      value.match(/#[0-9a-f]{3,8}|rgba?\([^)]*\)|\b(?:white|black)\b/i)?.[0] ??
+        value,
+    );
+
+  const lightLayer = () => colorIn(outline());
+  const darkLayer = () => colorIn(boxShadow());
+
+  const outlineWidth = () => lengths(outline())[0];
+  const outlineOffset = () =>
+    Number.parseFloat(declaration(indexCss, ":focus-visible", "outline-offset"));
+  /** The last length of `0 0 0 <spread>` is the spread radius. */
+  const shadowSpread = () => lengths(boxShadow()).at(-1) as number;
+
+  it("draws a solid outline thick enough to see", () => {
+    expect(outline()).toMatch(/\bsolid\b/);
+    expect(outlineWidth()).toBeGreaterThanOrEqual(2);
+  });
+
+  it("wraps that outline in a halo that extends past it", () => {
+    // The outline paints over the inner part of the spread, so the halo
+    // needs at least the outline's own thickness plus a visible remainder.
+    expect(shadowSpread()).toBeGreaterThanOrEqual(
+      outlineWidth() + outlineOffset() + 2,
+    );
+  });
+
+  it("has two layers that contrast with each other", () => {
+    // WCAG 1.4.11 non-text contrast. This is the property that makes the
+    // ring surface-independent: whichever layer a background swallows, the
+    // other still draws the shape against it.
+    expect(contrastRatio(lightLayer(), darkLayer())).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each(HEADER_BARS)(
+    "shows its light layer on the %s at either photo extreme",
+    (_name, selector) => {
+      for (const photo of [BLACK, WHITE]) {
+        expect(
+          contrastRatio(lightLayer(), headerOver(photo, selector)),
+        ).toBeGreaterThanOrEqual(3);
+      }
+    },
+  );
+
+  it("shows its dark layer on the lightest the cards ever get", () => {
+    expect(
+      contrastRatio(darkLayer(), cardOver(WHITE)),
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  it("shows its dark layer on the bare page over a white photo", () => {
+    // Controls that sit on no panel at all still have to be ringed.
+    expect(
+      contrastRatio(darkLayer(), backgroundLayerOver(WHITE)),
+    ).toBeGreaterThanOrEqual(3);
+  });
 });
