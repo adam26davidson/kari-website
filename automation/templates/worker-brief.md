@@ -85,12 +85,12 @@ scoped enough to plan yourself.
   stall the rest: leave its files untouched, remove its `in progress`
   label, comment on it why, and omit its `Closes #N` from the PR body;
   say so in the PR body and your report. The remaining items still ship.
-- Use the superpowers skills explicitly:
-  - `superpowers:test-driven-development` for every feature or fix.
-  - `superpowers:systematic-debugging` before proposing any fix to a bug
-    issue or an unexpected failure.
-  - `superpowers:verification-before-completion` before you claim
-    anything works — run the command, read the output, then say so.
+- Work test-first when behavior changes: write or extend the failing
+  test, watch it fail, then make it pass.
+- Debug from root cause: reproduce the failure and trace it to its
+  actual cause before changing code — never tweak until green.
+- Never claim anything works without having run the verifying command
+  and read its output.
 - If the issue turns out to be underspecified or blocked in a way you
   cannot resolve, STOP: do not guess at product decisions. Comment your
   question on the issue, remove nothing, and report the blockage in your

@@ -299,6 +299,21 @@ cover admin pages without Auth0 credentials.
   whether every job died in "Set up job" — that's GitHub infrastructure,
   not the PR.
 
+## Process
+The superpowers plugin is deliberately disabled for this repo
+(`.claude/settings.json` commits the `false` override — don't remove it;
+current models don't need its enforcement scaffolding and every fleet
+tick was paying for it, #540). The substance it enforced still applies,
+harness-free:
+- Clarify intent before building: for non-trivial features, agree on
+  design and scope first — interactively, ask; in the pipeline, the
+  issue plus its planning pass is the spec, so never guess at product
+  decisions.
+- Plan multi-step work before touching code.
+- Test-first for behavior changes; debug from root cause rather than
+  tweaking until green; claim something works only after running the
+  verifying command and reading its output.
+
 ## Code Style Guidelines
 - TypeScript: Use strict typing with interfaces (see models.ts)
 - React components: Use functional components with typed props
