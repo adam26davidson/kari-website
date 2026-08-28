@@ -103,19 +103,22 @@ describe("the weight axis of the type scale", () => {
     RULES.filter((rule) =>
       declaration(rule.block, "font-weight")?.includes(DISPLAY_TOKEN),
     ).map((rule): [string, string] => [label(rule), rule.block]),
-  )("%s spends the display weight on text of at least 18px", (_label, block) => {
-    const size = declaration(block, "font-size");
-    expect(size).toBeDefined();
-    // A fluid size (clamp/min/max) is judged on its smallest px value —
-    // that is the width at which its stems are thinnest.
-    const pxValues = (size as string)
-      .match(/([\d.]+)px/g)
-      ?.map((px) => Number.parseFloat(px));
-    expect(pxValues?.length).toBeGreaterThan(0);
-    expect(Math.min(...(pxValues as number[]))).toBeGreaterThanOrEqual(
-      DISPLAY_SIZE_FLOOR_PX,
-    );
-  });
+  )(
+    "%s spends the display weight on text of at least 18px",
+    (_label, block) => {
+      const size = declaration(block, "font-size");
+      expect(size).toBeDefined();
+      // A fluid size (clamp/min/max) is judged on its smallest px value —
+      // that is the width at which its stems are thinnest.
+      const pxValues = (size as string)
+        .match(/([\d.]+)px/g)
+        ?.map((px) => Number.parseFloat(px));
+      expect(pxValues?.length).toBeGreaterThan(0);
+      expect(Math.min(...(pxValues as number[]))).toBeGreaterThanOrEqual(
+        DISPLAY_SIZE_FLOOR_PX,
+      );
+    },
+  );
 
   it("keeps the display token itself light — it has no other purpose", () => {
     const root = RULES.find(

@@ -330,7 +330,9 @@ describe("the keyboard focus ring", () => {
 
   const outlineWidth = () => lengths(outline())[0];
   const outlineOffset = () =>
-    Number.parseFloat(declaration(indexCss, ":focus-visible", "outline-offset"));
+    Number.parseFloat(
+      declaration(indexCss, ":focus-visible", "outline-offset"),
+    );
   /** The last length of `0 0 0 <spread>` is the spread radius. */
   const shadowSpread = () => lengths(boxShadow()).at(-1) as number;
 
@@ -366,9 +368,9 @@ describe("the keyboard focus ring", () => {
   );
 
   it("shows its dark layer on the lightest the cards ever get", () => {
-    expect(
-      contrastRatio(darkLayer(), cardOver(WHITE)),
-    ).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(darkLayer(), cardOver(WHITE))).toBeGreaterThanOrEqual(
+      3,
+    );
   });
 
   it("shows its dark layer on the bare page over a white photo", () => {
