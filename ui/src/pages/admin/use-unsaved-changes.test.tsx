@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { createMemoryRouter, Link, RouterProvider } from "react-router-dom";
+import { createMemoryRouter, Link, RouterProvider } from "react-router";
 import { AdminUiContext } from "./admin-ui-context";
 import {
   answerNo,

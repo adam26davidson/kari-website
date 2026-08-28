@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import "./admin-haiga-page.css";
 import { v4 as uuidv4 } from "uuid";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router";
 import { Haiga } from "../../../models";
 import { HaigaService } from "../../../services/haiga";
 import { ImageService } from "../../../services/images";

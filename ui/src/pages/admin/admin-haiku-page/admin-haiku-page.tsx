@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import "./admin-haiku-page.css";
 import "../admin.css";
 import { v4 as uuidv4 } from "uuid";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router";
 import { Haiku } from "../../../models";
 import { HaikuContent } from "../../../components/haiku-content/haiku-content";
 import { HaikuService } from "../../../services/haiku";

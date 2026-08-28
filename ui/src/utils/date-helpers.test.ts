@@ -1,6 +1,14 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { applyTimeZone, restoreHostTimeZoneAfterEach } from "../test/timezone";
-import { formatPostDate, toPostDate, todayAsPostDate } from "./date-helpers";
+import {
+  applyTimeZone,
+  restoreHostTimeZoneAfterEach,
+} from "../test/timezone";
+import {
+  formatPostDate,
+  toDateInputValue,
+  toPostDate,
+  todayAsPostDate,
+} from "./date-helpers";
 
 describe("formatPostDate", () => {
   restoreHostTimeZoneAfterEach();
@@ -150,5 +158,43 @@ describe("toPostDate", () => {
 
   it("agrees with todayAsPostDate on today", () => {
     expect(toPostDate(new Date())).toBe(todayAsPostDate());
+  });
+});
+
+describe("toDateInputValue", () => {
+  restoreHostTimeZoneAfterEach();
+
+  it("renders a stored post date as its own calendar day", () => {
+    expect(toDateInputValue("2026-01-01T00:00:00.000Z")).toBe("2026-01-01");
+  });
+
+  it("does not shift the day west of UTC", () => {
+    // The input shows the day that formatPostDate shows, so a viewer's
+    // zone must not move it — 2026-01-01 stays Jan 1 in Los Angeles.
+    applyTimeZone("America/Los_Angeles");
+    expect(toDateInputValue("2026-01-01T00:00:00.000Z")).toBe("2026-01-01");
+  });
+
+  it("does not shift the day east of UTC", () => {
+    applyTimeZone("Pacific/Kiritimati");
+    expect(toDateInputValue("2026-01-01T00:00:00.000Z")).toBe("2026-01-01");
+  });
+
+  it("drops the time of day from a timestamp that is not midnight", () => {
+    expect(toDateInputValue("2026-03-05T12:00:00.000Z")).toBe("2026-03-05");
+  });
+
+  it("yields \"\" for a malformed stored date rather than throwing", () => {
+    // An Invalid Date's toISOString() throws, which would take the whole
+    // editor down on one corrupted record (#154).
+    expect(toDateInputValue("not-a-date")).toBe("");
+  });
+
+  it("yields \"\" for a cleared input value", () => {
+    expect(toDateInputValue("")).toBe("");
+  });
+
+  it("round-trips todayAsPostDate", () => {
+    expect(toDateInputValue(todayAsPostDate())).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });

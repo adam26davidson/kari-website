@@ -7,7 +7,7 @@ import {
   faTrash,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 
 /**
  * The query lives in the URL rather than in component state so it survives
