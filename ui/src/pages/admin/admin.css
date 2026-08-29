@@ -245,12 +245,29 @@ input[type="checkbox"] {
     grid-template-columns: repeat(2, 1fr);
     align-content: start;
     width: 100%;
+    /* With the default content-box, the side padding below is ADDED to the
+       100% above and the menu overflows the viewport by exactly that much
+       (16px on a 390px phone). */
+    box-sizing: border-box;
     height: auto;
-    padding: 4px 0;
+    /* The grid had no gap, so "a real gap from the one beside it" was only
+       ever the cells' own side padding — vertically the rows met exactly,
+       and eight links at a ~35px pitch read as a dense index rather than a
+       menu (design brief §1). Row gap first: touching rows are what makes
+       the block look like a table of contents. */
+    gap: 6px 8px;
+    padding: 10px 8px;
   }
 
   .admin-menu-item {
     width: auto;
+    /* A phone-sized target, the same 44px floor the list rows' controls
+       take at this breakpoint — a menu is tapped at least as often as they
+       are. min-height rather than padding alone so the number in the CSS is
+       the number a fingertip gets; the base rule is content-box, which
+       would otherwise add the padding on top of it. */
+    box-sizing: border-box;
+    min-height: 44px;
     padding: 8px 16px;
     /* Smaller so five items fit the wrapping bar on a 390px phone — which
        drops below the 18px the base rule's --display-weight is allowed at,
@@ -277,6 +294,10 @@ input[type="checkbox"] {
   align-items: center;
   width: 30px;
   height: 30px;
+  /* The outlined destructive variant below carries a border, and these are
+     fixed-size circles: without this the ring would add 4px to the disc and
+     leave delete visibly larger than the pencil beside it. */
+  box-sizing: border-box;
   margin: 5px;
   padding: 0;
   font: inherit;
@@ -308,13 +329,36 @@ input[type="checkbox"] {
 
 /* Delete and friends. Placed after the hover rule above so the red wins
    over the brown hover at equal specificity — a delete button must not
-   turn into the primary colour under the pointer (#457). */
+   turn into the primary colour under the pointer (#457).
+
+   Outlined, not filled. Red is the right hue for delete and stays, but a
+   filled disc of it was the loudest mark on the list pages: in CIELAB the
+   danger red is both lighter and markedly more colourful than the primary
+   brown (L* 38.4 / C* 56.2 against 29.0 / 38.6), so a 44px saturated disc
+   sitting alone in the whitespace of a phone card pulled the eye ahead of
+   the "Add a haiku" the page is actually for — the inversion design brief
+   §2 warns about. (Earlier rounds cleared it on HSV saturation, which
+   normalizes by value and so reported the dark brown as the *more*
+   saturated colour; it does not measure perceived colourfulness.)
+
+   Turning the disc inside out drops the red area by roughly three quarters
+   while keeping the hue unmistakable, and it separates delete from edit
+   MORE than the filled version did — the two circles now differ in
+   treatment as well as colour, rather than being two filled discs a shade
+   apart (#457). Same shape as .admin-button.danger-secondary, which the
+   labelled delete inside the photography editor already wears, so the
+   admin has one outlined-destructive look rather than two. */
 .admin-icon-button.danger {
-  background-color: var(--admin-danger);
+  background-color: #f2efe9;
+  color: var(--admin-danger-hover);
+  /* 2px, where the rectangular danger-secondary spends 1px: a ring reads
+     thinner than a straight edge of the same width, and this one has no
+     word beside it to carry the meaning. */
+  border: 2px solid var(--admin-danger);
 }
 
 .admin-icon-button.danger:hover {
-  background-color: var(--admin-danger-hover);
+  background-color: #f0e3e1;
 }
 
 /* Fixed overlays so they are visible regardless of list scroll position */
