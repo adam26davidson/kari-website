@@ -59,8 +59,12 @@ EOF
   cat >"$work/gh" <<'EOF'
 #!/usr/bin/env bash
 echo "$*" >>"$GH_LOG"
+# The cwd goes to its own log: a bare `gh issue comment` resolves WHICH
+# repo from the cwd's git remote, so where gh runs is behavior (#571).
+pwd >>"$GH_CWD_LOG"
 EOF
   chmod +x "$work/gh"
+  : >"$work/gh-cwd-log"
   # Records the flags it was called with as well as answering: /status
   # must ask for the phone-formatted report (--status-brief), not the
   # 80-column one, and only the argv can prove which.
@@ -89,6 +93,7 @@ run_telegram() { # <workdir> [args...] — stdout in <workdir>/out, stderr in er
   CURL_LOG="$work/curl-log" \
   RESPONSE_DIR="$work/responses" \
   GH_LOG="$work/gh-log" \
+  GH_CWD_LOG="$work/gh-cwd-log" \
   DISPATCH_LOG="$work/dispatch-log" \
   KARI_TELEGRAM_BOT_TOKEN="${TOKEN-test-token}" \
   KARI_TELEGRAM_CHAT_ID="${CHAT_ID-4242}" \
@@ -382,6 +387,21 @@ run_telegram "$w" poll
 expect_contains "$(last_poll "$w")" "offset=0" \
   "an unusable offset restarts from 0 instead of poisoning every poll"
 expect_eq "$(cat "$w/state/telegram-offset")" 41 "...and is then repaired"
+
+# 16. gh runs from the repo, wherever the caller stood. The systemd tick
+#     runs from $HOME, and a bare `gh issue comment` resolves which repo
+#     to target from the cwd's git remote — the first timer-consumed
+#     reply died on "not a git repository" while every manual poll, run
+#     from the repo, had worked (#571). The workdir is under /tmp and is
+#     no git repository, which is exactly the failing shape.
+w="$(new_work)"
+update_json "$w" '{"update_id":40,"message":{"message_id":300,
+  "chat":{"id":4242},"text":"#7 works from anywhere"}}'
+( cd "$w" && run_telegram "$w" poll )
+expect_contains "$w/gh-log" "issue comment 7" \
+  "a reply polled from a foreign cwd still reaches gh"
+expect_eq "$(sort -u "$w/gh-cwd-log")" "$(cd "$HERE/.." && pwd)" \
+  "every gh call runs from the repo root, not the caller's cwd"
 
 echo
 if [ "$FAILURES" -gt 0 ]; then
