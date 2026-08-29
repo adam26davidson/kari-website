@@ -288,26 +288,35 @@ input[type="checkbox"] {
   }
 }
 
+/* The move-up/move-down circles, and nothing else: edit and delete became
+   labelled buttons in #457, so every remaining icon-only control in the
+   admin is a low-consequence directional nudge.
+
+   Outlined, in the same brown family as .admin-button.secondary rather than
+   filled like the primary. A list row's one filled control should be the
+   thing she came to the page to do ("Add a haiku"); when the arrows were
+   filled brown discs, the LEAST consequential controls on the row were its
+   heaviest marks, which is the inversion design brief §2 warns about. */
 .admin-icon-button {
   display: flex;
   justify-content: center;
   align-items: center;
   width: 30px;
   height: 30px;
-  /* The outlined destructive variant below carries a border, and these are
-     fixed-size circles: without this the ring would add 4px to the disc and
-     leave delete visibly larger than the pencil beside it. */
+  /* The border below is part of the affordance, and these are fixed-size
+     circles: without this the ring would add 2px to the disc and leave the
+     control larger than its declared size. */
   box-sizing: border-box;
   margin: 5px;
   padding: 0;
   font: inherit;
-  /* Explicit, not inherited: the icon sits on the dark fill below, so its
-     legibility must not depend on an ancestor's text colour (#347). */
-  color: var(--light-text);
+  /* Explicit, not inherited: the glyph's legibility must not depend on an
+     ancestor's text colour (#347). */
+  color: #6d3513;
   /* Opaque, like .admin-button: a translucent fill reads washed out over
      a light card or photo (#278, #321). */
-  background-color: #6d3513;
-  border: none;
+  background-color: #f2efe9;
+  border: 1px solid #6d3513;
   border-radius: 50%;
   transition: background-color 0.2s;
 }
@@ -318,47 +327,20 @@ input[type="checkbox"] {
 .admin-icon-button:disabled:hover {
   background-color: #a89a91;
   color: #e9e3de;
+  border-color: #a89a91;
   cursor: not-allowed;
 }
 
-.admin-icon-button:hover,
-.admin-image-upload:hover {
-  background-color: #552a0f;
+/* The same darkening .admin-button.secondary uses, so the two outlined
+   shapes answer the pointer identically. */
+.admin-icon-button:hover {
+  background-color: #e4ded3;
   cursor: pointer;
 }
 
-/* Delete and friends. Placed after the hover rule above so the red wins
-   over the brown hover at equal specificity — a delete button must not
-   turn into the primary colour under the pointer (#457).
-
-   Outlined, not filled. Red is the right hue for delete and stays, but a
-   filled disc of it was the loudest mark on the list pages: in CIELAB the
-   danger red is both lighter and markedly more colourful than the primary
-   brown (L* 38.4 / C* 56.2 against 29.0 / 38.6), so a 44px saturated disc
-   sitting alone in the whitespace of a phone card pulled the eye ahead of
-   the "Add a haiku" the page is actually for — the inversion design brief
-   §2 warns about. (Earlier rounds cleared it on HSV saturation, which
-   normalizes by value and so reported the dark brown as the *more*
-   saturated colour; it does not measure perceived colourfulness.)
-
-   Turning the disc inside out drops the red area by roughly three quarters
-   while keeping the hue unmistakable, and it separates delete from edit
-   MORE than the filled version did — the two circles now differ in
-   treatment as well as colour, rather than being two filled discs a shade
-   apart (#457). Same shape as .admin-button.danger-secondary, which the
-   labelled delete inside the photography editor already wears, so the
-   admin has one outlined-destructive look rather than two. */
-.admin-icon-button.danger {
-  background-color: #f2efe9;
-  color: var(--admin-danger-hover);
-  /* 2px, where the rectangular danger-secondary spends 1px: a ring reads
-     thinner than a straight edge of the same width, and this one has no
-     word beside it to carry the meaning. */
-  border: 2px solid var(--admin-danger);
-}
-
-.admin-icon-button.danger:hover {
-  background-color: #f0e3e1;
+.admin-image-upload:hover {
+  background-color: #552a0f;
+  cursor: pointer;
 }
 
 /* Fixed overlays so they are visible regardless of list scroll position */

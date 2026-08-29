@@ -93,18 +93,28 @@ export function AdminWhatsOnTestPage() {
   return (
     <div className="admin-whats-on-test-page">
       <h2 className="admin-section-heading">What&apos;s on test</h2>
-      <p className="admin-section-explanation">
-        Changes that are on the test site but not on the live site yet. Have a
-        look at them on the test site before they go live.
-      </p>
+      {headSha && (
+        <p className="admin-section-explanation">
+          Changes that are on the test site but not on the live site yet. Have
+          a look at them on the test site before they go live.
+        </p>
+      )}
       {!headSha && (
         // No VITE_COMMIT_SHA is baked in, which is the normal case outside
         // a deployed environment (local dev, the test-mode bundle) — there
         // is no version to compare against, so say that rather than name
         // the build variable.
-        <p className="whats-on-test-note">
-          This isn&apos;t the test site, so there&apos;s nothing to compare. On
-          the test site, this page lists what&apos;s waiting to go live.
+        //
+        // One paragraph, not two. The standing explanation used to render
+        // unconditionally above this note, so the page promised a list of
+        // changes in one breath and withdrew it in the next — and this is
+        // the state every non-deployed build is in, so it is what a reader
+        // usually meets. Context first, then the situation (#457, design
+        // brief §3).
+        <p className="admin-section-explanation">
+          On the test site, this page lists the changes that are waiting to go
+          live, so they can be checked before they reach the live site. This
+          isn&apos;t the test site, so there&apos;s nothing to list here.
         </p>
       )}
       {headSha && isLoading && <div className="loading">Loading...</div>}

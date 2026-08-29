@@ -61,16 +61,37 @@ describe("AdminWhatsOnTestPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows the unknown-build fallback and skips fetching when the build sha is absent", async () => {
+  // The standing explanation used to render unconditionally above this
+  // note, so off a deployed environment — which is every local build and
+  // CI's e2e bundle, i.e. what a reader usually meets — the page promised a
+  // list of changes in one paragraph and withdrew it in the next. One
+  // paragraph now: context, then the situation (#457, design brief §3).
+  // Exact strings, because this test is the spec for the copy.
+  const STANDING =
+    "Changes that are on the test site but not on the live site yet. Have a " +
+    "look at them on the test site before they go live.";
+  const OFF_TEST =
+    "On the test site, this page lists the changes that are waiting to go " +
+    "live, so they can be checked before they reach the live site. This " +
+    "isn't the test site, so there's nothing to list here.";
+
+  it("explains the page in one paragraph when the build sha is absent", async () => {
     vi.unstubAllEnvs();
 
     render(<AdminWhatsOnTestPage />);
 
-    expect(
-      await screen.findByText(/isn't the test site, so there's nothing/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(OFF_TEST)).toBeInTheDocument();
+    // Not alongside a paragraph promising the list it just said is empty.
+    expect(screen.queryByText(STANDING)).toBeNull();
     expect(DeployStatusService.getLatestProdDeploy).not.toHaveBeenCalled();
     expect(DeployStatusService.getPendingCommits).not.toHaveBeenCalled();
+  });
+
+  it("explains the page as a live one when there is a build sha", async () => {
+    render(<AdminWhatsOnTestPage />);
+
+    expect(await screen.findByText(STANDING)).toBeInTheDocument();
+    expect(screen.queryByText(OFF_TEST)).toBeNull();
   });
 
   it("renders the pending commits newest first with PR link, date, and short sha", async () => {

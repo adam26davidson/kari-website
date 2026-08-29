@@ -114,17 +114,63 @@ describe("AdminItemList", () => {
     const { container } = renderList({ onEdit: vi.fn() });
     // The middle row: it has all four controls (both move directions).
     const row = container.querySelectorAll(".admin-data-list-item")[1];
-    const labels = within(row as HTMLElement)
+    const names = within(row as HTMLElement)
       .getAllByRole("button")
-      .map((button) => button.getAttribute("aria-label"));
-    expect(labels).toEqual(["Edit", "Move up", "Move down", "Delete"]);
+      .map((button) => button.textContent || button.getAttribute("aria-label"));
+    expect(names).toEqual(["Edit", "Move up", "Move down", "Delete"]);
   });
 
-  // Nested in an editor, a trash circle beside the fields says nothing
-  // about what it removes. Given a label it becomes a named button on a
-  // line of its own — still destructive, now unambiguous (#457).
-  describe("a labelled delete", () => {
-    it("names the thing it removes instead of showing a bare circle", () => {
+  // A pencil-in-a-circle and a bin-in-a-circle were the only affordance
+  // offered for the two most consequential things she can do to a row. The
+  // admin's one user does not read icons as vocabulary, and the words
+  // survive the shadcn migration where the icons would not (#457, design
+  // brief §3).
+  describe("the two consequential row controls", () => {
+    it("say what they do in a word, not only in an icon", () => {
+      renderList({ onEdit: vi.fn() });
+      for (const name of ["Edit", "Delete"]) {
+        // getByRole matches an accessible name in full, so "Delete" here
+        // cannot be satisfied by a longer deleteLabel.
+        const buttons = screen.getAllByRole("button", { name });
+        expect(buttons).toHaveLength(items.length);
+        // The name comes from visible text, not from an aria-label
+        // standing in for it.
+        expect(buttons[0]).toHaveTextContent(name);
+        expect(buttons[0]).not.toHaveAttribute("aria-label");
+      }
+    });
+
+    it("dresses edit as a quiet control beside the page's primary", () => {
+      renderList({ onEdit: vi.fn() });
+      const edit = screen.getAllByRole("button", { name: "Edit" })[0];
+      expect(edit).toHaveClass("admin-button", "secondary");
+    });
+
+    // Destructive and looks it — but outlined, so the page's one filled
+    // button stays the thing she came to do (design brief §2).
+    it("dresses delete as the destructive control it is", () => {
+      renderList();
+      for (const button of screen.getAllByRole("button", { name: "Delete" })) {
+        expect(button).toHaveClass("admin-button", "danger-secondary");
+      }
+    });
+
+    // The move arrows are directional and low-consequence, and the arrow
+    // already says what "Move up" would. They stay circles so the row's
+    // labelled pair does not get lost in four text buttons.
+    it("leaves the move controls as labelled icon circles", () => {
+      renderList();
+      const up = screen.getAllByRole("button", { name: "Move up" })[0];
+      expect(up).toHaveClass("admin-icon-button");
+      expect(up).not.toHaveClass("danger");
+    });
+  });
+
+  // Nested in an editor, the row is one part of the thing on screen and a
+  // bare "Delete" does not say WHICH part — the caption, the photo, or the
+  // whole post. deleteLabel replaces the word, not the button (#457).
+  describe("a custom delete label", () => {
+    it("names the thing it removes instead of saying just Delete", () => {
       renderList({ deleteLabel: "Remove this image" });
       expect(
         screen.queryByRole("button", { name: "Delete" }),
@@ -145,31 +191,6 @@ describe("AdminItemList", () => {
       );
       expect(onDelete).toHaveBeenCalledWith("b");
     });
-
-    it("marks the row so the label can take its own line", () => {
-      const { container } = renderList({ deleteLabel: "Remove this image" });
-      expect(
-        container.querySelectorAll(".admin-data-list-item.labelled-delete"),
-      ).toHaveLength(items.length);
-    });
-
-    it("leaves the row unmarked when delete is a circle", () => {
-      const { container } = renderList();
-      expect(
-        container.querySelector(".admin-data-list-item.labelled-delete"),
-      ).toBeNull();
-    });
-  });
-
-  it("dresses delete as the destructive control it is", () => {
-    renderList();
-    for (const button of screen.getAllByRole("button", { name: "Delete" })) {
-      expect(button).toHaveClass("danger");
-    }
-    // The non-destructive controls emphatically do not.
-    for (const button of screen.getAllByRole("button", { name: "Move up" })) {
-      expect(button).not.toHaveClass("danger");
-    }
   });
 
   // On a list page adding IS the one obvious next action, so the button is
@@ -438,15 +459,13 @@ describe("AdminItemList", () => {
     });
   });
 
-  describe("the row controls at phone width", () => {
-    const CONTROL = ".admin-data-list-item-controls .admin-icon-button";
-
+  describe("the row's shape", () => {
     // Edit and delete used to sit side by side on the compact lists (haiku,
     // haiga) and stacked vertically on the others (photography, other
     // works), so the same pair read as two different controls depending on
     // which section she was in. One direction, declared once, and no
     // variant allowed to flip it back.
-    it("lay the controls out in a row on every list", () => {
+    it("lays the controls out in a row on every list", () => {
       const directions = [
         ...listCss.matchAll(
           /([^{}]*admin-data-list-item-controls)\s*\{([^}]*)\}/g,
@@ -457,45 +476,75 @@ describe("AdminItemList", () => {
       expect(directions).not.toContain("column");
     });
 
-    // The whole row, content included, is what the phone has to hold; the
-    // content getting only what the circles leave over is what made the
-    // 390px lists read as crowded. A full-width basis puts the controls on
-    // their own line instead.
-    it("give the content the full width and the controls a line below", () => {
-      expect(atPhoneWidth).toMatch(
+    // The buttons that act on a row belong with the row, not across a gap
+    // of empty card from it — on a desktop the controls sat pinned to the
+    // far right of a ~750px row with ~450px of nothing between. And the
+    // labelled pair plus the move arrows is too wide to stand beside a
+    // haiga's caption at any width (#457, design brief §1).
+    it("gives the content a full line and the controls one below it", () => {
+      expect(listCss).toMatch(
+        /\.admin-data-list-item\s*\{[^}]*flex-wrap\s*:\s*wrap/,
+      );
+      expect(listCss).toMatch(
         /\.admin-data-list-item-content\s*\{[^}]*flex-basis\s*:\s*100%/,
       );
     });
 
-    it.each([["width"], ["height"]])(
-      "give every control a fingertip-sized %s",
-      (property) => {
-        // 44px: the size a touch target stops being a gamble at.
-        expect(px(atPhoneWidth, CONTROL, property)).toBeGreaterThanOrEqual(44);
-      },
-    );
-  });
+    // Not a phone-only shape any more: the same crowding it fixed at 390px
+    // is what the labelled controls create on a desktop.
+    it("does so in the base rules, not only at phone width", () => {
+      expect(atPhoneWidth).not.toMatch(/flex-basis\s*:\s*100%/);
+    });
 
-  describe("the destructive row control", () => {
-    const CONTROL = ".admin-data-list-item-controls .admin-icon-button";
-    /** What the base rule's margin leaves between two adjacent circles. */
-    const neighbourGap = 2 * px(adminCss, ".admin-icon-button", "margin");
-
-    // Colour alone does not stop two same-sized discs one neighbour-gap
-    // apart from reading as a pair; the brief also asks that a destructive
-    // action never be the closest thing to the one she reaches for most
-    // (§2). At every width, not only on a phone: a mouse slip is a slip
-    // too, and the separation is as much for the eye as for the fingertip.
-    it("sits further off than the controls sit from each other", () => {
-      expect(px(listCss, `${CONTROL}.danger`, "margin-left")).toBeGreaterThan(
-        neighbourGap,
+    // The list rows were the widest surface in the admin (800px) while the
+    // other cards sit near 700px, so a list page read as a different room.
+    it("holds a titled list to a narrower measure than an untitled one", () => {
+      expect(px(listCss, ".admin-data-list.titled", "max-width")).toBeLessThan(
+        px(listCss, ".admin-data-list", "max-width"),
       );
     });
 
+    it("only marks a list titled when it has a title", () => {
+      const { container } = renderList({ title: "Haiku" });
+      expect(container.querySelector(".admin-data-list.titled")).not.toBeNull();
+      const { container: nested } = renderList();
+      expect(nested.querySelector(".admin-data-list.titled")).toBeNull();
+    });
+  });
+
+  describe("the row controls at phone width", () => {
+    // 44px: the size a touch target stops being a gamble at. Both shapes —
+    // the arrows are circles, Edit and Delete are text buttons.
+    it.each([
+      [".admin-data-list-item-controls .admin-icon-button", "height"],
+      [".admin-data-list-item-controls .admin-icon-button", "width"],
+      [".admin-data-list-item-controls .admin-icon-button", "min-height"],
+      [".admin-data-list-item-controls .admin-button", "min-height"],
+    ])("gives %s a fingertip-sized %s", (selector, property) => {
+      expect(px(atPhoneWidth, selector, property)).toBeGreaterThanOrEqual(44);
+    });
+  });
+
+  describe("the destructive row control", () => {
+    const DELETE = ".admin-data-list-item-controls .admin-button.danger-secondary";
+    /** What the controls' own rhythm leaves between two neighbours. */
+    const neighbourGap = px(
+      listCss,
+      ".admin-data-list-item-controls",
+      "gap",
+    ) + 2 * px(adminCss, ".admin-icon-button", "margin");
+
+    // Colour and a word are not on their own enough: the brief asks that a
+    // destructive action never be the closest thing to the one she reaches
+    // for most (§2). At every width, not only on a phone — a mouse slip is
+    // a slip too, and the separation is as much for the eye as for the
+    // fingertip.
+    it("sits further off than the controls sit from each other", () => {
+      expect(px(listCss, DELETE, "margin-left")).toBeGreaterThan(neighbourGap);
+    });
+
     it("is set apart by a base rule, not a phone-only one", () => {
-      expect(atPhoneWidth).not.toMatch(
-        /admin-icon-button\.danger\s*\{[^}]*margin-left/,
-      );
+      expect(atPhoneWidth).not.toMatch(/danger-secondary\s*\{[^}]*margin-left/);
     });
   });
 });

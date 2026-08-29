@@ -2,9 +2,10 @@ import { test, expect, Page } from "@playwright/test";
 import {
   adminListItem,
   confirmDialog,
+  deleteButton,
   deleteItemsMatching,
+  editButton,
   expectGoneFromPublicPage,
-  iconButton,
   openAdminSection,
   originalKey,
   pngFixturePath,
@@ -94,7 +95,7 @@ test.describe("admin navigation", () => {
     await expect(page).toHaveURL(/\/admin\/haiku$/);
 
     // Opening an editor pushes history too, and its URL survives a reload.
-    await iconButton(adminListItem(page, marker), "pencil").click();
+    await editButton(adminListItem(page, marker)).click();
     await expect(page.locator(".data-editor")).toBeVisible();
     await expect(page).toHaveURL(/\/admin\/haiku\/[\w-]+$/);
     const editorUrl = page.url();
@@ -112,7 +113,7 @@ test.describe("admin navigation", () => {
     await expect(page.locator(".data-editor")).toBeHidden();
 
     // Back from a dirty editor asks first: No stays, Yes discards.
-    await iconButton(adminListItem(page, marker), "pencil").click();
+    await editButton(adminListItem(page, marker)).click();
     await expect(page.locator(".data-editor")).toBeVisible();
     await page.locator(".data-editor textarea").fill(`${marker}\nedited`);
     await page.goBack();
@@ -159,7 +160,7 @@ test.describe("haiku", () => {
     await expect(row).toBeVisible();
 
     // Edit
-    await iconButton(row, "pencil").click();
+    await editButton(row).click();
     const textarea = page.locator(".data-editor textarea");
     await expect(textarea).toHaveValue(new RegExp(marker));
     await textarea.fill(`${marker}\nedited line`);
@@ -176,7 +177,7 @@ test.describe("haiku", () => {
 
     // Delete
     await openAdminSection(page, "Haiku");
-    await iconButton(adminListItem(page, marker), "trash").click();
+    await deleteButton(adminListItem(page, marker)).click();
     await confirmDialog(page, "Yes");
     await waitForIdle(page, 120_000);
     await expect(adminListItem(page, marker)).toHaveCount(0);
@@ -229,7 +230,7 @@ test.describe("haiga", () => {
 
     // Edit: the publisher and the uploaded image persisted (the image is
     // served through the API on the admin side).
-    await iconButton(row, "pencil").click();
+    await editButton(row).click();
     const publisher = page.getByLabel("Publisher");
     await expect(publisher).toHaveValue(marker);
     await expect(
@@ -258,7 +259,7 @@ test.describe("haiga", () => {
 
     // Delete (the uploaded image object stays for the cleanup sweep)
     await openAdminSection(page, "Haiga");
-    await iconButton(adminListItem(page, marker), "trash").click();
+    await deleteButton(adminListItem(page, marker)).click();
     await confirmDialog(page, "Yes");
     await waitForIdle(page, 120_000);
     await expect(adminListItem(page, marker)).toHaveCount(0);
@@ -343,7 +344,7 @@ test.describe("blog (other works)", () => {
 
     // Reopen: content and image persisted; draft images are served through
     // the API (private storage).
-    await iconButton(adminListItem(page, marker), "pencil").click();
+    await editButton(adminListItem(page, marker)).click();
     await expect(page.locator(".data-editor")).toBeVisible({
       timeout: 60_000,
     });
@@ -381,7 +382,7 @@ test.describe("blog (other works)", () => {
     // Delete (also removes the content document; image objects stay
     // for the cleanup sweep).
     await openAdminSection(page, "Other works");
-    await iconButton(adminListItem(page, marker), "trash").click();
+    await deleteButton(adminListItem(page, marker)).click();
     await confirmDialog(page, "Yes");
     await waitForIdle(page, 180_000);
     await expect(adminListItem(page, marker)).toHaveCount(0);
@@ -443,7 +444,7 @@ test.describe("photography", () => {
     expect((await page.request.get(summarySrc!)).status()).toBe(200);
 
     // Reopen: the persisted image renders in the photo picker.
-    await iconButton(row, "pencil").click();
+    await editButton(row).click();
     await expect(
       imagesSection.locator('.photo-picker-image[src*="/images/"]'),
     ).toBeVisible();
@@ -473,7 +474,7 @@ test.describe("photography", () => {
 
     // Delete (the uploaded image objects stay for the cleanup sweep).
     await openAdminSection(page, "Photography");
-    await iconButton(adminListItem(page, marker), "trash").click();
+    await deleteButton(adminListItem(page, marker)).click();
     await confirmDialog(page, "Yes");
     await waitForIdle(page, 180_000);
     await expect(adminListItem(page, marker)).toHaveCount(0);

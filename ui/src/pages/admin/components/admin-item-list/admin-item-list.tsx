@@ -55,12 +55,12 @@ export interface AdminItemListProps<T extends { id: string }> {
    */
   onDelete: (id: string) => void;
   /**
-   * Renders delete as a labelled button rather than a trash circle, on its
-   * own line under the row's content. For a list nested in an editor, where
-   * a bare red disc floating beside the fields does not say WHAT it
-   * removes — the caption, the photo, or the whole post (#457, design brief
-   * §3). List pages keep the circle: their rows are one thing each, and the
-   * confirm dialog names it.
+   * What the delete button says, when a bare "Delete" would not be enough.
+   * For a list nested in an editor, where the row is one part of the thing
+   * on screen and "Delete" does not say WHAT it removes — the caption, the
+   * photo, or the whole post (#457, design brief §3). List pages leave it
+   * unset and get "Delete": their rows are one thing each, and the confirm
+   * dialog names it.
    */
   deleteLabel?: string;
   onMove: (id: string, direction: "up" | "down") => void;
@@ -154,7 +154,10 @@ export function AdminItemList<T extends { id: string }>({
 
   return (
     <div className="admin-data-list-container">
-      <div className="admin-data-list">
+      {/* `titled` narrows the measure to match the other admin cards — see
+          admin-item-list.css. Only a list PAGE gets it: the photography
+          editor's nested list is sized to the editor it sits in. */}
+      <div className={title ? "admin-data-list titled" : "admin-data-list"}>
         {title ? (
           <div className="admin-data-list-header">
             <h2 className="admin-section-heading">{title}</h2>
@@ -171,13 +174,11 @@ export function AdminItemList<T extends { id: string }>({
         {visibleItems.map((item, idx) => (
           <div
             key={item.id}
-            className={[
-              "admin-data-list-item",
-              compact ? "compact" : "",
-              deleteLabel ? "labelled-delete" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
+            className={
+              compact
+                ? "admin-data-list-item compact"
+                : "admin-data-list-item"
+            }
           >
             <div className="admin-data-list-item-content">
               {renderItem(item)}
@@ -185,17 +186,25 @@ export function AdminItemList<T extends { id: string }>({
             {/* Order matters: edit (the one she reaches for most) first,
                 delete last and in the danger red. Delete used to sit
                 first, immediately beside edit, and wear the identical
-                brown circle (#457, design brief §2). */}
+                brown circle (#457, design brief §2).
+
+                Edit and delete say what they do. A pencil-in-a-circle and
+                a bin-in-a-circle were the only affordance offered for the
+                two most consequential things she can do to a row, and the
+                admin's one user does not read icons as vocabulary; the
+                words also survive the shadcn migration, which the icons
+                would not (#457, design brief §3). The move arrows stay
+                icons — directional, low-consequence, and "Move up" is what
+                the arrow already says. */}
             <div className="admin-data-list-item-controls">
               {!hideEdit && (
-                <button
-                  type="button"
-                  className="admin-icon-button"
-                  aria-label="Edit"
+                <AdminButton
+                  variant="secondary"
                   onClick={onEdit && (() => onEdit(item.id))}
                 >
                   <FontAwesomeIcon icon={faPencil} />
-                </button>
+                  Edit
+                </AdminButton>
               )}
               {!filtering && idx !== 0 && (
                 <button
@@ -217,29 +226,17 @@ export function AdminItemList<T extends { id: string }>({
                   <FontAwesomeIcon icon={faArrowDown} />
                 </button>
               )}
-              {deleteLabel ? (
-                // Outlined, not filled: a labelled delete only appears
-                // nested in an editor, where the screen's primary is Save
-                // and a red block that wide would out-shout it. The circle
-                // below has no word to carry the meaning, so its whole
-                // area is the signal and it stays filled.
-                <AdminButton
-                  variant="danger-secondary"
-                  onClick={() => onDelete(item.id)}
-                >
-                  <FontAwesomeIcon icon={faTrash} />
-                  {deleteLabel}
-                </AdminButton>
-              ) : (
-                <button
-                  type="button"
-                  className="admin-icon-button danger"
-                  aria-label="Delete"
-                  onClick={() => onDelete(item.id)}
-                >
-                  <FontAwesomeIcon icon={faTrash} />
-                </button>
-              )}
+              {/* Outlined, not filled: red says "this destroys something"
+                  while the weight stays secondary, so the page's one
+                  filled button remains the thing she came to do. Red
+                  itself is settled — it is the right hue for delete. */}
+              <AdminButton
+                variant="danger-secondary"
+                onClick={() => onDelete(item.id)}
+              >
+                <FontAwesomeIcon icon={faTrash} />
+                {deleteLabel ?? "Delete"}
+              </AdminButton>
             </div>
           </div>
         ))}

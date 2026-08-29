@@ -352,100 +352,88 @@ describe("the admin section headings", () => {
   });
 });
 
-// The icon on a filled control is only legible because of the colour
+// The glyph on an icon control is only legible because of the colour
 // declared on the control. `color: inherit` made that lightness an accident
 // of whichever ancestor last set a colour — one dark-text ancestor away from
-// a dark icon on the dark brown fill (#347).
+// an invisible icon (#347). Since #457 the icon circles are the move arrows
+// and nothing else, and they are outlined rather than filled, so the brown
+// now has to carry the GLYPH and the RING against the button's own pale
+// fill rather than sit behind a white glyph.
 describe("the admin icon buttons", () => {
-  const foreground = () => declaration(adminCss, ".admin-icon-button", "color");
+  const declared = (property: string) =>
+    declaration(adminCss, ".admin-icon-button", property);
 
   it("declare their own foreground rather than inheriting one", () => {
-    expect(foreground()).not.toBe("inherit");
+    expect(declared("color")).not.toBe("inherit");
   });
 
-  it("put an icon on their fill that meets WCAG AA", () => {
-    const fill = parseColor(
-      declaration(adminCss, ".admin-icon-button", "background-color"),
-    );
+  it("put a glyph on their fill that meets WCAG AA", () => {
     expect(
-      contrastRatio(resolveColor(foreground()), fill),
+      contrastRatio(
+        resolveColor(declared("color")),
+        parseColor(declared("background-color")),
+      ),
     ).toBeGreaterThanOrEqual(4.5);
   });
 
-  // The delete circles are turned inside out rather than filled red (#457):
-  // pale fill, red ring, red glyph. A filled disc of the danger red was the
-  // loudest mark on the list pages — in CIELAB it is both lighter and much
-  // more colourful than the primary brown — so it pulled the eye ahead of
-  // the "Add a …" the page is for, inverting design brief §2. That inverts
-  // the argument above too: the danger colour now has to carry the ICON and
-  // the RING against the button's own fill, rather than be a background
-  // under a white glyph.
-  const DANGER_CIRCLE = ".admin-icon-button.danger";
-  const dangerDeclared = (property: string) =>
-    declaration(adminCss, DANGER_CIRCLE, property);
-
-  it("keep the outlined destructive circle legible on its own fill", () => {
-    const fill = parseColor(dangerDeclared("background-color"));
-
+  // The ring is the whole edge of the control — an outlined button with an
+  // invisible border is not a button (WCAG 1.4.11 non-text contrast).
+  it("draw a ring that reads as a shape on their own fill", () => {
     expect(
-      contrastRatio(adminColor(dangerDeclared("color")), fill),
-    ).toBeGreaterThanOrEqual(4.5);
-    // The ring is the whole affordance here — there is no word beside it —
-    // so it has to read as a shape (WCAG 1.4.11 non-text contrast).
-    expect(
-      contrastRatio(adminColor(dangerDeclared("border")), fill),
+      contrastRatio(
+        adminColor(declared("border")),
+        parseColor(declared("background-color")),
+      ),
     ).toBeGreaterThanOrEqual(3);
   });
 
-  // Spending LESS red, never a different colour. Quieting the disc by
-  // draining the hue out of it would be the #457 defect again in a new
-  // shape, and the maintainer's call on this is explicit: red is the right
-  // colour for delete.
-  it("keep the destructive circle red", () => {
-    expect(dangerDeclared("border")).toContain("--admin-danger");
-    expect(dangerDeclared("color")).toContain("--admin-danger");
-  });
-
   // A bordered circle on a fixed 30/44px control has to be border-box, or
-  // the ring makes delete measurably bigger than the pencil beside it.
-  it("size the circles so a ring cannot grow the destructive one", () => {
-    expect(declaration(adminCss, ".admin-icon-button", "box-sizing")).toBe(
-      "border-box",
-    );
+  // the ring grows it past the size it declares.
+  it("size the circles so a ring cannot grow them", () => {
+    expect(declared("box-sizing")).toBe("border-box");
   });
 
   // The quiet destructive button inverts the arrangement: red on the pale
   // fill rather than white on red. It is the one place the danger colour
   // has to carry TEXT contrast rather than just be a background, so its
-  // legibility cannot be assumed from the filled variant's numbers.
+  // legibility cannot be assumed from the filled variant's numbers. Since
+  // #457 it is also every list row's Delete, not only the photography
+  // editor's "Remove this image".
   it("keep the outlined destructive button legible on its own fill", () => {
     const OUTLINED = ".admin-button.danger-secondary";
-    const declared = (property: string) =>
+    const outlined = (property: string) =>
       declaration(adminButtonCss, OUTLINED, property);
-    const fill = parseColor(declared("background-color"));
+    const fill = parseColor(outlined("background-color"));
 
     expect(
-      contrastRatio(adminColor(declared("color")), fill),
+      contrastRatio(adminColor(outlined("color")), fill),
     ).toBeGreaterThanOrEqual(4.5);
     // And its outline has to read as a shape (WCAG 1.4.11 non-text
     // contrast) — an invisible border is not a button.
     expect(
-      contrastRatio(adminColor(declared("border")), fill),
+      contrastRatio(adminColor(outlined("border")), fill),
     ).toBeGreaterThanOrEqual(3);
   });
 
-  it("make the destructive circle distinguishable from the primary one", () => {
-    const primary = parseColor(
-      declaration(adminCss, ".admin-icon-button", "background-color"),
+  // Not a WCAG rule — just "these must not read as the same button". Edit
+  // and delete sat side by side in identical brown circles (#457); now each
+  // carries its own word, and colour still separates them: edit is outlined
+  // in the primary brown family, delete in the danger red. Spending LESS
+  // red, never a different colour — the maintainer's call on this is
+  // explicit, red is the right colour for delete.
+  it("colours edit and delete apart as well as naming them", () => {
+    const edit = declaration(adminButtonCss, ".admin-button.secondary", "border");
+    const del = declaration(
+      adminButtonCss,
+      ".admin-button.danger-secondary",
+      "border",
     );
-    // Not a WCAG rule — just "these must not read as the same button".
-    // Delete and edit sat side by side in identical brown circles (#457).
-    // Now they differ in treatment as well as colour: one filled and
-    // borderless, one pale and ringed, which is a bigger difference than the
-    // two filled discs a shade apart that this replaced.
-    expect(parseColor(dangerDeclared("background-color"))).not.toEqual(primary);
-    expect(declaration(adminCss, ".admin-icon-button", "border")).toBe("none");
-    expect(dangerDeclared("border")).not.toBe("none");
+    expect(del).toContain("--admin-danger");
+    expect(edit).not.toContain("--admin-danger");
+    expect(adminColor(edit)).not.toEqual(adminColor(del));
+    // Edit's outline is the same brown the icon circles beside it wear, so
+    // the row reads as one family with one exception.
+    expect(adminColor(edit)).toEqual(adminColor(declared("border")));
   });
 });
 

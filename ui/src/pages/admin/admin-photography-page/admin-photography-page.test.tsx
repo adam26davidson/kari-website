@@ -24,10 +24,16 @@ vi.mock("../../../hooks/use-admin-token", () => ({
   useAdminToken: () => async () => "token",
 }));
 
+/**
+ * A per-row control located by its FontAwesome glyph. Since #457 edit and
+ * delete are labelled .admin-button text buttons and the move arrows are
+ * .admin-icon-button circles, so this closes on the button element itself
+ * rather than on either class.
+ */
 function iconButton(container: HTMLElement, icon: string): HTMLElement {
   const button = container
     .querySelector(`svg[data-icon="${icon}"]`)
-    ?.closest(".admin-icon-button");
+    ?.closest("button");
   if (!(button instanceof HTMLElement)) {
     throw new Error(`no icon button for "${icon}"`);
   }
