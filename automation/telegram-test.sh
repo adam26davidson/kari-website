@@ -5,8 +5,9 @@
 #
 # Hermetic by construction: every run points KARI_TELEGRAM_CURL at a
 # recording stub that replays canned JSON, KARI_TELEGRAM_GH_BIN at a
-# recording gh stub, KARI_TELEGRAM_DISPATCH_BIN at a stub printing canned
-# status, and the state/pause paths into a temp dir. So the harness can
+# recording gh stub, KARI_TELEGRAM_DISPATCH_BIN at a stub recording its
+# flags and printing canned status, and the state/pause paths into a
+# temp dir. So the harness can
 # never reach api.telegram.org, comment on a real issue, pause the live
 # fleet, or read the fleet's real state — here or on the maintainer's
 # laptop, where the transport is configured for real.
@@ -32,6 +33,7 @@ new_work() {
   mkdir -p "$work/state" "$work/responses"
   : >"$work/curl-log"
   : >"$work/gh-log"
+  : >"$work/dispatch-log"
   # The API stub: the full argv on one line, then whichever canned
   # response the test wrote for the method being called. It matches on
   # the URL rather than an argument position, so reordering telegram.sh's
@@ -59,8 +61,12 @@ EOF
 echo "$*" >>"$GH_LOG"
 EOF
   chmod +x "$work/gh"
+  # Records the flags it was called with as well as answering: /status
+  # must ask for the phone-formatted report (--status-brief), not the
+  # 80-column one, and only the argv can prove which.
   cat >"$work/dispatch" <<'EOF'
 #!/usr/bin/env bash
+echo "$*" >>"$DISPATCH_LOG"
 echo "canned status: issue-pipeline every=4h"
 EOF
   chmod +x "$work/dispatch"
@@ -74,8 +80,8 @@ EOF
 }
 
 # TOKEN/CHAT_ID are overridable per call (TOKEN= exercises the
-# unconfigured no-op). CURL_LOG, RESPONSE_DIR and GH_LOG ride along in
-# the environment: telegram.sh execs the stubs directly, so the prefix's
+# unconfigured no-op). CURL_LOG, RESPONSE_DIR, GH_LOG and DISPATCH_LOG
+# ride along in the environment: telegram.sh execs the stubs directly, so the prefix's
 # environment is what they see.
 run_telegram() { # <workdir> [args...] — stdout in <workdir>/out, stderr in err
   local work="$1"
@@ -83,6 +89,7 @@ run_telegram() { # <workdir> [args...] — stdout in <workdir>/out, stderr in er
   CURL_LOG="$work/curl-log" \
   RESPONSE_DIR="$work/responses" \
   GH_LOG="$work/gh-log" \
+  DISPATCH_LOG="$work/dispatch-log" \
   KARI_TELEGRAM_BOT_TOKEN="${TOKEN-test-token}" \
   KARI_TELEGRAM_CHAT_ID="${CHAT_ID-4242}" \
   KARI_TELEGRAM_CURL="$work/curl" \
@@ -226,6 +233,8 @@ expect_contains "$w/gh-log" "--remove-label needs-human" \
 expect_contains "$w/gh-log" "--remove-label blocked" \
   "the reply clears blocked"
 expect_file "$w/state/nudge" "a reply nudges the fleet"
+expect_contains "$w/curl-log" "posted to issue #5" \
+  "the maintainer is told the reply landed"
 expect_eq "$(cat "$w/state/telegram-offset")" 11 \
   "the offset advances past the update just consumed"
 expect_contains "$w/out" "processed 1 update(s)" "poll reports what it did"
@@ -273,11 +282,13 @@ update_json "$w" '{"update_id":6,"message":{"message_id":204,
   "chat":{"id":4242},"text":"/pause"}}'
 run_telegram "$w" poll
 expect_file "$w/PAUSE" "/pause creates the pause file"
+expect_contains "$w/curl-log" "fleet paused" "...and says so"
 
 update_json "$w" '{"update_id":7,"message":{"message_id":205,
   "chat":{"id":4242},"text":"/resume"}}'
 run_telegram "$w" poll
 expect_file_absent "$w/PAUSE" "/resume removes the pause file"
+expect_contains "$w/curl-log" "fleet resumed" "...and says so"
 
 w="$(new_work)"
 update_json "$w" '{"update_id":8,"message":{"message_id":206,
@@ -285,14 +296,19 @@ update_json "$w" '{"update_id":8,"message":{"message_id":206,
 run_telegram "$w" poll
 expect_contains "$w/curl-log" "canned status: issue-pipeline" \
   "/status replies with the dispatcher's own output"
+expect_contains "$w/dispatch-log" "--status-brief" \
+  "/status asks for the phone-formatted report, not the 80-column one"
 
-# 10. Anything else gets the one-line help rather than silence: a typo
-#     that vanishes looks exactly like a fleet that has stopped.
+# 10. Anything else gets the help rather than silence: a typo that
+#     vanishes looks exactly like a fleet that has stopped. The help is a
+#     short bullet list, one item per line, because it is read on a phone.
 w="$(new_work)"
 update_json "$w" '{"update_id":9,"message":{"message_id":207,
   "chat":{"id":4242},"text":"hello?"}}'
 run_telegram "$w" poll
 expect_contains "$w/curl-log" "/pause" "unrouted text gets the help reply"
+expect_contains "$w/curl-log" "• done <issue>" \
+  "the help lists one thing it understands per line"
 expect_eq "$(wc -c <"$w/gh-log")" 0 "unrouted text comments on no issue"
 
 # 11. A multi-line answer is the normal case for "explain what you did",
@@ -339,6 +355,8 @@ expect_not_contains "$w/gh-log" "--remove-label" \
   "a failed comment leaves the labels alone"
 expect_file_absent "$w/state/nudge" "a failed comment nudges nothing"
 expect_contains "$w/err" "reply not recorded" "the failure is logged"
+expect_contains "$w/curl-log" "could not post your reply to issue #7" \
+  "...and the maintainer is told, rather than left assuming it landed"
 expect_eq "$(cat "$w/state/telegram-offset")" 31 \
   "an unpostable message is still consumed"
 

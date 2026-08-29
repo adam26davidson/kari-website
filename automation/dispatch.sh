@@ -14,6 +14,11 @@
 #   dispatch.sh --status   # per agent: last run, next due (tolerance
 #                          # included), lock state, observed inter-run gaps,
 #                          # and runs/cost over the retained usage records
+#   dispatch.sh --status-brief
+#                          # the same picture laid out for a phone: short
+#                          # emoji-prefixed lines, no gap forensics. This
+#                          # is what telegram.sh sends for /status, where
+#                          # 80-column terminal text wraps illegibly
 #   dispatch.sh --wait     # a tick that blocks until its launches finish
 #
 # Every per-run log ends in a "tick exited <code>" line (written by an
@@ -144,9 +149,12 @@ for arg in "$@"; do
   case "$arg" in
     --dry-run) MODE=dry-run ;;
     --status) MODE=status ;;
+    # Quoted so shellcheck does not read the hyphen as subtraction (SC2100).
+    --status-brief) MODE="status-brief" ;;
     --wait) WAIT=true ;;
     *)
-      echo "usage: $(basename "$0") [--dry-run | --status] [--wait]" >&2
+      echo "usage: $(basename "$0")" \
+        "[--dry-run | --status | --status-brief] [--wait]" >&2
       exit 2
       ;;
   esac
@@ -257,6 +265,54 @@ status_report() { # <name> <enabled> <every> <model> <last> <due_at> <now>
   echo "  lock:     $lock_state"
   echo "  gaps:     $(observed_gaps "$name")"
   echo "  usage:    $(usage_summary "$name")"
+}
+
+# The same report, laid out for a phone rather than an 80-column
+# terminal: a few short lines per agent instead of aligned columns that
+# wrap into porridge inside a Telegram bubble. Plain text and emoji only
+# — nothing here is sent with a parse_mode, so an agent name or a
+# jq-built usage string can never need escaping. Deliberately NOT a
+# superset of --status: the observed gaps are drift forensics worth
+# reading at a desk and pure noise on a phone, so they stay in --status
+# alone. Everything else is the same helpers on the same arguments,
+# computed by the same loop, so the two reports cannot drift apart.
+STATUS_BRIEF_SEEN=0
+status_brief_report() { # <name> <enabled> <every> <last> <due_at> <now>
+  local name="$1" enabled="$2" every="$3" last="$4" due_at="$5" now="$6"
+  local lock="$STATE_DIR/$name.lock"
+  # A blank line BETWEEN blocks rather than after each: a trailing blank
+  # is a wasted last line in the chat bubble.
+  [ "$STATUS_BRIEF_SEEN" -eq 0 ] || echo
+  STATUS_BRIEF_SEEN=1
+  if [ "$enabled" != "true" ]; then
+    echo "💤 $name · disabled"
+  else
+    echo "🤖 $name · every $every"
+  fi
+  if [ "$last" -eq 0 ]; then
+    echo "  last: never"
+  else
+    echo "  last: $(fmt_duration $((now - last))) ago"
+  fi
+  # A disabled agent has no next run to report, so the line is dropped
+  # rather than spent on an "n/a" that says nothing.
+  if [ "$enabled" = "true" ]; then
+    if [ "$last" -eq 0 ]; then
+      echo "  next: now"
+    elif [ "$due_at" -gt "$now" ]; then
+      echo "  next: in $(fmt_duration $((due_at - now)))"
+    else
+      echo "  ⚠️ overdue by $(fmt_duration $((now - due_at)))"
+    fi
+  fi
+  # The same read-only open status_report uses, so a status reply never
+  # creates a lock file as a side effect. Printed only when the lock is
+  # held: "free" is the normal state, and a line saying so is a line to
+  # skip past on every reply.
+  if [ -e "$lock" ] && ! (flock -n 9) 9<"$lock"; then
+    echo "  🔒 running now"
+  fi
+  echo "  💰 $(usage_summary "$name")"
 }
 
 # First "key: value" between the first two --- lines of an agent file.
@@ -458,13 +514,17 @@ telegram_alerts() {
   # stamp above absorbs it, whereas stamping afterwards would drop the
   # log entirely, and a missed alert is the expensive failure.
   mv "$marker" "$stamp"
+  # One log name per line rather than a run-on list: on a phone, four
+  # logs on one line is a wall of wrapped filenames nobody reads to the
+  # end of. printf does the joining, and the command substitution drops
+  # the trailing newline so the message never ends in a blank line.
   if [ "${#limited[@]}" -gt 0 ]; then
-    msg="automation: usage/spend limit killed ${#limited[@]} tick(s):"
-    send_alert usage-limit "$msg ${limited[*]}"
+    msg="🚨💸 automation: usage/spend limit killed ${#limited[@]} tick(s):"
+    send_alert usage-limit "$(printf '%s\n' "$msg" "${limited[@]}")"
   fi
   if [ "${#failed[@]}" -gt 0 ]; then
-    msg="automation: ${#failed[@]} tick(s) exited non-zero:"
-    send_alert tick-failed "$msg ${failed[*]}"
+    msg="🚨 automation: ${#failed[@]} tick(s) exited non-zero:"
+    send_alert tick-failed "$(printf '%s\n' "$msg" "${failed[@]}")"
   fi
 }
 
@@ -491,7 +551,7 @@ telegram_lock_alerts() {
     [[ "$last" =~ ^[1-9][0-9]*$ ]] || continue
     elapsed=$((now - last))
     if [ "$elapsed" -gt "$ceiling" ]; then
-      msg="automation: $name has held its lock for"
+      msg="🚨🔒 automation: $name has held its lock for"
       send_alert "lock-$name" \
         "$msg $(fmt_duration "$elapsed") — the run may be hung"
     fi
@@ -743,6 +803,12 @@ fi
 if [ -e "$PAUSE_FILE" ]; then
   case "$MODE" in
     status) echo "fleet paused ($PAUSE_FILE exists) — nothing will launch" ;;
+    # Both status modes report the agents anyway: paused is the moment
+    # you most want to know what the fleet will do once it resumes.
+    status-brief)
+      echo "⏸️ fleet PAUSED — remove the pause file to resume"
+      echo
+      ;;
     dry-run)
       decision paused '*' "$PAUSE_FILE"
       exit 0
@@ -806,6 +872,10 @@ for agent_file in "$AGENTS_DIR"/*.md; do
 
   if [ "$MODE" = status ]; then
     status_report "$name" "$enabled" "$every" "$model" "$last" "$due_at" "$now"
+    continue
+  fi
+  if [ "$MODE" = status-brief ]; then
+    status_brief_report "$name" "$enabled" "$every" "$last" "$due_at" "$now"
     continue
   fi
   if [ "$enabled" != "true" ]; then
