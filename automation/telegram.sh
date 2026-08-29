@@ -69,6 +69,12 @@ if ! command -v "$JQ_BIN" >/dev/null 2>&1; then
 fi
 
 mkdir -p "$STATE_DIR"
+# gh resolves WHICH repo a bare `gh issue comment` targets from the cwd's
+# git remote, and the systemd tick runs from $HOME — the first timer-run
+# reply died on "not a git repository" while every manual poll, run from
+# the repo, worked (#571). Nothing else here is cwd-relative (STATE_DIR
+# and PAUSE_FILE are absolute), so pin the cwd once rather than per call.
+cd "$REPO_ROOT"
 API="https://api.telegram.org/bot$TOKEN"
 THREADS="$STATE_DIR/telegram-threads.json"
 OFFSET_FILE="$STATE_DIR/telegram-offset"
@@ -199,8 +205,10 @@ cmd_send() { # cmd_send [--issue N] <text> [--issue N]
 
 comment_on_issue() { # comment_on_issue <issue> <text>
   local issue="$1" text="$2"
+  # gh's stderr flows through to the journal on purpose: swallowing it
+  # is why #571's "not a git repository" took a reproduction to name.
   if ! "$GH_BIN" issue comment "$issue" \
-    --body "From the maintainer via Telegram: $text" >/dev/null 2>&1
+    --body "From the maintainer via Telegram: $text" >/dev/null
   then
     # The comment IS the record; without it nothing else should happen,
     # least of all clearing the labels that say a human is still needed.
@@ -213,7 +221,7 @@ not recorded on GitHub — see the tick journal" >/dev/null 2>&1 || true
   # non-zero for a label that was never on the issue in the first place.
   # A failure here must never read as "your reply was lost".
   if ! "$GH_BIN" issue edit "$issue" --remove-label needs-human \
-    --remove-label blocked >/dev/null 2>&1
+    --remove-label blocked >/dev/null
   then
     echo "telegram: could not clear needs-human/blocked on #$issue" >&2
   fi
