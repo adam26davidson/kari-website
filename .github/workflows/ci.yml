@@ -53,6 +53,11 @@ jobs:
       - name: Dispatcher tests
         run: bash automation/dispatch-test.sh
 
+      # Stubs curl and gh, so it never reaches api.telegram.org or
+      # comments on a real issue — and never needs a bot token.
+      - name: Telegram transport tests
+        run: bash automation/telegram-test.sh
+
       # Points KARI_SYSTEMD_USER_DIR at a temp dir and systemctl at a
       # stub, so it never touches a real unit dir — here or on the
       # maintainer's laptop, where the fleet's timer is live.

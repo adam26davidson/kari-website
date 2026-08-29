@@ -54,6 +54,20 @@ exit 97
 EOF
 chmod +x "$TRIPWIRE_CLAUDE"
 
+# The telegram transport run_dispatch uses unless a test opts into the
+# recording stub below. Two hazards it closes at once: the real
+# telegram.sh prints its "transport disabled" warning into every test's
+# captured output, and on the maintainer's own laptop — where the token
+# IS exported — an unstubbed harness would message their phone on every
+# run. The env block in run_dispatch blanks the two secrets for the same
+# reason, so even a leaked token reaches nothing.
+QUIET_TELEGRAM="$TRIPWIRE_DIR/telegram-quiet"
+cat >"$QUIET_TELEGRAM" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$QUIET_TELEGRAM"
+
 write_agent() { # <workdir> <filename> <name> <enabled> <every> <model>
   cat >"$1/agents/$2" <<EOF
 ---
@@ -79,6 +93,10 @@ run_dispatch() { # <workdir> [args...] — output in <workdir>/out
   KARI_AUTOMATION_SYSTEMD_RUN_BIN="${KARI_AUTOMATION_SYSTEMD_RUN_BIN:-/nonexistent/systemd-run}" \
   KARI_AUTOMATION_SYSTEMCTL_BIN="${KARI_AUTOMATION_SYSTEMCTL_BIN:-/nonexistent/systemctl}" \
   KARI_AUTOMATION_SELF_UPDATE="${SELF_UPDATE:-0}" \
+  KARI_TELEGRAM_BOT_TOKEN='' KARI_TELEGRAM_CHAT_ID='' \
+  KARI_AUTOMATION_TELEGRAM_BIN="${STUB_TELEGRAM:-$QUIET_TELEGRAM}" \
+  KARI_AUTOMATION_LOCK_ALERT_SLACK="${KARI_AUTOMATION_LOCK_ALERT_SLACK:-1800}" \
+  KARI_AUTOMATION_BG_WAIT_CEILING_MS="${KARI_AUTOMATION_BG_WAIT_CEILING_MS:-5400000}" \
     bash "$DISPATCH" "$@" >"$work/out" 2>&1
   echo $? >"$work/exit-code"
 }
@@ -1631,7 +1649,193 @@ run_liveness "$w"
 expect_eq "$(cat "$w/exit-code")" 2 "no slug exits 2"
 expect_eq "$(fact_of "$w" verdict)" "" "no slug prints no verdict"
 
-# 15. Harness self-tests: the harness's own red is a property worth
+# 15. Telegram transport (#463). The dispatcher polls the phone channel
+#     at the top of every tick, alerts on failures the fleet cannot
+#     report itself, and honours the nudge a reply leaves behind. The
+#     stub records its argv and answers `send` with a message id, which
+#     is what dispatch.sh reads as "delivered" before stamping the
+#     rate limit.
+STUB_TELEGRAM_BIN="$STUB_DIR/telegram-stub"
+cat >"$STUB_TELEGRAM_BIN" <<'EOF'
+#!/usr/bin/env bash
+echo "$*" >>"$TELEGRAM_LOG"
+[ "${1:-}" = send ] && echo 41
+exit 0
+EOF
+chmod +x "$STUB_TELEGRAM_BIN"
+
+new_telegram_log() { # <workdir> — a fresh log this test alone writes to
+  export TELEGRAM_LOG="$1/telegram-log"
+  : >"$TELEGRAM_LOG"
+}
+
+sends_of() { # <workdir> — how many `send` calls the stub recorded
+  grep -c '^send ' "$TELEGRAM_LOG" 2>/dev/null || true
+}
+
+# 15a. A real tick polls for replies. The agent is not due, so this is a
+#      tick that does nothing else at all — the poll is not a side effect
+#      of launching something.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+ran_ago "$w" issue-pipeline 60
+new_telegram_log "$w"
+STUB_TELEGRAM="$STUB_TELEGRAM_BIN" run_dispatch "$w"
+expect_eq "$(cat "$w/exit-code")" 0 "a polling tick exits 0"
+expect_contains "$TELEGRAM_LOG" "poll" "a run-mode tick polls Telegram"
+expect_no_launch "polling launches nothing"
+
+# 15b. A paused fleet still polls: /resume arrives over Telegram, so a
+#      fleet that stops listening while paused can never be restarted
+#      from the phone.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+touch "$w/PAUSE"
+new_telegram_log "$w"
+STUB_TELEGRAM="$STUB_TELEGRAM_BIN" run_dispatch "$w"
+expect_contains "$TELEGRAM_LOG" "poll" "a paused fleet still polls"
+expect_contains "$w/out" "fleet paused" "...and still reports the pause"
+expect_no_launch "a paused fleet launches nothing"
+
+# 15c. Diagnostics never poll: consuming a message is a side effect, and
+#      --dry-run/--status exist to change nothing.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+new_telegram_log "$w"
+STUB_TELEGRAM="$STUB_TELEGRAM_BIN" run_dispatch "$w" --dry-run
+expect_eq "$(wc -c <"$TELEGRAM_LOG")" 0 "--dry-run does not poll"
+STUB_TELEGRAM="$STUB_TELEGRAM_BIN" run_dispatch "$w" --status
+expect_eq "$(wc -c <"$TELEGRAM_LOG")" 0 "--status does not poll"
+
+# 15d. The nudge: an answer from the phone means something was just
+#      unblocked, so the next tick runs every enabled agent instead of
+#      waiting out the rest of its cadence. The file is consumed, or the
+#      fleet would run flat out forever.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+ran_ago "$w" issue-pipeline 60
+touch "$w/state/nudge"
+new_telegram_log "$w"
+export STUB_OUT="$w/stub-out"
+STUB_TELEGRAM="$STUB_TELEGRAM_BIN" run_launch "$w"
+expect_contains "$w/stub-out" "This is the issue-pipeline prompt body." \
+  "a nudge makes a not-due agent run"
+expect_file_absent "$w/state/nudge" "the tick consumes the nudge"
+
+# 15e. ...and a diagnostic neither consumes it nor pretends it is due:
+#      the nudge is owed to the next REAL tick.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+ran_ago "$w" issue-pipeline 60
+touch "$w/state/nudge"
+run_dispatch "$w" --dry-run
+expect_eq "$(decision_of "$w" issue-pipeline)" not-due \
+  "--dry-run reports the real due state, nudge or no nudge"
+expect_file "$w/state/nudge" "--dry-run leaves the nudge for a real tick"
+
+# 15f. A tick that exited non-zero is alerted on once, and once only:
+#      the failure that matters clusters over consecutive ticks, and a
+#      channel that buzzes four times for one outage gets muted.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+ran_ago "$w" issue-pipeline 60
+mkdir -p "$w/state/alerts" "$w/state/logs"
+FAILED_LOG="$w/state/logs/issue-pipeline-20260829T000000.log"
+printf 'some session output\ntick exited 1\n' >"$FAILED_LOG"
+# An existing last-scan stamp makes this a normal scan rather than the
+# baseline-only first one (15h).
+touch -d '1 hour ago' "$w/state/alerts/last-scan"
+new_telegram_log "$w"
+STUB_TELEGRAM="$STUB_TELEGRAM_BIN" run_dispatch "$w"
+expect_contains "$TELEGRAM_LOG" "exited non-zero" \
+  "a non-zero tick trailer raises an alert"
+expect_contains "$TELEGRAM_LOG" "issue-pipeline-20260829T000000" \
+  "the alert names the log to open"
+expect_file "$w/state/alerts/tick-failed.stamp" \
+  "a delivered alert stamps its condition"
+# Re-touched so the log is newer than the scan stamp the tick just wrote:
+# without that the second tick would skip it for being old, and the
+# rate limit would never be exercised.
+touch "$FAILED_LOG"
+STUB_TELEGRAM="$STUB_TELEGRAM_BIN" run_dispatch "$w"
+expect_eq "$(sends_of "$w")" 1 "the same condition is not alerted twice"
+
+# 15g. A usage/spend limit is its own condition, so it can be worded for
+#      what it is (wait, or raise the cap) rather than "something failed".
+#      Classified on the stable shape of the message, not its exact
+#      wording: #322 saw "monthly spend limit" and it reads "reached your
+#      Fable 5 limit" today.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+ran_ago "$w" issue-pipeline 60
+mkdir -p "$w/state/alerts" "$w/state/logs"
+printf "You've reached your Fable 5 limit\ntick exited 1\n" \
+  >"$w/state/logs/issue-pipeline-20260829T010000.log"
+touch -d '1 hour ago' "$w/state/alerts/last-scan"
+new_telegram_log "$w"
+STUB_TELEGRAM="$STUB_TELEGRAM_BIN" run_dispatch "$w"
+expect_contains "$TELEGRAM_LOG" "usage/spend limit" \
+  "a limit-killed tick is alerted as a limit, not a generic failure"
+expect_file "$w/state/alerts/usage-limit.stamp" \
+  "the limit condition has its own stamp"
+expect_file_absent "$w/state/alerts/tick-failed.stamp" \
+  "a limit kill is not also counted as a plain failure"
+
+# 15h. The first scan is baseline only. A transport configured today must
+#      not open by relitigating the 30 days of logs already on disk.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+ran_ago "$w" issue-pipeline 60
+mkdir -p "$w/state/logs"
+printf 'old news\ntick exited 1\n' \
+  >"$w/state/logs/issue-pipeline-20260828T000000.log"
+new_telegram_log "$w"
+STUB_TELEGRAM="$STUB_TELEGRAM_BIN" run_dispatch "$w"
+expect_eq "$(sends_of "$w")" 0 "the first scan sends nothing"
+expect_file "$w/state/alerts/last-scan" "...but records the baseline"
+
+# 15i. A wedged tick is invisible to the log scan — it never wrote a
+#      trailer — so the held lock is the signal. Held here exactly as
+#      test 11a does it, in a subshell around the dispatch call, so there
+#      is no background holder to race with or clean up. The agent is not
+#      due, so the tick's own launch path never wants the same lock.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 4h fable
+ran_ago "$w" issue-pipeline 7200
+new_telegram_log "$w"
+(
+  flock 9 &&
+    KARI_AUTOMATION_BG_WAIT_CEILING_MS=1000 \
+    KARI_AUTOMATION_LOCK_ALERT_SLACK=0 \
+    STUB_TELEGRAM="$STUB_TELEGRAM_BIN" run_dispatch "$w"
+) 9>"$w/state/issue-pipeline.lock"
+expect_contains "$TELEGRAM_LOG" "held its lock" \
+  "a long-held lock raises a hang alert"
+expect_file "$w/state/alerts/lock-issue-pipeline.stamp" \
+  "the hang alert is stamped per agent"
+
+# 15j. ...and a lock held for less than the ceiling plus slack is just a
+#      run in progress.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 4h fable
+ran_ago "$w" issue-pipeline 60
+new_telegram_log "$w"
+( flock 9 && STUB_TELEGRAM="$STUB_TELEGRAM_BIN" run_dispatch "$w" ) \
+  9>"$w/state/issue-pipeline.lock"
+expect_eq "$(sends_of "$w")" 0 "a lock held briefly raises nothing"
+
+# 15k. The transport is optional infrastructure: a missing (or broken)
+#      telegram.sh degrades to a silent fleet, never a stopped one.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+ran_ago "$w" issue-pipeline 60
+STUB_TELEGRAM=/nonexistent/telegram run_dispatch "$w"
+expect_eq "$(cat "$w/exit-code")" 0 "an absent transport still exits 0"
+expect_contains "$w/out" "telegram poll failed" \
+  "...and says so rather than failing silently"
+expect_no_launch "an absent transport launches nothing"
+
+# 16. Harness self-tests: the harness's own red is a property worth
 #     pinning. A fixture command that cannot run has to turn this file
 #     red from anywhere it is called, including inside a subshell —
 #     where an increment of FAILURES dies with the subshell and prints a

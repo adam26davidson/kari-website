@@ -15,4 +15,13 @@ KillMode=process
 # everything the launched agent sessions themselves run picks up the full
 # environment from the user's shell profile.
 Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+# The Telegram bot token and chat id (KARI_TELEGRAM_BOT_TOKEN,
+# KARI_TELEGRAM_CHAT_ID), mode 600 and never in the repo. The leading
+# `-` makes the file optional: without it the transport is a no-op and
+# the fleet ticks on silently, which is the state every clone but the
+# maintainer's laptop is in. EnvironmentFile settings override
+# Environment= ones whatever order the lines are in, so keep the file to
+# the two Telegram secrets — a stray PATH line there WOULD shadow the
+# one above.
+EnvironmentFile=-%h/.config/kari-automation/env
 ExecStart={{DISPATCH}}

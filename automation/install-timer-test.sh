@@ -155,6 +155,14 @@ expect_not_contains "$w/units/kari-automation.service" "{{" \
 expect_contains "$w/units/kari-automation.service" "KillMode=process" \
   "service keeps KillMode=process"
 
+# 7a. The optional EnvironmentFile survives rendering: it is where the
+#     Telegram bot token and chat id live (mode 600, never committed), and
+#     without the line the fleet's alerts go nowhere while every unit test
+#     stays green.
+expect_contains "$w/units/kari-automation.service" \
+  "EnvironmentFile=-%h/.config/kari-automation/env" \
+  "service loads the optional Telegram env file"
+
 # 8. The install reloads systemd and enables the timer.
 expect_contains "$w/stub.log" "--user daemon-reload" \
   "install runs daemon-reload"

@@ -114,8 +114,11 @@ reading and summing those records needs `jq`, the dispatcher's one
 optional dependency — without it a tick still runs and still logs, the
 session output is kept verbatim, and both the log line and `--status`
 say so (`KARI_AUTOMATION_JQ_BIN` points at a different binary) —
-and `wip/<slug>-<timestamp>.patch` diffs rescued from dead
-workers' worktrees (see Usage limits). Token figures count the session's
+`wip/<slug>-<timestamp>.patch` diffs rescued from dead
+workers' worktrees (see Usage limits), and the Telegram transport's own
+files — `telegram-offset` and `telegram-threads.json` (which alert a
+reply belongs to), `alerts/*.stamp` (the per-condition rate limit) and
+`nudge` (see Telegram transport). Token figures count the session's
 own API calls as Claude Code reports them; whether background subagents
 are folded in is not something the dispatcher can verify, so compare
 `--status` totals against the subscription's usage page before trusting
@@ -128,6 +131,78 @@ and how often*; the machine tracks *when last*.
 - One agent: set `enabled: false` in its file.
 - Uninstall: `systemctl --user disable --now kari-automation.timer`
   (or remove the cron entry, if installed that way).
+
+## Telegram transport
+
+Alerts out, replies back, on the maintainer's phone. GitHub stays the
+source of truth: every reply that arrives is written onto the issue it
+answers *before* anything else happens, so a decision made on the phone
+is on the record whether or not anyone scrolls back through the chat.
+Telegram is transport, nothing more. `automation/telegram.sh` (tests:
+`automation/telegram-test.sh`); polling, not webhooks — the laptop has no
+public endpoint to receive a callback on.
+
+Unconfigured is a supported state: with no bot token the script prints
+one warning line and exits 0, so a fresh clone, CI and the test harnesses
+never touch the network and a tick never fails over a phone.
+
+One-time setup:
+
+1. Message [@BotFather](https://t.me/BotFather), `/newbot`, and keep the
+   token it gives you.
+2. Send the new bot one message from your own account — a bot cannot
+   start a conversation, and until it has one message there is no chat to
+   read.
+3. Read the chat id out of that message:
+   `curl https://api.telegram.org/bot<TOKEN>/getUpdates` — it is
+   `.result[0].message.chat.id`.
+4. Put both in `~/.config/kari-automation/env`, never in the repo:
+
+   ```
+   KARI_TELEGRAM_BOT_TOKEN=123456:AA...
+   KARI_TELEGRAM_CHAT_ID=987654321
+   ```
+
+   `chmod 600` it. The service template loads it with
+   `EnvironmentFile=-`, so a missing file is fine (see Installation) —
+   and re-running `install-timer.sh` is not needed after editing it, but
+   the running timer only picks up changes on its next tick.
+
+What you can send:
+
+- `/pause`, `/resume` — the same `automation/PAUSE` file as Pausing
+  above, so the phone and the filesystem cannot disagree.
+- `/status` — the `dispatch.sh --status` report, clipped to Telegram's
+  message limit.
+- A **reply** to any alert, or a message starting `#<issue> ...` or
+  `done <issue> ...` — posted as a comment on that issue prefixed
+  "From the maintainer via Telegram: ", which also removes the
+  `needs-human` and `blocked` labels and *nudges* the fleet. Anything
+  else gets a one-line help reply.
+
+A nudge is a file the next tick consumes: it treats every enabled agent
+as due, so an answer is acted on within one 15-minute poll instead of
+waiting out the rest of a 4h cadence. `--dry-run` and `--status` never
+poll and never consume it — diagnostics change nothing.
+
+What the dispatcher sends, each rate-limited to one message per
+`KARI_TELEGRAM_ALERT_INTERVAL` (default 4h) per condition, because a
+usage limit kills three or four consecutive ticks and a channel that
+buzzes four times for one outage is a channel that gets muted:
+
+- `usage-limit` — ticks whose log ends in a non-zero trailer and mentions
+  hitting a limit.
+- `tick-failed` — any other non-zero `tick exited` trailer. A log with no
+  trailer is neither: it is still running, or was SIGKILLed.
+- `lock-<agent>` — a lock held longer than
+  `KARI_AUTOMATION_BG_WAIT_CEILING_MS` plus
+  `KARI_AUTOMATION_LOCK_ALERT_SLACK` (default 1800s) after the run
+  started. That is the wedged tick the log scan cannot see, because it
+  never wrote a trailer.
+
+The very first scan after setup is baseline-only — it records where it
+got to and sends nothing — so configuring the transport does not open
+with 30 days of relitigated history.
 
 ## Dispatcher modes
 

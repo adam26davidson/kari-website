@@ -49,6 +49,17 @@
 #                               attempt that already spent more than this
 #                               is not retried on the fallback model —
 #                               see retry_on_fallback
+#   KARI_AUTOMATION_TELEGRAM_BIN default <repo>/automation/telegram.sh;
+#                               polled at the top of every tick and used
+#                               for the alerts below. Unconfigured (no
+#                               bot token) it is a no-op, so nothing here
+#                               depends on a phone being set up
+#   KARI_TELEGRAM_ALERT_INTERVAL default 4h (Nm/Nh/Nd); at most one
+#                               alert per condition per interval — see
+#                               send_alert
+#   KARI_AUTOMATION_LOCK_ALERT_SLACK default 1800 (seconds), added to
+#                               BG_WAIT_CEILING_MS before a held lock is
+#                               called hung — see telegram_lock_alerts
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -71,8 +82,35 @@ MEMORY_MAX="${KARI_AUTOMATION_MEMORY_MAX:-50%}"
 # PR. Deliberately not 0 ("wait indefinitely"): a hung worker would then
 # hold the agent's flock forever and stall every later tick.
 BG_WAIT_CEILING_MS="${KARI_AUTOMATION_BG_WAIT_CEILING_MS:-5400000}"
+# This is the first arithmetic use of the ceiling (telegram_lock_alerts
+# divides it by 1000), so it gets the same guard DUE_TOLERANCE has: an
+# unusable value would blow up inside the alert scan and, under set -e,
+# take the rest of the tick down with it.
+if ! [[ "$BG_WAIT_CEILING_MS" =~ ^(0|[1-9][0-9]*)$ ]]; then
+  echo "unusable KARI_AUTOMATION_BG_WAIT_CEILING_MS" \
+    "'$BG_WAIT_CEILING_MS' (want whole ms, no leading zeros);" \
+    "using 5400000" >&2
+  BG_WAIT_CEILING_MS=5400000
+fi
 USAGE_RETENTION_DAYS="${KARI_AUTOMATION_USAGE_RETENTION_DAYS:-180}"
 RETRY_COST_LIMIT="${KARI_AUTOMATION_RETRY_COST_LIMIT:-2}"
+# The phone channel (automation/telegram.sh, #463): polled for replies at
+# the top of every tick, and sent the mechanical alerts below. Nothing on
+# this path may fail a tick — an unconfigured or unreachable transport
+# means a fleet that runs silently, never a fleet that stops.
+TELEGRAM_BIN="${KARI_AUTOMATION_TELEGRAM_BIN:-$REPO_ROOT/automation/telegram.sh}"
+ALERT_INTERVAL="${KARI_TELEGRAM_ALERT_INTERVAL:-4h}"
+# Extra seconds on top of the background-wait ceiling before a held lock
+# reads as a hang. The ceiling only bounds how long claude waits for
+# background subagents AFTER the main turn ends; a long main turn sits on
+# top of that, and an alert that fires on every slow-but-healthy tick is
+# an alert that gets muted.
+LOCK_ALERT_SLACK="${KARI_AUTOMATION_LOCK_ALERT_SLACK:-1800}"
+if ! [[ "$LOCK_ALERT_SLACK" =~ ^(0|[1-9][0-9]*)$ ]]; then
+  echo "unusable KARI_AUTOMATION_LOCK_ALERT_SLACK '$LOCK_ALERT_SLACK'" \
+    "(want whole seconds, no leading zeros, e.g. 1800); using 1800" >&2
+  LOCK_ALERT_SLACK=1800
+fi
 # Slack on the "has the interval elapsed?" test. Polls happen on a coarse
 # grid (cron every 15m) while last-run is stamped at the moment a run
 # starts, so without slack each cycle's start creeps later into the
@@ -345,6 +383,121 @@ usage_summary() { # usage_summary <name>
   ' "${files[@]}"
 }
 
+# Alerts go out at most once per condition per ALERT_INTERVAL. A usage
+# limit kills three or four consecutive ticks and a hung lock is still
+# hung on the next poll: without the stamp the phone buzzes on every
+# tick, and an alert channel that cries wolf is one that gets muted,
+# which costs more than sending nothing would have.
+send_alert() { # send_alert <condition> <message>
+  local condition="$1" message="$2" id=""
+  local stamp="$STATE_DIR/alerts/$condition.stamp"
+  # Parsed on first use rather than in the config block: interval_seconds
+  # is defined further down the file.
+  if [ -z "${ALERT_SECS:-}" ]; then
+    ALERT_SECS="$(interval_seconds "$ALERT_INTERVAL" 2>/dev/null)" || {
+      echo "unusable KARI_TELEGRAM_ALERT_INTERVAL '$ALERT_INTERVAL'" \
+        "(want Nm/Nh/Nd, e.g. 4h); using 4h" >&2
+      ALERT_SECS=14400
+    }
+  fi
+  if [ -e "$stamp" ]; then
+    local age=$(($(date +%s) - $(stat -c %Y "$stamp")))
+    [ "$age" -lt "$ALERT_SECS" ] && return 0
+  fi
+  id="$("$TELEGRAM_BIN" send "$message")" || true
+  # Only a delivered message starts the rate-limit window. An
+  # unconfigured transport prints nothing at all, and stamping on that
+  # would swallow the first REAL alert after the token is finally set up
+  # — the one message the setup exists to receive.
+  [ -n "$id" ] && touch "$stamp"
+  return 0
+}
+
+# Failures the fleet cannot report on its own: the session that was
+# killed is in no position to send a message about being killed. Reads
+# the "tick exited <code>" trailer every run log ends in (see
+# tick_trailer) for logs written since the last scan.
+telegram_alerts() {
+  mkdir -p "$STATE_DIR/alerts"
+  local stamp="$STATE_DIR/alerts/last-scan"
+  local marker="$STATE_DIR/alerts/last-scan.tmp"
+  # Stamped BEFORE the scan, so a log finished while the scan runs is not
+  # skipped; see the mv below for the cost of that choice.
+  touch "$marker"
+  # The first scan is baseline only: a freshly configured transport must
+  # not open with 30 days of relitigated history in one buzz.
+  if [ ! -e "$stamp" ]; then
+    mv "$marker" "$stamp"
+    return 0
+  fi
+  local f last base msg limited=() failed=()
+  for f in "$STATE_DIR/logs"/*.log; do
+    [ -e "$f" ] || continue
+    [ "$f" -nt "$stamp" ] || continue
+    last="$(tail -n 1 "$f" 2>/dev/null || true)"
+    case "$last" in
+      "tick exited 0") continue ;;
+      "tick exited "*) ;;
+      # No trailer at all: still running, or SIGKILLed (an OOM). Neither
+      # is classifiable here, and telegram_lock_alerts covers the hang.
+      *) continue ;;
+    esac
+    base="$(basename "$f" .log)"
+    # Matched on the stable shape, not the exact wording: #322 recorded
+    # this as "You've hit your monthly spend limit" and today it reads
+    # "You've reached your Fable 5 limit". The wording has changed once
+    # already; "hit/reached your ... limit" has not.
+    if grep -qiE '(hit|reached) your .*limit' "$f"; then
+      limited+=("$base")
+    else
+      failed+=("$base")
+    fi
+  done
+  # A log that completed between the marker and here is seen by this scan
+  # and by the next one. That repeat is deliberate: the per-condition
+  # stamp above absorbs it, whereas stamping afterwards would drop the
+  # log entirely, and a missed alert is the expensive failure.
+  mv "$marker" "$stamp"
+  if [ "${#limited[@]}" -gt 0 ]; then
+    msg="automation: usage/spend limit killed ${#limited[@]} tick(s):"
+    send_alert usage-limit "$msg ${limited[*]}"
+  fi
+  if [ "${#failed[@]}" -gt 0 ]; then
+    msg="automation: ${#failed[@]} tick(s) exited non-zero:"
+    send_alert tick-failed "$msg ${failed[*]}"
+  fi
+}
+
+# The other half of "did the fleet die quietly": a tick that is neither
+# finished nor killed, just wedged. Its lock is still held and its log
+# has no trailer, so nothing above can see it — the lock is the signal.
+telegram_lock_alerts() {
+  local lock name last now elapsed ceiling msg
+  now="$(date +%s)"
+  ceiling=$((BG_WAIT_CEILING_MS / 1000 + LOCK_ALERT_SLACK))
+  for lock in "$STATE_DIR"/*.lock; do
+    [ -e "$lock" ] || continue
+    # The same read-only probe status_report uses, so checking never
+    # creates a lock file or takes a lock of its own. Wrapped in `if`
+    # rather than `&& continue` because a failing && list would trip
+    # set -e and end the tick.
+    if (flock -n 9) 9<"$lock"; then continue; fi
+    name="$(basename "$lock" .lock)"
+    last=0
+    [ -f "$STATE_DIR/$name.last-run" ] &&
+      last="$(cat "$STATE_DIR/$name.last-run")"
+    # A lock with no readable last-run is a lock this dispatcher never
+    # stamped; there is no age to judge it by.
+    [[ "$last" =~ ^[1-9][0-9]*$ ]] || continue
+    elapsed=$((now - last))
+    if [ "$elapsed" -gt "$ceiling" ]; then
+      msg="automation: $name has held its lock for"
+      send_alert "lock-$name" \
+        "$msg $(fmt_duration "$elapsed") — the run may be hung"
+    fi
+  done
+}
+
 # A usage limit is the one failure worth immediately re-running on the
 # other model. `--fallback-model` covers capacity/overload errors only, so
 # quota exhaustion exits the session without ever trying the fallback --
@@ -575,6 +728,18 @@ self_update() {
   [ "$before" = "$after" ] || echo "self-update: $before -> $after"
 }
 
+mkdir -p "$STATE_DIR/logs" "$STATE_DIR/usage"
+
+# Deliberately ABOVE the pause gate: /resume arrives over Telegram, and a
+# paused fleet that cannot hear it would stay paused until someone walked
+# back to the laptop. `|| echo` because a transport failure must never
+# fail a tick — an unreachable phone is not a reason to skip the work.
+# Diagnostics never poll: --dry-run and --status must leave the inbox
+# (and every side effect a message has) exactly as they found it.
+if [ "$MODE" = run ]; then
+  "$TELEGRAM_BIN" poll || echo "warn: telegram poll failed (rc=$?)" >&2
+fi
+
 if [ -e "$PAUSE_FILE" ]; then
   case "$MODE" in
     status) echo "fleet paused ($PAUSE_FILE exists) — nothing will launch" ;;
@@ -589,11 +754,26 @@ if [ -e "$PAUSE_FILE" ]; then
   esac
 fi
 
-mkdir -p "$STATE_DIR/logs" "$STATE_DIR/usage"
+# Initialised unconditionally so the diagnostics below read a real value
+# rather than tripping set -u.
+NUDGE=false
 
 # Only a real tick updates: --dry-run and --status are diagnostics and
-# must not change the tree under the operator reading them.
-[ "$MODE" = run ] && self_update
+# must not change the tree under the operator reading them — which
+# includes consuming the nudge the next real tick is owed.
+if [ "$MODE" = run ]; then
+  self_update
+  telegram_alerts
+  telegram_lock_alerts
+  # A reply from the phone means the maintainer just unblocked something;
+  # sitting out the rest of a 4h cadence wastes the moment. telegram.sh
+  # drops this file when it posts a reply to an issue.
+  if [ -e "$STATE_DIR/nudge" ]; then
+    rm -f "$STATE_DIR/nudge"
+    NUDGE=true
+    echo "nudge: treating every enabled agent as due"
+  fi
+fi
 
 for agent_file in "$AGENTS_DIR"/*.md; do
   [ -e "$agent_file" ] || continue
@@ -635,7 +815,7 @@ for agent_file in "$AGENTS_DIR"/*.md; do
     esac
     continue
   fi
-  if [ "$now" -lt "$due_at" ]; then
+  if [ "$NUDGE" != true ] && [ "$now" -lt "$due_at" ]; then
     case "$MODE" in
       dry-run) decision not-due "$name" "remaining=$((due_at - now))s" ;;
       *) echo "skip $name: not due ($((due_at - now))s remaining)" ;;
