@@ -21,6 +21,7 @@ function renderList(overrides?: {
   compact?: boolean;
   getSearchText?: (item: { id: string; name: string }) => string;
   noun?: string;
+  addVariant?: "primary" | "secondary" | "danger";
   entries?: Array<string>;
 }) {
   const onNewItem = vi.fn();
@@ -34,6 +35,7 @@ function renderList(overrides?: {
           <AdminItemList
             items={items}
             addLabel="Add a thing"
+            addVariant={overrides?.addVariant}
             onNewItem={onNewItem}
             onDelete={onDelete}
             onMove={onMove}
@@ -91,6 +93,23 @@ describe("AdminItemList", () => {
     for (const button of screen.getAllByRole("button", { name: "Move up" })) {
       expect(button).not.toHaveClass("danger");
     }
+  });
+
+  // On a list page adding IS the one obvious next action, so the button is
+  // filled by default; nested in an editor, whose primary is Save, it has
+  // to step down or the two compete as equals (design brief §2).
+  it("dresses the add control as the page's primary action by default", () => {
+    renderList();
+    const add = screen.getByRole("button", { name: "Add a thing" });
+    expect(add).toHaveClass("admin-button");
+    expect(add).not.toHaveClass("secondary");
+  });
+
+  it("steps the add control down when asked for a secondary one", () => {
+    renderList({ addVariant: "secondary" });
+    expect(screen.getByRole("button", { name: "Add a thing" })).toHaveClass(
+      "secondary",
+    );
   });
 
   it("fires onNewItem from the add control", () => {

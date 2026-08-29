@@ -7,7 +7,10 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useSearchParams } from "react-router";
-import { AdminButton } from "../admin-button/admin-button";
+import {
+  AdminButton,
+  AdminButtonVariant,
+} from "../admin-button/admin-button";
 
 /**
  * The query lives in the URL rather than in component state so it survives
@@ -26,6 +29,14 @@ export interface AdminItemListProps<T extends { id: string }> {
    * or invisible add affordance (#457).
    */
   addLabel: string;
+  /**
+   * How much weight the add button carries. On a list PAGE adding is the
+   * one obvious next action, so it defaults to primary; a list nested
+   * inside an editor (the photography post's images) asks for "secondary",
+   * because that screen's primary is Save and two filled brown buttons of
+   * equal weight compete (#457, design brief §2).
+   */
+  addVariant?: AdminButtonVariant;
   /**
    * Every item callback receives the item's id, never its position: the
    * rendered list may be a filtered subset, so an index into it would
@@ -61,6 +72,7 @@ export function AdminItemList<T extends { id: string }>({
   renderItem,
   onNewItem,
   addLabel,
+  addVariant = "primary",
   onDelete,
   onMove,
   onEdit,
@@ -110,7 +122,9 @@ export function AdminItemList<T extends { id: string }>({
           </p>
         )}
         <div className="admin-data-list-add">
-          <AdminButton onClick={onNewItem}>{addLabel}</AdminButton>
+          <AdminButton variant={addVariant} onClick={onNewItem}>
+            {addLabel}
+          </AdminButton>
         </div>
         {filtering && visibleItems.length === 0 && (
           <p className="admin-data-list-empty">

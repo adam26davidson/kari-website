@@ -116,6 +116,9 @@ export function PhotographyPostEditor({
         <AdminItemList
           items={images}
           addLabel="Add an image"
+          // Secondary: Save, in the header above, is this screen's one
+          // primary. Filled, these two competed as equals (#457).
+          addVariant="secondary"
           onNewItem={onNewImage}
           onDelete={onDelete}
           onMove={onMove}

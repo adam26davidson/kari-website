@@ -30,6 +30,14 @@
   padding-bottom: 6px;
 }
 
-.blog-post-editor-input-line input[type="date"] {
+/* A date is a fixed-width thing, so this one field keeps its own size
+   rather than filling the panel like the Title above it. Scoped through
+   .admin-field to outrank the shared "fill your field" rule in admin.css,
+   which would otherwise stretch it across the whole row. */
+.blog-post-editor-input-line .admin-field {
+  flex: 0 0 auto;
+}
+
+.blog-post-editor-input-line .admin-field > input[type="date"] {
   width: 150px;
 }

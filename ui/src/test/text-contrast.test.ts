@@ -225,6 +225,19 @@ describe("secondary text in the admin panels", () => {
       );
     },
   );
+
+  // The tint is only half of it. At 80% the photograph still reads through,
+  // and it is the small grey secondary line that loses — a publisher or a
+  // date landing on blurred petals. The blur is what turns the backing into
+  // a calm, even surface, so it is part of the contract rather than a
+  // flourish one panel happens to have: the list rows shipped without it
+  // while the sidebar, .card and .data-editor-content all had it (#307).
+  it.each(ADMIN_PANELS)(
+    "%s blurs the photo behind it instead of letting it read through",
+    (_name, css, selector) => {
+      expect(declaration(css, selector, "backdrop-filter")).toMatch(/blur\(/);
+    },
+  );
 });
 
 // Every admin section opens with an <h2> and one line saying what the page

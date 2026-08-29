@@ -153,6 +153,18 @@ textarea {
   min-width: 0;
 }
 
+/* The control fills its labelled field rather than keeping the 400px
+   default above. That default is right for a lone box, but in a panel it
+   left every editor lopsided: the haiku editor's fields stopped 110px
+   short of the card, and the other-works Title ended at 740px above a body
+   editor running to 1140px, so the panel read as unfinished rather than
+   spacious (#457). Direct children only — the picker's hidden file input
+   sits deeper and must not be sized. */
+.admin-field > input,
+.admin-field > textarea {
+  width: 100%;
+}
+
 .admin-field-label {
   font-family: "Roboto", sans-serif;
   /* Regular, never the display hairline: this is 14px text (#356). */
@@ -202,10 +214,18 @@ textarea {
     justify-content: flex-start;
   }
 
+  /* A grid, not a wrapping row. Wrapped and centred, the eight links came
+     out as a ragged 4/3/1 block whose neighbours sat a few pixels apart —
+     usable, but the opposite of the calm the rest of the admin aims for
+     (design brief §1). Fixed columns give every link the same start, a
+     real gap from the one beside it, and a full-cell tap target. Row-major
+     (the default flow) rather than a column count pinned to today's eight
+     pages: adding a section keeps the two tidy columns instead of silently
+     spilling into a third, cramped one. */
   .admin-menu {
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    align-content: start;
     width: 100%;
     height: auto;
     padding: 4px 0;
@@ -213,7 +233,7 @@ textarea {
 
   .admin-menu-item {
     width: auto;
-    padding: 8px 12px;
+    padding: 8px 16px;
     /* Smaller so five items fit the wrapping bar on a 390px phone — which
        drops below the 18px the base rule's --display-weight is allowed at,
        so the weight comes back to the 400 default here. A 16px hairline in

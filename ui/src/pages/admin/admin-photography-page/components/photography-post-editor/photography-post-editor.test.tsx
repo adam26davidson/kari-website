@@ -78,6 +78,22 @@ describe("PhotographyPostEditor", () => {
     expect(screen.getAllByText("Photo")).toHaveLength(3);
   });
 
+  // Design brief §2: one obvious next action per screen. "Add an image"
+  // and Save were both filled brown and competed as equals (#457).
+  it("leaves Save as the only primary action on the screen", () => {
+    renderEditor();
+    const filled = screen
+      .getAllByRole("button")
+      .filter(
+        (button) =>
+          button.classList.contains("admin-button") &&
+          !button.classList.contains("secondary") &&
+          !button.classList.contains("danger"),
+      )
+      .map((button) => button.textContent);
+    expect(filled).toEqual(["Save"]);
+  });
+
   it("updates the title without touching the images", () => {
     const { setPost, setImages } = renderEditor();
     fireEvent.change(screen.getByRole("textbox", { name: "Title" }), {

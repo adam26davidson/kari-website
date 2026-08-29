@@ -12,7 +12,9 @@
   margin: 12px 0;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  /* Stretch, so the fields below reach the same right edge as the header
+     above them instead of stopping wherever their content ends (#457). */
+  align-items: stretch;
   justify-content: space-between;
   /* Shrink-to-fit between 550px and 1000px, but never wider than the
      content column: the rich-text editor's 800px natural width used to
@@ -35,7 +37,8 @@
   flex: 1;
   flex-direction: column;
   gap: 15px;
-  align-items: flex-start;
+  /* See .data-editor-content: one right edge for the whole panel. */
+  align-items: stretch;
   justify-content: flex-start;
   max-height: 100%;
   /* This wrapper and everything it lays out are otherwise shrink-to-fit,

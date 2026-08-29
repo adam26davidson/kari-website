@@ -39,6 +39,9 @@
   padding: 12px 14px;
   border-radius: 3px;
   background-color: rgba(226, 226, 226, 0.8);
+  /* Blur what shows through, like every other admin surface — see the note
+     on .admin-data-list-item below. */
+  backdrop-filter: blur(10px);
   color: var(--muted-text);
   font-family: "Roboto", sans-serif;
 }
@@ -58,6 +61,15 @@
 
 .admin-data-list-item {
   background-color: rgba(226, 226, 226, 0.8);
+  /* The tint alone lets the background photograph read through, and the
+     row's secondary line (a haiku's publisher, a post's date) is small
+     grey text landing straight on blurred petals. Every other admin
+     surface at this tint already blurs its backdrop — the sidebar (#307),
+     .card, .data-editor-content — and the list rows were the one that did
+     not, which is exactly where the difference showed. Blur, rather than
+     more opacity: the tint is shared with the public card and pinned
+     equal to it by src/test/text-contrast.test.ts. */
+  backdrop-filter: blur(10px);
   display: flex;
   flex-direction: row;
   gap: 10px;
