@@ -10,6 +10,14 @@
      both spend this token rather than repeating the hex. */
   --admin-danger: #a33327;
   --admin-danger-hover: #872a20;
+  /* One reading measure and one size for admin body prose. Both, because
+     `ch` resolves against the element's own font-size: the what's-on-test
+     panel had a 15px explanation capped at 60ch sitting above 16px notes
+     capped at nothing, so its two paragraphs wrapped at visibly different
+     widths and the block came out ragged. Prose that shares a card has to
+     share a measure. */
+  --admin-prose-size: 15px;
+  --admin-prose-measure: 60ch;
 }
 
 .admin-container {
@@ -142,6 +150,15 @@ textarea {
   resize: none;
 }
 
+/* Checkboxes are the one control the browser still paints in its own
+   colour, and that colour is a saturated system blue — the only blue on a
+   screen otherwise made of warm browns and greys, so a ticked "Published"
+   was the loudest thing in the other-works editor. Tinted to the admin's
+   primary brown, once, so any checkbox added later inherits it. */
+input[type="checkbox"] {
+  accent-color: #6d3513;
+}
+
 /* A labelled form field: the visible label sitting above its control.
    Shared by every admin editor so no box is left for her to guess at
    (#457). */
@@ -194,10 +211,11 @@ textarea {
 .admin-section-explanation {
   margin: 0;
   font-family: "Roboto", sans-serif;
-  font-size: 15px;
+  font-size: var(--admin-prose-size);
   /* Wrap into a readable column rather than running the card's full
-     width. */
-  max-width: 60ch;
+     width — the shared measure, so every paragraph on the card breaks in
+     the same place. */
+  max-width: var(--admin-prose-measure);
   /* Secondary to the heading, and the same token the rest of the admin's
      secondary text spends (#354). */
   color: var(--muted-text);

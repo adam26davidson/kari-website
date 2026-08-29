@@ -60,10 +60,12 @@ export function PhotoPicker({
       )}
       {/* Secondary: picking a photo is a step towards saving, not the
           screen's primary action — the two used to carry identical
-          weight (#457). */}
+          weight (#457). Sentence case, like every other button in the
+          admin ("Add an image", "Preview cleanup"); this one was the last
+          in Title Case. */}
       <AdminButton htmlFor={inputId} variant="secondary">
         <FontAwesomeIcon icon={faArrowPointer} />
-        {imageFile ? "Select Different Image" : "Select Image"}
+        {imageFile ? "Select a different image" : "Select an image"}
       </AdminButton>
     </div>
   );

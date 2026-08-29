@@ -51,6 +51,21 @@
   background-color: var(--admin-danger-hover);
 }
 
+/* Destructive, but not the screen's purpose — the same outlined shape as
+   .secondary in the danger colour, so it reads as "this removes something"
+   without competing with the Save it sits below (design brief §2). */
+.admin-button.danger-secondary {
+  background-color: #f2efe9;
+  color: var(--admin-danger-hover);
+  border: 1px solid var(--admin-danger);
+  padding: 9px;
+}
+
+.admin-button.danger-secondary:hover,
+.admin-button.danger-secondary:active {
+  background-color: #f0e3e1;
+}
+
 /* Matches the disabled icon buttons in admin.css, so "not available yet"
    reads the same whatever shape the control is. */
 .admin-button:disabled,

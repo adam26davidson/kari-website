@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AdminWhatsOnTestPage } from "./admin-whats-on-test-page";
@@ -210,5 +211,36 @@ describe("AdminWhatsOnTestPage", () => {
     expect(
       await screen.findByText("Change background photo"),
     ).toBeInTheDocument();
+  });
+
+  // jsdom applies no stylesheet, so the shape of the page is read from the
+  // CSS. The panel's explanation line was capped at 60ch of 15px text while
+  // the notes beneath it ran uncapped at 16px, so two paragraphs on one
+  // card broke at visibly different widths — tidy panel, ragged block.
+  describe("the panel's prose", () => {
+    const css = (path: string) =>
+      readFileSync(path, "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const pageCss = css(
+      "src/pages/admin/admin-whats-on-test-page/admin-whats-on-test-page.css",
+    );
+
+    it.each([["font-size"], ["max-width"]])(
+      "sets the notes' %s from the shared admin prose token",
+      (property) => {
+        const block = pageCss.match(/\.whats-on-test-note\s*\{([^}]*)\}/)?.[1];
+        expect(block).toMatch(
+          new RegExp(`${property}\\s*:\\s*var\\(--admin-prose-`),
+        );
+      },
+    );
+
+    it("gives the explanation line above them the very same tokens", () => {
+      const adminCss = css("src/pages/admin/admin.css");
+      const block = adminCss.match(
+        /\.admin-section-explanation\s*\{([^}]*)\}/,
+      )?.[1];
+      expect(block).toMatch(/font-size\s*:\s*var\(--admin-prose-size\)/);
+      expect(block).toMatch(/max-width\s*:\s*var\(--admin-prose-measure\)/);
+    });
   });
 });

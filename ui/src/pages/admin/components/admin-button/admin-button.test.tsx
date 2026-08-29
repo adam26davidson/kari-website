@@ -35,7 +35,7 @@ describe("AdminButton", () => {
     expect(button.className).toBe("admin-button");
   });
 
-  it.each(["secondary", "danger"] as const)(
+  it.each(["secondary", "danger", "danger-secondary"] as const)(
     "marks a %s button with its variant class",
     (variant) => {
       render(<AdminButton variant={variant}>Close</AdminButton>);

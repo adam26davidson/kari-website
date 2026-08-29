@@ -53,7 +53,7 @@ describe("HaigaEditor", () => {
 
   it("prompts to select an image when none is chosen yet", () => {
     renderEditor();
-    expect(screen.getByText("Select Image")).toBeInTheDocument();
+    expect(screen.getByText("Select an image")).toBeInTheDocument();
   });
 
   it("saves and closes through the editor controls", async () => {

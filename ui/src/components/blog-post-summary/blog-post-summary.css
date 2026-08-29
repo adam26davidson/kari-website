@@ -5,7 +5,13 @@
   color: #333;
 }
 
+/* Admin-only: the public other-works list passes showPublished={false}, so
+   this line renders on the admin list's translucent row and nowhere else.
+   #666 was the one piece of admin secondary text that never joined the
+   shared token — 4.0:1 on that row, below AA, and the "Published" the
+   visual review kept naming as hard to read. --muted-text takes it to
+   7.7:1, and text-contrast.test.ts now holds it there (#457). */
 .blog-post-summary-status {
   font-size: 14px;
-  color: #666;
+  color: var(--muted-text);
 }

@@ -87,27 +87,46 @@
   flex-grow: 1;
 }
 
+/* One row of controls on every list, not a column here and a row there.
+   Haiku and haiga (compact) laid edit and delete side by side while
+   photography and other works stacked them vertically, so the same two
+   buttons read as two different controls depending on which section she
+   was in (#457, design brief §1). A row also keeps the item's height set
+   by its content rather than by the button stack. */
 .admin-data-list-item-controls {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
 }
 
-/* Compact variant: tighter spacing, controls in a row so the
-   item height is set by the content rather than the button stack */
+/* Compact variant: tighter spacing around the same row of controls. */
 .admin-data-list-item.compact {
   padding: 8px 14px;
   margin: 4px 8px;
   width: calc(100% - 44px);
 }
 
-.admin-data-list-item.compact .admin-data-list-item-controls {
-  flex-direction: row;
+/* A labelled delete ("Remove this image", in the photography editor) is
+   several times the width of the 30px disc, and a row narrow enough to
+   hold it beside the content is a row whose content is squeezed. So it
+   takes its own line under the content instead — the same shape the phone
+   breakpoint below gives every row, for the same reason. */
+.admin-data-list-item.labelled-delete {
+  flex-wrap: wrap;
 }
 
-/* Narrow viewports: let the content shrink and the control buttons wrap
-   onto their own line instead of pushing past the right edge. */
+.admin-data-list-item.labelled-delete .admin-data-list-item-content {
+  flex-basis: 100%;
+}
+
+.admin-data-list-item.labelled-delete .admin-data-list-item-controls {
+  flex-grow: 1;
+  justify-content: flex-end;
+}
+
+/* Narrow viewports: the controls take their own line under the content
+   instead of standing beside it. */
 @media (max-width: 767.98px) {
   .admin-data-list-item {
     flex-wrap: wrap;
@@ -115,11 +134,17 @@
 
   .admin-data-list-item .admin-data-list-item-content {
     min-width: 0;
+    /* A full line of its own. Sharing the row with the buttons left the
+       item with whatever the two circles did not want: a haiku's three
+       lines pushed off-centre and stopping short of the edit button, a
+       haiga's caption pinched into the gap between its thumbnail and the
+       controls. Not overflowing, but not calm either, which is the
+       question the design brief's checklist asks at 390px. */
+    flex-basis: 100%;
   }
 
   .admin-data-list-item .admin-data-list-item-controls {
     flex-grow: 1;
-    flex-direction: row;
     flex-wrap: wrap;
     justify-content: flex-end;
   }

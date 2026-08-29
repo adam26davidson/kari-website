@@ -109,6 +109,25 @@ const adminHaikuCss = read("pages/admin/admin-haiku-page/admin-haiku-page.css");
 const adminItemListCss = read(
   "pages/admin/components/admin-item-list/admin-item-list.css",
 );
+const blogPostSummaryCss = read(
+  "components/blog-post-summary/blog-post-summary.css",
+);
+const adminButtonCss = read(
+  "pages/admin/components/admin-button/admin-button.css",
+);
+
+/**
+ * The one colour in an admin declaration, following a `var(--token)` to the
+ * admin `:root` (where the danger pair lives) rather than the site one. The
+ * value may be a shorthand — `1px solid var(--admin-danger)`.
+ */
+function adminColor(value: string): Rgb {
+  const token = value.match(/var\(\s*(--[\w-]+)\s*\)/);
+  const resolved = token ? declaration(adminCss, ":root", token[1]) : value;
+  return parseColor(
+    resolved.match(/#[0-9a-f]{3,8}|rgba?\([^)]*\)/i)?.[0] ?? resolved,
+  );
+}
 
 /** Every public rule that renders small secondary text on the card. */
 const SECONDARY_TEXT_RULES: ReadonlyArray<[string, string, string]> = [
@@ -199,6 +218,15 @@ const ADMIN_SECONDARY_TEXT_RULES: ReadonlyArray<[string, string, string]> = [
   ["empty-result notice", adminItemListCss, ".admin-data-list-empty"],
   ["search match count", adminItemListCss, ".admin-data-list-count"],
   ["haiku list publisher", adminHaikuCss, ".admin-haiku-list-publisher"],
+  // Only ever rendered on the admin other-works list (the public page
+  // passes showPublished={false}), and the last piece of admin secondary
+  // text still carrying a hex of its own: #666, which is 4.0:1 on the row
+  // and the "Published" two visual reviews running named as hard to read.
+  [
+    "other-works published status",
+    blogPostSummaryCss,
+    ".blog-post-summary-status",
+  ],
 ];
 
 /** Every admin surface the rules above render their text on. */
@@ -349,6 +377,26 @@ describe("the admin icon buttons", () => {
     expect(
       contrastRatio(resolveColor(foreground()), danger),
     ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // The quiet destructive button inverts the arrangement: red on the pale
+  // fill rather than white on red. It is the one place the danger colour
+  // has to carry TEXT contrast rather than just be a background, so its
+  // legibility cannot be assumed from the filled variant's numbers.
+  it("keep the outlined destructive button legible on its own fill", () => {
+    const OUTLINED = ".admin-button.danger-secondary";
+    const declared = (property: string) =>
+      declaration(adminButtonCss, OUTLINED, property);
+    const fill = parseColor(declared("background-color"));
+
+    expect(contrastRatio(adminColor(declared("color")), fill)).toBeGreaterThanOrEqual(
+      4.5,
+    );
+    // And its outline has to read as a shape (WCAG 1.4.11 non-text
+    // contrast) — an invisible border is not a button.
+    expect(contrastRatio(adminColor(declared("border")), fill)).toBeGreaterThanOrEqual(
+      3,
+    );
   });
 
   it("make the destructive fill distinguishable from the primary one", () => {

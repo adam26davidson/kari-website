@@ -22,6 +22,7 @@ function renderList(overrides?: {
   getSearchText?: (item: { id: string; name: string }) => string;
   noun?: string;
   addVariant?: "primary" | "secondary" | "danger";
+  deleteLabel?: string;
   entries?: Array<string>;
 }) {
   const onNewItem = vi.fn();
@@ -38,6 +39,7 @@ function renderList(overrides?: {
             addVariant={overrides?.addVariant}
             onNewItem={onNewItem}
             onDelete={onDelete}
+            deleteLabel={overrides?.deleteLabel}
             onMove={onMove}
             onEdit={overrides?.onEdit}
             hideEdit={overrides?.hideEdit}
@@ -82,6 +84,47 @@ describe("AdminItemList", () => {
       .getAllByRole("button")
       .map((button) => button.getAttribute("aria-label"));
     expect(labels).toEqual(["Edit", "Move up", "Move down", "Delete"]);
+  });
+
+  // Nested in an editor, a trash circle beside the fields says nothing
+  // about what it removes. Given a label it becomes a named button on a
+  // line of its own — still destructive, now unambiguous (#457).
+  describe("a labelled delete", () => {
+    it("names the thing it removes instead of showing a bare circle", () => {
+      renderList({ deleteLabel: "Remove this image" });
+      expect(
+        screen.queryByRole("button", { name: "Delete" }),
+      ).not.toBeInTheDocument();
+      const remove = screen.getAllByRole("button", {
+        name: "Remove this image",
+      });
+      expect(remove).toHaveLength(items.length);
+      // Destructive, but quiet: it only ever appears nested in an editor
+      // whose primary is Save (design brief §2).
+      expect(remove[0]).toHaveClass("admin-button", "danger-secondary");
+    });
+
+    it("still deletes the row it belongs to", () => {
+      const { onDelete } = renderList({ deleteLabel: "Remove this image" });
+      fireEvent.click(
+        screen.getAllByRole("button", { name: "Remove this image" })[1],
+      );
+      expect(onDelete).toHaveBeenCalledWith("b");
+    });
+
+    it("marks the row so the label can take its own line", () => {
+      const { container } = renderList({ deleteLabel: "Remove this image" });
+      expect(
+        container.querySelectorAll(".admin-data-list-item.labelled-delete"),
+      ).toHaveLength(items.length);
+    });
+
+    it("leaves the row unmarked when delete is a circle", () => {
+      const { container } = renderList();
+      expect(
+        container.querySelector(".admin-data-list-item.labelled-delete"),
+      ).toBeNull();
+    });
   });
 
   it("dresses delete as the destructive control it is", () => {
@@ -345,6 +388,30 @@ describe("AdminItemList", () => {
     }
 
     const CONTROL = ".admin-data-list-item-controls .admin-icon-button";
+
+    // Edit and delete used to sit side by side on the compact lists (haiku,
+    // haiga) and stacked vertically on the others (photography, other
+    // works), so the same pair read as two different controls depending on
+    // which section she was in. One direction, declared once, and no
+    // variant allowed to flip it back.
+    it("lay the controls out in a row on every list", () => {
+      const directions = [
+        ...listCss.matchAll(/([^{}]*admin-data-list-item-controls)\s*\{([^}]*)\}/g),
+      ].map(([, , block]) => block.match(/flex-direction\s*:\s*(\w+)/)?.[1]);
+      // Declared at least once, and never as a column by any variant.
+      expect(directions).toContain("row");
+      expect(directions).not.toContain("column");
+    });
+
+    // The whole row, content included, is what the phone has to hold; the
+    // content getting only what the circles leave over is what made the
+    // 390px lists read as crowded. A full-width basis puts the controls on
+    // their own line instead.
+    it("give the content the full width and the controls a line below", () => {
+      expect(atPhoneWidth).toMatch(
+        /\.admin-data-list-item-content\s*\{[^}]*flex-basis\s*:\s*100%/,
+      );
+    });
 
     /** What the base rule's margin leaves between two adjacent circles. */
     const neighbourGap = 2 * px(adminCss, ".admin-icon-button", "margin");

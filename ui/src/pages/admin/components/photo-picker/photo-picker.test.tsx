@@ -29,12 +29,12 @@ describe("PhotoPicker", () => {
       <PhotoPicker imageFile={null} fileName="" setImageFile={() => {}} />
     );
     expect(screen.queryByAltText("Selected")).not.toBeInTheDocument();
-    expect(screen.getByText("Select Image")).toBeInTheDocument();
+    expect(screen.getByText("Select an image")).toBeInTheDocument();
   });
 
   it("stays secondary to the editor's Save button", () => {
     render(<PhotoPicker imageFile={null} fileName="" setImageFile={() => {}} />);
-    expect(screen.getByRole("button", { name: /Select Image/ })).toHaveClass(
+    expect(screen.getByRole("button", { name: /Select an image/ })).toHaveClass(
       "secondary",
     );
   });

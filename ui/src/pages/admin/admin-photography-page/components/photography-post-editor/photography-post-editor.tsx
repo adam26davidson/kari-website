@@ -121,6 +121,11 @@ export function PhotographyPostEditor({
           addVariant="secondary"
           onNewItem={onNewImage}
           onDelete={onDelete}
+          // Named and on its own line. As a bare red circle it floated in
+          // the space beside the caption box, centred against nothing and
+          // aligned to neither column, saying nothing about whether it
+          // removed the caption, the photo or the post (#457).
+          deleteLabel="Remove this image"
           onMove={onMove}
           hideEdit
           renderItem={(entry) => (
