@@ -29,7 +29,7 @@
 #                               harness points it at a stub script
 #   KARI_TELEGRAM_GH_BIN        default gh
 #   KARI_TELEGRAM_DISPATCH_BIN  default <repo>/automation/dispatch.sh;
-#                               what /status runs
+#                               what /status runs (as --status-brief)
 #   KARI_AUTOMATION_STATE_DIR   default ~/.local/state/kari-website-automation
 #   KARI_AUTOMATION_PAUSE_FILE  default <repo>/automation/PAUSE — the same
 #                               file dispatch.sh gates on, so /pause and
@@ -73,8 +73,18 @@ API="https://api.telegram.org/bot$TOKEN"
 THREADS="$STATE_DIR/telegram-threads.json"
 OFFSET_FILE="$STATE_DIR/telegram-offset"
 NUDGE_FILE="$STATE_DIR/nudge"
-HELP="I understand: a reply to an alert, '#<issue> your note' or \
-'done <issue>' to comment on that issue, /pause, /resume, /status."
+# Everything this script composes is plain text with emoji and is sent
+# WITHOUT a parse_mode, deliberately: the moment a message is Markdown or
+# HTML, every dynamic part of it (an issue title, a maintainer's note, a
+# path) needs escaping, and the one that slips through does not arrive
+# wrongly formatted — it arrives as a 400 and is lost. Emoji need no
+# escaping and read the same everywhere.
+# Short lines and one item per line, because this is read on a phone.
+HELP="🤔 I didn't catch that. I understand:
+• a reply to one of my asks
+• #<issue> <note> — comment on that issue
+• done <issue> — same thing by number
+• /pause · /resume · /status"
 
 usage() {
   echo "usage: telegram.sh send <text> [--issue N]"
@@ -93,10 +103,10 @@ api() { # api <method> [curl args...] — every call is a POST
   "$CURL" -sS --max-time 30 -X POST "$API/$method" "$@"
 }
 
-# Telegram rejects a message over 4096 characters outright, and /status
-# output already runs past that with a handful of agents. Clipping here
-# turns "the whole message is lost to a 400" into "the message arrives,
-# visibly shortened".
+# Telegram rejects a message over 4096 characters outright, and the
+# status report grows with the fleet. Clipping here turns "the whole
+# message is lost to a 400" into "the message arrives, visibly
+# shortened".
 MAX_TEXT=3900
 clip() { # clip <text>
   if [ "${#1}" -gt "$MAX_TEXT" ]; then
@@ -195,8 +205,8 @@ comment_on_issue() { # comment_on_issue <issue> <text>
     # The comment IS the record; without it nothing else should happen,
     # least of all clearing the labels that say a human is still needed.
     echo "telegram: gh issue comment $issue failed; reply not recorded" >&2
-    send_message "could not post your reply to issue #$issue; it is not \
-recorded on GitHub — see the tick journal" >/dev/null 2>&1 || true
+    send_message "⚠️ could not post your reply to issue #$issue; it is \
+not recorded on GitHub — see the tick journal" >/dev/null 2>&1 || true
     return 0
   fi
   # Best effort from here: the labels are housekeeping, and gh exits
@@ -211,7 +221,8 @@ recorded on GitHub — see the tick journal" >/dev/null 2>&1 || true
   # out the rest of a 4h cadence wastes the moment. dispatch.sh consumes
   # this file on its next tick and treats every agent as due.
   touch "$NUDGE_FILE"
-  send_message "posted to issue #$issue; fleet nudged" >/dev/null 2>&1 || true
+  send_message "✅ posted to issue #$issue; fleet nudged" \
+    >/dev/null 2>&1 || true
 }
 
 handle_message() { # handle_message <text> <reply-to-message-id>
@@ -235,18 +246,18 @@ handle_message() { # handle_message <text> <reply-to-message-id>
   case "$text" in
     /pause*)
       touch "$PAUSE_FILE"
-      send_message "fleet paused ($PAUSE_FILE) — /resume to start again" \
+      send_message "⏸️ fleet paused ($PAUSE_FILE) — /resume to start again" \
         >/dev/null 2>&1 || true
       ;;
     /resume*)
       rm -f "$PAUSE_FILE"
-      send_message "fleet resumed — the next tick launches whatever is due" \
+      send_message "▶️ fleet resumed — the next tick launches whatever is due" \
         >/dev/null 2>&1 || true
       ;;
     /status*)
       # Diagnostics must not be able to fail the poll, so the dispatcher's
       # own stderr is folded into the reply rather than escaping it.
-      status_out="$("$DISPATCH_BIN" --status 2>&1 || true)"
+      status_out="$("$DISPATCH_BIN" --status-brief 2>&1 || true)"
       send_message "${status_out:-(no status output)}" >/dev/null 2>&1 || true
       ;;
     *) send_message "$HELP" >/dev/null 2>&1 || true ;;

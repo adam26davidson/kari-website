@@ -172,13 +172,15 @@ What you can send:
 
 - `/pause`, `/resume` — the same `automation/PAUSE` file as Pausing
   above, so the phone and the filesystem cannot disagree.
-- `/status` — the `dispatch.sh --status` report, clipped to Telegram's
-  message limit.
+- `/status` — the compact `dispatch.sh --status-brief` report (short
+  emoji-prefixed lines per agent, laid out for a phone; the full
+  80-column `--status` with its inter-run gap history stays a terminal
+  command), clipped to Telegram's message limit.
 - A **reply** to any alert, or a message starting `#<issue> ...` or
   `done <issue> ...` — posted as a comment on that issue prefixed
   "From the maintainer via Telegram: ", which also removes the
   `needs-human` and `blocked` labels and *nudges* the fleet. Anything
-  else gets a one-line help reply.
+  else gets a short help reply listing what the bot understands.
 
 A nudge is a file the next tick consumes: it treats every enabled agent
 as due, so an answer is acted on within one 15-minute poll instead of

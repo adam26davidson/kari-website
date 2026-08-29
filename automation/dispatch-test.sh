@@ -913,6 +913,64 @@ expect_contains "$w/out" "paused" "status mentions the PAUSE file"
 expect_eq "$(status_line "$w" issue-pipeline last-run)" never \
   "status still lists agents while paused"
 
+# 11f. --status-brief (#564): the same data as --status, laid out for a
+#      phone. Short lines, one emoji-prefixed block per agent, no gap
+#      forensics — telegram.sh's /status sends this one, and 80-column
+#      terminal text wraps illegibly in a chat bubble.
+#      The ages are all over an hour and deliberately off a minute
+#      boundary: fmt_duration drops seconds above 1h, so the second or
+#      two between ran_ago writing the stamp and the dispatcher reading
+#      the clock cannot flip a digit and make this flaky.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 4h fable
+write_agent "$w" demo-agent.md demo-agent false 2h opus
+write_agent "$w" lapsed-agent.md lapsed-agent true 1h opus
+write_agent "$w" fresh-agent.md fresh-agent true 30m opus
+ran_ago "$w" issue-pipeline 7230
+ran_ago "$w" lapsed-agent 7230
+run_dispatch "$w" --status-brief
+expect_eq "$(cat "$w/exit-code")" 0 "status-brief exits 0"
+expect_contains "$w/out" "issue-pipeline · every 4h" \
+  "status-brief names the agent and its cadence"
+expect_contains "$w/out" "last: 2h00m ago" "status-brief dates the last run"
+expect_contains "$w/out" "next: in 1h57m" \
+  "status-brief says how long until the next run, tolerance included"
+expect_contains "$w/out" "overdue by 1h02m" \
+  "status-brief flags an overdue agent"
+expect_contains "$w/out" "demo-agent · disabled" \
+  "a disabled agent says so where its cadence would be"
+expect_contains "$w/out" "(no usage records yet)" \
+  "status-brief carries the same usage summary --status does"
+expect_not_contains "$w/out" "gaps" \
+  "the gap forensics stay in --status, where there is room for them"
+expect_not_contains "$w/out" "running now" \
+  "a free lock costs no line at all"
+expect_file_absent "$w/state/fresh-agent.last-run" \
+  "status-brief launches nothing"
+expect_no_launch "status-brief reaches no launch"
+
+# 11g. A held lock is the one line status-brief adds on demand. Held as
+#      test 11a does it, in a subshell around the dispatch call, so there
+#      is no background holder to race with.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+ran_ago "$w" issue-pipeline 600
+( flock 9 && run_dispatch "$w" --status-brief ) 9>"$w/state/issue-pipeline.lock"
+expect_contains "$w/out" "running now" "status-brief reports a held lock"
+
+# 11h. Paused: the banner, and then the agents anyway. A status reply
+#      that says only "paused" withholds the report at the moment it is
+#      most wanted.
+w="$(new_work)"
+write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
+touch "$w/PAUSE"
+run_dispatch "$w" --status-brief
+expect_contains "$w/out" "PAUSED" "status-brief announces the pause"
+expect_contains "$w/out" "issue-pipeline · every 1h" \
+  "...and still reports the agents"
+expect_contains "$w/out" "last: never" "...including one that has never run"
+expect_no_launch "a paused status-brief reaches no launch"
+
 # 12. Self-update: a real tick fast-forwards the clone it runs from to
 # origin/main before reading agents, so config merged to main takes effect
 # on the next tick instead of waiting for a human to pull (#399). Exercised
@@ -1706,6 +1764,8 @@ STUB_TELEGRAM="$STUB_TELEGRAM_BIN" run_dispatch "$w" --dry-run
 expect_eq "$(wc -c <"$TELEGRAM_LOG")" 0 "--dry-run does not poll"
 STUB_TELEGRAM="$STUB_TELEGRAM_BIN" run_dispatch "$w" --status
 expect_eq "$(wc -c <"$TELEGRAM_LOG")" 0 "--status does not poll"
+STUB_TELEGRAM="$STUB_TELEGRAM_BIN" run_dispatch "$w" --status-brief
+expect_eq "$(wc -c <"$TELEGRAM_LOG")" 0 "--status-brief does not poll"
 
 # 15d. The nudge: an answer from the phone means something was just
 #      unblocked, so the next tick runs every enabled agent instead of
@@ -1751,6 +1811,8 @@ expect_contains "$TELEGRAM_LOG" "exited non-zero" \
   "a non-zero tick trailer raises an alert"
 expect_contains "$TELEGRAM_LOG" "issue-pipeline-20260829T000000" \
   "the alert names the log to open"
+expect_eq "$(tail -n1 "$TELEGRAM_LOG")" "issue-pipeline-20260829T000000" \
+  "the log name sits on a line of its own, not run on after the summary"
 expect_file "$w/state/alerts/tick-failed.stamp" \
   "a delivered alert stamps its condition"
 # Re-touched so the log is newer than the scan stamp the tick just wrote:
