@@ -467,9 +467,6 @@ describe("AdminItemList", () => {
       );
     });
 
-    /** What the base rule's margin leaves between two adjacent circles. */
-    const neighbourGap = 2 * px(adminCss, ".admin-icon-button", "margin");
-
     it.each([["width"], ["height"]])(
       "give every control a fingertip-sized %s",
       (property) => {
@@ -477,11 +474,28 @@ describe("AdminItemList", () => {
         expect(px(atPhoneWidth, CONTROL, property)).toBeGreaterThanOrEqual(44);
       },
     );
+  });
 
-    it("set delete further off than the controls are from each other", () => {
-      expect(
-        px(atPhoneWidth, `${CONTROL}.danger`, "margin-left"),
-      ).toBeGreaterThan(neighbourGap);
+  describe("the destructive row control", () => {
+    const CONTROL = ".admin-data-list-item-controls .admin-icon-button";
+    /** What the base rule's margin leaves between two adjacent circles. */
+    const neighbourGap = 2 * px(adminCss, ".admin-icon-button", "margin");
+
+    // Colour alone does not stop two same-sized discs one neighbour-gap
+    // apart from reading as a pair; the brief also asks that a destructive
+    // action never be the closest thing to the one she reaches for most
+    // (§2). At every width, not only on a phone: a mouse slip is a slip
+    // too, and the separation is as much for the eye as for the fingertip.
+    it("sits further off than the controls sit from each other", () => {
+      expect(px(listCss, `${CONTROL}.danger`, "margin-left")).toBeGreaterThan(
+        neighbourGap,
+      );
+    });
+
+    it("is set apart by a base rule, not a phone-only one", () => {
+      expect(atPhoneWidth).not.toMatch(
+        /admin-icon-button\.danger\s*\{[^}]*margin-left/,
+      );
     });
   });
 });

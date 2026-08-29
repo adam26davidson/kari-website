@@ -141,6 +141,19 @@
   justify-content: center;
 }
 
+/* Set the destructive control apart from the ones beside it, at every
+   width. Colour already says "this one is different", but the brief also
+   asks that a destructive action never be the closest thing to the action
+   she reaches for most (§2) — and the row's own 10px rhythm made the trash
+   exactly as close to the pencil as the move arrows are to each other, so
+   the two discs read as a pair. This started as a phone-only rule; the same
+   argument applies to a mouse (a slip is a slip) and to the eye, which is
+   what tells the two circles apart at a glance. Enforced by
+   admin-item-list.test.tsx. */
+.admin-data-list-item-controls .admin-icon-button.danger {
+  margin-left: 24px;
+}
+
 /* Compact variant: tighter spacing around the same row of controls. */
 .admin-data-list-item.compact {
   padding: 8px 14px;
@@ -205,14 +218,5 @@
   .admin-data-list-item-controls .admin-icon-button {
     width: 44px;
     height: 44px;
-  }
-
-  /* And set the destructive one apart. Red already says "this one is
-     different"; the brief also asks that it never be the closest thing to
-     the action she reaches for most (§2), which colour alone cannot do
-     when the two circles are neighbours. Enforced by
-     admin-item-list.test.tsx. */
-  .admin-data-list-item-controls .admin-icon-button.danger {
-    margin-left: 24px;
   }
 }

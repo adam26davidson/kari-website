@@ -23,7 +23,15 @@
   max-width: min(1000px, 100%);
   min-width: min(550px, 100%);
   max-height: calc(100% - (24px + 16px));
-  padding: 20px;
+  /* 24px, the padding every other admin panel spends (the list page's
+     titled header, image cleanup, what's on test). At 20px this card was
+     the tightest surface in the admin, and it showed at the bottom edge,
+     where the last field's filled box stops a hair short of the card's rim
+     and the panel reads as cut off rather than deliberately closed. Kept
+     equal on all four sides at every width — the space above the Save/Close
+     row and the space below the last field are the same number, and are
+     meant to look it (#457, design brief §1). */
+  padding: 24px;
   /* Same blurred, near-solid backing as the other admin cards (.card,
      .admin-image-gc-page) — without the blur this panel read as far more
      translucent than the home editor (#278). */
