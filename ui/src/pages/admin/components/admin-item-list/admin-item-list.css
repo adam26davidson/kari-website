@@ -111,4 +111,22 @@
     flex-wrap: wrap;
     justify-content: flex-end;
   }
+
+  /* On a phone the controls sit in a row, so the 30px circles the desktop
+     column uses become a line of same-sized targets 10px apart — small for
+     a fingertip, and with delete one slip away from edit. Widen them to a
+     comfortable touch target (#457). */
+  .admin-data-list-item-controls .admin-icon-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* And set the destructive one apart. Red already says "this one is
+     different"; the brief also asks that it never be the closest thing to
+     the action she reaches for most (§2), which colour alone cannot do
+     when the two circles are neighbours. Enforced by
+     admin-item-list.test.tsx. */
+  .admin-data-list-item-controls .admin-icon-button.danger {
+    margin-left: 24px;
+  }
 }

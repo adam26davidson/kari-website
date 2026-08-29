@@ -161,6 +161,36 @@ textarea {
   color: var(--muted-text);
 }
 
+/* An admin section's heading, and the one line under it explaining what
+   the page is for. Styled once here — and worn by every section — because
+   the colour must never be left to inheritance: the body default is
+   --light-text, which is right over the background photo and invisible on
+   the pale card, so a section that simply forgets to override it renders
+   near-white on grey (the home-page editor did exactly that, while its
+   four siblings each re-declared a dark colour of their own, #457).
+   Enforced by src/test/text-contrast.test.ts. */
+.admin-section-heading {
+  margin: 0;
+  font-family: "Roboto", sans-serif;
+  /* Regular, not the bold <h2> default: calm and warm over slick (design
+     brief §1). This is the treatment the site-background page already had
+     and the one the others now match. */
+  font-weight: 400;
+  color: #181818;
+}
+
+.admin-section-explanation {
+  margin: 0;
+  font-family: "Roboto", sans-serif;
+  font-size: 15px;
+  /* Wrap into a readable column rather than running the card's full
+     width. */
+  max-width: 60ch;
+  /* Secondary to the heading, and the same token the rest of the admin's
+     secondary text spends (#354). */
+  color: var(--muted-text);
+}
+
 /* Narrow viewports: the fixed-width sidebar would leave too little room
    for the content (~230px on a 390px phone), so it collapses into a
    wrapping top bar and the content takes the full width. The breakpoint

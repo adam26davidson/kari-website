@@ -30,17 +30,6 @@
   font-family: "Roboto", sans-serif;
 }
 
-.admin-background-card-content h2 {
-  margin: 0;
-  font-weight: 400;
-}
-
-.admin-background-explanation {
-  margin: 0;
-  font-size: 15px;
-  max-width: 60ch;
-}
-
 .admin-background-default-preview {
   display: flex;
   flex-direction: column;

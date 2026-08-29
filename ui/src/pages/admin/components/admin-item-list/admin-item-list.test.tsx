@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
+import { readFileSync } from "node:fs";
 import { AdminItemList } from "./admin-item-list";
 
 const items = [
@@ -285,6 +286,62 @@ describe("AdminItemList", () => {
       expect(
         screen.getByText('No things match "nothing here"'),
       ).toBeInTheDocument();
+    });
+  });
+
+  // On a phone the row's controls turn from a column into a line of
+  // circles, which is where the two halves of design brief §2 that colour
+  // cannot carry come due: a destructive control has to be reachable
+  // without precision, and must not be the closest thing to the action she
+  // reaches for most. jsdom applies no stylesheet, so both are read from
+  // the CSS rather than measured.
+  describe("the row controls at phone width", () => {
+    const strip = (path: string) =>
+      readFileSync(path, "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
+
+    const listCss = strip(
+      "src/pages/admin/components/admin-item-list/admin-item-list.css",
+    );
+    const adminCss = strip("src/pages/admin/admin.css");
+
+    /** Everything inside the narrow-viewport media query. */
+    const atPhoneWidth = (() => {
+      const media = listCss.indexOf("@media (max-width: 767.98px)");
+      expect(media).toBeGreaterThanOrEqual(0);
+      return listCss.slice(listCss.indexOf("{", media) + 1);
+    })();
+
+    /** A px-valued declaration of the rule for exactly `selector`. */
+    function px(css: string, selector: string, property: string): number {
+      for (const [, selectors, block] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+        if (!selectors.split(",").some((one) => one.trim() === selector)) {
+          continue;
+        }
+        const match = block.match(
+          new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*(-?[\\d.]+)px`),
+        );
+        if (match) return Number(match[1]);
+      }
+      throw new Error(`No ${property} on "${selector}"`);
+    }
+
+    const CONTROL = ".admin-data-list-item-controls .admin-icon-button";
+
+    /** What the base rule's margin leaves between two adjacent circles. */
+    const neighbourGap = 2 * px(adminCss, ".admin-icon-button", "margin");
+
+    it.each([["width"], ["height"]])(
+      "give every control a fingertip-sized %s",
+      (property) => {
+        // 44px: the size a touch target stops being a gamble at.
+        expect(px(atPhoneWidth, CONTROL, property)).toBeGreaterThanOrEqual(44);
+      },
+    );
+
+    it("set delete further off than the controls are from each other", () => {
+      expect(px(atPhoneWidth, `${CONTROL}.danger`, "margin-left")).toBeGreaterThan(
+        neighbourGap,
+      );
     });
   });
 });

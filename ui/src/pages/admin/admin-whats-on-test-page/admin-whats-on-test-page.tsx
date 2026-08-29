@@ -92,10 +92,10 @@ export function AdminWhatsOnTestPage() {
 
   return (
     <div className="admin-whats-on-test-page">
-      <h2>What&apos;s on test</h2>
-      <p className="whats-on-test-explanation">
-        Merged changes deployed to test but not yet promoted to production —
-        what to check on test before approving the prod deploy.
+      <h2 className="admin-section-heading">What&apos;s on test</h2>
+      <p className="admin-section-explanation">
+        Changes that are on the test site but not on the live site yet. Have a
+        look at them on the test site before they go live.
       </p>
       {!headSha && (
         // No VITE_COMMIT_SHA is baked in, which is the normal case outside
@@ -103,15 +103,14 @@ export function AdminWhatsOnTestPage() {
         // is no version to compare against, so say that rather than name
         // the build variable.
         <p className="whats-on-test-note">
-          This copy of the site isn&apos;t a deployed build, so there&apos;s
-          nothing to compare. On the test site this page lists what&apos;s
-          ready to check before it goes live.
+          This isn&apos;t the test site, so there&apos;s nothing to compare. On
+          the test site, this page lists what&apos;s waiting to go live.
         </p>
       )}
       {headSha && isLoading && <div className="loading">Loading...</div>}
       {headSha && !isLoading && loadFailed && (
         <LoadError
-          message="Failed to load deployment status."
+          message="Failed to load what's waiting to go live."
           onRetry={load}
         />
       )}
@@ -132,7 +131,7 @@ export function AdminWhatsOnTestPage() {
             // costs a GitHub API request against a 60/hour limit.
             <p className="whats-on-test-note">
               Couldn&apos;t work out which version the live site is running.
-              This fixes itself once the next production deploy is approved.
+              This sorts itself out the next time changes go live.
             </p>
           )}
           {data.prod.kind === "found" && data.commits.length === 0 && (
@@ -143,9 +142,9 @@ export function AdminWhatsOnTestPage() {
           )}
           {truncated && (
             <p className="whats-on-test-warning">
-              {data.totalCommits} commits are pending, but GitHub&apos;s
-              comparison returned only the oldest {data.commits.length} — the
-              most recent merges are not listed below.
+              {data.totalCommits} changes are waiting to go live, but only the
+              oldest {data.commits.length} could be listed — the most recent
+              ones are missing from the list below.
             </p>
           )}
           {data.commits.length > 0 && (
@@ -157,11 +156,12 @@ export function AdminWhatsOnTestPage() {
           )}
           <p className="whats-on-test-shas">
             <span>
-              Test is at <code>{headSha.slice(0, 7)}</code>
+              The test site is at version <code>{headSha.slice(0, 7)}</code>
             </span>
             {data.prod.kind === "found" && (
               <span>
-                , production is at <code>{data.prod.sha.slice(0, 7)}</code>
+                , the live site at version{" "}
+                <code>{data.prod.sha.slice(0, 7)}</code>
               </span>
             )}
           </p>

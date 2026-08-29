@@ -108,8 +108,8 @@ export function HomePageEditor() {
         <div className="home-page-editor">
           <Card>
             <div className="home-page-editor-card-content">
-              <h2>Home page</h2>
-              <p className="home-page-editor-explanation">
+              <h2 className="admin-section-heading">Home page</h2>
+              <p className="admin-section-explanation">
                 The photo and welcome text at the top of the site&apos;s home
                 page.
               </p>

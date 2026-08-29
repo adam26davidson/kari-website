@@ -66,7 +66,7 @@ describe("AdminWhatsOnTestPage", () => {
     render(<AdminWhatsOnTestPage />);
 
     expect(
-      await screen.findByText(/isn't a deployed build, so there's nothing/i),
+      await screen.findByText(/isn't the test site, so there's nothing/i),
     ).toBeInTheDocument();
     expect(DeployStatusService.getLatestProdDeploy).not.toHaveBeenCalled();
     expect(DeployStatusService.getPendingCommits).not.toHaveBeenCalled();
@@ -96,7 +96,7 @@ describe("AdminWhatsOnTestPage", () => {
     expect(screen.queryByRole("link", { name: /#null/ })).toBeNull();
   });
 
-  it("shows which shas test and production are on", async () => {
+  it("shows which versions the test and live sites are on", async () => {
     render(<AdminWhatsOnTestPage />);
 
     // The sentence wraps its shas in <code>, so match on the paragraph's
@@ -106,7 +106,7 @@ describe("AdminWhatsOnTestPage", () => {
         element?.classList.contains("whats-on-test-shas") ?? false,
     );
     expect(shaLine).toHaveTextContent(
-      "Test is at bbb2222, production is at aaa1111",
+      "The test site is at version bbb2222, the live site at version aaa1111",
     );
   });
 
@@ -172,7 +172,7 @@ describe("AdminWhatsOnTestPage", () => {
     expect(DeployStatusService.getPendingCommits).not.toHaveBeenCalled();
   });
 
-  it("warns that the newest merges are missing when GitHub truncated the comparison", async () => {
+  it("warns that the newest changes are missing when GitHub truncated the comparison", async () => {
     vi.mocked(DeployStatusService.getPendingCommits).mockResolvedValue({
       commits: pendingCommits,
       totalCommits: 715,
@@ -181,9 +181,9 @@ describe("AdminWhatsOnTestPage", () => {
     render(<AdminWhatsOnTestPage />);
 
     const warning = await screen.findByText(
-      /715 commits are pending, but GitHub's comparison returned only the oldest 2/i,
+      /715 changes are waiting to go live, but only the oldest 2 could be listed/i,
     );
-    expect(warning).toHaveTextContent(/most recent merges are not listed/i);
+    expect(warning).toHaveTextContent(/most recent ones are missing/i);
     // The (incomplete) list still renders below the warning.
     expect(screen.getByText("Change background photo")).toBeInTheDocument();
   });
@@ -192,7 +192,7 @@ describe("AdminWhatsOnTestPage", () => {
     render(<AdminWhatsOnTestPage />);
 
     await screen.findByText("Change background photo");
-    expect(screen.queryByText(/comparison returned only/i)).toBeNull();
+    expect(screen.queryByText(/could be listed/i)).toBeNull();
   });
 
   it("shows an error state with retry when the GitHub API fails", async () => {
@@ -203,7 +203,7 @@ describe("AdminWhatsOnTestPage", () => {
     render(<AdminWhatsOnTestPage />);
 
     expect(
-      await screen.findByText("Failed to load deployment status."),
+      await screen.findByText("Failed to load what's waiting to go live."),
     ).toBeInTheDocument();
 
     await userEvent.click(screen.getByText("Retry"));

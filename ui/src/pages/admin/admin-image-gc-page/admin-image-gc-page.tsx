@@ -89,8 +89,8 @@ export function AdminImageGcPage() {
 
   return (
     <div className="admin-image-gc-page">
-      <h2>Image cleanup</h2>
-      <p className="gc-explanation">
+      <h2 className="admin-section-heading">Image cleanup</h2>
+      <p className="admin-section-explanation">
         Finds uploaded images that no page on the site uses any more and
         removes them from storage. Previewing never deletes anything; images
         uploaded within the last hour are always kept.

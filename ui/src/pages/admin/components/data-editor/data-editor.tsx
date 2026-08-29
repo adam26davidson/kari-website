@@ -20,7 +20,7 @@ export function DataEditor({
     <div className="data-editor">
       <div className="data-editor-content">
         <div className="data-editor-header">
-          <h2 className="data-editor-title">{title}</h2>
+          <h2 className="admin-section-heading data-editor-title">{title}</h2>
           <div className="data-editor-item-controls">
             {/* Save first and filled: the one obvious next action. It used
                 to be a floppy-disk glyph, the least legible control on the

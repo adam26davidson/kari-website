@@ -30,11 +30,3 @@
   min-width: 0;
   box-sizing: border-box;
 }
-
-/* Matches the site-background page's explanation line — the page this one
-   was brought up to the standard of (#457). */
-.home-page-editor-explanation {
-  margin: 0;
-  font-size: 15px;
-  max-width: 60ch;
-}

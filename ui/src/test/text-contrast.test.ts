@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 // The public haiku/haiga/photography pages render their attribution and
 // caption lines as small secondary text on a translucent card that floats
@@ -104,6 +104,7 @@ const photographyCss = read(
   "pages/photography-page/components/photography-post-content/photography-post-content.css",
 );
 const adminCss = read("pages/admin/admin.css");
+const adminCardCss = read("pages/admin/components/card/card.css");
 const adminHaikuCss = read("pages/admin/admin-haiku-page/admin-haiku-page.css");
 const adminItemListCss = read(
   "pages/admin/components/admin-item-list/admin-item-list.css",
@@ -224,6 +225,86 @@ describe("secondary text in the admin panels", () => {
       );
     },
   );
+});
+
+// Every admin section opens with an <h2> and one line saying what the page
+// is for, both sitting on the pale translucent panel. The body's default
+// colour is --light-text — correct over the background photo, invisible on
+// that panel — so a section that leaves either to inheritance renders
+// near-white on grey. That is not hypothetical: the home-page editor
+// shipped exactly that way while its four siblings each re-declared a dark
+// colour of their own. The colour therefore lives in ONE shared pair of
+// classes and every admin heading has to wear them, so the next section
+// added cannot re-acquire the bug by omission (#457).
+const ADMIN_DIR = "pages/admin";
+
+/** Every non-test `.tsx` under `src/pages/admin`, as `read()` paths. */
+function adminComponents(dir: string): string[] {
+  return readdirSync(`src/${dir}`, { withFileTypes: true }).flatMap((entry) => {
+    const path = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) return adminComponents(path);
+    return entry.isFile() &&
+      entry.name.endsWith(".tsx") &&
+      !entry.name.endsWith(".test.tsx")
+      ? [path]
+      : [];
+  });
+}
+
+/** Every `<h2 ...>` opening tag in the admin tree, with its file. */
+const ADMIN_HEADINGS: ReadonlyArray<[string, string]> = adminComponents(
+  ADMIN_DIR,
+).flatMap((path) =>
+  [...read(path).matchAll(/<h2[^>]*>/g)].map(
+    ([tag]) => [path, tag] as [string, string],
+  ),
+);
+
+/** The admin card as it actually renders over a given photo. */
+const adminCardOver = (photo: Rgb): Rgb =>
+  surfaceOver(photo, declaration(adminCardCss, ".card", "background-color"));
+
+describe("the admin section headings", () => {
+  it("finds the heading of every admin section", () => {
+    // Home page, site background, image cleanup, what's on test. A drop
+    // below that means the scan stopped seeing what it is meant to check.
+    expect(ADMIN_HEADINGS.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it.each(ADMIN_HEADINGS)(
+    "%s puts its heading in the shared class rather than inheriting a colour",
+    (_path, tag) => {
+      // Worn alongside a page's own class where one is needed (the editor
+      // titles add a size), so this is a token check, not equality.
+      const className = tag.match(/className="([^"]*)"/)?.[1] ?? "";
+      expect(className.split(/\s+/)).toContain("admin-section-heading");
+    },
+  );
+
+  it.each([[".admin-section-heading"], [".admin-section-explanation"]])(
+    "%s stays legible on the card whatever photo is behind it",
+    (selector) => {
+      const color = resolveColor(declaration(adminCss, selector, "color"));
+      for (const photo of [BLACK, MID_GREY, WHITE]) {
+        expect(
+          contrastRatio(color, adminCardOver(photo)),
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    },
+  );
+
+  it("keeps the explanation line secondary to the heading above it", () => {
+    const card = adminCardOver(MID_GREY);
+    const heading = resolveColor(
+      declaration(adminCss, ".admin-section-heading", "color"),
+    );
+    const explanation = resolveColor(
+      declaration(adminCss, ".admin-section-explanation", "color"),
+    );
+    expect(contrastRatio(explanation, card)).toBeLessThan(
+      contrastRatio(heading, card),
+    );
+  });
 });
 
 // The icon on a filled control is only legible because of the colour

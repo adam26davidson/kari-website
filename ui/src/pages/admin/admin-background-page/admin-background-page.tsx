@@ -146,8 +146,8 @@ export function AdminBackgroundPage() {
         <div className="admin-background-editor">
           <Card>
             <div className="admin-background-card-content">
-              <h2>Site background</h2>
-              <p className="admin-background-explanation">
+              <h2 className="admin-section-heading">Site background</h2>
+              <p className="admin-section-explanation">
                 The photo shown behind every page of the site. Upload a new
                 image or pick an already-uploaded one; large photos are
                 automatically resized so the site stays fast.
