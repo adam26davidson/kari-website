@@ -227,6 +227,8 @@ export function AdminPhotographyPage() {
   ) : (
     <AdminItemList
       items={postList}
+      // Matches the sidebar link, so the page says which section she is in.
+      title="Photography"
       noun="photography posts"
       addLabel="Add a photography post"
       getSearchText={(post) =>

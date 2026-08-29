@@ -7,10 +7,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useSearchParams } from "react-router";
-import {
-  AdminButton,
-  AdminButtonVariant,
-} from "../admin-button/admin-button";
+import { AdminButton, AdminButtonVariant } from "../admin-button/admin-button";
 
 /**
  * The query lives in the URL rather than in component state so it survives
@@ -22,6 +19,20 @@ const SEARCH_PARAM = "q";
 export interface AdminItemListProps<T extends { id: string }> {
   items: Array<T>;
   renderItem: (item: T) => React.ReactNode;
+  /**
+   * The section's name ("Haiku", "Other works"), matching its sidebar
+   * link. Given one, the search box, match count and add button are
+   * gathered into a titled panel above the rows — the same titled card
+   * with generous padding every other admin page opens with, so a list
+   * page confirms where she is rather than starting with a bare search
+   * field 13px under the top bar (#457, design brief §1).
+   *
+   * Optional, because a list nested INSIDE an editor (the photography
+   * post's images) already sits under that editor's heading, on that
+   * editor's card: a second heading and a second panel there would
+   * announce a section she has not moved to.
+   */
+  title?: string;
   onNewItem: () => void;
   /**
    * The add button's visible text, in the site's vocabulary — "Add a
@@ -79,6 +90,7 @@ export interface AdminItemListProps<T extends { id: string }> {
 export function AdminItemList<T extends { id: string }>({
   items,
   renderItem,
+  title,
   onNewItem,
   addLabel,
   addVariant = "primary",
@@ -113,29 +125,44 @@ export function AdminItemList<T extends { id: string }>({
     ? items.filter((item) => getSearchText(item).toLowerCase().includes(needle))
     : items;
 
+  // Declared once and placed twice: on a list PAGE these sit inside the
+  // titled panel below, and nested in an editor they stand on their own.
+  const controls = (
+    <>
+      {getSearchText && (
+        <input
+          type="search"
+          className="admin-data-list-search"
+          aria-label={`Search ${noun}`}
+          placeholder={`Search ${noun}...`}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      )}
+      {filtering && visibleItems.length > 0 && (
+        <p className="admin-data-list-count">
+          Showing {visibleItems.length} of {items.length} {noun}
+        </p>
+      )}
+      <div className="admin-data-list-add">
+        <AdminButton variant={addVariant} onClick={onNewItem}>
+          {addLabel}
+        </AdminButton>
+      </div>
+    </>
+  );
+
   return (
     <div className="admin-data-list-container">
       <div className="admin-data-list">
-        {getSearchText && (
-          <input
-            type="search"
-            className="admin-data-list-search"
-            aria-label={`Search ${noun}`}
-            placeholder={`Search ${noun}...`}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
+        {title ? (
+          <div className="admin-data-list-header">
+            <h2 className="admin-section-heading">{title}</h2>
+            {controls}
+          </div>
+        ) : (
+          controls
         )}
-        {filtering && visibleItems.length > 0 && (
-          <p className="admin-data-list-count">
-            Showing {visibleItems.length} of {items.length} {noun}
-          </p>
-        )}
-        <div className="admin-data-list-add">
-          <AdminButton variant={addVariant} onClick={onNewItem}>
-            {addLabel}
-          </AdminButton>
-        </div>
         {filtering && visibleItems.length === 0 && (
           <p className="admin-data-list-empty">
             No {noun} match &quot;{query.trim()}&quot;

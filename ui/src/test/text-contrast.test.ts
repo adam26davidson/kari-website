@@ -171,7 +171,10 @@ const surfaceOver = (photo: Rgb, tint: string): Rgb =>
 // layer. The photo can be anything, so the card's lightness spans a range;
 // `cardOver(photo)` gives the rendered card colour for a given photo.
 const cardOver = (photo: Rgb): Rgb =>
-  surfaceOver(photo, declaration(dataListCss, ".data-list", "background-color"));
+  surfaceOver(
+    photo,
+    declaration(dataListCss, ".data-list", "background-color"),
+  );
 
 describe("secondary text on the public cards", () => {
   it.each(SECONDARY_TEXT_RULES)(
@@ -235,6 +238,7 @@ const ADMIN_PANELS: ReadonlyArray<[string, string, string]> = [
   ["empty-result notice", adminItemListCss, ".admin-data-list-empty"],
   ["search match count", adminItemListCss, ".admin-data-list-count"],
   ["list row", adminItemListCss, ".admin-data-list-item"],
+  ["list header panel", adminItemListCss, ".admin-data-list-header"],
 ];
 
 describe("secondary text in the admin panels", () => {
@@ -389,14 +393,14 @@ describe("the admin icon buttons", () => {
       declaration(adminButtonCss, OUTLINED, property);
     const fill = parseColor(declared("background-color"));
 
-    expect(contrastRatio(adminColor(declared("color")), fill)).toBeGreaterThanOrEqual(
-      4.5,
-    );
+    expect(
+      contrastRatio(adminColor(declared("color")), fill),
+    ).toBeGreaterThanOrEqual(4.5);
     // And its outline has to read as a shape (WCAG 1.4.11 non-text
     // contrast) — an invisible border is not a button.
-    expect(contrastRatio(adminColor(declared("border")), fill)).toBeGreaterThanOrEqual(
-      3,
-    );
+    expect(
+      contrastRatio(adminColor(declared("border")), fill),
+    ).toBeGreaterThanOrEqual(3);
   });
 
   it("make the destructive fill distinguishable from the primary one", () => {

@@ -131,6 +131,8 @@ export function AdminHaikuPage() {
   ) : (
     <AdminItemList
       items={haikuList}
+      // Matches the sidebar link, so the page says which section she is in.
+      title="Haiku"
       noun="haiku"
       addLabel="Add a haiku"
       getSearchText={(haiku) => [...haiku.lines, haiku.publisher].join(" ")}

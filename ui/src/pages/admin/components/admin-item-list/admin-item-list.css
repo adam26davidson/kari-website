@@ -20,12 +20,53 @@
   padding: 8px 0px;
 }
 
+/* The titled panel a list page opens with: the section's name, the search
+   box, the match count and the add button, on the same near-solid backing
+   as everything else in the admin. Every other admin section (home page,
+   site background, image cleanup, what's on test) opens with a titled card
+   and generous padding; the list pages opened with a bare search field 13px
+   under the top bar and no heading at all, so they read as tighter than the
+   rest and named the section nowhere but the sidebar highlight (#457,
+   design brief §1). The 24px padding plus the container's own 8px is what
+   turns that 13px into ~40px of breathing room above the heading. */
+.admin-data-list-header {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  width: calc(100% - 16px);
+  margin: 8px;
+  padding: 24px;
+  border-radius: 3px;
+  background-color: rgba(226, 226, 226, 0.8);
+  /* Blur what shows through, like every other admin surface — see the note
+     on .admin-data-list-item below. */
+  backdrop-filter: blur(10px);
+}
+
 /* Search box: same field styling as the editors (admin.css input rules
    give it the opaque fill/border); sized to the row width so it lines up
    with the items below it. */
 .admin-data-list-search {
   width: calc(100% - 16px);
   margin: 4px 8px;
+}
+
+/* Inside the panel the gap does the spacing and the panel does the
+   backing, so the pieces drop the margins and separate surfaces they wear
+   when a nested list places them on their own. */
+.admin-data-list-header .admin-data-list-search,
+.admin-data-list-header .admin-data-list-count,
+.admin-data-list-header .admin-data-list-add {
+  width: 100%;
+  margin: 0;
+}
+
+.admin-data-list-header .admin-data-list-count {
+  padding: 0;
+  background-color: transparent;
+  backdrop-filter: none;
 }
 
 /* Search feedback -- the empty-result notice and the match count -- on the
@@ -128,6 +169,14 @@
 /* Narrow viewports: the controls take their own line under the content
    instead of standing beside it. */
 @media (max-width: 767.98px) {
+  /* Generous, not lavish: 24px of panel padding inside a 390px phone that
+     has already given up its gutter (.admin-content drops to 4px here)
+     leaves the search box noticeably narrower than the rows below it. */
+  .admin-data-list-header {
+    gap: 12px;
+    padding: 16px;
+  }
+
   .admin-data-list-item {
     flex-wrap: wrap;
   }

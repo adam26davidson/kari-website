@@ -16,6 +16,7 @@ const items = [
  * a test can assert what the browser back button does.
  */
 function renderList(overrides?: {
+  title?: string;
   onEdit?: (id: string) => void;
   hideEdit?: boolean;
   compact?: boolean;
@@ -35,6 +36,7 @@ function renderList(overrides?: {
         element: (
           <AdminItemList
             items={items}
+            title={overrides?.title}
             addLabel="Add a thing"
             addVariant={overrides?.addVariant}
             onNewItem={onNewItem}
@@ -67,6 +69,38 @@ const search = (query: string) =>
   fireEvent.change(screen.getByRole("searchbox", { name: "Search things" }), {
     target: { value: query },
   });
+
+// jsdom applies no stylesheet, so the spacing and sizing rules below are
+// read out of the CSS rather than measured. Shared by the heading and
+// phone-width groups.
+const strip = (path: string) =>
+  readFileSync(path, "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
+
+const listCss = strip(
+  "src/pages/admin/components/admin-item-list/admin-item-list.css",
+);
+const adminCss = strip("src/pages/admin/admin.css");
+
+/** Everything inside the narrow-viewport media query. */
+const atPhoneWidth = (() => {
+  const media = listCss.indexOf("@media (max-width: 767.98px)");
+  expect(media).toBeGreaterThanOrEqual(0);
+  return listCss.slice(listCss.indexOf("{", media) + 1);
+})();
+
+/** A px-valued declaration of the rule for exactly `selector`. */
+function px(css: string, selector: string, property: string): number {
+  for (const [, selectors, block] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    if (!selectors.split(",").some((one) => one.trim() === selector)) {
+      continue;
+    }
+    const match = block.match(
+      new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*(-?[\\d.]+)px`),
+    );
+    if (match) return Number(match[1]);
+  }
+  throw new Error(`No ${property} on "${selector}"`);
+}
 
 describe("AdminItemList", () => {
   it("renders every item through renderItem", () => {
@@ -357,36 +391,54 @@ describe("AdminItemList", () => {
   // without precision, and must not be the closest thing to the action she
   // reaches for most. jsdom applies no stylesheet, so both are read from
   // the CSS rather than measured.
+  // A list PAGE is a section of the admin like any other, and every other
+  // one opens with a titled card: a heading naming where she is, then the
+  // page's controls, with room around them. The lists opened with a bare
+  // search field 13px under the top bar and named their section nowhere but
+  // the sidebar highlight (#457, design brief §1).
+  describe("the section heading", () => {
+    it("names the section above the list", () => {
+      renderList({ title: "Haiku" });
+      expect(
+        screen.getByRole("heading", { level: 2, name: "Haiku" }),
+      ).toBeInTheDocument();
+    });
+
+    // Half a titled card is the defect: a heading floating above a search
+    // field that still sits on its own is no less tight than before.
+    it("gathers the search box, count and add button under it", () => {
+      renderList({ title: "Things", ...searchable });
+      search("a");
+      const panel = screen.getByRole("heading", { level: 2 }).parentElement;
+      expect(panel).toHaveClass("admin-data-list-header");
+      const inPanel = within(panel as HTMLElement);
+      expect(inPanel.getByRole("searchbox")).toBeInTheDocument();
+      expect(inPanel.getByText(/^Showing /)).toBeInTheDocument();
+      expect(
+        inPanel.getByRole("button", { name: "Add a thing" }),
+      ).toBeInTheDocument();
+    });
+
+    // The photography editor's image list. It already sits under that
+    // editor's own heading, on that editor's card, so a second heading and
+    // a second panel would announce a section she has not moved to.
+    it("stays out of a list nested inside an editor", () => {
+      renderList(searchable);
+      expect(screen.queryByRole("heading")).toBeNull();
+      expect(document.querySelector(".admin-data-list-header")).toBeNull();
+    });
+
+    // The point of the panel is the room, not the border: the heading has
+    // to have at least as much space around it as a list row gives its own
+    // content, or the page still reads as the tight one.
+    it("is padded at least as generously as a list row", () => {
+      expect(
+        px(listCss, ".admin-data-list-header", "padding"),
+      ).toBeGreaterThanOrEqual(px(listCss, ".admin-data-list-item", "padding"));
+    });
+  });
+
   describe("the row controls at phone width", () => {
-    const strip = (path: string) =>
-      readFileSync(path, "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
-
-    const listCss = strip(
-      "src/pages/admin/components/admin-item-list/admin-item-list.css",
-    );
-    const adminCss = strip("src/pages/admin/admin.css");
-
-    /** Everything inside the narrow-viewport media query. */
-    const atPhoneWidth = (() => {
-      const media = listCss.indexOf("@media (max-width: 767.98px)");
-      expect(media).toBeGreaterThanOrEqual(0);
-      return listCss.slice(listCss.indexOf("{", media) + 1);
-    })();
-
-    /** A px-valued declaration of the rule for exactly `selector`. */
-    function px(css: string, selector: string, property: string): number {
-      for (const [, selectors, block] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
-        if (!selectors.split(",").some((one) => one.trim() === selector)) {
-          continue;
-        }
-        const match = block.match(
-          new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*(-?[\\d.]+)px`),
-        );
-        if (match) return Number(match[1]);
-      }
-      throw new Error(`No ${property} on "${selector}"`);
-    }
-
     const CONTROL = ".admin-data-list-item-controls .admin-icon-button";
 
     // Edit and delete used to sit side by side on the compact lists (haiku,
@@ -396,7 +448,9 @@ describe("AdminItemList", () => {
     // variant allowed to flip it back.
     it("lay the controls out in a row on every list", () => {
       const directions = [
-        ...listCss.matchAll(/([^{}]*admin-data-list-item-controls)\s*\{([^}]*)\}/g),
+        ...listCss.matchAll(
+          /([^{}]*admin-data-list-item-controls)\s*\{([^}]*)\}/g,
+        ),
       ].map(([, , block]) => block.match(/flex-direction\s*:\s*(\w+)/)?.[1]);
       // Declared at least once, and never as a column by any variant.
       expect(directions).toContain("row");
@@ -425,9 +479,9 @@ describe("AdminItemList", () => {
     );
 
     it("set delete further off than the controls are from each other", () => {
-      expect(px(atPhoneWidth, `${CONTROL}.danger`, "margin-left")).toBeGreaterThan(
-        neighbourGap,
-      );
+      expect(
+        px(atPhoneWidth, `${CONTROL}.danger`, "margin-left"),
+      ).toBeGreaterThan(neighbourGap);
     });
   });
 });

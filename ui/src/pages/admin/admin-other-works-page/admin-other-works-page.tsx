@@ -277,6 +277,8 @@ export function AdminOtherWorksPage() {
   ) : (
     <AdminItemList
       items={postList}
+      // Matches the sidebar link, so the page says which section she is in.
+      title="Other works"
       noun="other works"
       addLabel="Add a post"
       getSearchText={(post) =>
