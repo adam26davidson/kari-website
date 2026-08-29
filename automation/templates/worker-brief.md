@@ -94,7 +94,9 @@ scoped enough to plan yourself.
 - If the issue turns out to be underspecified or blocked in a way you
   cannot resolve, STOP: do not guess at product decisions. Comment your
   question on the issue, remove nothing, and report the blockage in your
-  final report instead of opening a PR.
+  final report instead of opening a PR. If what blocks you is an action
+  only the maintainer can take, report it under `problems` with the
+  `needs-human:` marker described there.
 
 ## Verification gauntlet (all that apply to what you touched)
 
@@ -172,6 +174,13 @@ scoped enough to plan yourself.
 - `tech-debt`: debt you saw or created (with file paths).
 - `problems`: anything that slowed you down (flaky tooling, confusing
   scripts, missing docs) — the orchestrator files issues from these.
+  An action only the maintainer can take — host work on the EC2 box, a
+  migration against a real bucket, a prod approval, a secret, a
+  decision no issue answers — goes here too, as its own line starting
+  `needs-human:` stating what to run or do, where, and what to check
+  afterwards. Report it; never run `automation/telegram.sh` yourself.
+  The orchestrator is the one sender, so the maintainer gets each ask
+  once, deduplicated and rate-limited.
 - In all three, say explicitly when an item is about the machinery
   rather than about the website: the dispatcher, these briefs, the
   playbooks under `automation/`, claim/worktree handling, CI and the

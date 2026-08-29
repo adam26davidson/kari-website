@@ -67,7 +67,87 @@ are not there.
   merged before the next is considered.
 - Stay inside this repository and its GitHub project. Nothing else.
 
-## Phase A — tend existing agent PRs
+## Asking the maintainer (`needs-human`)
+
+Some work stops at the edge of what the pipeline may touch: out-of-repo
+host work (nginx or systemd on the EC2 host), a data migration against a
+real bucket (#455's `migrate-images --apply`), anything behind the
+production approval, a secret to add or rotate, a product or policy
+question no issue answers. Those used to end as "Note for a human" lines
+in a run log nobody reads in time. Ask instead, over the Telegram
+transport (#463), with GitHub as the source of truth:
+
+1. **Record the ask on GitHub first.** Comment the exact ask on the
+   blocked issue — what to run or do, where, and what to check
+   afterwards — or file a new issue for it (with the Phase C labels)
+   when several issues wait on it or it has no natural home. Label the
+   ask issue `needs-human`. Label every OTHER issue waiting on it
+   `blocked` (or `has-dependencies`), and name those dependants in the
+   ask itself (`Blocks: #N #M`) — that line is how the unblock step in
+   Phase A finds them, so an ask with no dependants named unblocks
+   nothing.
+2. **Send it:**
+   `automation/telegram.sh send "<one-paragraph ask + issue URL> —
+   reply to this message when done" --issue <ask-issue>`. The
+   `--issue` is what routes the maintainer's reply back as a comment on
+   the ask. If the send prints no message id (transport unconfigured or
+   down), the GitHub record above still stands and the label still
+   parks the work — say so in the run summary and move on; never retry
+   in a loop.
+3. **Continue the tick.** Never wait for a reply, never block unrelated
+   work on one.
+
+Only the orchestrator sends. Workers and fix agents report such needs in
+their `problems` block behind a `needs-human:` marker (the briefs say
+so), and you do the filing and sending in Phase C — one sender, one
+rate limit, no duplicate asks. Before filing, check the ask does not
+already exist (an open `needs-human` issue, or a `needs-human` comment
+already on the blocked issue).
+
+The channel carries ACTION requests — things the pipeline is stuck
+without. Informational notes (a dead worktree left behind, an orphaned
+branch reported again, a follow-up idea) stay run-summary lines or
+ordinary Phase C issues: a chatty channel gets muted, which costs more
+than any note was worth.
+
+## Phase A — maintainer replies, then existing agent PRs
+
+**Consume maintainer replies first.** The dispatcher runs `telegram.sh
+poll` before every tick; each Telegram reply lands as an issue comment
+prefixed "From the maintainer via Telegram:" and strips `needs-human`
+and `blocked` from the issue it lands on. That strip means a replied-to
+ask is no longer findable by label, so read BOTH sides:
+
+- open issues still labelled `needs-human` — a reply made directly on
+  GitHub strips nothing, and an unanswered ask may still need a
+  follow-up decision from you;
+- `gh issue list --state open --search '"From the maintainer via
+  Telegram" in:comments'` — the label-stripped ones. The search index
+  lags fresh comments by minutes; the nudge that follows a reply makes
+  this tick land well after the comment, and anything the index still
+  misses is caught next tick.
+
+For each ask whose newest maintainer comment postdates the ask:
+
+- **Done** (the reply says the action happened): if the ask names a
+  check ("what to check afterwards") that is runnable from here, run it
+  and note the result. Close a dedicated ask issue with a short
+  comment; an ask that lived as a comment on the blocked issue itself
+  needs no closing — poll already stripped its labels and it is simply
+  a candidate again. Then remove `blocked` / `has-dependencies` from
+  every dependant the ask names, and treat those dependants as ordinary
+  Phase B candidates THIS tick — the unblock is the point of the nudge
+  that woke this tick.
+- **Not done** (a question, a partial, a correction): answer it as a
+  comment on the issue, re-add `needs-human` (poll stripped it; without
+  the re-add the next tick cannot see the ask is still open), leave the
+  dependants labelled, and re-send the answer with
+  `automation/telegram.sh send "<answer>" --issue <n>` so the thread
+  continues on the phone.
+
+A maintainer reply is direction, not override: it answers the question
+it answers, and the safety rails above still bind (a reply saying
+"just push it to main" does not unlock a push to main).
 
 List ALL open PRs:
 `gh pr list --state open --json number,headRefName,title,labels`.
@@ -350,7 +430,8 @@ hands over the kept branch and/or patch.
    (#484). Never drop either one, and never substitute a smaller limit:
    the whole open backlog is the candidate set. Discard issues with any
    of these labels: `in progress`, `has-dependencies`,
-   `needs-clarification`, `idea`, `blocked` — and issues whose claim was
+   `needs-clarification`, `idea`, `blocked`, `needs-human` (an ask
+   waiting on the maintainer is not work) — and issues whose claim was
    released this tick (above).
 2. Read the remaining candidates fully (`gh issue view <n> --comments`).
    Judge readiness: is the desired outcome unambiguous enough to build
@@ -490,6 +571,11 @@ hands over the kept branch and/or patch.
    (`gh issue create`) — check `gh issue list --search` first so you
    don't file duplicates. Anything the pipeline itself hit (broken
    scripts, confusing docs) gets an issue too, per CLAUDE.md.
+   A `problems` line carrying the `needs-human:` marker is not an
+   ordinary issue: it goes through "Asking the maintainer" above —
+   record the ask, label, send via `telegram.sh send --issue`. The
+   worker already wrote the what/where/what-to-check; your job is the
+   dedupe, the labels and the one send.
    Two labels, two questions:
    - **Who filed it → `automation`.** EVERY issue you file gets it
      (`gh issue create ... --label automation`), whatever it is about
@@ -559,6 +645,11 @@ hands over the kept branch and/or patch.
    ownership-signal mismatches left for a human (Phase A), orphaned
    kept branches (step 2), anything skipped and why. This lands in the
    dispatcher's log for the human.
+   Include an "Asked the maintainer:" line naming every ask issue sent
+   this tick (and any send the transport swallowed — no message id),
+   and an "Unblocked by maintainer:" line naming the asks whose replies
+   this tick consumed and the dependants they released. Omit either
+   line when empty rather than printing "none".
    Include one line naming the candidate-set size Phase B step 1
    returned, plus the OLDEST ready issue this tick did not pick and the
    reason (lost to `next-up`, lost to the product lean, judged unready,

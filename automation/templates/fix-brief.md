@@ -46,4 +46,8 @@ report. You finish at push — never merge, never wait for checks to rerun.
 - `fixed`: each feedback item you fixed, one line on how.
 - `dismissed`: each item you dismissed, with the reasoning you posted.
 - `verified`: exactly which commands you ran and their outcomes.
-- `problems`: anything that blocked or slowed you.
+- `problems`: anything that blocked or slowed you. An action only the
+  maintainer can take goes here as its own line starting `needs-human:`
+  (what to run or do, where, what to check afterwards) — never run
+  `automation/telegram.sh` yourself; the orchestrator is the one
+  sender.
