@@ -32,5 +32,10 @@
   display: block;
   margin-left: auto;
   margin-right: auto;
+  /* Dynamic viewport height with the usual `vh` fallback first (#558): on a
+     phone the large-viewport `vh` would let an image claim 80% of a taller
+     page than the one on screen. Pinned by src/test/viewport-shell.test.ts,
+     which holds every vh length in src/ to this pair. */
   max-height: 80vh;
+  max-height: 80dvh;
 }

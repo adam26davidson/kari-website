@@ -44,7 +44,33 @@ body {
   font-style: normal;
   margin: 0;
   color: var(--light-text);
+  /* The shell is exactly as tall as the visible viewport, and the document
+     never scrolls (#558).
+
+     `vh` is the LARGE viewport height: on a phone it measures the page as
+     it would be with the URL bar and toolbars retracted, so while they are
+     shown the shell is taller than what the visitor can see and the
+     document becomes a scroll container of its own — one stacked on top of
+     the app's inner `.content` scroller. A gesture that moved the document
+     carried the header off the top of the screen, and the inner scroller
+     swallowed the gesture that should have brought it back. `dvh` is the
+     DYNAMIC viewport height, which tracks the chrome as it retracts, so
+     the shell can never exceed the visible area. The `vh` line above it is
+     the fallback for browsers without `dvh` (Safari <15.4, Chrome <108),
+     which drop the second declaration as invalid; the order is therefore
+     load-bearing.
+
+     `overflow: hidden` finishes the job. With no overflow declared on
+     `html`, the body's propagates to the viewport, so the document is not
+     a scroll container at all and nothing added later can make the header
+     scrollable away again. `hidden` rather than `clip` on purpose: a
+     `clip` box has no scrollable overflow region, which would blind the
+     horizontal-overflow assertion in e2e/screenshots.mjs.
+
+     Pinned by src/test/viewport-shell.test.ts. */
   height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 body::before {
@@ -101,7 +127,12 @@ body[data-custom-background]::before {
   flex-direction: column;
   align-items: flex-start;
   justify-content: flex-start;
+  /* Same viewport-unit pair as `body`, and for the same reason (#558).
+     It cannot simply be `height: 100%`: `#root`, the element between this
+     and `body`, has auto height, so a percentage here has nothing to
+     resolve against. */
   height: 100vh;
+  height: 100dvh;
   width: 100%;
 }
 
