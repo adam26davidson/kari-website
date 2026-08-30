@@ -53,32 +53,52 @@
   font-weight: 400;
 }
 
-/* One entry per image; its storage files nest inside. */
+/* One tile per image: she sees the pictures, not their storage keys (#495).
+   Wrapping tiles rather than a fixed grid so three still fit at 390px. */
 .gc-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin: 8px 0 0 0;
-  padding-left: 24px;
-  font-size: 14px;
-  font-family: monospace;
-  overflow-wrap: anywhere;
+  padding: 0;
+  list-style-type: none;
 }
 
 .gc-images > li {
-  margin: 6px 0;
+  /* Kills the inline-image descender gap under each tile. */
+  line-height: 0;
 }
 
-/* The files an image is made of: present but quiet, so the image names
-   stay the thing being counted. */
-.gc-keys {
-  margin: 4px 0 0 0;
-  /* A rule rather than an indent alone: at 390px both the image name and
-     its keys wrap, and the line is what keeps the nesting legible. */
-  padding-left: 10px;
-  border-left: 2px solid rgba(24, 24, 24, 0.15);
-  list-style-type: none;
-  font-size: 13px;
+.gc-image-thumb {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 3px;
+  /* A tint while the thumbnail loads, so the row doesn't flash white. */
+  background-color: rgba(24, 24, 24, 0.06);
+}
+
+/* Stands in for a picture that failed to load, at the same size so the
+   tiles around it don't move. */
+.gc-image-missing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 96px;
+  height: 96px;
+  padding: 6px;
+  border: 1px dashed rgba(24, 24, 24, 0.3);
+  border-radius: 3px;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: center;
   color: #4a4a4a;
 }
 
-.gc-keys > li {
-  margin: 2px 0;
+/* An empty group, and the deleted group whose pictures are gone. */
+.gc-images-note {
+  margin: 8px 0 0 0;
+  font-size: 14px;
+  color: #4a4a4a;
 }

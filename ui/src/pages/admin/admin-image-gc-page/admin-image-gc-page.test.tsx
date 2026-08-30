@@ -85,7 +85,7 @@ describe("AdminImageGcPage dry run", () => {
     expect(
       screen.getByText("Uploaded in the last hour (kept) (1)"),
     ).toBeTruthy();
-    // Every image is named once...
+    // Every image shows as a picture, one thumbnail each (#495).
     for (const id of [
       "orphan-1.png",
       "orphan-2.png",
@@ -93,18 +93,54 @@ describe("AdminImageGcPage dry run", () => {
       "kept-2.png",
       "fresh.png",
     ]) {
-      expect(screen.getByText(id)).toBeTruthy();
+      const thumb = screen.getByAltText(id);
+      expect(thumb).toHaveAttribute(
+        "src",
+        `https://api.test.local/images/${id}?size=thumb`,
+      );
+      expect(thumb).toHaveAttribute("loading", "lazy");
+      expect(thumb).toHaveAttribute("decoding", "async");
     }
-    // ...with its stored objects nested underneath it.
+    // Storage keys are the code's vocabulary, not hers — the report shows
+    // pictures instead (#495).
     for (const key of [
       "images/orphan-1.png/original.png",
       "images/orphan-1.png/thumb.jpg",
-      "images/orphan-2.png/original.png",
-      "images/orphan-2.png/thumb.jpg",
       "images/fresh.png/original.png",
     ]) {
-      expect(screen.getByText(key)).toBeTruthy();
+      expect(screen.queryByText(key)).toBeNull();
     }
+  });
+
+  it("shows a plain placeholder for a picture that will not load", async () => {
+    vi.mocked(ImageService.gc).mockResolvedValue({
+      ...dryRunReport,
+      orphaned: [image("orphan-1.png")],
+      referenced: [],
+      skipped_recent: [],
+    });
+    renderPage();
+    await clickPreview();
+
+    fireEvent.error(screen.getByAltText("orphan-1.png"));
+
+    // No broken-image icon: a quiet tile that says what happened.
+    expect(screen.queryByAltText("orphan-1.png")).toBeNull();
+    expect(screen.getByText("Couldn't show this picture")).toBeTruthy();
+  });
+
+  it("invites nothing rather than showing a blank list when a group is empty", async () => {
+    vi.mocked(ImageService.gc).mockResolvedValue({
+      ...dryRunReport,
+      orphaned: [],
+      referenced: [],
+      skipped_recent: [],
+    });
+    renderPage();
+
+    await clickPreview();
+
+    expect(screen.getAllByText("Nothing here.")).toHaveLength(3);
   });
 
   // "1 images are no longer used" would be the plainest possible way to
@@ -182,6 +218,15 @@ describe("AdminImageGcPage real run", () => {
     expect(notify).toHaveBeenCalledWith("Deleted 2 unused images");
     expect(screen.getByText("Deleted 2 unused images.")).toBeTruthy();
     expect(screen.getByText("Deleted (2)")).toBeTruthy();
+    // Deleted pictures are gone from storage, so asking for their
+    // thumbnails would only draw broken images — say so instead (#495).
+    expect(screen.queryByAltText("orphan-1.png")).toBeNull();
+    expect(
+      screen.getByText(
+        "These pictures are no longer in storage, so there is nothing left" +
+          " to show.",
+      ),
+    ).toBeTruthy();
     // The real run replaces the preview's delete button and orphan list.
     expect(screen.queryByText("Delete 2 unused images")).toBeNull();
   });
