@@ -2,28 +2,28 @@ import { useEffect, useState } from "react";
 import "../admin.css";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate, useParams } from "react-router";
-import { PhotographyPost } from "../../../models";
+import { PhotographyPost } from "@kari/shared/models";
 import {
   moveItemByIdByOne,
   removeItemById,
-} from "../../../utils/data-list-helpers";
-import { ImageService } from "../../../services/images";
-import { PhotographyService } from "../../../services/photography";
+} from "@kari/shared/utils/data-list-helpers";
+import { ImageService } from "@kari/shared/services/images";
+import { PhotographyService } from "@kari/shared/services/photography";
 import { PhotographyPostEditor } from "./components/photography-post-editor/photography-post-editor";
 import {
   EditorImage,
   newEditorImage,
 } from "./components/photography-post-editor/editor-image";
 import { PhotographyPostSummary } from "./components/photography-post-summary/photography-post-summary";
-import { LoadError } from "../../../components/load-error/load-error";
+import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { AdminItemList } from "../components/admin-item-list/admin-item-list";
-import { useAdminToken } from "../../../hooks/use-admin-token";
+import { useAdminToken } from "../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
 import { useListUrls } from "../use-list-urls";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 
-const LIST_PATH = "/admin/photography";
+const LIST_PATH = "/photography";
 
 /** Copies a post deeply enough that edits to the copy never leak back. */
 const copyPost = (post: PhotographyPost): PhotographyPost => ({

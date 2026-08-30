@@ -3,22 +3,22 @@ import "./admin-haiku-page.css";
 import "../admin.css";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate, useParams } from "react-router";
-import { Haiku } from "../../../models";
-import { HaikuContent } from "../../../components/haiku-content/haiku-content";
-import { HaikuService } from "../../../services/haiku";
+import { Haiku } from "@kari/shared/models";
+import { HaikuContent } from "@kari/shared/components/haiku-content/haiku-content";
+import { HaikuService } from "@kari/shared/services/haiku";
 import {
   moveItemByIdByOne,
   removeItemById,
-} from "../../../utils/data-list-helpers";
+} from "@kari/shared/utils/data-list-helpers";
 import { HaikuEditor } from "./components/haiku-editor/haiku-editor";
-import { LoadError } from "../../../components/load-error/load-error";
+import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { AdminItemList } from "../components/admin-item-list/admin-item-list";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
 import { useListUrls } from "../use-list-urls";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 
-const LIST_PATH = "/admin/haiku";
+const LIST_PATH = "/haiku";
 
 export function AdminHaikuPage() {
   const { confirm } = useAdminUi();

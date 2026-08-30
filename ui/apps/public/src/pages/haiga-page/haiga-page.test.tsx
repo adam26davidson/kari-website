@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HaigaPage } from "./haiga-page";
-import { HaigaService } from "../../services/haiga";
+import { HaigaService } from "@kari/shared/services/haiga";
 
-vi.mock("../../services/haiga", () => ({
+vi.mock("@kari/shared/services/haiga", () => ({
   HaigaService: {
     getListFromS3: vi.fn(),
   },

@@ -13,7 +13,7 @@ const haiku: Haiku = {
 // jsdom applies no stylesheet, so the alignment is read out of the CSS
 // rather than measured.
 const css = readFileSync(
-  "src/components/haiku-content/haiku-content.css",
+  "packages/shared/src/components/haiku-content/haiku-content.css",
   "utf-8",
 ).replace(/\/\*[\s\S]*?\*\//g, "");
 

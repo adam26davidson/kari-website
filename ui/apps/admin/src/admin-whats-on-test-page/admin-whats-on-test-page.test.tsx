@@ -3,10 +3,10 @@ import { readFileSync } from "node:fs";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AdminWhatsOnTestPage } from "./admin-whats-on-test-page";
-import { DeployStatusService } from "../../../services/deploy-status";
-import type { PendingCommit } from "../../../services/deploy-status";
+import { DeployStatusService } from "@kari/shared/services/deploy-status";
+import type { PendingCommit } from "@kari/shared/services/deploy-status";
 
-vi.mock("../../../services/deploy-status", () => ({
+vi.mock("@kari/shared/services/deploy-status", () => ({
   DEPLOYMENTS_SCAN_LIMIT: 20,
   DeployStatusService: {
     getLatestProdDeploy: vi.fn(),
@@ -242,7 +242,7 @@ describe("AdminWhatsOnTestPage", () => {
     const css = (path: string) =>
       readFileSync(path, "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
     const pageCss = css(
-      "src/pages/admin/admin-whats-on-test-page/admin-whats-on-test-page.css",
+      "apps/admin/src/admin-whats-on-test-page/admin-whats-on-test-page.css",
     );
 
     it.each([["font-size"], ["max-width"]])(
@@ -256,7 +256,7 @@ describe("AdminWhatsOnTestPage", () => {
     );
 
     it("gives the explanation line above them the very same tokens", () => {
-      const adminCss = css("src/pages/admin/admin.css");
+      const adminCss = css("apps/admin/src/admin.css");
       const block = adminCss.match(
         /\.admin-section-explanation\s*\{([^}]*)\}/,
       )?.[1];

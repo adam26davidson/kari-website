@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { Haiga } from "../../../../../models";
+import { Haiga } from "@kari/shared/models";
 import { DataEditor } from "../../../components/data-editor/data-editor";
 import { PhotoPicker } from "../../../components/photo-picker/photo-picker";
 import "./haiga-editor.css";

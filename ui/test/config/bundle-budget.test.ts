@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { OutputBundle } from "rollup";
-import { bundleBudget } from "../../../vite-bundle-budget";
+import { bundleBudget } from "../../vite-bundle-budget";
 
 // The build-time ratchet behind issue #272. Route-level code splitting
 // landed in #63 and the entry chunk crept back over vite's 500 kB warning

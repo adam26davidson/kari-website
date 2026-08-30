@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useAdminToken } from "../../hooks/use-admin-token";
-import { TokenGetter } from "../../services/http";
+import { useAdminToken } from "./hooks/use-admin-token";
+import { TokenGetter } from "@kari/shared/services/http";
 import { useAdminUi } from "./admin-ui-context";
 
 export interface UseAdminListOptions<T> {

@@ -1,9 +1,9 @@
 import { useId } from "react";
-import { BlogPost } from "../../../../../models";
+import { BlogPost } from "@kari/shared/models";
 import {
   toDateInputValue,
   toPostDate,
-} from "../../../../../utils/date-helpers";
+} from "@kari/shared/utils/date-helpers";
 import { DataEditor } from "../../../components/data-editor/data-editor";
 import { Tiptap } from "../../../components/tiptap/tiptap";
 import "./blog-post-editor.css";

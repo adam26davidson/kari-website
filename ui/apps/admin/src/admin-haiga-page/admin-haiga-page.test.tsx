@@ -1,30 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { AdminHaigaPage } from "./admin-haiga-page";
-import { Haiga } from "../../../models";
-import { HaigaService } from "../../../services/haiga";
-import { TokenGetter } from "../../../services/http";
-import { ImageService } from "../../../services/images";
+import { Haiga } from "@kari/shared/models";
+import { HaigaService } from "@kari/shared/services/haiga";
+import { TokenGetter } from "@kari/shared/services/http";
+import { ImageService } from "@kari/shared/services/images";
 import { answerYes, renderAdminPage } from "../admin-ui-test-helpers";
 
 function renderPage(initialEntry?: string) {
-  return renderAdminPage(<AdminHaigaPage />, "/admin/haiga/:id?", initialEntry);
+  return renderAdminPage(<AdminHaigaPage />, "/haiga/:id?", initialEntry);
 }
 
-vi.mock("../../../services/haiga", () => ({
+vi.mock("@kari/shared/services/haiga", () => ({
   HaigaService: {
     getListFromApi: vi.fn(),
     updateList: vi.fn(),
   },
 }));
 
-vi.mock("../../../services/images", () => ({
+vi.mock("@kari/shared/services/images", () => ({
   ImageService: {
     upload: vi.fn(),
   },
 }));
 
-vi.mock("../../../hooks/use-admin-token", () => ({
+vi.mock("../hooks/use-admin-token", () => ({
   useAdminToken: () => async () => "token",
 }));
 
@@ -410,11 +410,11 @@ describe("AdminHaigaPage routing", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
     await screen.findByRole("button", { name: "Save" });
 
-    expect(router.state.location.pathname).toBe("/admin/haiga/h1");
+    expect(router.state.location.pathname).toBe("/haiga/h1");
   });
 
   it("opens the editor directly from an editor URL", async () => {
-    renderPage("/admin/haiga/h1");
+    renderPage("/haiga/h1");
 
     expect(
       await screen.findByRole("button", { name: "Save" }),
@@ -422,13 +422,13 @@ describe("AdminHaigaPage routing", () => {
   });
 
   it("falls back to the list for an unknown editor URL", async () => {
-    const { router } = renderPage("/admin/haiga/no-such-id");
+    const { router } = renderPage("/haiga/no-such-id");
 
     expect(
       await screen.findByRole("button", { name: "Edit" }),
     ).toBeInTheDocument();
     await waitFor(() =>
-      expect(router.state.location.pathname).toBe("/admin/haiga"),
+      expect(router.state.location.pathname).toBe("/haiga"),
     );
   });
 
@@ -447,7 +447,7 @@ describe("AdminHaigaPage routing", () => {
   });
 
   it("keeps the search filter through the editor round trip", async () => {
-    const { router } = renderPage("/admin/haiga?q=kari");
+    const { router } = renderPage("/haiga?q=kari");
 
     fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
     await screen.findByRole("button", { name: "Save" });
@@ -492,7 +492,7 @@ describe("AdminHaigaPage routing", () => {
     expect(
       await screen.findByRole("button", { name: "Edit" }),
     ).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe("/admin/haiga");
+    expect(router.state.location.pathname).toBe("/haiga");
     expect(adminUi.confirm).not.toHaveBeenCalled();
   });
 });

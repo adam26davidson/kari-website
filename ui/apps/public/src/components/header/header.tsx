@@ -1,12 +1,9 @@
-import { Suspense } from "react";
 import { Link, useLocation } from "react-router";
-import "./header.css";
+import "@kari/shared/styles/header.css";
 import { faBars } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { useIsMobile } from "../../hooks/use-is-mobile";
-import { PAGES } from "../../constants";
-import { isAdminPath } from "../../utils/admin-routes";
-import { HeaderUserSection } from "../../auth/lazy-admin-auth";
+import { useIsMobile } from "@kari/shared/hooks/use-is-mobile";
+import { PAGES } from "@kari/shared/constants";
 
 export function Header({
   showingMobileMenu,
@@ -17,10 +14,9 @@ export function Header({
 }) {
   const location = useLocation();
   const isMobile = useIsMobile();
-  const isAdminPage = isAdminPath(location.pathname);
 
   return (
-    <div className={isAdminPage ? "admin-header" : "header"}>
+    <div className="header">
       {isMobile && (
         <button
           type="button"
@@ -31,18 +27,10 @@ export function Header({
           <FontAwesomeIcon icon={faBars} className="header-menu-icon" />
         </button>
       )}
-      <div
-        className={
-          isMobile
-            ? "header-title-mobile"
-            : isAdminPage
-              ? "admin-header-title"
-              : "header-title"
-        }
-      >
-        {"Kari Davidson" + (isAdminPage ? " - Admin" : "")}
+      <div className={isMobile ? "header-title-mobile" : "header-title"}>
+        Kari Davidson
       </div>
-      {!isAdminPage && !isMobile && (
+      {!isMobile && (
         <div className="pages">
           {PAGES.map((page) => (
             <Link
@@ -53,17 +41,12 @@ export function Header({
               {page.name}
             </Link>
           ))}
+          {/* A plain anchor, not a router Link: /admin is a different
+              application (its own build, its own bundle), so following it
+              has to be a full page load rather than a client-side
+              navigation this router could never resolve. */}
+          <a href="/admin">Admin</a>
         </div>
-      )}
-      {/* Admin-only, and lazy: the user section is the header's sole
-          Auth0 consumer, so keeping it in its own chunk keeps the SDK off
-          every public page. The chunk is already in flight by the time
-          this renders -- the app shell mounts AdminAuthProvider from the
-          same module -- so the null fallback is momentary. */}
-      {isAdminPage && (
-        <Suspense fallback={null}>
-          <HeaderUserSection />
-        </Suspense>
       )}
     </div>
   );

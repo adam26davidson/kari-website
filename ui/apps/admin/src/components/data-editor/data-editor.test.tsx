@@ -7,7 +7,7 @@ import { DataEditor } from "./data-editor";
 // jsdom applies no stylesheet, so the card's spacing is read out of the CSS
 // rather than measured.
 const editorCss = readFileSync(
-  "src/pages/admin/components/data-editor/data-editor.css",
+  "apps/admin/src/components/data-editor/data-editor.css",
   "utf-8",
 ).replace(/\/\*[\s\S]*?\*\//g, "");
 

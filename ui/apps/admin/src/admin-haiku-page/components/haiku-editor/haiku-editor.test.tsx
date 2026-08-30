@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HaikuEditor } from "./haiku-editor";
-import { Haiku } from "../../../../../models";
+import { Haiku } from "@kari/shared/models";
 
 const haiku: Haiku = {
   id: "h1",

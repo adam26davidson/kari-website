@@ -1,12 +1,12 @@
-import { BlogPost } from "../../../models";
-import { TokenGetter } from "../../../services/http";
+import { BlogPost } from "@kari/shared/models";
+import { TokenGetter } from "@kari/shared/services/http";
 import {
   apiImageUrl,
   changeImageUrlToApi,
   changeImageUrlToS3,
   getImageFileName,
   s3ImageUrl,
-} from "../../../utils/image-management-helpers";
+} from "@kari/shared/utils/image-management-helpers";
 
 // Shown when a failed publish/unpublish could not fully restore the
 // previous state; storage stays mixed until the same save is retried.

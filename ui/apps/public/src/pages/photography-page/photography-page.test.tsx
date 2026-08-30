@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PhotographyPage } from "./photography-page";
-import { PhotographyService } from "../../services/photography";
+import { PhotographyService } from "@kari/shared/services/photography";
 
-vi.mock("../../services/photography", () => ({
+vi.mock("@kari/shared/services/photography", () => ({
   PhotographyService: {
     getListFromS3: vi.fn(),
   },

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HaigaEditor } from "./haiga-editor";
-import { Haiga } from "../../../../../models";
+import { Haiga } from "@kari/shared/models";
 
 const haiga: Haiga = {
   id: "g1",

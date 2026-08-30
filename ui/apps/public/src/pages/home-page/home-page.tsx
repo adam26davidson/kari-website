@@ -1,13 +1,13 @@
-import { useIsMobile } from "../../hooks/use-is-mobile";
+import { useIsMobile } from "@kari/shared/hooks/use-is-mobile";
 import "./home-page.css";
-import { HomePageData } from "../../models";
-import { LoadError } from "../../components/load-error/load-error";
-import { HomePageService } from "../../services/home-page";
-import { useS3Load } from "../../hooks/use-s3-load";
+import { HomePageData } from "@kari/shared/models";
+import { LoadError } from "@kari/shared/components/load-error/load-error";
+import { HomePageService } from "@kari/shared/services/home-page";
+import { useS3Load } from "@kari/shared/hooks/use-s3-load";
 import {
   onS3ImageError,
   s3ImageUrl,
-} from "../../utils/image-management-helpers";
+} from "@kari/shared/utils/image-management-helpers";
 
 const EMPTY_HOME_PAGE: HomePageData = {
   photo: "",

@@ -1,11 +1,11 @@
 import { useState } from "react";
 import "./admin-image-gc-page.css";
 import "../admin.css";
-import { useAdminToken } from "../../../hooks/use-admin-token";
-import { GcImage, GcReport, ImageService } from "../../../services/images";
+import { useAdminToken } from "../hooks/use-admin-token";
+import { GcImage, GcReport, ImageService } from "@kari/shared/services/images";
 import { AdminButton } from "../components/admin-button/admin-button";
 import { useAdminUi } from "../admin-ui-context";
-import { apiImageUrl } from "../../../utils/image-management-helpers";
+import { apiImageUrl } from "@kari/shared/utils/image-management-helpers";
 
 /**
  * One image's picture, fetched at thumbnail size like every other admin

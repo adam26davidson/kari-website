@@ -2,15 +2,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AdminBackgroundPage } from "./admin-background-page";
-import { ImageService } from "../../../services/images";
-import { SiteSettingsService } from "../../../services/site-settings";
+import { ImageService } from "@kari/shared/services/images";
+import { SiteSettingsService } from "@kari/shared/services/site-settings";
 import {
   BackgroundImageError,
   prepareBackgroundImage,
-} from "../../../utils/background-image";
+} from "@kari/shared/utils/background-image";
 import { answerNo, renderAdminPage } from "../admin-ui-test-helpers";
 
-vi.mock("../../../services/images", () => ({
+vi.mock("@kari/shared/services/images", () => ({
   ImageService: {
     upload: vi.fn(),
     list: vi.fn(),
@@ -18,7 +18,7 @@ vi.mock("../../../services/images", () => ({
   },
 }));
 
-vi.mock("../../../services/site-settings", () => ({
+vi.mock("@kari/shared/services/site-settings", () => ({
   SiteSettingsService: {
     getFromApi: vi.fn(),
     update: vi.fn(),
@@ -28,22 +28,22 @@ vi.mock("../../../services/site-settings", () => ({
 // The real preparation needs canvas APIs jsdom lacks; its own unit tests
 // cover it. Keep the real BackgroundImageError so the page's instanceof
 // check runs against the class it uses in production.
-vi.mock("../../../utils/background-image", async (importOriginal) => ({
+vi.mock("@kari/shared/utils/background-image", async (importOriginal) => ({
   ...(await importOriginal<
-    typeof import("../../../utils/background-image")
+    typeof import("@kari/shared/utils/background-image")
   >()),
   prepareBackgroundImage: vi.fn(),
 }));
 
-vi.mock("../../../hooks/use-admin-token", () => ({
+vi.mock("../hooks/use-admin-token", () => ({
   useAdminToken: () => async () => "token",
 }));
 
 function renderPage() {
   return renderAdminPage(
     <AdminBackgroundPage />,
-    "/admin/:section",
-    "/admin/background",
+    "/:section",
+    "/background",
   );
 }
 
@@ -268,10 +268,10 @@ describe("AdminBackgroundPage unsaved-changes guard", () => {
     const { adminUi, router } = await renderLoaded();
 
     await act(async () => {
-      router.navigate("/admin/haiku");
+      router.navigate("/haiku");
     });
 
-    expect(router.state.location.pathname).toBe("/admin/haiku");
+    expect(router.state.location.pathname).toBe("/haiku");
     expect(adminUi.confirm).not.toHaveBeenCalled();
   });
 
@@ -282,7 +282,7 @@ describe("AdminBackgroundPage unsaved-changes guard", () => {
     );
 
     await act(async () => {
-      router.navigate("/admin/haiku");
+      router.navigate("/haiku");
     });
 
     expect(adminUi.confirm).toHaveBeenCalledWith(
@@ -291,7 +291,7 @@ describe("AdminBackgroundPage unsaved-changes guard", () => {
       expect.any(Function),
     );
     await answerNo(adminUi);
-    expect(router.state.location.pathname).toBe("/admin/background");
+    expect(router.state.location.pathname).toBe("/background");
   });
 
   it("does not block leaving after a save", async () => {
@@ -302,10 +302,10 @@ describe("AdminBackgroundPage unsaved-changes guard", () => {
     );
 
     await act(async () => {
-      router.navigate("/admin/haiku");
+      router.navigate("/haiku");
     });
 
-    expect(router.state.location.pathname).toBe("/admin/haiku");
+    expect(router.state.location.pathname).toBe("/haiku");
     expect(adminUi.confirm).not.toHaveBeenCalled();
   });
 });

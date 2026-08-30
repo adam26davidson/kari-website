@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { DataEditor } from "../../../components/data-editor/data-editor";
-import { Haiku } from "../../../../../models";
+import { Haiku } from "@kari/shared/models";
 
 export function HaikuEditor({
   haiku,

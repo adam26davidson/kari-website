@@ -1,5 +1,5 @@
-import { HaigaContent } from "../../components/haiga-content/haiga-content";
-import { HaigaService } from "../../services/haiga";
+import { HaigaContent } from "@kari/shared/components/haiga-content/haiga-content";
+import { HaigaService } from "@kari/shared/services/haiga";
 import { PublicListPage } from "../../components/public-list-page/public-list-page";
 
 export function HaigaPage() {

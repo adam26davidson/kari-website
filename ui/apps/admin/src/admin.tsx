@@ -11,7 +11,7 @@ import { AdminImageGcPage } from "./admin-image-gc-page/admin-image-gc-page";
 import { AdminBackgroundPage } from "./admin-background-page/admin-background-page";
 import { AdminButton } from "./components/admin-button/admin-button";
 import { AdminUiProvider } from "./admin-ui-provider";
-import { lazyWithRetry } from "../../components/error-boundary/lazy-with-retry";
+import { lazyWithRetry } from "@kari/shared/components/error-boundary/lazy-with-retry";
 
 // Staging-only section (VITE_SHOW_TEST_STATUS is set in .env.staging and
 // .env.test, never .env.production). Lazy, unlike the other admin pages:
@@ -56,7 +56,7 @@ export function Admin() {
             {pages.map(({ id, label }) => (
               <NavLink
                 key={id}
-                to={`/admin/${id}`}
+                to={`/${id}`}
                 className={({ isActive }) =>
                   `admin-menu-item ${isActive ? "selected" : ""}`
                 }
@@ -97,7 +97,7 @@ export function Admin() {
                 )}
                 <Route
                   path="*"
-                  element={<Navigate to="/admin/home" replace />}
+                  element={<Navigate to="/home" replace />}
                 />
               </Routes>
             </AdminUiProvider>

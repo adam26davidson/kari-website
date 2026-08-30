@@ -1,21 +1,21 @@
 import { useEffect, useState } from "react";
 import "./admin-background-page.css";
 import { Card } from "../components/card/card";
-import { useAdminToken } from "../../../hooks/use-admin-token";
-import { SiteSettings } from "../../../models";
+import { useAdminToken } from "../hooks/use-admin-token";
+import { SiteSettings } from "@kari/shared/models";
 import { PhotoPicker } from "../components/photo-picker/photo-picker";
-import { ImageService } from "../../../services/images";
-import { SiteSettingsService } from "../../../services/site-settings";
+import { ImageService } from "@kari/shared/services/images";
+import { SiteSettingsService } from "@kari/shared/services/site-settings";
 import { AdminButton } from "../components/admin-button/admin-button";
-import { LoadError } from "../../../components/load-error/load-error";
+import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { useAdminUi } from "../admin-ui-context";
 import { useUnsavedChanges } from "../use-unsaved-changes";
-import { apiImageUrl } from "../../../utils/image-management-helpers";
+import { apiImageUrl } from "@kari/shared/utils/image-management-helpers";
 import {
   BackgroundImageError,
   prepareBackgroundImage,
-} from "../../../utils/background-image";
-import defaultBackground from "../../../assets/petals_on_ground.webp";
+} from "@kari/shared/utils/background-image";
+import defaultBackground from "@kari/shared/assets/petals_on_ground.webp";
 
 const DEFAULT_SETTINGS: SiteSettings = { backgroundPhoto: "" };
 

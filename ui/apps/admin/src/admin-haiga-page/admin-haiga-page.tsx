@@ -2,24 +2,24 @@ import { useEffect, useState } from "react";
 import "./admin-haiga-page.css";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate, useParams } from "react-router";
-import { Haiga } from "../../../models";
-import { HaigaService } from "../../../services/haiga";
-import { ImageService } from "../../../services/images";
+import { Haiga } from "@kari/shared/models";
+import { HaigaService } from "@kari/shared/services/haiga";
+import { ImageService } from "@kari/shared/services/images";
 import { HaigaEditor } from "./components/haiga-editor/haiga-editor";
 import {
   moveItemByIdByOne,
   removeItemById,
-} from "../../../utils/data-list-helpers";
-import { HaigaContent } from "../../../components/haiga-content/haiga-content";
-import { LoadError } from "../../../components/load-error/load-error";
+} from "@kari/shared/utils/data-list-helpers";
+import { HaigaContent } from "@kari/shared/components/haiga-content/haiga-content";
+import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { AdminItemList } from "../components/admin-item-list/admin-item-list";
-import { useAdminToken } from "../../../hooks/use-admin-token";
+import { useAdminToken } from "../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
 import { useListUrls } from "../use-list-urls";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 
-const LIST_PATH = "/admin/haiga";
+const LIST_PATH = "/haiga";
 
 export function AdminHaigaPage() {
   const getAccessTokenSilently = useAdminToken();

@@ -1,27 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ReactNode } from "react";
 import { MemoryRouter } from "react-router";
 import { Header } from "./header";
-import { PAGES } from "../../constants";
-import { useIsMobile } from "../../hooks/use-is-mobile";
+import { PAGES } from "@kari/shared/constants";
+import { useIsMobile } from "@kari/shared/hooks/use-is-mobile";
 
-vi.mock("../../hooks/use-is-mobile", () => ({
+vi.mock("@kari/shared/hooks/use-is-mobile", () => ({
   useIsMobile: vi.fn(),
-}));
-
-// The header's only Auth0 consumer is HeaderUserSection, which it pulls in
-// through a lazy chunk (see auth/lazy-admin-auth.ts). Stubbing the module
-// behind that chunk keeps @auth0/auth0-react out of this file entirely --
-// which is the point: a header that reached for Auth0 directly would throw
-// "You forgot to wrap your component in <Auth0Provider>" in every
-// public-route test below, since public pages mount no provider.
-vi.mock("../../auth/admin-auth", () => ({
-  AdminAuthProvider: ({ children }: { children: ReactNode }) => (
-    <>{children}</>
-  ),
-  HeaderUserSection: () => <div>User section stub</div>,
 }));
 
 function renderHeader(
@@ -49,8 +35,8 @@ beforeEach(() => {
   vi.mocked(useIsMobile).mockReturnValue(false);
 });
 
-describe("Header on desktop, non-admin routes", () => {
-  it("shows the site title without the admin suffix", () => {
+describe("Header on desktop", () => {
+  it("shows the site title", () => {
     renderHeader("/");
     expect(screen.getByText("Kari Davidson")).toBeInTheDocument();
     expect(screen.queryByText(/- Admin/)).not.toBeInTheDocument();
@@ -66,6 +52,25 @@ describe("Header on desktop, non-admin routes", () => {
     expect(screen.getByRole("link", { name: "Haiga" })).not.toHaveClass(
       "active",
     );
+  });
+
+  // The admin section is a separate application (#591): its own build, its
+  // own bundle, mounted under /admin. A router <Link> would try to resolve
+  // that inside this app's route tree, which has no /admin route and never
+  // will; only a full page load gets there. react-router marks the anchors
+  // it renders with data-discover, so its absence is what distinguishes the
+  // two here.
+  it("links to the admin app with a plain anchor, not a router link", () => {
+    renderHeader("/");
+    const admin = screen.getByRole("link", { name: "Admin" });
+    expect(admin).toHaveAttribute("href", "/admin");
+    expect(admin).not.toHaveAttribute("data-discover");
+  });
+
+  it("never renders the admin chrome or a signed-in user", () => {
+    const { container } = renderHeader("/");
+    expect(container.querySelector(".admin-header")).toBeNull();
+    expect(container.querySelector(".header-user-section")).toBeNull();
   });
 
   it("does not render the hamburger menu button", () => {
@@ -84,28 +89,17 @@ describe("Header on mobile", () => {
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
-  // The mobile title swaps to .header-title-mobile ALONE — neither
-  // .header-title nor .admin-header-title applies — so header.css styles it
-  // through `.header`/`.admin-header` descendant rules, which are the only
-  // thing declaring its font-weight. If this class or the bar around it
-  // drifts, the title silently falls back to the body default (it did: the
-  // #356 opt-ins were enumerated per desktop class and missed this one).
-  it.each([
-    ["/", "header"],
-    ["/admin", "admin-header"],
-  ])(
-    "styles the title through the %s bar's mobile class",
-    async (path, bar) => {
-      const { container } = renderHeader(path);
-      // Let the admin bar's lazy user section settle, as the /admin tests
-      // below do, so its resolution doesn't land outside act().
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      });
-      const title = container.querySelector(`.${bar} > .header-title-mobile`);
-      expect(title).toHaveTextContent("Kari Davidson");
-    },
-  );
+  // The mobile title swaps to .header-title-mobile ALONE — .header-title
+  // does not apply — so header.css styles it through the `.header`
+  // descendant rule, which is the only thing declaring its font-weight. If
+  // this class or the bar around it drifts, the title silently falls back
+  // to the body default (it did: the #356 opt-ins were enumerated per
+  // desktop class and missed this one).
+  it("styles the title through the header bar's mobile class", () => {
+    const { container } = renderHeader("/");
+    const title = container.querySelector(".header > .header-title-mobile");
+    expect(title).toHaveTextContent("Kari Davidson");
+  });
 
   it("toggles the mobile menu open when the hamburger is clicked", async () => {
     const { setShowingMobileMenu } = renderHeader("/", {
@@ -131,30 +125,5 @@ describe("Header on mobile", () => {
     button.focus();
     await userEvent.keyboard("{Enter}");
     expect(setShowingMobileMenu).toHaveBeenCalledWith(true);
-  });
-});
-
-describe("Header on /admin", () => {
-  it("shows the admin title and the signed-in user section", async () => {
-    renderHeader("/admin");
-    expect(screen.getByText("Kari Davidson - Admin")).toBeInTheDocument();
-    expect(await screen.findByText("User section stub")).toBeInTheDocument();
-  });
-
-  it("shows the admin header on nested admin routes", async () => {
-    renderHeader("/admin/haiku/h1");
-    expect(screen.getByText("Kari Davidson - Admin")).toBeInTheDocument();
-    expect(await screen.findByText("User section stub")).toBeInTheDocument();
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
-  });
-});
-
-describe("Header on public routes", () => {
-  it("never mounts the Auth0-backed user section", async () => {
-    renderHeader("/haiku");
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    expect(screen.queryByText("User section stub")).toBeNull();
   });
 });

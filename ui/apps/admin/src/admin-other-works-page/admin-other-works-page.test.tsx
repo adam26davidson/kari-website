@@ -1,17 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { AdminOtherWorksPage } from "./admin-other-works-page";
-import { BlogPost } from "../../../models";
-import { BlogService } from "../../../services/blog";
-import { ImageService } from "../../../services/images";
-import { TokenGetter } from "../../../services/http";
+import { BlogPost } from "@kari/shared/models";
+import { BlogService } from "@kari/shared/services/blog";
+import { ImageService } from "@kari/shared/services/images";
+import { TokenGetter } from "@kari/shared/services/http";
 import { answerYes, renderAdminPage } from "../admin-ui-test-helpers";
 import {
   applyTimeZone,
   restoreHostTimeZoneAfterEach,
-} from "../../../test/timezone";
+} from "@kari/shared/test/timezone";
 
-vi.mock("../../../services/blog", () => ({
+vi.mock("@kari/shared/services/blog", () => ({
   BlogService: {
     getListFromApi: vi.fn(),
     updateList: vi.fn(),
@@ -21,14 +21,14 @@ vi.mock("../../../services/blog", () => ({
   },
 }));
 
-vi.mock("../../../services/images", () => ({
+vi.mock("@kari/shared/services/images", () => ({
   ImageService: {
     upload: vi.fn(),
     setPublished: vi.fn(),
   },
 }));
 
-vi.mock("../../../hooks/use-admin-token", () => ({
+vi.mock("../hooks/use-admin-token", () => ({
   useAdminToken: () => async () => "token",
 }));
 
@@ -111,7 +111,7 @@ const savedContent =
 async function renderPage(initialEntry?: string) {
   const { container, adminUi, router } = renderAdminPage(
     <AdminOtherWorksPage />,
-    "/admin/other-works/:id?",
+    "/other-works/:id?",
     initialEntry,
   );
   const notify = adminUi.notify;
@@ -955,7 +955,7 @@ describe("AdminOtherWorksPage search", () => {
     // The clicked title addresses its post by id, so filtering the list
     // down to a single row still opens that row's post and not the first
     // post of the unfiltered list.
-    expect(router.state.location.pathname).toBe("/admin/other-works/b2");
+    expect(router.state.location.pathname).toBe("/other-works/b2");
   });
 });
 
@@ -1025,7 +1025,7 @@ describe("AdminOtherWorksPage load failure", () => {
     );
     const { container } = renderAdminPage(
       <AdminOtherWorksPage />,
-      "/admin/other-works/:id?",
+      "/other-works/:id?",
     );
 
     await screen.findByText("Failed to load other works.");
@@ -1059,7 +1059,7 @@ describe("AdminOtherWorksPage closing the editor", () => {
 
 describe("AdminOtherWorksPage routing", () => {
   it("keeps the search filter through the editor round trip", async () => {
-    const { container, router } = await renderPage("/admin/other-works?q=post");
+    const { container, router } = await renderPage("/other-works?q=post");
 
     fireEvent.click(iconButton(container, "pencil"));
     await screen.findByPlaceholderText("post content");
@@ -1077,14 +1077,14 @@ describe("AdminOtherWorksPage routing", () => {
     fireEvent.click(iconButton(container, "pencil"));
     await screen.findByPlaceholderText("post content");
 
-    expect(router.state.location.pathname).toBe("/admin/other-works/b1");
+    expect(router.state.location.pathname).toBe("/other-works/b1");
   });
 
   it("opens the editor directly from an editor URL", async () => {
     renderAdminPage(
       <AdminOtherWorksPage />,
-      "/admin/other-works/:id?",
-      "/admin/other-works/b1",
+      "/other-works/:id?",
+      "/other-works/b1",
     );
 
     expect(await screen.findByPlaceholderText("post content")).toHaveValue(
@@ -1095,13 +1095,13 @@ describe("AdminOtherWorksPage routing", () => {
   it("falls back to the list for an unknown editor URL", async () => {
     const { container, router } = renderAdminPage(
       <AdminOtherWorksPage />,
-      "/admin/other-works/:id?",
-      "/admin/other-works/no-such-id",
+      "/other-works/:id?",
+      "/other-works/no-such-id",
     );
 
     await waitFor(() => iconButton(container, "pencil"));
     await waitFor(() =>
-      expect(router.state.location.pathname).toBe("/admin/other-works"),
+      expect(router.state.location.pathname).toBe("/other-works"),
     );
   });
 
@@ -1117,7 +1117,7 @@ describe("AdminOtherWorksPage routing", () => {
       expect(notify).toHaveBeenCalledWith("Failed to load content", "error"),
     );
     await waitFor(() =>
-      expect(router.state.location.pathname).toBe("/admin/other-works"),
+      expect(router.state.location.pathname).toBe("/other-works"),
     );
     iconButton(container, "pencil");
   });

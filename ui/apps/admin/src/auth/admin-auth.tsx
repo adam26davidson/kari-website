@@ -2,26 +2,21 @@ import { Auth0Provider, useAuth0 } from "@auth0/auth0-react";
 import { ReactNode } from "react";
 import { faUser, faRightFromBracket } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { SiteButton } from "../components/site-button/site-button";
+import { SiteButton } from "@kari/shared/components/site-button/site-button";
 
 /**
- * Every piece of the app that talks to Auth0 from outside the /admin
- * route tree lives here, in one module, so `@auth0/auth0-react` lands in
- * a chunk of its own that only admin routes ever fetch (issue #272 — the
- * SDK was 212 kB of the 514 kB entry chunk that every visitor
- * downloaded). Import it through `lazy-admin-auth.ts`, never directly:
- * a static import from app.tsx or header.tsx puts the SDK straight back
- * into the entry chunk.
+ * Everything in this app that talks to Auth0. It used to be reached through
+ * a lazy chunk so that `@auth0/auth0-react` never reached a public visitor
+ * (issue #272 — the SDK was 212 kB of the 514 kB entry chunk everyone
+ * downloaded). The admin is its own build now (#591), so that separation is
+ * structural and these can be imported normally.
  */
 
 /**
- * Auth0 session boundary for the admin section. Rendered around the whole
- * app shell — including the header — but only while an /admin route is
- * active, so `useAuth0` has a provider wherever admin code runs and
- * public pages carry none of it.
+ * Auth0 session boundary, mounted around the whole admin app in main.tsx —
+ * the header included, since it renders the signed-in user outside the
+ * route outlet.
  */
-// `children` is optional so the component type stays assignable to
-// React's bare `ComponentType`, which is what `lazyWithRetry` accepts.
 export function AdminAuthProvider({ children }: { children?: ReactNode }) {
   return (
     <Auth0Provider
@@ -43,11 +38,7 @@ export function AdminAuthProvider({ children }: { children?: ReactNode }) {
   );
 }
 
-/**
- * The signed-in user and logout control shown in the admin header. Lives
- * here rather than in header.tsx because it is the header's only use of
- * Auth0, and header.tsx renders on every public page.
- */
+/** The signed-in user and logout control shown in the admin header. */
 export function HeaderUserSection() {
   const { user, isAuthenticated, isLoading, logout } = useAuth0();
 

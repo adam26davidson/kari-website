@@ -1,8 +1,8 @@
-import { PhotographyPost } from "../../../../models";
+import { PhotographyPost } from "@kari/shared/models";
 import {
   onS3ImageError,
   s3ImageUrl,
-} from "../../../../utils/image-management-helpers";
+} from "@kari/shared/utils/image-management-helpers";
 import "./photography-post-content.css";
 
 export function PhotographyPostContent({ post }: { post: PhotographyPost }) {

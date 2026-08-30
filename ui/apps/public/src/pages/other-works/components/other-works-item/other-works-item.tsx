@@ -1,11 +1,11 @@
 import "./other-works-item.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { BlogService } from "../../../../services/blog";
-import { BlogPost as BlogPostData } from "../../../../models";
-import { LoadError } from "../../../../components/load-error/load-error";
-import { formatPostDate } from "../../../../utils/date-helpers";
-import { fallBackToLegacyS3Image } from "../../../../utils/image-management-helpers";
+import { BlogService } from "@kari/shared/services/blog";
+import { BlogPost as BlogPostData } from "@kari/shared/models";
+import { LoadError } from "@kari/shared/components/load-error/load-error";
+import { formatPostDate } from "@kari/shared/utils/date-helpers";
+import { fallBackToLegacyS3Image } from "@kari/shared/utils/image-management-helpers";
 
 export function OtherWorksItem({ id }: { id: string }) {
   const [isLoading, setIsLoading] = useState<boolean>(true);

@@ -98,7 +98,7 @@ body::before {
   left: 0;
   width: 100%;
   height: 100%;
-  background-image: url("assets/petals_on_ground.webp");
+  background-image: url("../assets/petals_on_ground.webp");
   background-size: cover; /* Scale to fill any viewport, no tiling seam */
   background-position: center;
   background-repeat: no-repeat;
@@ -110,7 +110,7 @@ body::before {
 /* Smaller variant (~51 kB vs ~146 kB) for narrow viewports */
 @media (max-width: 960px) {
   body::before {
-    background-image: url("assets/petals_on_ground_960.webp");
+    background-image: url("../assets/petals_on_ground_960.webp");
   }
 }
 

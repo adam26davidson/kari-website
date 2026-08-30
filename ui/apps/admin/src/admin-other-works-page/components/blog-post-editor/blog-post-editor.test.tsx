@@ -3,11 +3,11 @@ import { readFileSync } from "node:fs";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BlogPostEditor } from "./blog-post-editor";
-import { BlogPost } from "../../../../../models";
+import { BlogPost } from "@kari/shared/models";
 import {
   applyTimeZone,
   restoreHostTimeZoneAfterEach,
-} from "../../../../../test/timezone";
+} from "@kari/shared/test/timezone";
 
 // The rich-text editor pulls in the whole tiptap stack; stub it with a
 // plain textarea so the tests exercise only BlogPostEditor's own logic.
@@ -176,7 +176,7 @@ describe("BlogPostEditor", () => {
   // and it paints it system blue — the only blue on a screen of warm
   // browns. jsdom applies no stylesheet, so the tint is read from the CSS.
   it("tints the checkbox with the admin's own colour, not the browser's", () => {
-    const adminCss = readFileSync("src/pages/admin/admin.css", "utf-8").replace(
+    const adminCss = readFileSync("apps/admin/src/admin.css", "utf-8").replace(
       /\/\*[\s\S]*?\*\//g,
       "",
     );

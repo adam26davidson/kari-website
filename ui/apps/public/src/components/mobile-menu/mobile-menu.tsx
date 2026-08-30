@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router";
-import "./mobile-menu.css";
-import { PAGES } from "../../constants";
+import "@kari/shared/styles/mobile-menu.css";
+import { PAGES } from "@kari/shared/constants";
 
 export function MobileMenu({
   setShowingMobileMenu,
@@ -23,6 +23,13 @@ export function MobileMenu({
           {page.name}
         </Link>
       ))}
+      {/* Plain anchor, like the desktop header's: /admin is a separate
+          application, so it is a full page load rather than a client-side
+          navigation. Without it the admin section is unreachable on a
+          phone, where the nav bar is collapsed into this menu. */}
+      <a href="/admin" className="mobile-menu-item">
+        Admin
+      </a>
     </div>
   );
 }

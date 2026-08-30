@@ -5,18 +5,18 @@ import { createBrowserRouter } from "react-router";
 // RouterProvider comes from the DOM entry point: it is the one export that
 // depends on react-dom (it uses flushSync for transition-aware updates).
 import { RouterProvider } from "react-router/dom";
-import "./index.css";
+import "@kari/shared/styles/index.css";
 
-// A data router (not <BrowserRouter>) so useBlocker can hold navigations
-// while an admin editor has unsaved changes. App keeps owning the route
-// tree via descendant <Routes>.
-// The six v7_* future flags this file carried on v6 are all default
-// behaviour in v7, so the options object goes away with them.
+// A data router (not <BrowserRouter>). App keeps owning the route tree via
+// descendant <Routes>.
+// The reason for the data router was the admin unsaved-changes guard's
+// useBlocker, which now lives in the admin app; #533 tracks dropping it
+// here and getting ~56 kB of the entry chunk back.
 const router = createBrowserRouter([{ path: "*", element: <App /> }]);
 
-// No Auth0Provider here: App mounts one from a lazy chunk while an /admin
-// route is active (auth/admin-auth.tsx), so the SDK stays out of the entry
-// bundle that every visitor downloads. Issue #272.
+// No Auth0 anywhere in this app: the admin section is its own build, served
+// under /admin (issue #591). Issue #272 is what put the SDK behind a lazy
+// chunk before that; the split makes it structural.
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <RouterProvider router={router} />

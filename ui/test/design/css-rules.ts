@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 // A tiny stylesheet reader shared by the CSS-invariant tests
 // (type-scale.test.ts, viewport-shell.test.ts). Those tests assert on what
@@ -15,21 +16,39 @@ import { readFileSync, readdirSync } from "node:fs";
 // and "declared unconditionally" are different claims: a declaration inside
 // `@supports (height: 100dvh)` applies only where that unit is understood.
 
-const SRC = "src";
+// Every workspace's stylesheets, not one app's: several of these invariants
+// are cross-app claims (the admin panels use the same tint as the public
+// card; both shells size themselves the same way), so the reader has to see
+// apps/public, apps/admin and packages/shared alike. Resolved from this
+// file's own location so the paths never depend on the working directory
+// vitest happens to run in.
+const UI_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
-/** Every CSS file under src/, as repo-relative paths. */
+/** Where the stylesheets live, as ui-relative directory paths. */
+const SOURCE_DIRS = [
+  "apps/public/src",
+  "apps/admin/src",
+  "packages/shared/src",
+];
+
+/** The shared stylesheet holding the tokens and the app shell. */
+export const INDEX_CSS = "packages/shared/src/styles/index.css";
+
+/** Every CSS file under `dir`, as ui-relative paths. */
 function cssFiles(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const path = `${dir}/${entry.name}`;
-    if (entry.isDirectory()) return cssFiles(path);
-    return entry.isFile() && entry.name.endsWith(".css") ? [path] : [];
-  });
+  return readdirSync(`${UI_ROOT}${dir}`, { withFileTypes: true }).flatMap(
+    (entry) => {
+      const path = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) return cssFiles(path);
+      return entry.isFile() && entry.name.endsWith(".css") ? [path] : [];
+    },
+  );
 }
 
 // Comments are stripped so an explanatory `/* ... */` between declarations
 // can't hide the declaration that follows it from the regexes above it.
 const read = (path: string) =>
-  readFileSync(path, "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
+  readFileSync(`${UI_ROOT}${path}`, "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
 
 export interface Rule {
   file: string;
@@ -93,8 +112,8 @@ function parse(file: string, css: string): Rule[] {
 }
 
 /** Every rule in every stylesheet, flattened (at-rule wrappers included). */
-export const RULES: Rule[] = cssFiles(SRC).flatMap((file) =>
-  parse(file, read(file)),
+export const RULES: Rule[] = SOURCE_DIRS.flatMap((dir) =>
+  cssFiles(dir).flatMap((file) => parse(file, read(file))),
 );
 
 /** The first value a block declares for `property`, trimmed. */
@@ -151,7 +170,7 @@ export const declaring = (property: string): Array<[string, string]> =>
   });
 
 /**
- * The UNCONDITIONAL rule in `src/index.css` whose selector is exactly
+ * The UNCONDITIONAL rule in the shared index.css whose selector is exactly
  * `selector` — an at-rule-wrapped rule for the same selector is a different
  * claim (it applies only where its condition holds), so callers that want
  * one ask `RULES` for it by its `atRules`.
@@ -159,7 +178,7 @@ export const declaring = (property: string): Array<[string, string]> =>
 export function indexRule(selector: string): Rule {
   const rule = RULES.find(
     (candidate) =>
-      candidate.file === `${SRC}/index.css` &&
+      candidate.file === INDEX_CSS &&
       candidate.selector === selector &&
       candidate.atRules.length === 0,
   );

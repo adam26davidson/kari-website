@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { RULES, declarations, indexRule, label } from "./css-rules";
+import {
+  INDEX_CSS,
+  RULES,
+  declarations,
+  indexRule,
+  label,
+} from "./css-rules";
 
 // The mobile double-scroll bug (#558).
 //
@@ -61,7 +67,7 @@ interface Site {
 }
 
 /**
- * Every bare-`vh` declaration in every stylesheet under src/, paired with
+ * Every bare-`vh` declaration in every workspace stylesheet, paired with
  * whether a later declaration in the SAME block restates the same property
  * in `dvh`. Later wins wherever `dvh` is understood, so this is both the
  * "use the dynamic unit" rule and the "keep the fallback first" rule.
@@ -101,7 +107,7 @@ describe("the viewport shell", () => {
   it("keeps the document out of the scrolling wherever dvh applies", () => {
     const gated = RULES.filter(
       (rule) =>
-        rule.file === "src/index.css" &&
+        rule.file === INDEX_CSS &&
         rule.selector === "body" &&
         rule.atRules.includes(SHELL_GATE),
     );

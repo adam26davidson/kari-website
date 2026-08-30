@@ -2,28 +2,28 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HomePageEditor } from "./home-page-editor";
-import { ImageService } from "../../../services/images";
-import { HomePageService } from "../../../services/home-page";
+import { ImageService } from "@kari/shared/services/images";
+import { HomePageService } from "@kari/shared/services/home-page";
 import {
   answerNo,
   answerYes,
   renderAdminPage,
 } from "../admin-ui-test-helpers";
 
-vi.mock("../../../services/images", () => ({
+vi.mock("@kari/shared/services/images", () => ({
   ImageService: {
     upload: vi.fn(),
   },
 }));
 
-vi.mock("../../../services/home-page", () => ({
+vi.mock("@kari/shared/services/home-page", () => ({
   HomePageService: {
     getFromApi: vi.fn(),
     update: vi.fn(),
   },
 }));
 
-vi.mock("../../../hooks/use-admin-token", () => ({
+vi.mock("../hooks/use-admin-token", () => ({
   useAdminToken: () => async () => "token",
 }));
 
@@ -31,7 +31,7 @@ vi.mock("../../../hooks/use-admin-token", () => ({
 // guard needs a data router, and the /admin/:section pattern also matches
 // /admin/haiku, giving the guard tests somewhere to navigate to.
 function renderPage() {
-  return renderAdminPage(<HomePageEditor />, "/admin/:section", "/admin/home");
+  return renderAdminPage(<HomePageEditor />, "/:section", "/home");
 }
 
 // Renders the editor and picks a replacement photo — the state right
@@ -173,10 +173,10 @@ describe("HomePageEditor unsaved-changes guard", () => {
     await screen.findByDisplayValue("hello");
 
     await act(async () => {
-      router.navigate("/admin/haiku");
+      router.navigate("/haiku");
     });
 
-    expect(router.state.location.pathname).toBe("/admin/haiku");
+    expect(router.state.location.pathname).toBe("/haiku");
     expect(adminUi.confirm).not.toHaveBeenCalled();
   });
 
@@ -186,7 +186,7 @@ describe("HomePageEditor unsaved-changes guard", () => {
     fireEvent.change(textarea, { target: { value: "changed blurb" } });
 
     await act(async () => {
-      router.navigate("/admin/haiku");
+      router.navigate("/haiku");
     });
 
     expect(adminUi.confirm).toHaveBeenCalledWith(
@@ -195,7 +195,7 @@ describe("HomePageEditor unsaved-changes guard", () => {
       expect.any(Function),
     );
     await answerNo(adminUi);
-    expect(router.state.location.pathname).toBe("/admin/home");
+    expect(router.state.location.pathname).toBe("/home");
     expect(screen.getByDisplayValue("changed blurb")).toBeInTheDocument();
   });
 
@@ -203,7 +203,7 @@ describe("HomePageEditor unsaved-changes guard", () => {
     const { adminUi, router } = await renderAndPickImage();
 
     await act(async () => {
-      router.navigate("/admin/haiku");
+      router.navigate("/haiku");
     });
 
     expect(adminUi.confirm).toHaveBeenCalledWith(
@@ -212,7 +212,7 @@ describe("HomePageEditor unsaved-changes guard", () => {
       expect.any(Function),
     );
     await answerYes(adminUi);
-    expect(router.state.location.pathname).toBe("/admin/haiku");
+    expect(router.state.location.pathname).toBe("/haiku");
     expect(HomePageService.update).not.toHaveBeenCalled();
   });
 
@@ -225,10 +225,10 @@ describe("HomePageEditor unsaved-changes guard", () => {
     await waitFor(() => expect(notify).toHaveBeenCalledWith("Home page saved"));
 
     await act(async () => {
-      router.navigate("/admin/haiku");
+      router.navigate("/haiku");
     });
 
-    expect(router.state.location.pathname).toBe("/admin/haiku");
+    expect(router.state.location.pathname).toBe("/haiku");
     expect(adminUi.confirm).not.toHaveBeenCalled();
   });
 
@@ -246,7 +246,7 @@ describe("HomePageEditor unsaved-changes guard", () => {
     );
 
     await act(async () => {
-      router.navigate("/admin/haiku");
+      router.navigate("/haiku");
     });
 
     expect(adminUi.confirm).toHaveBeenCalledWith(
@@ -255,6 +255,6 @@ describe("HomePageEditor unsaved-changes guard", () => {
       expect.any(Function),
     );
     await answerNo(adminUi);
-    expect(router.state.location.pathname).toBe("/admin/home");
+    expect(router.state.location.pathname).toBe("/home");
   });
 });

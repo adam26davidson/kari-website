@@ -32,7 +32,7 @@ function renderList(overrides?: {
   const router = createMemoryRouter(
     [
       {
-        path: "/admin/things",
+        path: "/things",
         element: (
           <AdminItemList
             items={items}
@@ -54,7 +54,7 @@ function renderList(overrides?: {
       },
       { path: "*", element: <p>elsewhere</p> },
     ],
-    { initialEntries: overrides?.entries ?? ["/admin/things"] },
+    { initialEntries: overrides?.entries ?? ["/things"] },
   );
   const utils = render(<RouterProvider router={router} />);
   return { ...utils, onNewItem, onDelete, onMove, router };
@@ -77,9 +77,9 @@ const strip = (path: string) =>
   readFileSync(path, "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
 
 const listCss = strip(
-  "src/pages/admin/components/admin-item-list/admin-item-list.css",
+  "apps/admin/src/components/admin-item-list/admin-item-list.css",
 );
-const adminCss = strip("src/pages/admin/admin.css");
+const adminCss = strip("apps/admin/src/admin.css");
 
 /** Everything inside the narrow-viewport media query. */
 const atPhoneWidth = (() => {
@@ -331,7 +331,7 @@ describe("AdminItemList", () => {
 
   describe("the query in the URL", () => {
     it("filters from the ?q= the page was opened with", () => {
-      renderList({ ...searchable, entries: ["/admin/things?q=beta"] });
+      renderList({ ...searchable, entries: ["/things?q=beta"] });
       expect(
         screen.getByRole("searchbox", { name: "Search things" }),
       ).toHaveValue("beta");
@@ -348,7 +348,7 @@ describe("AdminItemList", () => {
     it("drops ?q= entirely when the box is cleared", () => {
       const { router } = renderList({
         ...searchable,
-        entries: ["/admin/things?q=beta"],
+        entries: ["/things?q=beta"],
       });
       search("");
       expect(router.state.location.search).toBe("");
@@ -357,7 +357,7 @@ describe("AdminItemList", () => {
     it("leaves any other query parameter alone", () => {
       const { router } = renderList({
         ...searchable,
-        entries: ["/admin/things?ref=email"],
+        entries: ["/things?ref=email"],
       });
       search("beta");
       expect(router.state.location.search).toBe("?ref=email&q=beta");
@@ -366,7 +366,7 @@ describe("AdminItemList", () => {
     it("replaces history while typing, so back leaves the list", () => {
       const { router } = renderList({
         ...searchable,
-        entries: ["/somewhere-else", "/admin/things"],
+        entries: ["/somewhere-else", "/things"],
       });
       search("b");
       search("be");
@@ -378,7 +378,7 @@ describe("AdminItemList", () => {
     });
 
     it("ignores ?q= when the list has no search box", () => {
-      renderList({ entries: ["/admin/things?q=beta"] });
+      renderList({ entries: ["/things?q=beta"] });
       expect(screen.getByText("alpha")).toBeInTheDocument();
       expect(screen.getByText("gamma")).toBeInTheDocument();
     });

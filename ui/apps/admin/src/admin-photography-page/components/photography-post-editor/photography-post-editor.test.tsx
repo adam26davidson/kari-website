@@ -5,7 +5,7 @@ import { useState } from "react";
 import { MemoryRouter } from "react-router";
 import { PhotographyPostEditor } from "./photography-post-editor";
 import { EditorImage, newEditorImage } from "./editor-image";
-import { PhotographyPost } from "../../../../../models";
+import { PhotographyPost } from "@kari/shared/models";
 
 function makePost(): PhotographyPost {
   return {

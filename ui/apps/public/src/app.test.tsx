@@ -1,16 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ReactNode } from "react";
 import { MemoryRouter } from "react-router";
 import { App } from "./app";
-import { useIsMobile } from "./hooks/use-is-mobile";
-import { SiteSettingsService } from "./services/site-settings";
+import { useIsMobile } from "@kari/shared/hooks/use-is-mobile";
+import { SiteSettingsService } from "@kari/shared/services/site-settings";
 
 // App is a shell: Header + routes. Mock the lazy page modules to light
 // stubs so these tests exercise routing without pulling in every page's
-// dependency stack (BrowserRouter and Auth0Provider live in main.tsx,
-// outside App, so tests provide a MemoryRouter and mock useAuth0).
+// dependency stack (the router lives in main.tsx, outside App, so tests
+// provide a MemoryRouter).
 vi.mock("./pages/home-page/home-page", () => ({
   Home: () => <div>Home page stub</div>,
 }));
@@ -29,21 +28,7 @@ vi.mock("./pages/blog-post/blog-post-page", () => ({
 vi.mock("./pages/photography-page/photography-page", () => ({
   PhotographyPage: () => <div>Photography page stub</div>,
 }));
-vi.mock("./pages/admin/admin", () => ({
-  Admin: () => <div>Admin page stub</div>,
-}));
-// Not imported by app.tsx — the page is reachable only from inside the
-// admin shell. Stubbed anyway so that if it is ever wired up as a public
-// route again, the guard below sees a recognisable stub instead of the
-// real page (which would fetch, likely throw, and get swallowed by the
-// route error boundary).
-vi.mock(
-  "./pages/admin/admin-whats-on-test-page/admin-whats-on-test-page",
-  () => ({
-    AdminWhatsOnTestPage: () => <div>Whats-on-test page stub</div>,
-  }),
-);
-vi.mock("./hooks/use-is-mobile", () => ({
+vi.mock("@kari/shared/hooks/use-is-mobile", () => ({
   useIsMobile: vi.fn(),
 }));
 
@@ -52,22 +37,10 @@ vi.mock("./hooks/use-is-mobile", () => ({
 // reaches for a hostname that does not resolve — a real network attempt
 // per test, each one logging a fetch failure over the run's output. The
 // hook's own behaviour is covered in use-site-background.test.tsx.
-vi.mock("./services/site-settings", () => ({
+vi.mock("@kari/shared/services/site-settings", () => ({
   SiteSettingsService: {
     getFromS3: vi.fn(),
   },
-}));
-
-// The Auth0 SDK lives behind a lazy chunk that only admin routes fetch
-// (auth/lazy-admin-auth.ts). Stubbing the module behind it keeps
-// @auth0/auth0-react out of these tests entirely, and makes the boundary
-// observable: "admin auth boundary" appears exactly where the real
-// Auth0Provider would be mounted.
-vi.mock("./auth/admin-auth", () => ({
-  AdminAuthProvider: ({ children }: { children?: ReactNode }) => (
-    <div data-testid="admin-auth-boundary">{children}</div>
-  ),
-  HeaderUserSection: () => <div>User section stub</div>,
 }));
 
 function renderApp(path: string) {
@@ -103,26 +76,18 @@ describe("App", () => {
     expect(await screen.findByText("Haiku page stub")).toBeInTheDocument();
   });
 
-  it("routes nested admin paths to the admin shell", async () => {
-    renderApp("/admin/haiku/some-id");
-    expect(await screen.findByText("Admin page stub")).toBeInTheDocument();
-  });
-
-  it("mounts the Auth0 session boundary on admin routes", async () => {
-    renderApp("/admin/haiku/some-id");
-    expect(await screen.findByText("Admin page stub")).toBeInTheDocument();
-    expect(screen.getByTestId("admin-auth-boundary")).toBeInTheDocument();
-    // The header sits inside the boundary, so its user section has a
-    // session to read.
-    expect(
-      screen.getByTestId("admin-auth-boundary"),
-    ).toContainElement(screen.getByText("Kari Davidson - Admin"));
-  });
-
-  it("leaves public routes outside the Auth0 session boundary", async () => {
-    renderApp("/haiku");
-    expect(await screen.findByText("Haiku page stub")).toBeInTheDocument();
-    expect(screen.queryByTestId("admin-auth-boundary")).toBeNull();
+  // The admin section is its own application now (#591). This app has no
+  // /admin route, so the URL matches nothing and the outlet stays empty —
+  // the header's plain <a href="/admin"> is the only way there, and it
+  // leaves this SPA entirely.
+  it("registers no admin route: /admin matches nothing here", async () => {
+    const { container } = renderApp("/admin/haiku/some-id");
+    expect(screen.getByText("Kari Davidson")).toBeInTheDocument();
+    expect(screen.queryByText("Loading...")).toBeNull();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(container.querySelector(".content")).toBeEmptyDOMElement();
   });
 
   it("redirects /blog to /other-works", async () => {
@@ -132,7 +97,7 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
-  it("does not register whats-on-test as a public route (it lives under /admin)", async () => {
+  it("does not register whats-on-test as a public route (it lives in the admin app)", async () => {
     const { container } = renderApp("/whats-on-test");
     // The shell still renders; the unmatched route just shows nothing.
     expect(screen.getByText("Kari Davidson")).toBeInTheDocument();
@@ -147,7 +112,6 @@ describe("App", () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-    expect(screen.queryByText("Whats-on-test page stub")).toBeNull();
     expect(screen.queryByText(/what's on test/i)).toBeNull();
     // Nothing at all matched: the route outlet stays empty (this also
     // catches a page that rendered and then threw into the boundary).

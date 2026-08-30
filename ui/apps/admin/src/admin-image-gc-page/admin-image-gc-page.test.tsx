@@ -1,17 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, fireEvent, screen } from "@testing-library/react";
 import { AdminImageGcPage } from "./admin-image-gc-page";
-import { GcReport, ImageService } from "../../../services/images";
-import { HttpError } from "../../../services/http-error";
+import { GcReport, ImageService } from "@kari/shared/services/images";
+import { HttpError } from "@kari/shared/services/http-error";
 import { answerYes, renderWithAdminUi } from "../admin-ui-test-helpers";
 
-vi.mock("../../../services/images", () => ({
+vi.mock("@kari/shared/services/images", () => ({
   ImageService: {
     gc: vi.fn(),
   },
 }));
 
-vi.mock("../../../hooks/use-admin-token", () => ({
+vi.mock("../hooks/use-admin-token", () => ({
   useAdminToken: () => async () => "token",
 }));
 

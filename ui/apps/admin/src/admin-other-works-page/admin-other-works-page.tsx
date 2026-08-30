@@ -3,26 +3,26 @@ import "./admin-other-works-page.css";
 import "../admin.css";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate, useParams } from "react-router";
-import { BlogPost } from "../../../models";
+import { BlogPost } from "@kari/shared/models";
 import {
   moveItemByIdByOne,
   removeItemById,
-} from "../../../utils/data-list-helpers";
-import { formatPostDate, todayAsPostDate } from "../../../utils/date-helpers";
-import { BlogService } from "../../../services/blog";
-import { BlogPostSummary } from "../../../components/blog-post-summary/blog-post-summary";
+} from "@kari/shared/utils/data-list-helpers";
+import { formatPostDate, todayAsPostDate } from "@kari/shared/utils/date-helpers";
+import { BlogService } from "@kari/shared/services/blog";
+import { BlogPostSummary } from "@kari/shared/components/blog-post-summary/blog-post-summary";
 import { BlogPostEditor } from "./components/blog-post-editor/blog-post-editor";
-import { ImageService } from "../../../services/images";
-import { LoadError } from "../../../components/load-error/load-error";
+import { ImageService } from "@kari/shared/services/images";
+import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { AdminItemList } from "../components/admin-item-list/admin-item-list";
-import { useAdminToken } from "../../../hooks/use-admin-token";
+import { useAdminToken } from "../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
 import { useListUrls } from "../use-list-urls";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 import { saveBlogPost } from "./blog-post-save";
 
-const LIST_PATH = "/admin/other-works";
+const LIST_PATH = "/other-works";
 
 export function AdminOtherWorksPage() {
   const getAccessTokenSilently = useAdminToken();

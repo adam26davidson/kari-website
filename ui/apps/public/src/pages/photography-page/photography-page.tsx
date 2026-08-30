@@ -1,4 +1,4 @@
-import { PhotographyService } from "../../services/photography";
+import { PhotographyService } from "@kari/shared/services/photography";
 import { PhotographyPostContent } from "./components/photography-post-content/photography-post-content";
 import { PublicListPage } from "../../components/public-list-page/public-list-page";
 

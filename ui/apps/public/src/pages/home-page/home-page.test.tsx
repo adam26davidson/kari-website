@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Home } from "./home-page";
-import { HomePageService } from "../../services/home-page";
+import { HomePageService } from "@kari/shared/services/home-page";
 
-vi.mock("../../services/home-page", () => ({
+vi.mock("@kari/shared/services/home-page", () => ({
   HomePageService: {
     getFromS3: vi.fn(),
   },

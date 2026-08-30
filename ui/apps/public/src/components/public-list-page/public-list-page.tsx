@@ -2,8 +2,8 @@ import { ReactNode } from "react";
 import { DataList } from "../data-list/data-list";
 import { DataListItem } from "../data-list-item/data-list-item";
 import { ContentPage } from "../content-page/content-page";
-import { LoadError } from "../load-error/load-error";
-import { useS3Load } from "../../hooks/use-s3-load";
+import { LoadError } from "@kari/shared/components/load-error/load-error";
+import { useS3Load } from "@kari/shared/hooks/use-s3-load";
 
 interface PublicListPageProps<T extends { id: string }> {
   /** Stable fetcher, e.g. a static service method (see useS3Load). */

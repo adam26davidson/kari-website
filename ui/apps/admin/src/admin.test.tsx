@@ -49,12 +49,17 @@ function mockAuth(overrides?: {
   } as unknown as ReturnType<typeof useAuth0>);
 }
 
-// Mounted the way App mounts it: as the catch-all under /admin.
+// Mounted the way main.tsx mounts it: as the catch-all of a router whose
+// basename is /admin. The basename is deliberately part of the fixture --
+// every route inside this app is written as if it owned the site root, and
+// what a maintainer's browser actually shows (and what the e2e journeys
+// click) is those paths with /admin in front. Entries are therefore real
+// URLs, and the href assertions below are real hrefs.
 function renderAdmin(path: string = "/admin") {
   return render(
-    <MemoryRouter initialEntries={[path]}>
+    <MemoryRouter basename="/admin" initialEntries={[path]}>
       <Routes>
-        <Route path="/admin/*" element={<Admin />} />
+        <Route path="/*" element={<Admin />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -187,7 +192,7 @@ describe("Admin what's-on-test section (staging-only)", () => {
 describe("the admin menu at phone width", () => {
   const strip = (path: string) =>
     readFileSync(path, "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
-  const adminCss = strip("src/pages/admin/admin.css");
+  const adminCss = strip("apps/admin/src/admin.css");
   const atPhoneWidth = (() => {
     const media = adminCss.indexOf("@media (max-width: 767.98px)");
     expect(media).toBeGreaterThanOrEqual(0);

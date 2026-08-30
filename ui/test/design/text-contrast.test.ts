@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 // The public haiku/haiga/photography pages render their attribution and
 // caption lines as small secondary text on a translucent card that floats
@@ -20,10 +21,16 @@ import { readFileSync, readdirSync } from "node:fs";
 // inheritance to come out legible (#347) and the keyboard focus ring, whose
 // job is to read on every one of these surfaces at once (#501).
 
+// Paths are ui-relative and resolved from this file's own location: the
+// stylesheets these assertions span live in three workspaces (the public
+// app, the admin app and the shared package), and nothing here should
+// depend on the working directory vitest happens to run in.
+const UI_ROOT = fileURLToPath(new URL("../..", import.meta.url));
+
 // Comments are stripped so an explanatory `/* ... */` between declarations
 // can't hide the declaration that follows it from the regexes below.
 const read = (path: string) =>
-  readFileSync(`src/${path}`, "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
+  readFileSync(`${UI_ROOT}${path}`, "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
 
 /**
  * The declarations of the first rule whose selector list contains exactly
@@ -95,25 +102,26 @@ function contrastRatio(a: Rgb, b: Rgb): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-const indexCss = read("index.css");
-const dataListCss = read("components/data-list/data-list.css");
-const headerCss = read("components/header/header.css");
-const haikuCss = read("components/haiku-content/haiku-content.css");
-const haigaCss = read("components/haiga-content/haiga-content.css");
+const indexCss = read("packages/shared/src/styles/index.css");
+const dataListCss = read("apps/public/src/components/data-list/data-list.css");
+const headerCss = read("packages/shared/src/styles/header.css");
+const haikuCss = read("packages/shared/src/components/haiku-content/haiku-content.css");
+const haigaCss = read("packages/shared/src/components/haiga-content/haiga-content.css");
 const photographyCss = read(
-  "pages/photography-page/components/photography-post-content/photography-post-content.css",
+  "apps/public/src/pages/photography-page/components/" +
+    "photography-post-content/photography-post-content.css",
 );
-const adminCss = read("pages/admin/admin.css");
-const adminCardCss = read("pages/admin/components/card/card.css");
-const adminHaikuCss = read("pages/admin/admin-haiku-page/admin-haiku-page.css");
+const adminCss = read("apps/admin/src/admin.css");
+const adminCardCss = read("apps/admin/src/components/card/card.css");
+const adminHaikuCss = read("apps/admin/src/admin-haiku-page/admin-haiku-page.css");
 const adminItemListCss = read(
-  "pages/admin/components/admin-item-list/admin-item-list.css",
+  "apps/admin/src/components/admin-item-list/admin-item-list.css",
 );
 const blogPostSummaryCss = read(
-  "components/blog-post-summary/blog-post-summary.css",
+  "packages/shared/src/components/blog-post-summary/blog-post-summary.css",
 );
 const adminButtonCss = read(
-  "pages/admin/components/admin-button/admin-button.css",
+  "apps/admin/src/components/admin-button/admin-button.css",
 );
 
 /**
@@ -281,19 +289,21 @@ describe("secondary text in the admin panels", () => {
 // colour of their own. The colour therefore lives in ONE shared pair of
 // classes and every admin heading has to wear them, so the next section
 // added cannot re-acquire the bug by omission (#457).
-const ADMIN_DIR = "pages/admin";
+const ADMIN_DIR = "apps/admin/src";
 
-/** Every non-test `.tsx` under `src/pages/admin`, as `read()` paths. */
+/** Every non-test `.tsx` in the admin app, as `read()` paths. */
 function adminComponents(dir: string): string[] {
-  return readdirSync(`src/${dir}`, { withFileTypes: true }).flatMap((entry) => {
-    const path = `${dir}/${entry.name}`;
-    if (entry.isDirectory()) return adminComponents(path);
-    return entry.isFile() &&
-      entry.name.endsWith(".tsx") &&
-      !entry.name.endsWith(".test.tsx")
-      ? [path]
-      : [];
-  });
+  return readdirSync(`${UI_ROOT}${dir}`, { withFileTypes: true }).flatMap(
+    (entry) => {
+      const path = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) return adminComponents(path);
+      return entry.isFile() &&
+        entry.name.endsWith(".tsx") &&
+        !entry.name.endsWith(".test.tsx")
+        ? [path]
+        : [];
+    },
+  );
 }
 
 /** Every `<h2 ...>` opening tag in the admin tree, with its file. */

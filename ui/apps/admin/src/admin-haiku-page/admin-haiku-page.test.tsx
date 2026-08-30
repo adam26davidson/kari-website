@@ -1,18 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { AdminHaikuPage } from "./admin-haiku-page";
-import { Haiku } from "../../../models";
-import { HaikuService } from "../../../services/haiku";
+import { Haiku } from "@kari/shared/models";
+import { HaikuService } from "@kari/shared/services/haiku";
 import { answerNo, answerYes, renderAdminPage } from "../admin-ui-test-helpers";
 
-vi.mock("../../../services/haiku", () => ({
+vi.mock("@kari/shared/services/haiku", () => ({
   HaikuService: {
     getListFromApi: vi.fn(),
     updateList: vi.fn(),
   },
 }));
 
-vi.mock("../../../hooks/use-admin-token", () => ({
+vi.mock("../hooks/use-admin-token", () => ({
   useAdminToken: () => async () => "token",
 }));
 
@@ -24,7 +24,7 @@ let first: Haiku;
 let second: Haiku;
 
 function renderPage(initialEntry?: string) {
-  return renderAdminPage(<AdminHaikuPage />, "/admin/haiku/:id?", initialEntry);
+  return renderAdminPage(<AdminHaikuPage />, "/haiku/:id?", initialEntry);
 }
 
 /** Opens the first haiku's editor from the list and waits for it. */
@@ -292,11 +292,11 @@ describe("AdminHaikuPage routing", () => {
 
     await openFirstHaiku();
 
-    expect(router.state.location.pathname).toBe("/admin/haiku/h1");
+    expect(router.state.location.pathname).toBe("/haiku/h1");
   });
 
   it("opens the editor directly from an editor URL", async () => {
-    renderPage("/admin/haiku/h2");
+    renderPage("/haiku/h2");
 
     expect(await screen.findByPlaceholderText(/line 1/)).toHaveValue(
       "summer grass",
@@ -304,11 +304,11 @@ describe("AdminHaikuPage routing", () => {
   });
 
   it("falls back to the list for an unknown editor URL", async () => {
-    const { router } = renderPage("/admin/haiku/no-such-id");
+    const { router } = renderPage("/haiku/no-such-id");
 
     expect(await screen.findByText("old pond")).toBeInTheDocument();
     await waitFor(() =>
-      expect(router.state.location.pathname).toBe("/admin/haiku"),
+      expect(router.state.location.pathname).toBe("/haiku"),
     );
   });
 
@@ -331,12 +331,12 @@ describe("AdminHaikuPage routing", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
     expect(await screen.findByText("summer grass")).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe("/admin/haiku");
+    expect(router.state.location.pathname).toBe("/haiku");
     expect(adminUi.confirm).not.toHaveBeenCalled();
   });
 
   it("keeps the search filter through the editor round trip", async () => {
-    const { router } = renderPage("/admin/haiku?q=frog");
+    const { router } = renderPage("/haiku?q=frog");
     expect(await screen.findByText("old pond")).toBeInTheDocument();
     expect(screen.queryByText("summer grass")).toBeNull();
 

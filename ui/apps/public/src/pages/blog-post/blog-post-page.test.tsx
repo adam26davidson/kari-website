@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { BlogPostPage } from "./blog-post-page";
-import { BlogService } from "../../services/blog";
+import { BlogService } from "@kari/shared/services/blog";
 
-vi.mock("../../services/blog", () => ({
+vi.mock("@kari/shared/services/blog", () => ({
   BlogService: {
     getPublicListFromS3: vi.fn(),
     getSanitizedContentFromS3: vi.fn(),

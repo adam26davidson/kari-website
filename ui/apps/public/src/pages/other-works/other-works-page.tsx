@@ -1,5 +1,5 @@
-import { BlogService } from "../../services/blog";
-import { BlogPostSummary } from "../../components/blog-post-summary/blog-post-summary";
+import { BlogService } from "@kari/shared/services/blog";
+import { BlogPostSummary } from "@kari/shared/components/blog-post-summary/blog-post-summary";
 import { PublicListPage } from "../../components/public-list-page/public-list-page";
 
 // Public list of blog posts. Renders one summary per published post, each

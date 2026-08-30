@@ -6,7 +6,7 @@ import {
   planContentSave,
   saveBlogPost,
 } from "./blog-post-save";
-import { BlogPost } from "../../../models";
+import { BlogPost } from "@kari/shared/models";
 
 const apiImg = (id: string) => `https://api.test.local/images/${id}`;
 // Public URLs name the original inside the image's own directory (#273).

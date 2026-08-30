@@ -1,6 +1,6 @@
-import { TitleLink } from "../../../../../components/title-link/title-link";
-import { PhotographyPost } from "../../../../../models";
-import { apiImageUrl } from "../../../../../utils/image-management-helpers";
+import { TitleLink } from "@kari/shared/components/title-link/title-link";
+import { PhotographyPost } from "@kari/shared/models";
+import { apiImageUrl } from "@kari/shared/utils/image-management-helpers";
 import "./photography-post-summary.css";
 
 export function PhotographyPostSummary({

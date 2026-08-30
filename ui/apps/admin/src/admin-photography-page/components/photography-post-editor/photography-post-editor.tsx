@@ -1,12 +1,12 @@
 import { useId } from "react";
-import { PhotographyPost } from "../../../../../models";
+import { PhotographyPost } from "@kari/shared/models";
 import { AdminItemList } from "../../../components/admin-item-list/admin-item-list";
 import { DataEditor } from "../../../components/data-editor/data-editor";
 import { PhotoPicker } from "../../../components/photo-picker/photo-picker";
 import {
   moveItemByIdByOne,
   removeItemById,
-} from "../../../../../utils/data-list-helpers";
+} from "@kari/shared/utils/data-list-helpers";
 import { EditorImage, newEditorImage } from "./editor-image";
 import "./photography-post-editor.css";
 

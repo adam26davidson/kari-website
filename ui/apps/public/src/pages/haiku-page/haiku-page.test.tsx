@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HaikuPage } from "./haiku-page";
-import { HaikuService } from "../../services/haiku";
+import { HaikuService } from "@kari/shared/services/haiku";
 
-vi.mock("../../services/haiku", () => ({
+vi.mock("@kari/shared/services/haiku", () => ({
   HaikuService: {
     getListFromS3: vi.fn(),
   },

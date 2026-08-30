@@ -1,26 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { AdminPhotographyPage } from "./admin-photography-page";
-import { PhotographyPost } from "../../../models";
-import { PhotographyService } from "../../../services/photography";
-import { TokenGetter } from "../../../services/http";
-import { ImageService } from "../../../services/images";
+import { PhotographyPost } from "@kari/shared/models";
+import { PhotographyService } from "@kari/shared/services/photography";
+import { TokenGetter } from "@kari/shared/services/http";
+import { ImageService } from "@kari/shared/services/images";
 import { answerYes, renderAdminPage } from "../admin-ui-test-helpers";
 
-vi.mock("../../../services/photography", () => ({
+vi.mock("@kari/shared/services/photography", () => ({
   PhotographyService: {
     getListFromApi: vi.fn(),
     updateList: vi.fn(),
   },
 }));
 
-vi.mock("../../../services/images", () => ({
+vi.mock("@kari/shared/services/images", () => ({
   ImageService: {
     upload: vi.fn(),
   },
 }));
 
-vi.mock("../../../hooks/use-admin-token", () => ({
+vi.mock("../hooks/use-admin-token", () => ({
   useAdminToken: () => async () => "token",
 }));
 
@@ -60,7 +60,7 @@ let savedPost: PhotographyPost;
 async function renderPage(initialEntry?: string) {
   const { container, adminUi, router } = renderAdminPage(
     <AdminPhotographyPage />,
-    "/admin/photography/:id?",
+    "/photography/:id?",
     initialEntry,
   );
   const notify = adminUi.notify;
@@ -422,7 +422,7 @@ describe("AdminPhotographyPage search", () => {
     // The clicked title addresses its post by id, so filtering the list
     // down to a single row still opens that row's post and not the first
     // post of the unfiltered list.
-    expect(router.state.location.pathname).toBe("/admin/photography/p2");
+    expect(router.state.location.pathname).toBe("/photography/p2");
   });
 });
 
@@ -433,7 +433,7 @@ describe("AdminPhotographyPage load failure", () => {
     );
     const { container } = renderAdminPage(
       <AdminPhotographyPage />,
-      "/admin/photography/:id?",
+      "/photography/:id?",
     );
 
     await screen.findByText("Failed to load photography posts.");
@@ -464,7 +464,7 @@ describe("AdminPhotographyPage closing the editor", () => {
 
 describe("AdminPhotographyPage routing", () => {
   it("keeps the search filter through the editor round trip", async () => {
-    const { container, router } = await renderPage("/admin/photography?q=post");
+    const { container, router } = await renderPage("/photography?q=post");
 
     fireEvent.click(iconButton(container, "pencil"));
     await screen.findByLabelText("Title");
@@ -480,14 +480,14 @@ describe("AdminPhotographyPage routing", () => {
     fireEvent.click(iconButton(container, "pencil"));
     await screen.findByLabelText("Title");
 
-    expect(router.state.location.pathname).toBe("/admin/photography/p1");
+    expect(router.state.location.pathname).toBe("/photography/p1");
   });
 
   it("opens the editor directly from an editor URL", async () => {
     renderAdminPage(
       <AdminPhotographyPage />,
-      "/admin/photography/:id?",
-      "/admin/photography/p1",
+      "/photography/:id?",
+      "/photography/p1",
     );
 
     expect(await screen.findByLabelText("Title")).toHaveValue("A Post");
@@ -496,13 +496,13 @@ describe("AdminPhotographyPage routing", () => {
   it("falls back to the list for an unknown editor URL", async () => {
     const { container, router } = renderAdminPage(
       <AdminPhotographyPage />,
-      "/admin/photography/:id?",
-      "/admin/photography/no-such-id",
+      "/photography/:id?",
+      "/photography/no-such-id",
     );
 
     await waitFor(() => iconButton(container, "pencil"));
     await waitFor(() =>
-      expect(router.state.location.pathname).toBe("/admin/photography"),
+      expect(router.state.location.pathname).toBe("/photography"),
     );
   });
 

@@ -3,7 +3,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useId, useState } from "react";
 import "./photo-picker.css";
 import { AdminButton } from "../admin-button/admin-button";
-import { apiImageUrl } from "../../../../utils/image-management-helpers";
+import { apiImageUrl } from "@kari/shared/utils/image-management-helpers";
 
 export function PhotoPicker({
   imageFile,

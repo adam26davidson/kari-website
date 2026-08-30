@@ -3,9 +3,9 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { OtherWorksItem } from "./other-works-item";
-import { BlogService } from "../../../../services/blog";
+import { BlogService } from "@kari/shared/services/blog";
 
-vi.mock("../../../../services/blog", () => ({
+vi.mock("@kari/shared/services/blog", () => ({
   BlogService: {
     getPublicListFromS3: vi.fn(),
     getSanitizedContentFromS3: vi.fn(),

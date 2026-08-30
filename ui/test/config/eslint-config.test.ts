@@ -57,7 +57,7 @@ describe("eslint config ignore patterns", () => {
     await expect(eslint.isPathIgnored(path)).resolves.toBe(true);
   });
 
-  it.each(["src/main.tsx", "e2e/screenshots.mjs", "eslint.config.js"])(
+  it.each(["apps/public/src/main.tsx", "e2e/screenshots.mjs", "eslint.config.js"])(
     "still lints checked-in source %s",
     async (path) => {
       await expect(eslint.isPathIgnored(path)).resolves.toBe(false);
