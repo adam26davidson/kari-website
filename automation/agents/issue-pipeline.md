@@ -419,22 +419,33 @@ next tick see the branch as it was left, not as a race. The released
 issues are ordinary candidates from the next tick on, when step 6
 hands over the kept branch and/or patch.
 
-1. `gh issue list --state open --limit 500 --json
-   number,title,labels,body,createdAt`. Both flags are load-bearing and
-   neither is optional: `gh issue list` defaults to **30** results
-   ordered newest-first, so without `--limit` the older half of an
-   88-issue backlog is never in the list at all — not evaluated and
-   rejected, simply unseen — and without `createdAt` the only ordering
-   signal in the JSON is the issue number, which leaves step 3's
-   "oldest first" resting on an inference rather than on the data
-   (#484). Never drop either one, and never substitute a smaller limit:
-   the whole open backlog is the candidate set. Discard issues with any
-   of these labels: `in progress`, `has-dependencies`,
+1. Run `automation/backlog-shortlist.sh` (from the repo root) and read
+   its JSON: that is the candidate set. It paginates the WHOLE open
+   backlog through the REST API — no `--limit` to under-read it the
+   way `gh issue list` can (#484), and no lagging search index — then
+   drops issues carrying `in progress`, `has-dependencies`,
    `needs-clarification`, `idea`, `blocked`, `needs-human` (an ask
-   waiting on the maintainer is not work) — and issues whose claim was
-   released this tick (above).
-2. Read the remaining candidates fully (`gh issue view <n> --comments`).
-   Judge readiness: is the desired outcome unambiguous enough to build
+   waiting on the maintainer is not work) or `duplicate`, and emits
+   four slices, each sorted oldest-first by `created_at` (the issue
+   number is a proxy, never the ordering key — #484):
+   - `bugs` — everything labelled `bug`, whatever else it carries;
+   - `maintainer` — product work with no `automation` label: filed by
+     a human, not the fleet;
+   - `product` — agent-filed product work, oldest ~20;
+   - `tooling` — machinery work, oldest ~10.
+   The `*_omitted` counts say what the caps dropped — quote them in
+   the run summary so a capped view is visible instead of silent.
+   Discard, additionally, issues whose claim was released this tick
+   (above). If the script fails, skip Phase B this tick and report it:
+   never fall back to a bare `gh issue list`, whose defaults (30
+   results, newest first) are exactly the silent truncation the script
+   exists to prevent.
+2. Walk the slices in step 3's order, reading a candidate fully
+   (`gh issue view <n> --comments`) only when you reach it, and stop
+   reading once you have your selection(s) — the shortlist exists so a
+   tick reads a handful of issues, not ~130 bodies every 4 hours.
+   For each candidate you reach, judge readiness: is the desired
+   outcome unambiguous enough to build
    without product decisions you'd be guessing at? If not, post ONE
    comment asking the specific blocking questions and add the
    `needs-clarification` label (create it if missing:
@@ -450,52 +461,45 @@ hands over the kept branch and/or patch.
    posting the same comment again; a human removes it when they refresh
    the issue. Never comment without labelling.
 3. From the ready issues, select up to (MAX_IN_FLIGHT − in-flight)
-   workers. Order: `next-up` first, then product work first when the
-   machinery is smooth, then oldest first (there is no readiness label
-   to prefer — `has-dependencies` is the only marker, and it is a hard
-   skip in step 1). "Oldest" everywhere below means the earliest
-   `createdAt` from step 1, never the lowest issue number: the number
-   is a proxy that happens to be monotonic, and reading it as the
-   ordering key is what let a truncated candidate list look like a
-   working oldest-first rule for three days (#484). Concretely:
+   workers, walking the slices in this order (within a slice, oldest
+   first — always by `created_at`, never by issue number, #484):
 
-   `next-up` is the backlog groomer's pick
-   (`automation/agents/backlog-grooming.md`): at most three open,
-   unclaimed issues a curating tick judged should go before the
-   ordering below — a visible defect, the prerequisite of several other
-   issues. (An issue keeps `next-up` once you claim it, so a `next-up`
-   issue carrying `in progress` is simply one already in flight.) A ready
-   `next-up` issue is picked ahead of everything else, oldest first
-   among several, whatever the product/tooling lean says; it is still
-   subject to the readiness judgement in step 2 and the file-overlap
-   rule below. Never add or remove the label yourself.
+   1. **Blocking bugs** — the `bugs` slice, but only where the body
+      shows something actually broken or blocked for a visitor or the
+      admin: a broken flow, an unusable control, content that cannot
+      be read, lost data. Judge that from the body at read time, not
+      from the label alone: `bug` is a priority claim, and a `bug`
+      label sitting on visual polish or a design-brief near-miss does
+      not jump the queue — treat that issue as ordinary work in its
+      provenance slice, note the mislabel in the run summary, and
+      leave the label alone (the groomer audits it; you never add or
+      remove `bug` on an existing issue yourself).
+   2. **Maintainer-filed product work** — the `maintainer` slice. No
+      `automation` label means a human filed it, and the fleet exists
+      to build what its maintainer asks for, ahead of the polish it
+      files for itself.
+   3. **Agent-filed product work** — the `product` slice.
+   4. **Tooling** — the `tooling` slice, under the bar below.
 
    Issues labelled `tooling` are about the machinery — the pipeline,
    CI and workflows, the lint and dev scripts, the test harnesses —
    work the fleet largely generates for itself, and it generates it
    faster than it clears it (2026-08-19..21: two thirds of merged
    agent PRs were machinery, eight touched the website, and the
-   backlog grew). The machinery exists to ship the website, so the
-   default lean is towards the product: when the machinery is running
-   smoothly, pick the oldest ready issue WITHOUT the `tooling` label,
-   even when older `tooling` issues are waiting. (`automation` is a
-   different label — provenance, "filed by the pipeline" — and says
-   nothing about topic: a product defect a worker reported carries
-   `automation` and is product work.)
-   "Smoothly" means this tick saw none of: a CI or tooling failure you
-   had to dispatch a fix agent for, a stale claim released, a
-   dispatcher-log error or usage-limit kill, a worker `problems`
-   report naming a tool or script, a visual-review job that failed to
-   run. Pick a `tooling` issue instead when it is in the way —
-   something a worker reported in `problems` or a recent run summary
-   flagged, a broken or flaky job, a claim-handling bug — when it is
-   small and a product issue's worker would hit it anyway, or when no
-   product issue is ready. Scale machinery energy to the product
-   backlog, not to the machinery backlog: while dozens of ready
-   product issues are waiting, a `tooling` pick must clear the
-   in-the-way bar above — "worth doing sometime" never does — and a
-   thin product backlog is what frees ticks for machinery. This is a
-   direction for your judgement, not a quota: a tick with a broken CI job is a machinery tick, a quiet
+   backlog grew). The machinery exists to ship the website, so a
+   `tooling` pick must clear a bar the other slices don't face: pick
+   one only when it is in the way — something a worker reported in
+   `problems` or a recent run summary flagged, a broken or flaky job,
+   a claim-handling bug — when it is small and a product issue's
+   worker would hit it anyway, or when no product issue is ready.
+   (`automation` is a different label — provenance, "filed by the
+   pipeline" — and says nothing about topic: a product defect a worker
+   reported carries `automation` and is product work.) Scale machinery
+   energy to the product backlog, not to the machinery backlog: while
+   dozens of ready product issues are waiting, "worth doing sometime"
+   never clears the bar, and a thin product backlog is what frees
+   ticks for machinery. This is a direction for your judgement, not a
+   quota: a tick with a broken CI job is a machinery tick, a quiet
    tick is a product tick, and the run summary says which way you
    leaned and why in one line.
 
@@ -576,12 +580,24 @@ hands over the kept branch and/or patch.
    record the ask, label, send via `telegram.sh send --issue`. The
    worker already wrote the what/where/what-to-check; your job is the
    dedupe, the labels and the one send.
-   Two labels, two questions:
+   Three labels, three questions:
+   - **Is something broken → `bug`.** Add it ONLY when the issue
+     describes something a visitor or the admin cannot do, or can
+     barely do: a broken flow, an unusable control, content that
+     cannot be read, lost data. Phase B works the `bugs` slice before
+     everything else, so the label is a priority claim — visual
+     polish, design-brief near-misses and would-be-nicer-if findings
+     are NOT bugs, and mislabelling one steals the front of the queue
+     (the backlog groomer audits the label, but every audit costs a
+     grooming mutation the filing discipline makes unnecessary).
    - **Who filed it → `automation`.** EVERY issue you file gets it
      (`gh issue create ... --label automation`), whatever it is about
      — a product defect a worker noticed included. It is provenance,
-     so a human triaging can tell fleet-filed issues from their own;
-     it says nothing about topic and Phase B never reads it.
+     so a human triaging can tell fleet-filed issues from their own —
+     and so the shortlist can put maintainer-filed work ahead of
+     fleet-filed work in Phase B. It says nothing about topic:
+     forgetting it promotes a fleet-filed issue into the maintainer
+     slice, jumping a queue meant for the human's own asks.
    - **What it is about → `tooling`.** Add it (alongside `automation`)
      when the issue is about the machinery rather than the website:
      the dispatcher, the briefs and playbooks under `automation/`,
@@ -589,10 +605,10 @@ hands over the kept branch and/or patch.
      workflows, the lint scripts, the dev scripts and dev environment,
      the shell and vitest test harnesses. An issue about what a visitor
      or the admin sees or does is product work and does NOT get it.
-     This is the label Phase B step 3 reads to lean towards product
-     work when the machinery is smooth, so a mislabelled product issue
-     gets deprioritised and a mislabelled machinery issue gets picked
-     as if it were product. Also add `tooling` to an existing issue you
+     This is the label that routes an issue into the shortlist's
+     `tooling` slice, behind Phase B's in-the-way bar — so a
+     mislabelled product issue gets deprioritised and a mislabelled
+     machinery issue gets picked as if it were product. Also add `tooling` to an existing issue you
      touch that plainly qualifies and lacks it (`gh issue edit <n>
      --add-label tooling`).
    If either label is missing, create it first: `gh label create
@@ -650,10 +666,11 @@ hands over the kept branch and/or patch.
    and an "Unblocked by maintainer:" line naming the asks whose replies
    this tick consumed and the dependants they released. Omit either
    line when empty rather than printing "none".
-   Include one line naming the candidate-set size Phase B step 1
-   returned, plus the OLDEST ready issue this tick did not pick and the
-   reason (lost to `next-up`, lost to the product lean, judged unready,
-   file overlap, no capacity). A backlog tail that is being passed over
+   Include one line quoting the shortlist's slice sizes and `*_omitted`
+   counts from Phase B step 1, plus the OLDEST ready issue this tick
+   did not pick and the reason (outranked by a bug or a
+   maintainer-filed issue, judged unready, mislabelled `bug`, file
+   overlap, no capacity). A backlog tail that is being passed over
    tick after tick should be visible in one summary — until #484 that
    took reconstructing the pick order across thirty merged PRs, because
    a tick whose candidate list was silently truncated logged exactly

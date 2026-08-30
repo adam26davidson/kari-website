@@ -28,15 +28,26 @@ Design and decisions:
     no choice of interval reliably keeps them out of the same poll, and
     the re-read below is what makes an overlap safe), curates the open
     issues the pipeline picks from: closes duplicates and already-landed
-    work, adds/clears `has-dependencies`, flags file-overlap pairs, and
-    keeps the `next-up` label on at most three issues not yet claimed —
-    the pipeline's Phase B works those first. Never touches
+    work, adds/clears `has-dependencies`, flags file-overlap pairs,
+    audits the `bug` label (a priority claim — the pipeline works bugs
+    first), and sends the questions only a human can answer to the
+    maintainer over the `needs-human` + Telegram protocol. It sets no
+    priorities of its own — pick order is computed by
+    `backlog-shortlist.sh` below. Never touches
     `in progress` issues (it re-reads an issue's labels immediately
     before each mutation, since the pipeline can claim one mid-tick),
     never files issues, signs every comment `backlog-grooming:`.
 - `templates/*.md` — subagent prompt templates the issue-pipeline fills
   in (`{{PLACEHOLDER}}` slots): `plan-brief.md`, `worker-brief.md`,
   `fix-brief.md`, `review-brief.md`.
+- `backlog-shortlist.sh` — the pipeline's Phase B candidate feed:
+  paginates the whole open backlog through the REST API (no `--limit`
+  truncation, no lagging search index), filters out claimed/blocked
+  issues, and prints bounded oldest-first JSON slices — `bugs`,
+  `maintainer` (no `automation` label — human-filed), `product`
+  (agent-filed), `tooling` — with `*_omitted` counts so a capped view
+  is visible. Read-only; the header documents the env knobs. Tests:
+  `backlog-shortlist-test.sh`.
 - `claim-liveness.sh <slug> [issue ...]` — read-only probe behind the
   playbook's stale-claim step: prints one `key=value` line per liveness
   signal for `agent/<slug>` (open PR, worktree and git-dir mtimes,
