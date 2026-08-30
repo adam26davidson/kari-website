@@ -16,7 +16,9 @@ function ImageThumbnail({ id }: { id: string }) {
   const [failed, setFailed] = useState(false);
 
   if (failed) {
-    return <div className="gc-image-missing">Couldn&apos;t show this picture</div>;
+    return (
+      <div className="gc-image-missing">Couldn&apos;t show this picture</div>
+    );
   }
 
   return (
