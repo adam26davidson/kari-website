@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 // The public haiku/haiga/photography pages render their attribution and
 // caption lines as small secondary text on a translucent card that floats
@@ -104,10 +104,30 @@ const photographyCss = read(
   "pages/photography-page/components/photography-post-content/photography-post-content.css",
 );
 const adminCss = read("pages/admin/admin.css");
+const adminCardCss = read("pages/admin/components/card/card.css");
 const adminHaikuCss = read("pages/admin/admin-haiku-page/admin-haiku-page.css");
 const adminItemListCss = read(
   "pages/admin/components/admin-item-list/admin-item-list.css",
 );
+const blogPostSummaryCss = read(
+  "components/blog-post-summary/blog-post-summary.css",
+);
+const adminButtonCss = read(
+  "pages/admin/components/admin-button/admin-button.css",
+);
+
+/**
+ * The one colour in an admin declaration, following a `var(--token)` to the
+ * admin `:root` (where the danger pair lives) rather than the site one. The
+ * value may be a shorthand — `1px solid var(--admin-danger)`.
+ */
+function adminColor(value: string): Rgb {
+  const token = value.match(/var\(\s*(--[\w-]+)\s*\)/);
+  const resolved = token ? declaration(adminCss, ":root", token[1]) : value;
+  return parseColor(
+    resolved.match(/#[0-9a-f]{3,8}|rgba?\([^)]*\)/i)?.[0] ?? resolved,
+  );
+}
 
 /** Every public rule that renders small secondary text on the card. */
 const SECONDARY_TEXT_RULES: ReadonlyArray<[string, string, string]> = [
@@ -151,7 +171,10 @@ const surfaceOver = (photo: Rgb, tint: string): Rgb =>
 // layer. The photo can be anything, so the card's lightness spans a range;
 // `cardOver(photo)` gives the rendered card colour for a given photo.
 const cardOver = (photo: Rgb): Rgb =>
-  surfaceOver(photo, declaration(dataListCss, ".data-list", "background-color"));
+  surfaceOver(
+    photo,
+    declaration(dataListCss, ".data-list", "background-color"),
+  );
 
 describe("secondary text on the public cards", () => {
   it.each(SECONDARY_TEXT_RULES)(
@@ -198,6 +221,15 @@ const ADMIN_SECONDARY_TEXT_RULES: ReadonlyArray<[string, string, string]> = [
   ["empty-result notice", adminItemListCss, ".admin-data-list-empty"],
   ["search match count", adminItemListCss, ".admin-data-list-count"],
   ["haiku list publisher", adminHaikuCss, ".admin-haiku-list-publisher"],
+  // Only ever rendered on the admin other-works list (the public page
+  // passes showPublished={false}), and the last piece of admin secondary
+  // text still carrying a hex of its own: #666, which is 4.0:1 on the row
+  // and the "Published" two visual reviews running named as hard to read.
+  [
+    "other-works published status",
+    blogPostSummaryCss,
+    ".blog-post-summary-status",
+  ],
 ];
 
 /** Every admin surface the rules above render their text on. */
@@ -206,6 +238,7 @@ const ADMIN_PANELS: ReadonlyArray<[string, string, string]> = [
   ["empty-result notice", adminItemListCss, ".admin-data-list-empty"],
   ["search match count", adminItemListCss, ".admin-data-list-count"],
   ["list row", adminItemListCss, ".admin-data-list-item"],
+  ["list header panel", adminItemListCss, ".admin-data-list-header"],
 ];
 
 describe("secondary text in the admin panels", () => {
@@ -224,26 +257,183 @@ describe("secondary text in the admin panels", () => {
       );
     },
   );
+
+  // The tint is only half of it. At 80% the photograph still reads through,
+  // and it is the small grey secondary line that loses — a publisher or a
+  // date landing on blurred petals. The blur is what turns the backing into
+  // a calm, even surface, so it is part of the contract rather than a
+  // flourish one panel happens to have: the list rows shipped without it
+  // while the sidebar, .card and .data-editor-content all had it (#307).
+  it.each(ADMIN_PANELS)(
+    "%s blurs the photo behind it instead of letting it read through",
+    (_name, css, selector) => {
+      expect(declaration(css, selector, "backdrop-filter")).toMatch(/blur\(/);
+    },
+  );
 });
 
-// The icon on a filled control is only legible because of the colour
-// declared on the control. `color: inherit` made that lightness an accident
-// of whichever ancestor last set a colour — one dark-text ancestor away from
-// a dark icon on the dark brown fill (#347).
-describe("the admin icon buttons", () => {
-  const foreground = () => declaration(adminCss, ".admin-icon-button", "color");
+// Every admin section opens with an <h2> and one line saying what the page
+// is for, both sitting on the pale translucent panel. The body's default
+// colour is --light-text — correct over the background photo, invisible on
+// that panel — so a section that leaves either to inheritance renders
+// near-white on grey. That is not hypothetical: the home-page editor
+// shipped exactly that way while its four siblings each re-declared a dark
+// colour of their own. The colour therefore lives in ONE shared pair of
+// classes and every admin heading has to wear them, so the next section
+// added cannot re-acquire the bug by omission (#457).
+const ADMIN_DIR = "pages/admin";
 
-  it("declare their own foreground rather than inheriting one", () => {
-    expect(foreground()).not.toBe("inherit");
+/** Every non-test `.tsx` under `src/pages/admin`, as `read()` paths. */
+function adminComponents(dir: string): string[] {
+  return readdirSync(`src/${dir}`, { withFileTypes: true }).flatMap((entry) => {
+    const path = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) return adminComponents(path);
+    return entry.isFile() &&
+      entry.name.endsWith(".tsx") &&
+      !entry.name.endsWith(".test.tsx")
+      ? [path]
+      : [];
+  });
+}
+
+/** Every `<h2 ...>` opening tag in the admin tree, with its file. */
+const ADMIN_HEADINGS: ReadonlyArray<[string, string]> = adminComponents(
+  ADMIN_DIR,
+).flatMap((path) =>
+  [...read(path).matchAll(/<h2[^>]*>/g)].map(
+    ([tag]) => [path, tag] as [string, string],
+  ),
+);
+
+/** The admin card as it actually renders over a given photo. */
+const adminCardOver = (photo: Rgb): Rgb =>
+  surfaceOver(photo, declaration(adminCardCss, ".card", "background-color"));
+
+describe("the admin section headings", () => {
+  it("finds the heading of every admin section", () => {
+    // Home page, site background, image cleanup, what's on test. A drop
+    // below that means the scan stopped seeing what it is meant to check.
+    expect(ADMIN_HEADINGS.length).toBeGreaterThanOrEqual(4);
   });
 
-  it("put an icon on their fill that meets WCAG AA", () => {
-    const fill = parseColor(
-      declaration(adminCss, ".admin-icon-button", "background-color"),
+  it.each(ADMIN_HEADINGS)(
+    "%s puts its heading in the shared class rather than inheriting a colour",
+    (_path, tag) => {
+      // Worn alongside a page's own class where one is needed (the editor
+      // titles add a size), so this is a token check, not equality.
+      const className = tag.match(/className="([^"]*)"/)?.[1] ?? "";
+      expect(className.split(/\s+/)).toContain("admin-section-heading");
+    },
+  );
+
+  it.each([[".admin-section-heading"], [".admin-section-explanation"]])(
+    "%s stays legible on the card whatever photo is behind it",
+    (selector) => {
+      const color = resolveColor(declaration(adminCss, selector, "color"));
+      for (const photo of [BLACK, MID_GREY, WHITE]) {
+        expect(
+          contrastRatio(color, adminCardOver(photo)),
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    },
+  );
+
+  it("keeps the explanation line secondary to the heading above it", () => {
+    const card = adminCardOver(MID_GREY);
+    const heading = resolveColor(
+      declaration(adminCss, ".admin-section-heading", "color"),
     );
+    const explanation = resolveColor(
+      declaration(adminCss, ".admin-section-explanation", "color"),
+    );
+    expect(contrastRatio(explanation, card)).toBeLessThan(
+      contrastRatio(heading, card),
+    );
+  });
+});
+
+// The glyph on an icon control is only legible because of the colour
+// declared on the control. `color: inherit` made that lightness an accident
+// of whichever ancestor last set a colour — one dark-text ancestor away from
+// an invisible icon (#347). Since #457 the icon circles are the move arrows
+// and nothing else, and they are outlined rather than filled, so the brown
+// now has to carry the GLYPH and the RING against the button's own pale
+// fill rather than sit behind a white glyph.
+describe("the admin icon buttons", () => {
+  const declared = (property: string) =>
+    declaration(adminCss, ".admin-icon-button", property);
+
+  it("declare their own foreground rather than inheriting one", () => {
+    expect(declared("color")).not.toBe("inherit");
+  });
+
+  it("put a glyph on their fill that meets WCAG AA", () => {
     expect(
-      contrastRatio(resolveColor(foreground()), fill),
+      contrastRatio(
+        resolveColor(declared("color")),
+        parseColor(declared("background-color")),
+      ),
     ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // The ring is the whole edge of the control — an outlined button with an
+  // invisible border is not a button (WCAG 1.4.11 non-text contrast).
+  it("draw a ring that reads as a shape on their own fill", () => {
+    expect(
+      contrastRatio(
+        adminColor(declared("border")),
+        parseColor(declared("background-color")),
+      ),
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  // A bordered circle on a fixed 30/44px control has to be border-box, or
+  // the ring grows it past the size it declares.
+  it("size the circles so a ring cannot grow them", () => {
+    expect(declared("box-sizing")).toBe("border-box");
+  });
+
+  // The quiet destructive button inverts the arrangement: red on the pale
+  // fill rather than white on red. It is the one place the danger colour
+  // has to carry TEXT contrast rather than just be a background, so its
+  // legibility cannot be assumed from the filled variant's numbers. Since
+  // #457 it is also every list row's Delete, not only the photography
+  // editor's "Remove this image".
+  it("keep the outlined destructive button legible on its own fill", () => {
+    const OUTLINED = ".admin-button.danger-secondary";
+    const outlined = (property: string) =>
+      declaration(adminButtonCss, OUTLINED, property);
+    const fill = parseColor(outlined("background-color"));
+
+    expect(
+      contrastRatio(adminColor(outlined("color")), fill),
+    ).toBeGreaterThanOrEqual(4.5);
+    // And its outline has to read as a shape (WCAG 1.4.11 non-text
+    // contrast) — an invisible border is not a button.
+    expect(
+      contrastRatio(adminColor(outlined("border")), fill),
+    ).toBeGreaterThanOrEqual(3);
+  });
+
+  // Not a WCAG rule — just "these must not read as the same button". Edit
+  // and delete sat side by side in identical brown circles (#457); now each
+  // carries its own word, and colour still separates them: edit is outlined
+  // in the primary brown family, delete in the danger red. Spending LESS
+  // red, never a different colour — the maintainer's call on this is
+  // explicit, red is the right colour for delete.
+  it("colours edit and delete apart as well as naming them", () => {
+    const edit = declaration(adminButtonCss, ".admin-button.secondary", "border");
+    const del = declaration(
+      adminButtonCss,
+      ".admin-button.danger-secondary",
+      "border",
+    );
+    expect(del).toContain("--admin-danger");
+    expect(edit).not.toContain("--admin-danger");
+    expect(adminColor(edit)).not.toEqual(adminColor(del));
+    // Edit's outline is the same brown the icon circles beside it wear, so
+    // the row reads as one family with one exception.
+    expect(adminColor(edit)).toEqual(adminColor(declared("border")));
   });
 });
 

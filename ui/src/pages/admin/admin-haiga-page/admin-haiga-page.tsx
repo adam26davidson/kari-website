@@ -183,7 +183,10 @@ export function AdminHaigaPage() {
   ) : (
     <AdminItemList
       items={haigaList}
+      // Matches the sidebar link, so the page says which section she is in.
+      title="Haiga"
       noun="haiga"
+      addLabel="Add a haiga"
       getSearchText={(haiga) => [...haiga.lines, haiga.publisher].join(" ")}
       compact={true}
       onNewItem={onNewItem}

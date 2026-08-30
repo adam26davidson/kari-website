@@ -34,11 +34,25 @@ export function pngFixturePath(): string {
 }
 
 // --- Admin UI helpers -------------------------------------------------------
-// The admin controls are icon-only buttons (FontAwesome renders
-// <svg data-icon="...">), so selectors go through the icon name.
+// Save, Close, Add and the per-row Edit/Delete are labelled text buttons and
+// are located by their accessible name. Only the per-row move controls are
+// icon-only (FontAwesome renders <svg data-icon="...">), and nothing here
+// drives them.
 
-export function iconButton(scope: Page | Locator, icon: string): Locator {
-  return scope.locator(`.admin-icon-button:has(svg[data-icon="${icon}"])`);
+/**
+ * A list row's Edit button. `exact` matters: without it "Edit" would also
+ * match any longer button name that contains it.
+ */
+export function editButton(scope: Page | Locator): Locator {
+  return scope.getByRole("button", { name: "Edit", exact: true });
+}
+
+/**
+ * A list row's Delete button. Exact, so the photography editor's per-image
+ * "Remove this image" (the same control with a `deleteLabel`) never matches.
+ */
+export function deleteButton(scope: Page | Locator): Locator {
+  return scope.getByRole("button", { name: "Delete", exact: true });
 }
 
 /** Answer the "Are you sure?" dialog the admin page shows before mutations. */
@@ -215,7 +229,7 @@ export async function deleteItemsMatching(
   for (let i = 0; i < 10; i++) {
     const count = await rows.count();
     if (count === 0) break;
-    await iconButton(rows.first(), "trash").click();
+    await deleteButton(rows.first()).click();
     await confirmDialog(page, "Yes");
     await waitForIdle(page, 120_000);
     await expect(rows).toHaveCount(count - 1, { timeout: 60_000 });

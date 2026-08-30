@@ -3,11 +3,11 @@ import {
   faArrowDown,
   faArrowUp,
   faPencil,
-  faPlus,
   faTrash,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useSearchParams } from "react-router";
+import { AdminButton, AdminButtonVariant } from "../admin-button/admin-button";
 
 /**
  * The query lives in the URL rather than in component state so it survives
@@ -19,13 +19,50 @@ const SEARCH_PARAM = "q";
 export interface AdminItemListProps<T extends { id: string }> {
   items: Array<T>;
   renderItem: (item: T) => React.ReactNode;
+  /**
+   * The section's name ("Haiku", "Other works"), matching its sidebar
+   * link. Given one, the search box, match count and add button are
+   * gathered into a titled panel above the rows — the same titled card
+   * with generous padding every other admin page opens with, so a list
+   * page confirms where she is rather than starting with a bare search
+   * field 13px under the top bar (#457, design brief §1).
+   *
+   * Optional, because a list nested INSIDE an editor (the photography
+   * post's images) already sits under that editor's heading, on that
+   * editor's card: a second heading and a second panel there would
+   * announce a section she has not moved to.
+   */
+  title?: string;
   onNewItem: () => void;
+  /**
+   * The add button's visible text, in the site's vocabulary — "Add a
+   * haiku", not a bare "+". Required, so no list can ship with a generic
+   * or invisible add affordance (#457).
+   */
+  addLabel: string;
+  /**
+   * How much weight the add button carries. On a list PAGE adding is the
+   * one obvious next action, so it defaults to primary; a list nested
+   * inside an editor (the photography post's images) asks for "secondary",
+   * because that screen's primary is Save and two filled brown buttons of
+   * equal weight compete (#457, design brief §2).
+   */
+  addVariant?: AdminButtonVariant;
   /**
    * Every item callback receives the item's id, never its position: the
    * rendered list may be a filtered subset, so an index into it would
    * silently address the wrong element of the page's full list.
    */
   onDelete: (id: string) => void;
+  /**
+   * What the delete button says, when a bare "Delete" would not be enough.
+   * For a list nested in an editor, where the row is one part of the thing
+   * on screen and "Delete" does not say WHAT it removes — the caption, the
+   * photo, or the whole post (#457, design brief §3). List pages leave it
+   * unset and get "Delete": their rows are one thing each, and the confirm
+   * dialog names it.
+   */
+  deleteLabel?: string;
   onMove: (id: string, direction: "up" | "down") => void;
   /** Omit to hide the edit control (pass hideEdit too for clarity). */
   onEdit?: (id: string) => void;
@@ -53,8 +90,12 @@ export interface AdminItemListProps<T extends { id: string }> {
 export function AdminItemList<T extends { id: string }>({
   items,
   renderItem,
+  title,
   onNewItem,
+  addLabel,
+  addVariant = "primary",
   onDelete,
+  deleteLabel,
   onMove,
   onEdit,
   hideEdit,
@@ -84,32 +125,47 @@ export function AdminItemList<T extends { id: string }>({
     ? items.filter((item) => getSearchText(item).toLowerCase().includes(needle))
     : items;
 
+  // Declared once and placed twice: on a list PAGE these sit inside the
+  // titled panel below, and nested in an editor they stand on their own.
+  const controls = (
+    <>
+      {getSearchText && (
+        <input
+          type="search"
+          className="admin-data-list-search"
+          aria-label={`Search ${noun}`}
+          placeholder={`Search ${noun}...`}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      )}
+      {filtering && visibleItems.length > 0 && (
+        <p className="admin-data-list-count">
+          Showing {visibleItems.length} of {items.length} {noun}
+        </p>
+      )}
+      <div className="admin-data-list-add">
+        <AdminButton variant={addVariant} onClick={onNewItem}>
+          {addLabel}
+        </AdminButton>
+      </div>
+    </>
+  );
+
   return (
     <div className="admin-data-list-container">
-      <div className="admin-data-list">
-        {getSearchText && (
-          <input
-            type="search"
-            className="admin-data-list-search"
-            aria-label={`Search ${noun}`}
-            placeholder={`Search ${noun}...`}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
+      {/* `titled` narrows the measure to match the other admin cards — see
+          admin-item-list.css. Only a list PAGE gets it: the photography
+          editor's nested list is sized to the editor it sits in. */}
+      <div className={title ? "admin-data-list titled" : "admin-data-list"}>
+        {title ? (
+          <div className="admin-data-list-header">
+            <h2 className="admin-section-heading">{title}</h2>
+            {controls}
+          </div>
+        ) : (
+          controls
         )}
-        {filtering && visibleItems.length > 0 && (
-          <p className="admin-data-list-count">
-            Showing {visibleItems.length} of {items.length} {noun}
-          </p>
-        )}
-        <button
-          type="button"
-          className="admin-icon-button"
-          aria-label="Add item"
-          onClick={onNewItem}
-        >
-          <FontAwesomeIcon icon={faPlus} />
-        </button>
         {filtering && visibleItems.length === 0 && (
           <p className="admin-data-list-empty">
             No {noun} match &quot;{query.trim()}&quot;
@@ -119,13 +175,37 @@ export function AdminItemList<T extends { id: string }>({
           <div
             key={item.id}
             className={
-              compact ? "admin-data-list-item compact" : "admin-data-list-item"
+              compact
+                ? "admin-data-list-item compact"
+                : "admin-data-list-item"
             }
           >
             <div className="admin-data-list-item-content">
               {renderItem(item)}
             </div>
+            {/* Order matters: edit (the one she reaches for most) first,
+                delete last and in the danger red. Delete used to sit
+                first, immediately beside edit, and wear the identical
+                brown circle (#457, design brief §2).
+
+                Edit and delete say what they do. A pencil-in-a-circle and
+                a bin-in-a-circle were the only affordance offered for the
+                two most consequential things she can do to a row, and the
+                admin's one user does not read icons as vocabulary; the
+                words also survive the shadcn migration, which the icons
+                would not (#457, design brief §3). The move arrows stay
+                icons — directional, low-consequence, and "Move up" is what
+                the arrow already says. */}
             <div className="admin-data-list-item-controls">
+              {!hideEdit && (
+                <AdminButton
+                  variant="secondary"
+                  onClick={onEdit && (() => onEdit(item.id))}
+                >
+                  <FontAwesomeIcon icon={faPencil} />
+                  Edit
+                </AdminButton>
+              )}
               {!filtering && idx !== 0 && (
                 <button
                   type="button"
@@ -146,24 +226,17 @@ export function AdminItemList<T extends { id: string }>({
                   <FontAwesomeIcon icon={faArrowDown} />
                 </button>
               )}
-              <button
-                type="button"
-                className="admin-icon-button"
-                aria-label="Delete"
+              {/* Outlined, not filled: red says "this destroys something"
+                  while the weight stays secondary, so the page's one
+                  filled button remains the thing she came to do. Red
+                  itself is settled — it is the right hue for delete. */}
+              <AdminButton
+                variant="danger-secondary"
                 onClick={() => onDelete(item.id)}
               >
                 <FontAwesomeIcon icon={faTrash} />
-              </button>
-              {!hideEdit && (
-                <button
-                  type="button"
-                  className="admin-icon-button"
-                  aria-label="Edit"
-                  onClick={onEdit && (() => onEdit(item.id))}
-                >
-                  <FontAwesomeIcon icon={faPencil} />
-                </button>
-              )}
+                {deleteLabel ?? "Delete"}
+              </AdminButton>
             </div>
           </div>
         ))}

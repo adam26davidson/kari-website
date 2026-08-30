@@ -98,6 +98,35 @@
   font-weight: 400;
 }
 
+/* Narrow viewports, admin bar only. At 390px the bar has literally no slack
+   — the title's flex box ends exactly where the user block begins — and its
+   spacing is lopsided: 11px between the title and the person icon and 10px
+   between the icon and the name, against 20px around the name and 20px to
+   the right edge. The result reads as four things shoved together rather
+   than a title and a user block (design brief §1).
+
+   Rebalanced rather than widened: the slack is taken from the loose end
+   (the name's own margins and the right gutter) and, because the title is
+   `flex: 1` and its text is left-aligned, everything freed reappears as gap
+   between the title and the person icon. Net width goes DOWN, so this
+   cannot overflow the phone the way an added margin would. The breakpoint
+   matches useIsMobile()'s 768px, which is what swaps in
+   .header-title-mobile. */
+@media (max-width: 767.98px) {
+  .admin-header {
+    /* Vertical air to match: 10px made a 56px bar carrying a 36px button. */
+    padding: 14px 0px 14px 0px;
+  }
+
+  .admin-header .header-user-name {
+    margin: 0px 14px 0px 14px;
+  }
+
+  .admin-header .header-user-section {
+    margin-right: 16px;
+  }
+}
+
 /* Real <button> for keyboard access; neutralize default button chrome
    so the hamburger icon looks exactly as it did as a bare icon. */
 .header-menu-button {

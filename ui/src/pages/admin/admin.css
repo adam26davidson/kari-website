@@ -4,6 +4,20 @@
      background showing through the card (#308). */
   --admin-field-bg: rgb(240, 240, 240);
   --admin-field-border: rgba(0, 0, 0, 0.15);
+  /* The one red in the admin. Destructive controls have to LOOK
+     destructive and must never be mistaken for the brown primary (#457),
+     and an error toast is the same statement in a different shape — so
+     both spend this token rather than repeating the hex. */
+  --admin-danger: #a33327;
+  --admin-danger-hover: #872a20;
+  /* One reading measure and one size for admin body prose. Both, because
+     `ch` resolves against the element's own font-size: the what's-on-test
+     panel had a 15px explanation capped at 60ch sitting above 16px notes
+     capped at nothing, so its two paragraphs wrapped at visibly different
+     widths and the block came out ragged. Prose that shares a card has to
+     share a measure. */
+  --admin-prose-size: 15px;
+  --admin-prose-measure: 60ch;
 }
 
 .admin-container {
@@ -107,7 +121,11 @@ textarea {
   border: 1px solid var(--admin-field-border);
   background-color: var(--admin-field-bg);
   color: #181818;
-  font-family: "Courier New", Courier, monospace;
+  /* Sans-serif, like the rest of the admin: the monospace this used to be
+     made every search box and editor field read like a code editor rather
+     than a writing surface (#457). Nothing here is code — it is haiku,
+     titles and captions. */
+  font-family: "Roboto", sans-serif;
   font-size: 14px;
   /* The 400px default above must never push a field past its card,
      whatever the viewport (#259). */
@@ -132,6 +150,77 @@ textarea {
   resize: none;
 }
 
+/* Checkboxes are the one control the browser still paints in its own
+   colour, and that colour is a saturated system blue — the only blue on a
+   screen otherwise made of warm browns and greys, so a ticked "Published"
+   was the loudest thing in the other-works editor. Tinted to the admin's
+   primary brown, once, so any checkbox added later inherits it. */
+input[type="checkbox"] {
+  accent-color: #6d3513;
+}
+
+/* A labelled form field: the visible label sitting above its control.
+   Shared by every admin editor so no box is left for her to guess at
+   (#457). */
+.admin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* The control fills its labelled field rather than keeping the 400px
+   default above. That default is right for a lone box, but in a panel it
+   left every editor lopsided: the haiku editor's fields stopped 110px
+   short of the card, and the other-works Title ended at 740px above a body
+   editor running to 1140px, so the panel read as unfinished rather than
+   spacious (#457). Direct children only — the picker's hidden file input
+   sits deeper and must not be sized. */
+.admin-field > input,
+.admin-field > textarea {
+  width: 100%;
+}
+
+.admin-field-label {
+  font-family: "Roboto", sans-serif;
+  /* Regular, never the display hairline: this is 14px text (#356). */
+  font-weight: 400;
+  font-size: 14px;
+  color: var(--muted-text);
+}
+
+/* An admin section's heading, and the one line under it explaining what
+   the page is for. Styled once here — and worn by every section — because
+   the colour must never be left to inheritance: the body default is
+   --light-text, which is right over the background photo and invisible on
+   the pale card, so a section that simply forgets to override it renders
+   near-white on grey (the home-page editor did exactly that, while its
+   four siblings each re-declared a dark colour of their own, #457).
+   Enforced by src/test/text-contrast.test.ts. */
+.admin-section-heading {
+  margin: 0;
+  font-family: "Roboto", sans-serif;
+  /* Regular, not the bold <h2> default: calm and warm over slick (design
+     brief §1). This is the treatment the site-background page already had
+     and the one the others now match. */
+  font-weight: 400;
+  color: #181818;
+}
+
+.admin-section-explanation {
+  margin: 0;
+  font-family: "Roboto", sans-serif;
+  font-size: var(--admin-prose-size);
+  /* Wrap into a readable column rather than running the card's full
+     width — the shared measure, so every paragraph on the card breaks in
+     the same place. */
+  max-width: var(--admin-prose-measure);
+  /* Secondary to the heading, and the same token the rest of the admin's
+     secondary text spends (#354). */
+  color: var(--muted-text);
+}
+
 /* Narrow viewports: the fixed-width sidebar would leave too little room
    for the content (~230px on a 390px phone), so it collapses into a
    wrapping top bar and the content takes the full width. The breakpoint
@@ -143,18 +232,43 @@ textarea {
     justify-content: flex-start;
   }
 
+  /* A grid, not a wrapping row. Wrapped and centred, the eight links came
+     out as a ragged 4/3/1 block whose neighbours sat a few pixels apart —
+     usable, but the opposite of the calm the rest of the admin aims for
+     (design brief §1). Fixed columns give every link the same start, a
+     real gap from the one beside it, and a full-cell tap target. Row-major
+     (the default flow) rather than a column count pinned to today's eight
+     pages: adding a section keeps the two tidy columns instead of silently
+     spilling into a third, cramped one. */
   .admin-menu {
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    align-content: start;
     width: 100%;
+    /* With the default content-box, the side padding below is ADDED to the
+       100% above and the menu overflows the viewport by exactly that much
+       (16px on a 390px phone). */
+    box-sizing: border-box;
     height: auto;
-    padding: 4px 0;
+    /* The grid had no gap, so "a real gap from the one beside it" was only
+       ever the cells' own side padding — vertically the rows met exactly,
+       and eight links at a ~35px pitch read as a dense index rather than a
+       menu (design brief §1). Row gap first: touching rows are what makes
+       the block look like a table of contents. */
+    gap: 6px 8px;
+    padding: 10px 8px;
   }
 
   .admin-menu-item {
     width: auto;
-    padding: 8px 12px;
+    /* A phone-sized target, the same 44px floor the list rows' controls
+       take at this breakpoint — a menu is tapped at least as often as they
+       are. min-height rather than padding alone so the number in the CSS is
+       the number a fingertip gets; the base rule is content-box, which
+       would otherwise add the padding on top of it. */
+    box-sizing: border-box;
+    min-height: 44px;
+    padding: 8px 16px;
     /* Smaller so five items fit the wrapping bar on a 390px phone — which
        drops below the 18px the base rule's --display-weight is allowed at,
        so the weight comes back to the 400 default here. A 16px hairline in
@@ -174,22 +288,35 @@ textarea {
   }
 }
 
+/* The move-up/move-down circles, and nothing else: edit and delete became
+   labelled buttons in #457, so every remaining icon-only control in the
+   admin is a low-consequence directional nudge.
+
+   Outlined, in the same brown family as .admin-button.secondary rather than
+   filled like the primary. A list row's one filled control should be the
+   thing she came to the page to do ("Add a haiku"); when the arrows were
+   filled brown discs, the LEAST consequential controls on the row were its
+   heaviest marks, which is the inversion design brief §2 warns about. */
 .admin-icon-button {
   display: flex;
   justify-content: center;
   align-items: center;
   width: 30px;
   height: 30px;
+  /* The border below is part of the affordance, and these are fixed-size
+     circles: without this the ring would add 2px to the disc and leave the
+     control larger than its declared size. */
+  box-sizing: border-box;
   margin: 5px;
   padding: 0;
   font: inherit;
-  /* Explicit, not inherited: the icon sits on the dark fill below, so its
-     legibility must not depend on an ancestor's text colour (#347). */
-  color: var(--light-text);
+  /* Explicit, not inherited: the glyph's legibility must not depend on an
+     ancestor's text colour (#347). */
+  color: #6d3513;
   /* Opaque, like .admin-button: a translucent fill reads washed out over
      a light card or photo (#278, #321). */
-  background-color: #6d3513;
-  border: none;
+  background-color: #f2efe9;
+  border: 1px solid #6d3513;
   border-radius: 50%;
   transition: background-color 0.2s;
 }
@@ -200,10 +327,17 @@ textarea {
 .admin-icon-button:disabled:hover {
   background-color: #a89a91;
   color: #e9e3de;
+  border-color: #a89a91;
   cursor: not-allowed;
 }
 
-.admin-icon-button:hover,
+/* The same darkening .admin-button.secondary uses, so the two outlined
+   shapes answer the pointer identically. */
+.admin-icon-button:hover {
+  background-color: #e4ded3;
+  cursor: pointer;
+}
+
 .admin-image-upload:hover {
   background-color: #552a0f;
   cursor: pointer;
@@ -276,7 +410,7 @@ textarea {
 }
 
 .admin-toast-error {
-  background-color: #a33327;
+  background-color: var(--admin-danger);
 }
 
 @keyframes admin-toast-in {

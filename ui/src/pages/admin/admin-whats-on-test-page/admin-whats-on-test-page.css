@@ -18,17 +18,13 @@
   color: #181818;
 }
 
-.admin-whats-on-test-page h2 {
-  margin: 0;
-}
-
-.whats-on-test-explanation {
-  margin: 0;
-  color: #4a4a4a;
-}
-
+/* Same size and same measure as the explanation line above them, so the
+   panel's paragraphs all break at one edge instead of one stopping at half
+   the card and the next running to its rim (admin.css --admin-prose-*). */
 .whats-on-test-note {
   margin: 0;
+  font-size: var(--admin-prose-size);
+  max-width: var(--admin-prose-measure);
 }
 
 .whats-on-test-warning {

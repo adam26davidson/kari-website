@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AdminWhatsOnTestPage } from "./admin-whats-on-test-page";
@@ -60,16 +61,37 @@ describe("AdminWhatsOnTestPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows the unknown-build fallback and skips fetching when the build sha is absent", async () => {
+  // The standing explanation used to render unconditionally above this
+  // note, so off a deployed environment — which is every local build and
+  // CI's e2e bundle, i.e. what a reader usually meets — the page promised a
+  // list of changes in one paragraph and withdrew it in the next. One
+  // paragraph now: context, then the situation (#457, design brief §3).
+  // Exact strings, because this test is the spec for the copy.
+  const STANDING =
+    "Changes that are on the test site but not on the live site yet. Have a " +
+    "look at them on the test site before they go live.";
+  const OFF_TEST =
+    "On the test site, this page lists the changes that are waiting to go " +
+    "live, so they can be checked before they reach the live site. This " +
+    "isn't the test site, so there's nothing to list here.";
+
+  it("explains the page in one paragraph when the build sha is absent", async () => {
     vi.unstubAllEnvs();
 
     render(<AdminWhatsOnTestPage />);
 
-    expect(
-      await screen.findByText(/unknown build — comparison unavailable/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(OFF_TEST)).toBeInTheDocument();
+    // Not alongside a paragraph promising the list it just said is empty.
+    expect(screen.queryByText(STANDING)).toBeNull();
     expect(DeployStatusService.getLatestProdDeploy).not.toHaveBeenCalled();
     expect(DeployStatusService.getPendingCommits).not.toHaveBeenCalled();
+  });
+
+  it("explains the page as a live one when there is a build sha", async () => {
+    render(<AdminWhatsOnTestPage />);
+
+    expect(await screen.findByText(STANDING)).toBeInTheDocument();
+    expect(screen.queryByText(OFF_TEST)).toBeNull();
   });
 
   it("renders the pending commits newest first with PR link, date, and short sha", async () => {
@@ -96,7 +118,7 @@ describe("AdminWhatsOnTestPage", () => {
     expect(screen.queryByRole("link", { name: /#null/ })).toBeNull();
   });
 
-  it("shows which shas test and production are on", async () => {
+  it("shows which versions the test and live sites are on", async () => {
     render(<AdminWhatsOnTestPage />);
 
     // The sentence wraps its shas in <code>, so match on the paragraph's
@@ -106,7 +128,7 @@ describe("AdminWhatsOnTestPage", () => {
         element?.classList.contains("whats-on-test-shas") ?? false,
     );
     expect(shaLine).toHaveTextContent(
-      "Test is at bbb2222, production is at aaa1111",
+      "The test site is at version bbb2222, the live site at version aaa1111",
     );
   });
 
@@ -119,7 +141,9 @@ describe("AdminWhatsOnTestPage", () => {
     render(<AdminWhatsOnTestPage />);
 
     expect(
-      await screen.findByText("test == prod — nothing awaiting promotion."),
+      await screen.findByText(
+        /the test site and the live site are the same right now/i,
+      ),
     ).toBeInTheDocument();
     expect(DeployStatusService.getPendingCommits).not.toHaveBeenCalled();
   });
@@ -133,7 +157,9 @@ describe("AdminWhatsOnTestPage", () => {
     render(<AdminWhatsOnTestPage />);
 
     expect(
-      await screen.findByText("test == prod — nothing awaiting promotion."),
+      await screen.findByText(
+        /the test site and the live site are the same right now/i,
+      ),
     ).toBeInTheDocument();
   });
 
@@ -145,7 +171,7 @@ describe("AdminWhatsOnTestPage", () => {
     render(<AdminWhatsOnTestPage />);
 
     expect(
-      await screen.findByText(/no successful production deployment/i),
+      await screen.findByText(/hasn't been published from here yet/i),
     ).toBeInTheDocument();
     expect(DeployStatusService.getPendingCommits).not.toHaveBeenCalled();
   });
@@ -158,15 +184,17 @@ describe("AdminWhatsOnTestPage", () => {
     render(<AdminWhatsOnTestPage />);
 
     expect(
-      await screen.findByText(/couldn't determine what production is running/i),
+      await screen.findByText(
+        /couldn't work out which version the live site is running/i,
+      ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText(/no successful production deployment/i),
+      screen.queryByText(/hasn't been published from here yet/i),
     ).toBeNull();
     expect(DeployStatusService.getPendingCommits).not.toHaveBeenCalled();
   });
 
-  it("warns that the newest merges are missing when GitHub truncated the comparison", async () => {
+  it("warns that the newest changes are missing when GitHub truncated the comparison", async () => {
     vi.mocked(DeployStatusService.getPendingCommits).mockResolvedValue({
       commits: pendingCommits,
       totalCommits: 715,
@@ -175,9 +203,9 @@ describe("AdminWhatsOnTestPage", () => {
     render(<AdminWhatsOnTestPage />);
 
     const warning = await screen.findByText(
-      /715 commits are pending, but GitHub's comparison returned only the oldest 2/i,
+      /715 changes are waiting to go live, but only the oldest 2 could be listed/i,
     );
-    expect(warning).toHaveTextContent(/most recent merges are not listed/i);
+    expect(warning).toHaveTextContent(/most recent ones are missing/i);
     // The (incomplete) list still renders below the warning.
     expect(screen.getByText("Change background photo")).toBeInTheDocument();
   });
@@ -186,7 +214,7 @@ describe("AdminWhatsOnTestPage", () => {
     render(<AdminWhatsOnTestPage />);
 
     await screen.findByText("Change background photo");
-    expect(screen.queryByText(/comparison returned only/i)).toBeNull();
+    expect(screen.queryByText(/could be listed/i)).toBeNull();
   });
 
   it("shows an error state with retry when the GitHub API fails", async () => {
@@ -197,12 +225,43 @@ describe("AdminWhatsOnTestPage", () => {
     render(<AdminWhatsOnTestPage />);
 
     expect(
-      await screen.findByText("Failed to load deployment status."),
+      await screen.findByText("Failed to load what's waiting to go live."),
     ).toBeInTheDocument();
 
     await userEvent.click(screen.getByText("Retry"));
     expect(
       await screen.findByText("Change background photo"),
     ).toBeInTheDocument();
+  });
+
+  // jsdom applies no stylesheet, so the shape of the page is read from the
+  // CSS. The panel's explanation line was capped at 60ch of 15px text while
+  // the notes beneath it ran uncapped at 16px, so two paragraphs on one
+  // card broke at visibly different widths — tidy panel, ragged block.
+  describe("the panel's prose", () => {
+    const css = (path: string) =>
+      readFileSync(path, "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const pageCss = css(
+      "src/pages/admin/admin-whats-on-test-page/admin-whats-on-test-page.css",
+    );
+
+    it.each([["font-size"], ["max-width"]])(
+      "sets the notes' %s from the shared admin prose token",
+      (property) => {
+        const block = pageCss.match(/\.whats-on-test-note\s*\{([^}]*)\}/)?.[1];
+        expect(block).toMatch(
+          new RegExp(`${property}\\s*:\\s*var\\(--admin-prose-`),
+        );
+      },
+    );
+
+    it("gives the explanation line above them the very same tokens", () => {
+      const adminCss = css("src/pages/admin/admin.css");
+      const block = adminCss.match(
+        /\.admin-section-explanation\s*\{([^}]*)\}/,
+      )?.[1];
+      expect(block).toMatch(/font-size\s*:\s*var\(--admin-prose-size\)/);
+      expect(block).toMatch(/max-width\s*:\s*var\(--admin-prose-measure\)/);
+    });
   });
 });

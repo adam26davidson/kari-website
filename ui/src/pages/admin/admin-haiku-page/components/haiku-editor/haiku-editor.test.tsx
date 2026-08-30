@@ -46,7 +46,9 @@ describe("HaikuEditor", () => {
 
   it("updates the publisher while keeping the lines", () => {
     const { setHaiku } = renderEditor();
-    fireEvent.change(screen.getByPlaceholderText("Publisher"), {
+    // Through the visible label, which proves the htmlFor/id wiring and
+    // not merely that some text sits above the box (#457).
+    fireEvent.change(screen.getByLabelText("Publisher"), {
       target: { value: "basho" },
     });
     expect(setHaiku).toHaveBeenCalledWith({ ...haiku, publisher: "basho" });
@@ -64,8 +66,17 @@ describe("HaikuEditor", () => {
 
   it("disables the save button when the page says so", () => {
     renderEditor({ saveDisabled: true });
-    expect(screen.getByRole("button", { name: "Save" })).toHaveClass(
-      "disabled",
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it("says what it is editing and labels both fields", () => {
+    renderEditor();
+    expect(
+      screen.getByRole("heading", { name: "Edit haiku" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Haiku")).toHaveValue(
+      "line one\nline two\nline three",
     );
+    expect(screen.getByLabelText("Publisher")).toHaveValue("kari");
   });
 });

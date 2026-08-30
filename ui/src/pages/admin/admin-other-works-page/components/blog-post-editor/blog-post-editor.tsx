@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { BlogPost } from "../../../../../models";
 import {
   toDateInputValue,
@@ -27,6 +28,9 @@ export function BlogPostEditor({
   onClose: () => void;
   onAddImage: (image: File, id: string) => void;
 }) {
+  const titleId = useId();
+  const dateId = useId();
+  const publishedId = useId();
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // toPostDate pins the picked day to UTC midnight, the one shape
     // stored post dates take (#379), and returns null for a value that
@@ -38,21 +42,38 @@ export function BlogPostEditor({
   };
 
   return (
-    <DataEditor onSave={onSave} onClose={onClose} disableSave={saveDisabled}>
-      <input
-        type="text"
-        placeholder="Title"
-        value={post.title}
-        onChange={(e) => setPost({ ...post, title: e.target.value })}
-      />
-      <div className="blog-post-editor-input-line">
+    <DataEditor
+      title="Edit post"
+      onSave={onSave}
+      onClose={onClose}
+      disableSave={saveDisabled}
+    >
+      <div className="admin-field">
+        <label className="admin-field-label" htmlFor={titleId}>
+          Title
+        </label>
         <input
-          type="date"
-          value={toDateInputValue(post.date)}
-          onChange={handleDateChange}
+          id={titleId}
+          type="text"
+          value={post.title}
+          onChange={(e) => setPost({ ...post, title: e.target.value })}
         />
+      </div>
+      <div className="blog-post-editor-input-line">
+        <div className="admin-field">
+          <label className="admin-field-label" htmlFor={dateId}>
+            Date
+          </label>
+          <input
+            id={dateId}
+            type="date"
+            value={toDateInputValue(post.date)}
+            onChange={handleDateChange}
+          />
+        </div>
         <div className="blog-post-editor-status">
           <input
+            id={publishedId}
             className="blog-post-editor-status-checkbox"
             type="checkbox"
             checked={post.isPublished}
@@ -60,7 +81,7 @@ export function BlogPostEditor({
               setPost({ ...post, isPublished: e.target.checked })
             }
           />
-          <label>Published</label>
+          <label htmlFor={publishedId}>Published</label>
         </div>
       </div>
       {

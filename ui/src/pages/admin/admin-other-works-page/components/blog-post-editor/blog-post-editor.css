@@ -15,11 +15,29 @@
 .blog-post-editor-input-line {
   display: flex;
   flex-direction: row;
-  align-items: center;
+  /* The date now carries a label above it and the Published checkbox does
+     not, so align on the controls' baseline row rather than the boxes'
+     centres — otherwise the checkbox floats up beside the "Date" label. */
+  align-items: flex-end;
   justify-content: flex-start;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 8px 16px;
 }
 
-.blog-post-editor-input-line input[type="date"] {
+/* The checkbox sits on the same row as the date input, not level with its
+   label. */
+.blog-post-editor-status {
+  padding-bottom: 6px;
+}
+
+/* A date is a fixed-width thing, so this one field keeps its own size
+   rather than filling the panel like the Title above it. Scoped through
+   .admin-field to outrank the shared "fill your field" rule in admin.css,
+   which would otherwise stretch it across the whole row. */
+.blog-post-editor-input-line .admin-field {
+  flex: 0 0 auto;
+}
+
+.blog-post-editor-input-line .admin-field > input[type="date"] {
   width: 150px;
 }

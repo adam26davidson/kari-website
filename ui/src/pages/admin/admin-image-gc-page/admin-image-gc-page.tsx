@@ -41,6 +41,14 @@ function ImageList({
   );
 }
 
+/** Picks the wording that agrees with a count, so "1" never reads wrong. */
+const agree = (count: number, one: string, many: string) =>
+  count === 1 ? one : many;
+
+/** "1 unused image" / "3 unused images" — the phrase every count uses. */
+const countOfImages = (count: number) =>
+  `${count} ${agree(count, "unused image", "unused images")}`;
+
 export function AdminImageGcPage() {
   const getAccessTokenSilently = useAdminToken();
   const { showLoading, hideLoading, confirm, notify } = useAdminUi();
@@ -49,18 +57,14 @@ export function AdminImageGcPage() {
 
   const runGc = async (dryRun: boolean) => {
     showLoading(
-      dryRun ? "Previewing image cleanup..." : "Deleting orphaned images...",
+      dryRun ? "Previewing image cleanup..." : "Deleting unused images...",
     );
     setError(null);
     try {
       const result = await ImageService.gc(dryRun, getAccessTokenSilently);
       setReport(result);
       if (!dryRun) {
-        notify(
-          `Deleted ${result.deleted.length} orphaned image${
-            result.deleted.length === 1 ? "" : "s"
-          }`,
-        );
+        notify(`Deleted ${countOfImages(result.deleted.length)}`);
       }
     } catch (e) {
       console.error(e);
@@ -74,27 +78,24 @@ export function AdminImageGcPage() {
     }
   };
 
-  const onDeleteOrphaned = () => {
+  const onDeleteUnused = () => {
     if (!report) return;
     confirm(
-      `This will permanently delete ${report.orphaned.length} orphaned ` +
-        `image${report.orphaned.length === 1 ? "" : "s"} from storage. ` +
-        "Do you want to continue?",
+      `This will permanently delete ${countOfImages(report.orphaned.length)}` +
+        " from storage. This cannot be undone. Do you want to continue?",
       () => runGc(false),
     );
   };
 
   return (
     <div className="admin-image-gc-page">
-      <h2>Image cleanup</h2>
-      <p className="gc-explanation">
-        Finds uploaded images that are no longer referenced by any page and
+      <h2 className="admin-section-heading">Image cleanup</h2>
+      <p className="admin-section-explanation">
+        Finds uploaded images that no page on the site uses any more and
         removes them from storage. Previewing never deletes anything; images
         uploaded within the last hour are always kept.
       </p>
-      <AdminButton onClick={() => runGc(true)}>
-        Preview cleanup (dry run)
-      </AdminButton>
+      <AdminButton onClick={() => runGc(true)}>Preview cleanup</AdminButton>
       {error && (
         <div className="gc-error" role="alert">
           {error}
@@ -107,30 +108,30 @@ export function AdminImageGcPage() {
         <div className="gc-report">
           <div className="gc-summary">
             {report.dry_run
-              ? `Preview: ${report.orphaned.length} orphaned, ` +
-                `${report.referenced.length} referenced, ` +
-                `${report.skipped_recent.length} skipped as recent. ` +
-                "Nothing has been deleted."
-              : `Deleted ${report.deleted.length} orphaned image` +
-                `${report.deleted.length === 1 ? "" : "s"}.`}
+              ? `Preview: ${report.orphaned.length} ` +
+                agree(report.orphaned.length, "image is", "images are") +
+                " no longer used by any page and would be deleted, " +
+                `${report.referenced.length} still in use, ` +
+                `${report.skipped_recent.length} uploaded in the last hour ` +
+                "and left alone. Nothing has been deleted."
+              : `Deleted ${countOfImages(report.deleted.length)}.`}
           </div>
           {report.dry_run && report.orphaned.length > 0 && (
-            <AdminButton onClick={onDeleteOrphaned}>
-              Delete {report.orphaned.length} orphaned image
-              {report.orphaned.length === 1 ? "" : "s"}
+            <AdminButton variant="danger" onClick={onDeleteUnused}>
+              Delete {countOfImages(report.orphaned.length)}
             </AdminButton>
           )}
           {report.dry_run ? (
             <ImageList
-              title="Orphaned (would be deleted)"
+              title="No longer used (would be deleted)"
               images={report.orphaned}
             />
           ) : (
             <ImageList title="Deleted" images={report.deleted} />
           )}
-          <ImageList title="Referenced (kept)" images={report.referenced} />
+          <ImageList title="Still in use (kept)" images={report.referenced} />
           <ImageList
-            title="Skipped — uploaded within the last hour"
+            title="Uploaded in the last hour (kept)"
             images={report.skipped_recent}
           />
         </div>

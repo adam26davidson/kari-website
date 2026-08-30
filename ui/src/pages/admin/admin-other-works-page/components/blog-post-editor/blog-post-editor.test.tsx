@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BlogPostEditor } from "./blog-post-editor";
@@ -56,7 +57,7 @@ function renderEditor(overrides?: { post?: BlogPost; saveDisabled?: boolean }) {
 describe("BlogPostEditor", () => {
   it("updates the title while keeping the rest of the post", () => {
     const { setPost } = renderEditor();
-    fireEvent.change(screen.getByPlaceholderText("Title"), {
+    fireEvent.change(screen.getByLabelText("Title"), {
       target: { value: "New Title" },
     });
     expect(setPost).toHaveBeenCalledWith({ ...post, title: "New Title" });
@@ -148,8 +149,38 @@ describe("BlogPostEditor", () => {
 
   it("disables the save button when the page says the post is invalid", () => {
     renderEditor({ saveDisabled: true });
-    expect(screen.getByRole("button", { name: "Save" })).toHaveClass(
-      "disabled",
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it("says what it is editing and labels the title, date and checkbox", () => {
+    renderEditor();
+    expect(
+      screen.getByRole("heading", { name: "Edit post" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Title")).toHaveValue(post.title);
+    expect(screen.getByLabelText("Date")).toHaveValue("2024-05-01");
+    // The bare <label>Published</label> pointed at nothing, so clicking
+    // the word did not toggle the box (#457).
+    expect(screen.getByLabelText("Published")).toBe(
+      screen.getByRole("checkbox"),
     );
+  });
+
+  it("toggles the published flag by clicking its label", async () => {
+    const { setPost } = renderEditor();
+    await userEvent.click(screen.getByText("Published"));
+    expect(setPost).toHaveBeenCalledWith({ ...post, isPublished: true });
+  });
+
+  // A ticked checkbox is the one control the browser still paints itself,
+  // and it paints it system blue — the only blue on a screen of warm
+  // browns. jsdom applies no stylesheet, so the tint is read from the CSS.
+  it("tints the checkbox with the admin's own colour, not the browser's", () => {
+    const adminCss = readFileSync("src/pages/admin/admin.css", "utf-8").replace(
+      /\/\*[\s\S]*?\*\//g,
+      "",
+    );
+    const block = adminCss.match(/input\[type="checkbox"\]\s*\{([^}]*)\}/)?.[1];
+    expect(block).toMatch(/accent-color\s*:\s*#[0-9a-f]{6}/i);
   });
 });

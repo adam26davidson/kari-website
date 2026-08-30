@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
@@ -178,5 +179,47 @@ describe("Admin what's-on-test section (staging-only)", () => {
     expect(screen.queryByText("whats-on-test-page-stub")).toBeNull();
     // The unknown section falls through to the home redirect.
     expect(screen.getByText("home-page-stub")).toBeInTheDocument();
+  });
+});
+
+// jsdom applies no stylesheet, so the phone menu's sizing is read out of the
+// CSS rather than measured.
+describe("the admin menu at phone width", () => {
+  const strip = (path: string) =>
+    readFileSync(path, "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const adminCss = strip("src/pages/admin/admin.css");
+  const atPhoneWidth = (() => {
+    const media = adminCss.indexOf("@media (max-width: 767.98px)");
+    expect(media).toBeGreaterThanOrEqual(0);
+    return adminCss.slice(adminCss.indexOf("{", media) + 1);
+  })();
+  const block = (selector: string) =>
+    atPhoneWidth.match(
+      new RegExp(
+        `(?:^|\\})\\s*${selector.replace(".", "\\.")}\\s*\\{([^}]*)\\}`,
+      ),
+    )?.[1] ?? "";
+
+  // Eight links at a ~35px pitch with no row gap read as a dense index
+  // rather than a menu (design brief §1), and 35px is under the size a
+  // fingertip stops missing at — the same 44px floor the list rows' own
+  // controls take at this breakpoint.
+  it("gives every link a fingertip-sized row", () => {
+    const menuItem = block(".admin-menu-item");
+    expect(menuItem).toMatch(/min-height\s*:\s*(4[4-9]|[5-9]\d)px/);
+    // Without border-box the base rule's content-box adds the padding on
+    // top of the floor, so the number above would not be what she taps.
+    expect(menuItem).toMatch(/box-sizing\s*:\s*border-box/);
+  });
+
+  it("separates the rows rather than letting them meet", () => {
+    expect(block(".admin-menu")).toMatch(/gap\s*:\s*[1-9]/);
+  });
+
+  // The menu is width:100%, so any side padding it takes has to come out of
+  // that 100% — content-box pushed the grid past a 390px viewport by
+  // exactly the padding.
+  it("keeps its side padding inside the viewport", () => {
+    expect(block(".admin-menu")).toMatch(/box-sizing\s*:\s*border-box/);
   });
 });

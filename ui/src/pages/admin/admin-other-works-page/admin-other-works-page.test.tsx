@@ -72,12 +72,32 @@ vi.mock("../components/tiptap/tiptap", () => ({
   ),
 }));
 
+/**
+ * A per-row control located by its FontAwesome glyph. Since #457 edit and
+ * delete are labelled .admin-button text buttons and the move arrows are
+ * .admin-icon-button circles, so this closes on the button element itself
+ * rather than on either class.
+ */
 function iconButton(container: HTMLElement, icon: string): HTMLElement {
   const button = container
     .querySelector(`svg[data-icon="${icon}"]`)
-    ?.closest(".admin-icon-button");
+    ?.closest("button");
   if (!(button instanceof HTMLElement)) {
     throw new Error(`no icon button for "${icon}"`);
+  }
+  return button;
+}
+
+/**
+ * The editor's Save control. A floppy-disk icon circle until #457 made it
+ * a labelled text button; it is the first control in the editor header.
+ */
+function saveButton(container: HTMLElement): HTMLElement {
+  const button = container.querySelector(
+    ".data-editor-item-controls .admin-button",
+  );
+  if (!(button instanceof HTMLElement)) {
+    throw new Error("no save button in the editor");
   }
   return button;
 }
@@ -131,7 +151,7 @@ describe("AdminOtherWorksPage image removal on save", () => {
     );
     const { container, notify } = await openEditorAndRemoveImage();
 
-    fireEvent.click(iconButton(container, "floppy-disk"));
+    fireEvent.click(saveButton(container));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
@@ -155,7 +175,7 @@ describe("AdminOtherWorksPage image removal on save", () => {
     );
     const { container, notify } = await openEditorAndRemoveImage();
 
-    fireEvent.click(iconButton(container, "floppy-disk"));
+    fireEvent.click(saveButton(container));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
@@ -168,7 +188,7 @@ describe("AdminOtherWorksPage image removal on save", () => {
   it("saves content then list, leaving the removed image in storage", async () => {
     const { container, notify } = await openEditorAndRemoveImage();
 
-    fireEvent.click(iconButton(container, "floppy-disk"));
+    fireEvent.click(saveButton(container));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Other works item saved"),
@@ -203,7 +223,7 @@ describe("AdminOtherWorksPage pending image files", () => {
       },
     });
 
-    fireEvent.click(iconButton(container, "floppy-disk"));
+    fireEvent.click(saveButton(container));
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Other works item saved"),
     );
@@ -240,7 +260,7 @@ describe("AdminOtherWorksPage content serialization on save", () => {
   it("saves the body fragment without html/head/body wrappers", async () => {
     const { container, notify } = await openEditorAndRemoveImage();
 
-    fireEvent.click(iconButton(container, "floppy-disk"));
+    fireEvent.click(saveButton(container));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Other works item saved"),
@@ -257,7 +277,7 @@ describe("AdminOtherWorksPage content serialization on save", () => {
   it("re-saves already-clean content byte-for-byte (round-trip no-op)", async () => {
     const { container, notify } = await openEditor();
 
-    fireEvent.click(iconButton(container, "floppy-disk"));
+    fireEvent.click(saveButton(container));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Other works item saved"),
@@ -276,7 +296,7 @@ describe("AdminOtherWorksPage content serialization on save", () => {
     );
     const { container, notify } = await openEditor();
 
-    fireEvent.click(iconButton(container, "floppy-disk"));
+    fireEvent.click(saveButton(container));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Other works item saved"),
@@ -330,7 +350,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
     it("flips images public, then saves content, then the list", async () => {
       const { container, notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(iconButton(container, "floppy-disk"));
+      fireEvent.click(saveButton(container));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith("Other works item saved"),
@@ -369,7 +389,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       );
       const { container, notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(iconButton(container, "floppy-disk"));
+      fireEvent.click(saveButton(container));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith("Other works item saved"),
@@ -390,7 +410,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       );
       const { container, notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(iconButton(container, "floppy-disk"));
+      fireEvent.click(saveButton(container));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -415,7 +435,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       );
       const { container, notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(iconButton(container, "floppy-disk"));
+      fireEvent.click(saveButton(container));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -440,7 +460,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       );
       const { container, notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(iconButton(container, "floppy-disk"));
+      fireEvent.click(saveButton(container));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -484,7 +504,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       );
       const { container, notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(iconButton(container, "floppy-disk"));
+      fireEvent.click(saveButton(container));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -507,7 +527,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
         .mockRejectedValue(new Error("rollback PUT failed"));
       const { container, notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(iconButton(container, "floppy-disk"));
+      fireEvent.click(saveButton(container));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -528,7 +548,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
     it("hides the post first, then saves content, then flips images", async () => {
       const { container, notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(iconButton(container, "floppy-disk"));
+      fireEvent.click(saveButton(container));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith("Other works item saved"),
@@ -565,7 +585,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       );
       const { container, notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(iconButton(container, "floppy-disk"));
+      fireEvent.click(saveButton(container));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -583,7 +603,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       );
       const { container, notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(iconButton(container, "floppy-disk"));
+      fireEvent.click(saveButton(container));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -619,7 +639,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
         .mockRejectedValue(new Error("rollback PUT failed"));
       const { container, notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(iconButton(container, "floppy-disk"));
+      fireEvent.click(saveButton(container));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -656,7 +676,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
         .mockRejectedValue(new Error("rollback PUT failed"));
       const { container, notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(iconButton(container, "floppy-disk"));
+      fireEvent.click(saveButton(container));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -682,7 +702,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       );
       const { container, notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(iconButton(container, "floppy-disk"));
+      fireEvent.click(saveButton(container));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -721,7 +741,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       );
       const { container, notify } = await openEditorAndRemoveImage();
 
-      fireEvent.click(iconButton(container, "floppy-disk"));
+      fireEvent.click(saveButton(container));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -796,7 +816,7 @@ describe("AdminOtherWorksPage creation", () => {
   // dialog has been handed to confirm().
   async function openCreateConfirmation() {
     const { container, notify, adminUi } = await renderPage();
-    fireEvent.click(screen.getByRole("button", { name: "Add item" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add a post" }));
     return { container, notify, adminUi };
   }
 
@@ -1010,7 +1030,7 @@ describe("AdminOtherWorksPage load failure", () => {
 
     await screen.findByText("Failed to load other works.");
     // No editable list — saving one would overwrite the real data.
-    expect(screen.queryByRole("button", { name: "Add item" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add a post" })).toBeNull();
 
     // Retry reloads and shows the list.
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
@@ -1136,7 +1156,7 @@ describe("AdminOtherWorksPage routing", () => {
     const { container, adminUi } = await renderPage();
     fireEvent.click(iconButton(container, "pencil"));
     await screen.findByPlaceholderText("post content");
-    fireEvent.change(screen.getByPlaceholderText("Title"), {
+    fireEvent.change(screen.getByLabelText("Title"), {
       target: { value: "New Title" },
     });
 
@@ -1155,7 +1175,7 @@ describe("AdminOtherWorksPage routing", () => {
     const textarea = await screen.findByPlaceholderText("post content");
     fireEvent.change(textarea, { target: { value: "<p>hello</p>" } });
 
-    fireEvent.click(iconButton(container, "floppy-disk"));
+    fireEvent.click(saveButton(container));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Other works item saved"),
@@ -1176,7 +1196,7 @@ describe("AdminOtherWorksPage image upload on save", () => {
     await screen.findByPlaceholderText("post content");
     fireEvent.click(screen.getByText("attach pending file"));
 
-    fireEvent.click(iconButton(container, "floppy-disk"));
+    fireEvent.click(saveButton(container));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
@@ -1207,7 +1227,7 @@ describe("AdminOtherWorksPage new item", () => {
     });
     const { adminUi } = await renderPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "Add item" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add a post" }));
     await answerYes(adminUi);
 
     await waitFor(() => expect(BlogService.updateList).toHaveBeenCalled());

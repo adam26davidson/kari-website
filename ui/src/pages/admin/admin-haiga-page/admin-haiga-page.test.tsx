@@ -220,7 +220,7 @@ describe("AdminHaigaPage creation", () => {
     const notify = adminUi.notify;
     // Wait for the list to load so the saved list is deterministic.
     await screen.findByRole("button", { name: "Edit" });
-    fireEvent.click(screen.getByRole("button", { name: "Add item" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add a haiga" }));
     return { notify, adminUi };
   }
 
@@ -383,7 +383,7 @@ describe("AdminHaigaPage load failure", () => {
 
     await screen.findByText("Failed to load haiga.");
     // No editable list — saving one would overwrite the real data.
-    expect(screen.queryByRole("button", { name: "Add item" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add a haiga" })).toBeNull();
 
     // Retry reloads and shows the list.
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));

@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { PhotographyPost } from "../../../../../models";
 import { AdminItemList } from "../../../components/admin-item-list/admin-item-list";
 import { DataEditor } from "../../../components/data-editor/data-editor";
@@ -26,6 +27,10 @@ export function PhotographyPostEditor({
   images: Array<EditorImage>;
   setImages: (images: Array<EditorImage>) => void;
 }) {
+  const titleId = useId();
+  const subtitleId = useId();
+  const blurbId = useId();
+  const captionIdPrefix = useId();
   const updateField =
     (field: "title" | "subtitle" | "blurb") =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -67,49 +72,87 @@ export function PhotographyPostEditor({
   };
 
   return (
-    <DataEditor onSave={onSave} onClose={onClose} disableSave={saveDisabled}>
+    <DataEditor
+      title="Edit photography post"
+      onSave={onSave}
+      onClose={onClose}
+      disableSave={saveDisabled}
+    >
       <div className="photography-post-editor-fields">
-        <input
-          type="text"
-          placeholder="Title"
-          aria-label="Title"
-          value={post.title}
-          onChange={updateField("title")}
-        />
-        <input
-          type="text"
-          placeholder="Subtitle"
-          aria-label="Subtitle"
-          value={post.subtitle}
-          onChange={updateField("subtitle")}
-        />
-        <textarea
-          value={post.blurb}
-          placeholder={"Optional blurb"}
-          aria-label="Optional blurb"
-          onChange={updateField("blurb")}
-        />
+        <div className="admin-field">
+          <label className="admin-field-label" htmlFor={titleId}>
+            Title
+          </label>
+          <input
+            id={titleId}
+            type="text"
+            value={post.title}
+            onChange={updateField("title")}
+          />
+        </div>
+        <div className="admin-field">
+          <label className="admin-field-label" htmlFor={subtitleId}>
+            Subtitle
+          </label>
+          <input
+            id={subtitleId}
+            type="text"
+            value={post.subtitle}
+            onChange={updateField("subtitle")}
+          />
+        </div>
+        <div className="admin-field">
+          <label className="admin-field-label" htmlFor={blurbId}>
+            Blurb (optional)
+          </label>
+          <textarea
+            id={blurbId}
+            value={post.blurb}
+            onChange={updateField("blurb")}
+          />
+        </div>
       </div>
       <div className="photography-post-editor-images">
         <AdminItemList
           items={images}
+          addLabel="Add an image"
+          // Secondary: Save, in the header above, is this screen's one
+          // primary. Filled, these two competed as equals (#457).
+          addVariant="secondary"
           onNewItem={onNewImage}
           onDelete={onDelete}
+          // Named and on its own line. As a bare red circle it floated in
+          // the space beside the caption box, centred against nothing and
+          // aligned to neither column, saying nothing about whether it
+          // removed the caption, the photo or the post (#457).
+          deleteLabel="Remove this image"
           onMove={onMove}
           hideEdit
           renderItem={(entry) => (
             <div className="photography-post-editor-image-fields">
-              <PhotoPicker
-                imageFile={entry.file}
-                fileName={entry.image}
-                setImageFile={setImageFile(entry.id)}
-              />
-              <textarea
-                value={entry.blurb}
-                placeholder={"image blurb or caption"}
-                aria-label="image blurb or caption"
-                onChange={handleImageBlurbChange(entry.id)}
-              />
+              <div className="admin-field photography-post-editor-photo-field">
+                {/* Group label: the picker is a composite, not one
+                    control, so there is nothing to point `for` at. */}
+                <span className="admin-field-label">Photo</span>
+                <PhotoPicker
+                  imageFile={entry.file}
+                  fileName={entry.image}
+                  setImageFile={setImageFile(entry.id)}
+                />
+              </div>
+              <div className="admin-field photography-post-editor-caption-field">
+                <label
+                  className="admin-field-label"
+                  htmlFor={`${captionIdPrefix}-${entry.id}`}
+                >
+                  Caption (optional)
+                </label>
+                <textarea
+                  id={`${captionIdPrefix}-${entry.id}`}
+                  value={entry.blurb}
+                  onChange={handleImageBlurbChange(entry.id)}
+                />
+              </div>
             </div>
           )}
         />

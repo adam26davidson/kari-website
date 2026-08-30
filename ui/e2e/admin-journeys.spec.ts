@@ -2,9 +2,10 @@ import { test, expect, Page } from "@playwright/test";
 import {
   adminListItem,
   confirmDialog,
+  deleteButton,
   deleteItemsMatching,
+  editButton,
   expectGoneFromPublicPage,
-  iconButton,
   openAdminSection,
   originalKey,
   pngFixturePath,
@@ -31,19 +32,26 @@ import {
 const editorControls = (page: Page) =>
   page.locator(".data-editor-item-controls");
 
+const saveButton = (page: Page) =>
+  editorControls(page).getByRole("button", { name: "Save" });
+
 async function saveEditor(page: Page) {
-  const save = iconButton(editorControls(page), "floppy-disk");
-  await expect(save).not.toHaveClass(/disabled/);
+  const save = saveButton(page);
+  await expect(save).toBeEnabled();
   await save.click();
 }
 
 async function closeEditor(page: Page) {
-  await iconButton(editorControls(page), "xmark").click();
+  await editorControls(page).getByRole("button", { name: "Close" }).click();
   await expect(page.locator(".data-editor")).toBeHidden();
 }
 
 async function createNewItem(page: Page) {
-  await iconButton(page, "plus").first().click();
+  // Every list's add control is a labelled "Add a <thing>" button (#457).
+  await page
+    .getByRole("button", { name: /^Add a/ })
+    .first()
+    .click();
   await confirmDialog(page, "Yes");
   await waitForIdle(page, 120_000);
   await expect(page.locator(".data-editor")).toBeVisible({ timeout: 60_000 });
@@ -87,7 +95,7 @@ test.describe("admin navigation", () => {
     await expect(page).toHaveURL(/\/admin\/haiku$/);
 
     // Opening an editor pushes history too, and its URL survives a reload.
-    await iconButton(adminListItem(page, marker), "pencil").click();
+    await editButton(adminListItem(page, marker)).click();
     await expect(page.locator(".data-editor")).toBeVisible();
     await expect(page).toHaveURL(/\/admin\/haiku\/[\w-]+$/);
     const editorUrl = page.url();
@@ -105,7 +113,7 @@ test.describe("admin navigation", () => {
     await expect(page.locator(".data-editor")).toBeHidden();
 
     // Back from a dirty editor asks first: No stays, Yes discards.
-    await iconButton(adminListItem(page, marker), "pencil").click();
+    await editButton(adminListItem(page, marker)).click();
     await expect(page.locator(".data-editor")).toBeVisible();
     await page.locator(".data-editor textarea").fill(`${marker}\nedited`);
     await page.goBack();
@@ -144,7 +152,7 @@ test.describe("haiku", () => {
     await page
       .locator(".data-editor textarea")
       .fill(`${marker}\nsecond line\nthird line`);
-    await page.getByPlaceholder("Publisher").fill("e2e publisher");
+    await page.getByLabel("Publisher").fill("e2e publisher");
     await saveEditor(page);
     await expectToast(page, "Haiku saved");
     await closeEditor(page);
@@ -152,7 +160,7 @@ test.describe("haiku", () => {
     await expect(row).toBeVisible();
 
     // Edit
-    await iconButton(row, "pencil").click();
+    await editButton(row).click();
     const textarea = page.locator(".data-editor textarea");
     await expect(textarea).toHaveValue(new RegExp(marker));
     await textarea.fill(`${marker}\nedited line`);
@@ -169,7 +177,7 @@ test.describe("haiku", () => {
 
     // Delete
     await openAdminSection(page, "Haiku");
-    await iconButton(adminListItem(page, marker), "trash").click();
+    await deleteButton(adminListItem(page, marker)).click();
     await confirmDialog(page, "Yes");
     await waitForIdle(page, 120_000);
     await expect(adminListItem(page, marker)).toHaveCount(0);
@@ -207,10 +215,8 @@ test.describe("haiga", () => {
     // Saving is disabled until an image is picked — the image is the
     // content of a haiga.
     await createNewItem(page);
-    await expect(iconButton(editorControls(page), "floppy-disk")).toHaveClass(
-      /disabled/,
-    );
-    await page.getByPlaceholder("Publisher").fill(marker);
+    await expect(saveButton(page)).toBeDisabled();
+    await page.getByLabel("Publisher").fill(marker);
     await page
       .locator('.data-editor input[type="file"]')
       .setInputFiles(pngFixturePath());
@@ -224,8 +230,8 @@ test.describe("haiga", () => {
 
     // Edit: the publisher and the uploaded image persisted (the image is
     // served through the API on the admin side).
-    await iconButton(row, "pencil").click();
-    const publisher = page.getByPlaceholder("Publisher");
+    await editButton(row).click();
+    const publisher = page.getByLabel("Publisher");
     await expect(publisher).toHaveValue(marker);
     await expect(
       page.locator('.photo-picker-image[src*="/images/"]'),
@@ -253,7 +259,7 @@ test.describe("haiga", () => {
 
     // Delete (the uploaded image object stays for the cleanup sweep)
     await openAdminSection(page, "Haiga");
-    await iconButton(adminListItem(page, marker), "trash").click();
+    await deleteButton(adminListItem(page, marker)).click();
     await confirmDialog(page, "Yes");
     await waitForIdle(page, 120_000);
     await expect(adminListItem(page, marker)).toHaveCount(0);
@@ -285,7 +291,7 @@ test.describe("blog (other works)", () => {
   }) => {
     await openAdminSection(page, "Other works");
     await createNewItem(page);
-    await page.getByPlaceholder("Title", { exact: true }).fill(marker);
+    await page.getByLabel("Title", { exact: true }).fill(marker);
     // Leave "Published" unchecked: this is a draft.
     await expect(
       page.locator(".blog-post-editor-status-checkbox"),
@@ -319,7 +325,7 @@ test.describe("blog (other works)", () => {
 
     // Create a draft with rich-text content and an embedded image.
     await createNewItem(page);
-    await page.getByPlaceholder("Title", { exact: true }).fill(marker);
+    await page.getByLabel("Title", { exact: true }).fill(marker);
     const prose = page.locator(".tiptap-container .ProseMirror");
     await prose.click();
     await page.keyboard.type(`Body ${marker} content`);
@@ -338,7 +344,7 @@ test.describe("blog (other works)", () => {
 
     // Reopen: content and image persisted; draft images are served through
     // the API (private storage).
-    await iconButton(adminListItem(page, marker), "pencil").click();
+    await editButton(adminListItem(page, marker)).click();
     await expect(page.locator(".data-editor")).toBeVisible({
       timeout: 60_000,
     });
@@ -376,7 +382,7 @@ test.describe("blog (other works)", () => {
     // Delete (also removes the content document; image objects stay
     // for the cleanup sweep).
     await openAdminSection(page, "Other works");
-    await iconButton(adminListItem(page, marker), "trash").click();
+    await deleteButton(adminListItem(page, marker)).click();
     await confirmDialog(page, "Yes");
     await waitForIdle(page, 180_000);
     await expect(adminListItem(page, marker)).toHaveCount(0);
@@ -408,21 +414,21 @@ test.describe("photography", () => {
 
     // Create
     await createNewItem(page);
-    await page.getByPlaceholder("Title", { exact: true }).fill(marker);
-    await page.getByPlaceholder("Subtitle").fill("e2e subtitle");
-    await page.getByPlaceholder("Optional blurb").fill("e2e blurb");
+    await page.getByLabel("Title", { exact: true }).fill(marker);
+    await page.getByLabel("Subtitle").fill("e2e subtitle");
+    await page.getByLabel("Blurb (optional)").fill("e2e blurb");
 
     // Add an image: new picker slot, then pick the PNG fixture.
     const imagesSection = page.locator(".photography-post-editor-images");
-    await iconButton(imagesSection, "plus").click();
+    await imagesSection
+      .getByRole("button", { name: "Add an image" })
+      .click();
     await imagesSection.locator('input[type="file"]').setInputFiles(
       pngFixturePath(),
     );
     // The chosen image shows up in the photo picker as a preview.
     await expect(imagesSection.locator(".photo-picker-image")).toBeVisible();
-    await page
-      .getByPlaceholder("image blurb or caption")
-      .fill("e2e caption");
+    await page.getByLabel("Caption (optional)").fill("e2e caption");
 
     await saveEditor(page);
     await expect(page.locator(".data-editor")).toBeHidden({
@@ -438,12 +444,12 @@ test.describe("photography", () => {
     expect((await page.request.get(summarySrc!)).status()).toBe(200);
 
     // Reopen: the persisted image renders in the photo picker.
-    await iconButton(row, "pencil").click();
+    await editButton(row).click();
     await expect(
       imagesSection.locator('.photo-picker-image[src*="/images/"]'),
     ).toBeVisible();
     // Edit the subtitle and save.
-    await page.getByPlaceholder("Subtitle").fill("e2e subtitle edited");
+    await page.getByLabel("Subtitle").fill("e2e subtitle edited");
     await saveEditor(page);
     await expect(page.locator(".data-editor")).toBeHidden({
       timeout: 180_000,
@@ -468,7 +474,7 @@ test.describe("photography", () => {
 
     // Delete (the uploaded image objects stay for the cleanup sweep).
     await openAdminSection(page, "Photography");
-    await iconButton(adminListItem(page, marker), "trash").click();
+    await deleteButton(adminListItem(page, marker)).click();
     await confirmDialog(page, "Yes");
     await waitForIdle(page, 180_000);
     await expect(adminListItem(page, marker)).toHaveCount(0);

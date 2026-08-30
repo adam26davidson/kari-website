@@ -20,12 +20,64 @@
   padding: 8px 0px;
 }
 
+/* A list PAGE is one of the admin's cards and should share their measure.
+   At 800px the rows were the widest surface in the admin while What's on
+   test, the home page editor and their peers sit near 700px, so a list page
+   read as a different, looser room (#457, design brief §1). Only the titled
+   list narrows: the photography editor's nested image list has no title and
+   its width was deliberately aligned to the editor around it. Desktop-only
+   in effect — tablet and phone content areas are narrower than this cap. */
+.admin-data-list.titled {
+  max-width: 660px;
+}
+
+/* The titled panel a list page opens with: the section's name, the search
+   box, the match count and the add button, on the same near-solid backing
+   as everything else in the admin. Every other admin section (home page,
+   site background, image cleanup, what's on test) opens with a titled card
+   and generous padding; the list pages opened with a bare search field 13px
+   under the top bar and no heading at all, so they read as tighter than the
+   rest and named the section nowhere but the sidebar highlight (#457,
+   design brief §1). The 24px padding plus the container's own 8px is what
+   turns that 13px into ~40px of breathing room above the heading. */
+.admin-data-list-header {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  width: calc(100% - 16px);
+  margin: 8px;
+  padding: 24px;
+  border-radius: 3px;
+  background-color: rgba(226, 226, 226, 0.8);
+  /* Blur what shows through, like every other admin surface — see the note
+     on .admin-data-list-item below. */
+  backdrop-filter: blur(10px);
+}
+
 /* Search box: same field styling as the editors (admin.css input rules
    give it the opaque fill/border); sized to the row width so it lines up
    with the items below it. */
 .admin-data-list-search {
   width: calc(100% - 16px);
   margin: 4px 8px;
+}
+
+/* Inside the panel the gap does the spacing and the panel does the
+   backing, so the pieces drop the margins and separate surfaces they wear
+   when a nested list places them on their own. */
+.admin-data-list-header .admin-data-list-search,
+.admin-data-list-header .admin-data-list-count,
+.admin-data-list-header .admin-data-list-add {
+  width: 100%;
+  margin: 0;
+}
+
+.admin-data-list-header .admin-data-list-count {
+  padding: 0;
+  background-color: transparent;
+  backdrop-filter: none;
 }
 
 /* Search feedback -- the empty-result notice and the match count -- on the
@@ -39,6 +91,9 @@
   padding: 12px 14px;
   border-radius: 3px;
   background-color: rgba(226, 226, 226, 0.8);
+  /* Blur what shows through, like every other admin surface — see the note
+     on .admin-data-list-item below. */
+  backdrop-filter: blur(10px);
   color: var(--muted-text);
   font-family: "Roboto", sans-serif;
 }
@@ -50,10 +105,35 @@
   font-size: 0.9rem;
 }
 
+/* The list's one primary action, written out. Lines up with the search box
+   and the rows below it. */
+.admin-data-list-add {
+  margin: 4px 8px 8px;
+}
+
 .admin-data-list-item {
   background-color: rgba(226, 226, 226, 0.8);
+  /* The tint alone lets the background photograph read through, and the
+     row's secondary line (a haiku's publisher, a post's date) is small
+     grey text landing straight on blurred petals. Every other admin
+     surface at this tint already blurs its backdrop — the sidebar (#307),
+     .card, .data-editor-content — and the list rows were the one that did
+     not, which is exactly where the difference showed. Blur, rather than
+     more opacity: the tint is shared with the public card and pinned
+     equal to it by src/test/text-contrast.test.ts. */
+  backdrop-filter: blur(10px);
   display: flex;
   flex-direction: row;
+  /* The content takes a line of its own and the controls sit directly
+     beneath it, at every width. Two things forced this out of the phone
+     breakpoint it started in (#457): the labelled Edit/Delete pair plus the
+     move arrows is ~300px of controls, which pinches a haiga caption beside
+     its 200px thumbnail on a desktop just as it did on a phone; and with
+     the controls beside the content the buttons that act on a row sat up to
+     450px away from it across empty card, so the pairing read as loose
+     rather than calm (design brief §1). Under the content the gap between
+     an item and its controls is a few pixels of whitespace instead. */
+  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
   justify-content: space-between;
@@ -67,42 +147,76 @@
   display: flex;
   flex-direction: column;
   flex-grow: 1;
+  min-width: 0;
+  flex-basis: 100%;
 }
 
+/* One row of controls on every list, not a column here and a row there.
+   Haiku and haiga (compact) laid edit and delete side by side while
+   photography and other works stacked them vertically, so the same two
+   buttons read as two different controls depending on which section she
+   was in (#457, design brief §1). A row also keeps the item's height set
+   by its content rather than by the button stack.
+
+   Right-aligned, on a line of their own under the content. A consistent
+   right edge across rows beats controls that land at a different x on every
+   row, which is what left-pinning them under a variable-height item would
+   give. */
 .admin-data-list-item-controls {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
+  /* The icon circles carry their own 5px margin; AdminButtons carry none,
+     so the row needs a gap of its own or Edit would touch the arrow beside
+     it. */
+  gap: 8px;
+  flex-grow: 1;
+  flex-wrap: wrap;
 }
 
-/* Compact variant: tighter spacing, controls in a row so the
-   item height is set by the content rather than the button stack */
+/* Set the destructive control apart from the ones beside it, at every
+   width. Colour and the word already say "this one is different", but the
+   brief also asks that a destructive action never be the closest thing to
+   the action she reaches for most (§2), and the controls' own 8px gap would
+   otherwise put Delete exactly as close to its neighbour as the two move
+   arrows are to each other. Not a phone-only rule: a mouse slip is a slip
+   too, and the separation is as much for the eye as for the fingertip.
+   Enforced by admin-item-list.test.tsx. */
+.admin-data-list-item-controls .admin-button.danger-secondary {
+  margin-left: 24px;
+}
+
+/* Compact variant: tighter spacing around the same row of controls. */
 .admin-data-list-item.compact {
   padding: 8px 14px;
   margin: 4px 8px;
   width: calc(100% - 44px);
 }
 
-.admin-data-list-item.compact .admin-data-list-item-controls {
-  flex-direction: row;
-}
-
-/* Narrow viewports: let the content shrink and the control buttons wrap
-   onto their own line instead of pushing past the right edge. */
+/* Narrow viewports. */
 @media (max-width: 767.98px) {
-  .admin-data-list-item {
-    flex-wrap: wrap;
+  /* Generous, not lavish: 24px of panel padding inside a 390px phone that
+     has already given up its gutter (.admin-content drops to 4px here)
+     leaves the search box noticeably narrower than the rows below it. */
+  .admin-data-list-header {
+    gap: 12px;
+    padding: 16px;
   }
 
-  .admin-data-list-item .admin-data-list-item-content {
-    min-width: 0;
+  /* The controls sit in a line on a phone, so every one of them has to be
+     reachable without precision — 44px is the size a touch target stops
+     being a gamble at (#457). Both shapes: the arrows are circles sized
+     outright, the labelled Edit/Delete are text buttons whose padding
+     leaves them a few pixels short of the floor. */
+  .admin-data-list-item-controls .admin-icon-button {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
   }
 
-  .admin-data-list-item .admin-data-list-item-controls {
-    flex-grow: 1;
-    flex-direction: row;
-    flex-wrap: wrap;
-    justify-content: flex-end;
+  .admin-data-list-item-controls .admin-button {
+    min-height: 44px;
+    align-items: center;
   }
 }

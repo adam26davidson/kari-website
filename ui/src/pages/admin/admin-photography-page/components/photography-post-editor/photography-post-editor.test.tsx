@@ -62,10 +62,39 @@ beforeEach(() => {
 
 // The per-image blurb textareas, in list order.
 function imageBlurbs(): Array<HTMLElement> {
-  return screen.getAllByRole("textbox", { name: "image blurb or caption" });
+  return screen.getAllByRole("textbox", { name: "Caption (optional)" });
 }
 
 describe("PhotographyPostEditor", () => {
+  it("says what it is editing and labels every field", () => {
+    renderEditor();
+    expect(
+      screen.getByRole("heading", { name: "Edit photography post" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Title")).toHaveValue("Trip");
+    expect(screen.getByLabelText("Subtitle")).toHaveValue("Coast");
+    expect(screen.getByLabelText("Blurb (optional)")).toBeInTheDocument();
+    // One "Photo" group label per image row.
+    expect(screen.getAllByText("Photo")).toHaveLength(3);
+  });
+
+  // Design brief §2: one obvious next action per screen. "Add an image"
+  // and Save were both filled brown and competed as equals (#457).
+  it("leaves Save as the only primary action on the screen", () => {
+    renderEditor();
+    const filled = screen
+      .getAllByRole("button")
+      .filter(
+        (button) =>
+          // Primary is the absence of a variant class, so any variant
+          // added later is excluded here without editing this list.
+          button.classList.contains("admin-button") &&
+          button.classList.length === 1,
+      )
+      .map((button) => button.textContent);
+    expect(filled).toEqual(["Save"]);
+  });
+
   it("updates the title without touching the images", () => {
     const { setPost, setImages } = renderEditor();
     fireEvent.change(screen.getByRole("textbox", { name: "Title" }), {
@@ -82,7 +111,7 @@ describe("PhotographyPostEditor", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Subtitle" }), {
       target: { value: "Inland" },
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "Optional blurb" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "Blurb (optional)" }), {
       target: { value: "New blurb" },
     });
     expect(setPost.mock.calls[0][0].subtitle).toBe("Inland");
@@ -92,7 +121,7 @@ describe("PhotographyPostEditor", () => {
   it("appends an empty entry with a fresh id on new item", async () => {
     const { setImages } = renderEditor();
 
-    await userEvent.click(screen.getByRole("button", { name: "Add item" }));
+    await userEvent.click(screen.getByRole("button", { name: "Add an image" }));
 
     const updated = setImages.mock.calls[0][0] as Array<EditorImage>;
     expect(updated).toHaveLength(4);
@@ -106,12 +135,26 @@ describe("PhotographyPostEditor", () => {
     expect(makeImages().map((e) => e.id)).not.toContain(updated[3].id);
   });
 
+  // A bare red circle beside the caption box said nothing about whether it
+  // removed the caption, the photo or the post (#457, design brief §3).
+  it("names what the per-image delete removes", () => {
+    renderEditor();
+    expect(
+      screen.queryByRole("button", { name: "Delete" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: "Remove this image" }),
+    ).toHaveLength(3);
+  });
+
   it("deletes an image entry, file and all", async () => {
     const images = makeImages();
     images[1].file = new File(["img"], "pending.png", { type: "image/png" });
     const { setImages, setPost } = renderEditor({ images });
 
-    await userEvent.click(screen.getAllByRole("button", { name: "Delete" })[1]);
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Remove this image" })[1],
+    );
 
     const updated = setImages.mock.calls[0][0] as Array<EditorImage>;
     expect(updated.map((e) => e.id)).toEqual(["img-a", "img-c"]);
@@ -168,7 +211,7 @@ describe("PhotographyPostEditor", () => {
     const { setImages } = renderEditor();
     const file = new File(["img"], "new.png", { type: "image/png" });
 
-    fireEvent.change(screen.getAllByLabelText("Select Image")[0], {
+    fireEvent.change(screen.getAllByLabelText("Select an image")[0], {
       target: { files: [file] },
     });
 
@@ -187,7 +230,7 @@ describe("PhotographyPostEditor", () => {
     images[0].file = new File(["img"], "pending.png", { type: "image/png" });
     const { setImages } = renderEditor({ images });
 
-    fireEvent.change(screen.getAllByLabelText("Select Different Image")[0], {
+    fireEvent.change(screen.getAllByLabelText("Select a different image")[0], {
       target: { files: [] },
     });
 

@@ -33,7 +33,7 @@ function renderEditor(overrides?: { saveDisabled?: boolean }) {
 describe("HaigaEditor", () => {
   it("updates the publisher while keeping the rest of the haiga", () => {
     const { setHaiga } = renderEditor();
-    fireEvent.change(screen.getByPlaceholderText("Publisher"), {
+    fireEvent.change(screen.getByLabelText("Publisher"), {
       target: { value: "issa" },
     });
     expect(setHaiga).toHaveBeenCalledWith({ ...haiga, publisher: "issa" });
@@ -53,7 +53,7 @@ describe("HaigaEditor", () => {
 
   it("prompts to select an image when none is chosen yet", () => {
     renderEditor();
-    expect(screen.getByText("Select Image")).toBeInTheDocument();
+    expect(screen.getByText("Select an image")).toBeInTheDocument();
   });
 
   it("saves and closes through the editor controls", async () => {
@@ -68,8 +68,15 @@ describe("HaigaEditor", () => {
 
   it("disables the save button when the page says so", () => {
     renderEditor({ saveDisabled: true });
-    expect(screen.getByRole("button", { name: "Save" })).toHaveClass(
-      "disabled",
-    );
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it("says what it is editing and names both fields", () => {
+    renderEditor();
+    expect(
+      screen.getByRole("heading", { name: "Edit haiga" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Image")).toBeInTheDocument();
+    expect(screen.getByLabelText("Publisher")).toHaveValue("kari");
   });
 });
