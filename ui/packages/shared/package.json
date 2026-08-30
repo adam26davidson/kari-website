@@ -1,0 +1,26 @@
+{
+  "name": "@kari/shared",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./models": "./src/models.ts",
+    "./constants": "./src/constants.ts",
+    "./services/*": "./src/services/*.ts",
+    "./utils/*": "./src/utils/*.ts",
+    "./hooks/*": "./src/hooks/*.ts",
+    "./test/*": "./src/test/*.ts",
+    "./components/error-boundary/lazy-with-retry": "./src/components/error-boundary/lazy-with-retry.ts",
+    "./components/*": "./src/components/*.tsx",
+    "./styles/*": "./src/styles/*",
+    "./assets/*": "./src/assets/*"
+  },
+  "dependencies": {
+    "dompurify": "^3.4.14",
+    "uuid": "^11.1.1"
+  },
+  "peerDependencies": {
+    "react": "^18.3.1",
+    "react-router": "^7.18.2"
+  }
+}

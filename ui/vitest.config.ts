@@ -6,7 +6,7 @@ import { defineConfig } from "vitest/config";
 // Which tests run, and in which environment, is defined per project in
 // vitest.workspace.ts. What stays here is everything Vitest scopes to the
 // whole run rather than to a project -- coverage above all, which must keep
-// measuring all of src/ across both projects.
+// measuring every workspace's source across both projects.
 export default defineConfig({
   test: {
     workspace: "./vitest.workspace.ts",
@@ -14,9 +14,11 @@ export default defineConfig({
       provider: "v8",
       // json-summary feeds the CI coverage comment on PRs.
       reporter: ["text", "html", "json-summary"],
-      // Whole-app scope: every file under src/ counts, tested or not, so the
-      // number reflects reality rather than a curated subset.
-      include: ["src/**"],
+      // Whole-app scope: every source file in every workspace counts, tested
+      // or not, so the number reflects reality rather than a curated subset.
+      // `test/` is in scope for the same reason it used to be under src/:
+      // its non-test helpers (the CSS reader) are code like any other.
+      include: ["apps/*/src/**", "packages/*/src/**", "test/**"],
       // Ratchet floors: pinned just below current whole-app coverage so CI
       // fails on regressions. When coverage rises meaningfully, bump these
       // in the same PR (see CLAUDE.md). Floors, not targets — keep a small
