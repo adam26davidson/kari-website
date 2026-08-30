@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync, readdirSync } from "node:fs";
+import {
+  RULES,
+  declaration,
+  declaring,
+  indexRule,
+  label,
+} from "./css-rules";
 
 // The weight half of the type scale (#356).
 //
@@ -17,56 +23,12 @@ import { readFileSync, readdirSync } from "node:fs";
 // a font-size of at least 18px. These tests pin all three halves of that:
 // the default, the opt-in's spelling, and the size floor it is allowed at.
 
-const SRC = "src";
+// The stylesheet reader these assertions run on is shared with the other
+// CSS-invariant tests; see ./css-rules.
 const DISPLAY_TOKEN = "--display-weight";
 
 /** The smallest weight the display token is allowed to be spent on. */
 const DISPLAY_SIZE_FLOOR_PX = 18;
-
-/** Every CSS file under src/, as repo-relative paths. */
-function cssFiles(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const path = `${dir}/${entry.name}`;
-    if (entry.isDirectory()) return cssFiles(path);
-    return entry.isFile() && entry.name.endsWith(".css") ? [path] : [];
-  });
-}
-
-// Comments are stripped so an explanatory `/* ... */` between declarations
-// can't hide the declaration that follows it from the regexes below (the
-// same treatment text-contrast.test.ts gives its stylesheets).
-const read = (path: string) =>
-  readFileSync(path, "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
-
-interface Rule {
-  file: string;
-  selector: string;
-  block: string;
-}
-
-/** Every rule in every stylesheet, flattened (at-rule wrappers included). */
-const RULES: Rule[] = cssFiles(SRC).flatMap((file) => {
-  const css = read(file);
-  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(
-    ([, selector, block]) => ({ file, selector: selector.trim(), block }),
-  );
-});
-
-function declaration(block: string, property: string): string | undefined {
-  const match = block.match(
-    new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+)`),
-  );
-  return match?.[1].trim();
-}
-
-const label = (rule: Rule) => `${rule.file} { ${rule.selector} }`;
-
-/** Every rule declaring `property`, as `[label, value]` pairs. */
-const declaring = (property: string): Array<[string, string]> =>
-  RULES.flatMap((rule) => {
-    const value = declaration(rule.block, property);
-    return value ? [[label(rule), value] satisfies [string, string]] : [];
-  });
 
 /**
  * Whether a weight value is at or above regular. `bold`/`bolder` are, the
@@ -106,11 +68,7 @@ const SPENT_ON = new Set(
 
 describe("the weight axis of the type scale", () => {
   it("leaves body text at regular weight, not the hairline 300", () => {
-    const body = RULES.find(
-      (rule) => rule.file === `${SRC}/index.css` && rule.selector === "body",
-    );
-    if (!body) throw new Error("no body rule in index.css");
-    const weight = declaration(body.block, "font-weight");
+    const weight = declaration(indexRule("body").block, "font-weight");
     expect(weight).toBeDefined();
     expect(isRegularOrHeavier(weight as string)).toBe(true);
   });
@@ -170,11 +128,7 @@ describe("the weight axis of the type scale", () => {
   );
 
   it("keeps the display token itself light — it has no other purpose", () => {
-    const root = RULES.find(
-      (rule) => rule.file === `${SRC}/index.css` && rule.selector === ":root",
-    );
-    if (!root) throw new Error("no :root rule in index.css");
-    const value = Number(declaration(root.block, DISPLAY_TOKEN));
+    const value = Number(declaration(indexRule(":root").block, DISPLAY_TOKEN));
     expect(value).toBeGreaterThanOrEqual(200);
     expect(value).toBeLessThan(400);
   });

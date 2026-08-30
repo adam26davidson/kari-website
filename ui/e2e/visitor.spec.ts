@@ -153,6 +153,49 @@ test("photography page renders at least one seeded post", async ({ page }) => {
   await expect(page.locator(".photography-post-image").first()).toBeVisible();
 });
 
+// The header used to be scrollable off the top of a phone screen (#558):
+// the shell was `height: 100vh`, taller than the visible viewport while the
+// browser chrome is shown, so the document scrolled as well as the app's
+// own inner content area — and once the header was gone the inner scroller
+// kept every further gesture, stranding it there.
+//
+// Honest scope: headless Chromium has no retracting URL bar, so `dvh` and
+// `vh` are equal here and this cannot exercise the unit change itself
+// (src/test/viewport-shell.test.ts pins that). What it does cover is the
+// other half of the fix, which is what actually strands the header: the
+// document must never be a scroll container, and wheeling over the content
+// must move the content and leave the header where it is.
+test("mobile: content scrolls under the header, never the document", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/haiku");
+  await expect(page.locator(".haiku-list-line").first()).toBeVisible();
+
+  const header = page.locator(".header");
+  const headerBefore = await header.boundingBox();
+  if (!headerBefore) throw new Error("header not rendered");
+  expect(headerBefore.y).toBeLessThanOrEqual(1);
+
+  // The document itself has nothing to scroll: the shell fits the viewport.
+  const documentOverflow = await page.evaluate(() => {
+    const root = document.scrollingElement ?? document.documentElement;
+    return root.scrollHeight - root.clientHeight;
+  });
+  expect(documentOverflow).toBeLessThanOrEqual(1);
+
+  // A long gesture over the middle of the content area, well past the end
+  // of a short list, so nothing can absorb it quietly.
+  await page.mouse.move(195, 500);
+  await page.mouse.wheel(0, 2000);
+  await page.waitForTimeout(200);
+
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  const headerAfter = await header.boundingBox();
+  if (!headerAfter) throw new Error("header left the layout after scrolling");
+  expect(headerAfter.y).toBeLessThanOrEqual(1);
+});
+
 // The site-wide keyboard focus ring (#501). jsdom cannot decide
 // :focus-visible, so the unit tests can only pin the declared colours and
 // widths; whether a real browser actually applies the rule to whatever the
