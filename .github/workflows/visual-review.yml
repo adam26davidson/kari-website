@@ -16,12 +16,15 @@ name: Visual review
 on:
   pull_request:
     paths:
-      - "ui/src/**"
-      - "ui/public/**"
-      - "ui/index.html"
+      # One glob per workspace: the two apps (source, index.html, public/)
+      # and the shared package they both render from.
+      - "ui/apps/**"
+      - "ui/packages/**"
       - "ui/package.json"
       - "ui/package-lock.json"
       - "ui/e2e/screenshots.mjs"
+      # The static server the screenshots are captured against.
+      - "ui/scripts/serve.mjs"
       - ".github/workflows/visual-review.yml"
       # The hermetic-stack setup lives in this shared composite action.
       - ".github/actions/e2e-stack/**"

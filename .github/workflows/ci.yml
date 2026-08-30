@@ -235,7 +235,7 @@ jobs:
             echo ""
             echo "| Area | Lines | Functions |"
             echo "| --- | --- | --- |"
-            echo "| Frontend (\`ui/src\`) | ${ui_lines}% | ${ui_funcs}% |"
+            echo "| Frontend (\`ui/\`) | ${ui_lines}% | ${ui_funcs}% |"
             echo "| API (Rust) | ${api_lines}% | ${api_funcs}% |"
             echo ""
             echo "Per-file breakdown in the [job summary](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."

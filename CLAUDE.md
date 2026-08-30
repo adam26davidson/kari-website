@@ -19,20 +19,57 @@ with code in this repository.
   means ephemeral). It prints the chosen URLs at startup and wires them
   into the UI/API via env vars, so N stacks can run in parallel and
   `docker compose down` in one worktree never touches another's stack.
-- UI: `npm run dev` - Start development server (like the rest of the local
-  toolchain it targets the local MinIO + localhost:3000 API from
+- UI: `npm run dev` - Start the PUBLIC site's dev server (like the rest of
+  the local toolchain it targets the local MinIO + localhost:3000 API from
   `.env.development`; the real AWS test bucket is opt-in via
   `./scripts/dev.sh --aws` — no vite mode silently reads AWS)
-- UI: `npm run build` - Build production UI
+- UI: `npm run dev:admin` - Start the ADMIN app's dev server. It is a
+  separate app (see UI Layout below), so `dev`/`dev.sh` do not start it;
+  #593 wires it into the dev stack. Note that its Auth0 callback is
+  `<origin>/admin`, so logging in locally needs the port it comes up on
+  allowlisted in the Auth0 application.
+- UI: `npm run build` - Build production UI (both apps, into one `ui/dist`)
 - UI: `npm run build:test` - Build UI for test environment
+- UI: `npm run preview` - Serve a built `ui/dist` on 4173. NOT `vite
+  preview`: `ui/scripts/serve.mjs` stands in for it because the merged dist
+  needs two SPA fallback documents (`/admin*` gets the admin one). #593
+  replaces it with the prod-like arrangement.
 - UI: `npm run lint` - Lint TypeScript code
 - UI: `npm run typecheck` - Type-check app code, tests and the vite
   configs (`tsc -b`; every project sets `noEmit`, so nothing is written).
   CI's Frontend job runs it as its own step, so a type error is named
   rather than buried in a build failure. `npm run typecheck:e2e` covers the
-  Playwright specs, which are a separate TS project.
+  Playwright specs plus the plain-`.mjs` node scripts, which are a separate
+  TS project.
 - API: `cargo watch -x 'run dev'` - Run API in watch mode
 - API: `cargo build` - Build the Rust API
+
+## UI Layout (npm workspaces)
+`ui/` is an npm workspace root with three workspaces (#591). One
+`ui/package-lock.json`, one `npm ci`, one `node_modules` — every command
+above still runs from `ui/`.
+
+- `ui/apps/public` — the public site, served from `/`, built into
+  `ui/dist`. It contains NO Auth0, tiptap or admin code; the header's
+  "Admin" entry is a plain `<a href="/admin">` that leaves the SPA.
+- `ui/apps/admin` — the admin app, served under `/admin`, built into
+  `ui/dist/admin` (vite `base: "/admin/"`, router `basename: "/admin"`).
+  Routes inside it are written as if it owned the site root — `/haiku`,
+  not `/admin/haiku` — and react-router adds the prefix on the way out.
+- `ui/packages/shared` (`@kari/shared`) — `models.ts`, the API-facing
+  services, the shared utils/hooks, the components both sides render, and
+  the global stylesheets + background assets. It is consumed as TypeScript
+  SOURCE through its `exports` map (no build step), so vite, vitest and
+  `tsc` all read `packages/shared/src/*` directly.
+- `ui/test` — the cross-workspace tests: tooling assertions
+  (`test/config/`, node environment) and the CSS design invariants
+  (`test/design/`), which read stylesheets from BOTH apps and so cannot
+  live in either.
+
+npm hoists every workspace's dependencies into one `node_modules`, so an
+admin-only import from public code would still resolve and ship.
+`ui/test/config/app-boundaries.test.ts` is what actually enforces the
+split — keep it passing rather than working around it.
 
 ## Dependency Install Scripts
 npm 12 (what recent Node ships locally) blocks a dependency's install
@@ -74,8 +111,9 @@ threaded through every `npm ci` in CI.
   The vitest suite is split into two projects (`ui/vitest.workspace.ts`):
   `unit` (jsdom) for app code, and `config` (node) for tests that assert on
   this package's own tooling. Config-level tests go in
-  `ui/src/test/config/`; everything else defaults to `unit`. Coverage stays
-  configured once in `ui/vitest.config.ts` and is measured across both.
+  `ui/test/config/` (with the CSS design invariants in `ui/test/design/`);
+  everything else defaults to `unit`. Coverage stays configured once in
+  `ui/vitest.config.ts` and is measured across both, over every workspace.
 - UI: `npm run test:e2e` - Playwright e2e tests (seeds a local S3, builds the
   test-mode bundle, previews it, and runs smoke + visitor journeys; admin
   journeys additionally run when `E2E_AUTH0_USERNAME` / `E2E_AUTH0_PASSWORD`
