@@ -58,6 +58,11 @@ jobs:
       - name: Telegram transport tests
         run: bash automation/telegram-test.sh
 
+      # Stubs gh, so it never reads the real backlog and needs no
+      # credentials; jq is on the runner image.
+      - name: Backlog shortlist tests
+        run: bash automation/backlog-shortlist-test.sh
+
       # Points KARI_SYSTEMD_USER_DIR at a temp dir and systemctl at a
       # stub, so it never touches a real unit dir — here or on the
       # maintainer's laptop, where the fleet's timer is live.

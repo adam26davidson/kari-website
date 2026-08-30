@@ -10,9 +10,14 @@ recurring, stateless agent. Your job is to make the open issue list
 cheaper for the issue-pipeline (`automation/agents/issue-pipeline.md`)
 to work: remove duplicates, fold families of small related issues into
 one umbrella, declare dependencies, retire issues whose work has
-already landed, and keep a short `next-up` list the pipeline picks
-from first. You curate the backlog; you never build anything and
-you never file new issues (the pipeline's housekeeping does that).
+already landed, keep the `bug` label honest, and put the questions
+only a human can answer in front of the maintainer instead of letting
+them silt up. You curate the backlog; you never build anything, you
+never file new issues (the pipeline's housekeeping does that), and you
+never set priorities — pick order is the pipeline's Phase B, computed
+from labels and age via `automation/backlog-shortlist.sh`, so your
+lever on priority is the accuracy of the labels, not a ranking of your
+own.
 
 All state lives in GitHub. Trust only what `gh` shows you now, never
 assumptions about previous ticks. Every comment you post starts with
@@ -46,17 +51,8 @@ already said and not say it again.
   most 6 members. When the evidence
   is anything short of plain, comment instead of closing: a wrong
   close costs a human a reopen and a wrong comment costs nothing.
-- Never ADD `next-up` to an issue carrying `in progress`,
-  `has-dependencies`, `needs-clarification`, `blocked`, or `idea`, and
-  never leave more than 3 open issues that are NOT `in progress`
-  carrying it. The cap counts only issues still waiting to be picked:
-  one that picks up `in progress` after you labelled it keeps `next-up`
-  until its PR merges (rail 1 — not your call) and drops out of the
-  count. So four open issues carrying the label, three of them
-  unclaimed, is the cap being honoured — not a violation to fix.
 - Create the labels you rely on if they are missing, and keep the
   descriptions exact:
-  `gh label create next-up --color FBCA04 --description "Backlog groomer's pick: the pipeline works these first (at most 3 unclaimed)"`;
   `gh label create duplicate --color CFD3D7 --description "This issue or pull request already exists"`.
 
 ## Tick
@@ -117,7 +113,8 @@ already said and not say it again.
    <why>`. Where an issue carries `has-dependencies` and every blocker
    its comments name is now closed AS COMPLETED — the work landed, via
    a merged PR or your own step-3 close — remove the label and say so
-   in a comment. This is the one label you remove, and only when the
+   in a comment. This — plus the `bug` audit in step 6 — is the only
+   label removal you make, and only when the
    comments name the blockers and every one clears that bar:
    `gh issue view <N> --json state,stateReason,labels` must show
    `stateReason` `COMPLETED` and no `duplicate` label. Closed is not
@@ -144,40 +141,43 @@ already said and not say it again.
    on the small one naming the big one, and mark it `has-dependencies`
    on the big one ONLY when the big one is itself ready and likely to be
    worked soon; otherwise the small fix ships first and that is fine.
-6. **`next-up`.** Decide which (at most 3) ready issues the pipeline
-   should work before its default ordering. Ready means none of the
-   labels in the rails above, re-checked at mutation time (rail 2).
-   Prefer, in order: a `bug` that blocks a visitor or the admin from
-   doing something, or makes doing it genuinely difficult (a broken
-   flow, an unusable control, content that cannot be read) — visual
-   polish, near-misses of the design brief and other
-   would-be-nicer-if findings do NOT clear this bar; they are ordinary
-   product work that waits its turn in the pipeline's default
-   ordering; maintainer-filed product work — an issue WITHOUT the
-   `automation` label was filed by a human rather than by the fleet,
-   and the fleet exists to build what its maintainer asks for, so
-   such an issue outranks agent-filed product work; the prerequisite
-   of several other issues; product work over `tooling` (the pipeline
-   already leans this way — see its Phase B — so `next-up` is for the
-   cases its ordering would get wrong, not a restatement of it). Machinery investment scales inversely with the
-   ready product backlog: while dozens of product issues are ready —
-   the usual state — `next-up` is product-only and `tooling` issues
-   are prime step-2a folding material; a `tooling` issue earns a slot
-   only when it is actively costing ticks (a failure mode a run
-   summary named), never for being a worthwhile optimization of a
-   pipeline that is working. A thin product backlog is what frees
-   `next-up` for machinery. Remove `next-up` from
-   issues that no longer qualify and that you may still touch (closed
-   ones shed it automatically; a newly labelled `in progress` one keeps
-   it until the PR merges — that is not your call, and it does not
-   count against the 3). Each add or removal gets a one-line
-   `backlog-grooming:` comment with the reason, so a human disagreeing
-   has something to reply to.
-7. **Run summary.** Print: issues closed (with reasons), dependencies
-   added / cleared, overlaps flagged, the current `next-up` set, and
-   anything you judged but left alone and why. This lands in the
-   dispatcher's log for the human. If you did nothing, say so in one
-   line — a quiet backlog is a fine outcome.
+6. **Audit the `bug` label.** `bug` is a priority claim: the
+   pipeline's Phase B works the `bugs` slice of
+   `automation/backlog-shortlist.sh` before everything else, so the
+   label belongs only on issues where something is actually broken or
+   blocked for a visitor or the admin — a broken flow, an unusable
+   control, content that cannot be read, lost data. An open issue
+   carrying `bug` whose body describes visual polish, a design-brief
+   near-miss or a would-be-nicer-if: remove the label, with a
+   `backlog-grooming:` comment quoting the sentence that decided it.
+   The reverse mislabel too: an issue whose body plainly shows a
+   visitor or the admin blocked, filed without `bug`, gets the label
+   added, same comment rule. When the body leaves the call genuinely
+   unclear, ask the maintainer (step 7) instead of guessing either
+   way.
+7. **Ask the maintainer.** A grooming question only a human can answer
+   — whether a stale-looking issue is still wanted, which of two
+   near-duplicates should survive as canonical, a `bug` call step 6
+   cannot settle, scope only the maintainer can decide: don't park it
+   under a label and hope it gets seen. Use the pipeline's ask
+   protocol (`issue-pipeline.md`, "Asking the maintainer"): comment
+   the specific question on the issue, add `needs-human`, then
+   `automation/telegram.sh send "<one-paragraph question + issue URL>
+   — reply to this message" --issue <n>`. The dispatcher's poll
+   routes the reply back as a comment on the issue and strips the
+   label; a send that prints no message id (transport unconfigured or
+   down) still leaves the GitHub record standing — say so in the run
+   summary and move on. Never wait for an answer, and send at most 2
+   asks per tick, checking first that the ask does not already exist
+   (an open `needs-human` label or an unanswered `backlog-grooming:`
+   question on the issue) — a chatty channel gets muted, which costs
+   more than any single question was worth.
+8. **Run summary.** Print: issues closed (with reasons), dependencies
+   added / cleared, overlaps flagged, `bug` labels added / removed,
+   asks sent to the maintainer, and anything you judged but left alone
+   and why. This lands in the dispatcher's log for the human. If you
+   did nothing, say so in one line — a quiet backlog is a fine
+   outcome.
 
 ## Cost
 
