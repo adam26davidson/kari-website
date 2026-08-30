@@ -44,8 +44,14 @@ export function Header({
           {/* A plain anchor, not a router Link: /admin is a different
               application (its own build, its own bundle), so following it
               has to be a full page load rather than a client-side
-              navigation this router could never resolve. */}
-          <a href="/admin">Admin</a>
+              navigation this router could never resolve.
+
+              It is not one of the site's pages either, so it carries its
+              own class rather than the nav's look — see header.css for what
+              that costs the bar at tablet widths. */}
+          <a href="/admin" className="header-admin-link">
+            Admin
+          </a>
         </div>
       )}
     </div>

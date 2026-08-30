@@ -153,6 +153,13 @@
      breakpoint and ~948px. gap/margins/font-size now scale with the
      viewport and reach the old spacing on wide screens. */
   gap: clamp(14px, 3.5vw, 60px);
+  /* Column gap only: the admin link below wraps to a second row between
+     768px and ~1000px, and at the fluid gap above that row would push the
+     bar ~27px taller than it has been. 4px keeps the wrapped row inside
+     the line box the site title already reserves, so the bar's height is
+     unchanged at every width. The nav links themselves never wrap (#221
+     fluid sizing), so this affects nothing else. */
+  row-gap: 4px;
   margin: 0px clamp(16px, 2.5vw, 40px);
   font-size: clamp(17px, 2.2vw, 20px);
 }
@@ -176,4 +183,27 @@
   border-bottom: 2px solid white;
   opacity: 1;
   cursor: pointer;
+}
+
+/* The way into the admin app from the public site (#591). Not one of the
+   site's pages, so it is deliberately quieter than the nav links: smaller,
+   and dimmed until hovered or focused.
+
+   `margin-left: auto` pins it to the right-hand end of whichever nav row it
+   lands on. Which row that is depends on the width: the five nav links fill
+   the bar to within ~15px at 768px, so between 768px and about 1000px there
+   is no room for a sixth item and .pages wraps this one onto a second row.
+   That is the deliberate trade — the alternative was shrinking the nav's
+   type through the whole tablet band for a link that serves one person
+   (see #591's PR). At the auto margin it wraps to the right, reading as a
+   separate affordance rather than a stray nav item. */
+.pages .header-admin-link {
+  margin-left: auto;
+  font-size: 15px;
+  opacity: 0.7;
+}
+
+.pages .header-admin-link:hover,
+.pages .header-admin-link:focus-visible {
+  opacity: 1;
 }

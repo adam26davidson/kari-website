@@ -16,17 +16,18 @@ export default defineConfig({
       reporter: ["text", "html", "json-summary"],
       // Whole-app scope: every source file in every workspace counts, tested
       // or not, so the number reflects reality rather than a curated subset.
-      // `test/` is in scope for the same reason it used to be under src/:
-      // its non-test helpers (the CSS reader) are code like any other.
-      include: ["apps/*/src/**", "packages/*/src/**", "test/**"],
+      // `test/` is deliberately absent — vitest's own default excludes cover
+      // `test/**`, and what lives there is test code plus the readers those
+      // tests drive.
+      include: ["apps/*/src/**", "packages/*/src/**"],
       // Ratchet floors: pinned just below current whole-app coverage so CI
       // fails on regressions. When coverage rises meaningfully, bump these
       // in the same PR (see CLAUDE.md). Floors, not targets — keep a small
       // margin below actuals to absorb V8 line-accounting drift.
       thresholds: {
-        lines: 99.0,
-        functions: 99.5,
-        branches: 96.1,
+        lines: 99.1,
+        functions: 99.9,
+        branches: 96.9,
       },
     },
   },
