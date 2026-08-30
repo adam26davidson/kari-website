@@ -147,11 +147,19 @@ already said and not say it again.
 6. **`next-up`.** Decide which (at most 3) ready issues the pipeline
    should work before its default ordering. Ready means none of the
    labels in the rails above, re-checked at mutation time (rail 2).
-   Prefer, in order: a `bug` or anything a visitor or the admin would
-   notice; the prerequisite of several other issues; product work over
-   `tooling` (the pipeline already leans this way — see its Phase B —
-   so `next-up` is for the cases its ordering would get wrong, not a
-   restatement of it). Machinery investment scales inversely with the
+   Prefer, in order: a `bug` that blocks a visitor or the admin from
+   doing something, or makes doing it genuinely difficult (a broken
+   flow, an unusable control, content that cannot be read) — visual
+   polish, near-misses of the design brief and other
+   would-be-nicer-if findings do NOT clear this bar; they are ordinary
+   product work that waits its turn in the pipeline's default
+   ordering; maintainer-filed product work — an issue WITHOUT the
+   `automation` label was filed by a human rather than by the fleet,
+   and the fleet exists to build what its maintainer asks for, so
+   such an issue outranks agent-filed product work; the prerequisite
+   of several other issues; product work over `tooling` (the pipeline
+   already leans this way — see its Phase B — so `next-up` is for the
+   cases its ordering would get wrong, not a restatement of it). Machinery investment scales inversely with the
    ready product backlog: while dozens of product issues are ready —
    the usual state — `next-up` is product-only and `tooling` issues
    are prime step-2a folding material; a `tooling` issue earns a slot
