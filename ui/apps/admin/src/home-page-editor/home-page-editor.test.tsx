@@ -146,6 +146,24 @@ describe("HomePageEditor photo replacement", () => {
     expect(HomePageService.update).not.toHaveBeenCalled();
   });
 
+  // ImageService.upload resolves to null rather than throwing when it has
+  // no stored name to report. Treat that as a failed upload too: the JSON
+  // must not be written with an empty photo reference.
+  it("keeps the old photo and skips the JSON save when the upload returns no name", async () => {
+    vi.mocked(ImageService.upload).mockResolvedValue(null);
+    const { notify } = await renderAndPickImage();
+
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith(
+        "Failed to save — your change was not saved",
+        "error",
+      ),
+    );
+    expect(HomePageService.update).not.toHaveBeenCalled();
+  });
+
   it("saves the new photo and leaves the replaced object in storage", async () => {
     const { notify } = await renderAndPickImage();
 

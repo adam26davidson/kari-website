@@ -71,9 +71,18 @@ describe("App", () => {
     expect(await screen.findByText("Home page stub")).toBeInTheDocument();
   });
 
-  it("renders the matching page for a direct route", async () => {
-    renderApp("/haiku");
-    expect(await screen.findByText("Haiku page stub")).toBeInTheDocument();
+  // Every public route, so each lazy chunk factory is actually invoked —
+  // a route wired to the wrong page (or dropped from the table) fails here
+  // rather than only in the e2e run.
+  it.each([
+    ["/haiku", "Haiku page stub"],
+    ["/haiga", "Haiga page stub"],
+    ["/other-works", "Other works page stub"],
+    ["/blog/some-post", "Blog post page stub"],
+    ["/photography", "Photography page stub"],
+  ])("renders the matching page for a direct route: %s", async (path, text) => {
+    renderApp(path);
+    expect(await screen.findByText(text)).toBeInTheDocument();
   });
 
   // The admin section is its own application now (#591). This app has no

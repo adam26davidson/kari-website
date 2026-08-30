@@ -194,4 +194,81 @@ describe("lazyWithRetry", () => {
 
     expect(await screen.findByText("page loaded")).toBeInTheDocument();
   });
+
+  // Production callers (app.tsx) pass no hooks at all, so the default
+  // reload -- a real window.location.reload() -- is what actually ships.
+  // Every other test here substitutes it, which left the one line that
+  // performs the recovery unexecuted.
+  it("reloads the window itself when no reload hook is supplied", async () => {
+    // jsdom's Location members are unforgeable (own, non-writable), so
+    // location.reload cannot be spied on directly; window.location itself
+    // is a configurable accessor, so stub that instead.
+    const reload = vi.fn();
+    const realLocation = window.location;
+    vi.spyOn(window, "location", "get").mockReturnValue({
+      ...realLocation,
+      reload,
+    } as unknown as Location);
+    const factory = vi.fn().mockRejectedValue(chunkError());
+    renderLazy(lazyWithRetry(factory, { storage: fakeStorage() }));
+
+    await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+    // The loader never settles, so Suspense holds its fallback while the
+    // real reload would be tearing the document down.
+    expect(screen.getByText("loading chunk")).toBeInTheDocument();
+  });
+
+  // Reading window.sessionStorage can throw outright (cookies/site data
+  // blocked), before any getItem call. With no storage at all we cannot
+  // remember having reloaded, so we must not auto-reload.
+  it("never auto-reloads when reading sessionStorage throws", async () => {
+    const reload = vi.fn();
+    const original = Object.getOwnPropertyDescriptor(
+      window,
+      "sessionStorage",
+    ) ?? { configurable: true, value: window.sessionStorage };
+    Object.defineProperty(window, "sessionStorage", {
+      configurable: true,
+      get() {
+        throw new Error("The operation is insecure.");
+      },
+    });
+
+    try {
+      const factory = vi.fn().mockRejectedValue(chunkError());
+      // No `storage` hook: the component falls back to the real
+      // window.sessionStorage, which is what now throws.
+      renderLazy(lazyWithRetry(factory, { reload }));
+
+      expect(
+        await screen.findByText(/A new version of the site/),
+      ).toBeInTheDocument();
+      expect(reload).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(window, "sessionStorage", original);
+    }
+  });
+
+  // Storage that reads fine but refuses writes (private mode quota): the
+  // flag cannot be persisted, so the one automatic reload still happens
+  // and the failed write is swallowed rather than surfacing as an error.
+  it("still auto-reloads when the reload flag cannot be written", async () => {
+    const reload = vi.fn();
+    const factory = vi.fn().mockRejectedValue(chunkError());
+    renderLazy(
+      lazyWithRetry(factory, {
+        reload,
+        storage: {
+          getItem: () => null,
+          setItem: () => {
+            throw new Error("QuotaExceededError");
+          },
+          removeItem: () => {},
+        },
+      }),
+    );
+
+    await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+    expect(screen.getByText("loading chunk")).toBeInTheDocument();
+  });
 });

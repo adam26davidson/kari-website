@@ -23,11 +23,14 @@ export default defineConfig({
       // Ratchet floors: pinned just below current whole-app coverage so CI
       // fails on regressions. When coverage rises meaningfully, bump these
       // in the same PR (see CLAUDE.md). Floors, not targets — keep a small
-      // margin below actuals to absorb V8 line-accounting drift.
+      // margin below actuals to absorb V8 line-accounting drift, which is
+      // real: V8 versions disagree about how many functions a file has, so
+      // the same tree measures slightly differently on Node 22 (CI) and on
+      // a newer local Node (#398). Measure on CI before tightening these.
       thresholds: {
-        lines: 99.1,
+        lines: 99.5,
         functions: 99.9,
-        branches: 96.9,
+        branches: 97.4,
       },
     },
   },
