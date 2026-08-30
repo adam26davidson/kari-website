@@ -25,7 +25,13 @@ import { RULES, declarations, indexRule, label } from "./css-rules";
 //     Order is therefore load-bearing and asserted.
 //   * `overflow: hidden` on `body` — body overflow propagates to the
 //     viewport when `html` declares none, so the document is not a scroll
-//     container at all and no future overflow can resurrect the bug.
+//     container at all and no future overflow can resurrect the bug. It is
+//     wrapped in `@supports (height: 100dvh)` because it only makes sense
+//     alongside the correction above: a browser that drops `100dvh` keeps a
+//     shell taller than the visible area, and taking the document's scroll
+//     away there would strand the bottom `100vh - visible` strip of the
+//     page off-screen for good — worse than the bug being fixed. Gated, the
+//     fallback really is today's behaviour, and that gate is asserted.
 //
 // jsdom lays nothing out and has no browser chrome to retract, so none of
 // this is observable from a rendered component; the stylesheet is the only
@@ -41,6 +47,13 @@ const BARE_VH = /\dvh\b/;
 
 /** The same value with every bare `vh` length switched to `dvh`. */
 const toDvh = (value: string) => value.replace(/(\d)vh\b/g, "$1dvh");
+
+/**
+ * The feature query the shell's `overflow: hidden` hangs off: exactly the
+ * support the `100dvh` line needs, so the two halves of the fix can never
+ * come apart.
+ */
+const SHELL_GATE = "@supports (height: 100dvh)";
 
 interface Site {
   label: string;
@@ -85,15 +98,35 @@ describe("the viewport shell", () => {
     },
   );
 
-  it("keeps the document out of the scrolling entirely", () => {
-    const overflow = declarations(indexRule("body").block).filter(
-      (decl) => decl.property === "overflow",
+  it("keeps the document out of the scrolling wherever dvh applies", () => {
+    const gated = RULES.filter(
+      (rule) =>
+        rule.file === "src/index.css" &&
+        rule.selector === "body" &&
+        rule.atRules.includes(SHELL_GATE),
     );
+    const overflow = gated
+      .flatMap((rule) => declarations(rule.block))
+      .filter((decl) => decl.property === "overflow");
     // `hidden`, not `clip`: a `clip` box has no scrollable overflow region,
     // which would blind e2e/screenshots.mjs's horizontal-overflow assertion
     // (it reads document.documentElement.scrollWidth). And not `auto`,
     // which is what a scroll container is.
     expect(overflow.map((decl) => decl.value)).toEqual(["hidden"]);
+  });
+
+  it("leaves the document scrolling where the dvh correction is dropped", () => {
+    // Unconditionally: `body`'s own rule must not take the scroll away.
+    // Without `dvh` the shell is still `100vh` — taller than the visible
+    // viewport while browser chrome is shown — and the document scroll is
+    // the ONLY way to reach its bottom strip. Scrolling the inner scroller
+    // moves content inside an off-screen box and never retracts the chrome,
+    // so an ungated `overflow: hidden` clips that strip permanently on e.g.
+    // iOS 15.0-15.3 Safari or Chrome <=107.
+    const overflow = declarations(indexRule("body").block).filter(
+      (decl) => decl.property === "overflow",
+    );
+    expect(overflow).toEqual([]);
   });
 
   it("gives every vh length a dvh line after it", () => {

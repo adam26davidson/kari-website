@@ -8,9 +8,12 @@ import { readFileSync, readdirSync } from "node:fs";
 // misbehave on a real device. A flat regex parse is enough for that: the
 // rules being pinned are hand-written, flat, and stay that way.
 //
-// Deliberately not a CSS parser. It flattens at-rule wrappers into rules of
-// their own rather than nesting them, has no notion of specificity, and
-// assumes declarations are `property: value` pairs separated by semicolons.
+// Deliberately not a CSS parser. It has no notion of specificity and assumes
+// declarations are `property: value` pairs separated by semicolons. At-rule
+// wrappers are flattened — the rules inside one are returned in their own
+// right — but each rule records the wrappers it sat in, because "declared"
+// and "declared unconditionally" are different claims: a declaration inside
+// `@supports (height: 100dvh)` applies only where that unit is understood.
 
 const SRC = "src";
 
@@ -32,15 +35,67 @@ export interface Rule {
   file: string;
   selector: string;
   block: string;
+  /**
+   * The preludes of the at-rules wrapping this rule, outermost first — e.g.
+   * `["@supports (height: 100dvh)"]`. Empty for a rule that applies
+   * unconditionally.
+   */
+  atRules: string[];
+}
+
+interface Frame {
+  prelude: string;
+  /** Whether this block contained blocks of its own (so it is a wrapper). */
+  hasNested: boolean;
+}
+
+/** Whitespace-normalized, so a prelude reads the same however it was wrapped. */
+const normalize = (text: string) => text.trim().replace(/\s+/g, " ");
+
+/**
+ * Every rule in one stylesheet, in source order. Blocks are matched by
+ * scanning braces rather than by one regex, so a nested block (`@media
+ * { .a { ... } }`) yields the inner rule with the wrapper recorded in
+ * `atRules` instead of being flattened into an anonymous match.
+ */
+function parse(file: string, css: string): Rule[] {
+  const rules: Rule[] = [];
+  const stack: Frame[] = [];
+  let buffer = "";
+  for (const char of css) {
+    if (char === "{") {
+      stack.push({ prelude: normalize(buffer), hasNested: false });
+      buffer = "";
+      continue;
+    }
+    if (char !== "}") {
+      buffer += char;
+      continue;
+    }
+    const frame = stack.pop();
+    if (frame === undefined) continue; // Unbalanced `}`; nothing to close.
+    // A block holding other blocks is a wrapper, not a declaration block:
+    // `@media (...) { ... }` declares nothing of its own. `@font-face`,
+    // which holds declarations only, is a rule like any other.
+    if (!frame.hasNested) {
+      rules.push({
+        file,
+        selector: frame.prelude,
+        block: buffer,
+        atRules: stack.map((outer) => outer.prelude),
+      });
+    }
+    const parent = stack.at(-1);
+    if (parent) parent.hasNested = true;
+    buffer = "";
+  }
+  return rules;
 }
 
 /** Every rule in every stylesheet, flattened (at-rule wrappers included). */
-export const RULES: Rule[] = cssFiles(SRC).flatMap((file) => {
-  const css = read(file);
-  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(
-    ([, selector, block]) => ({ file, selector: selector.trim(), block }),
-  );
-});
+export const RULES: Rule[] = cssFiles(SRC).flatMap((file) =>
+  parse(file, read(file)),
+);
 
 /** The first value a block declares for `property`, trimmed. */
 export function declaration(
@@ -85,7 +140,8 @@ export function declarations(block: string): Declaration[] {
 }
 
 /** A rule, named the way a failing test should name it. */
-export const label = (rule: Rule) => `${rule.file} { ${rule.selector} }`;
+export const label = (rule: Rule) =>
+  `${rule.file} { ${[...rule.atRules, rule.selector].join(" ")} }`;
 
 /** Every rule declaring `property`, as `[label, value]` pairs. */
 export const declaring = (property: string): Array<[string, string]> =>
@@ -94,11 +150,18 @@ export const declaring = (property: string): Array<[string, string]> =>
     return value ? [[label(rule), value] satisfies [string, string]] : [];
   });
 
-/** The rule in `src/index.css` whose selector is exactly `selector`. */
+/**
+ * The UNCONDITIONAL rule in `src/index.css` whose selector is exactly
+ * `selector` — an at-rule-wrapped rule for the same selector is a different
+ * claim (it applies only where its condition holds), so callers that want
+ * one ask `RULES` for it by its `atRules`.
+ */
 export function indexRule(selector: string): Rule {
   const rule = RULES.find(
     (candidate) =>
-      candidate.file === `${SRC}/index.css` && candidate.selector === selector,
+      candidate.file === `${SRC}/index.css` &&
+      candidate.selector === selector &&
+      candidate.atRules.length === 0,
   );
   if (!rule) throw new Error(`no ${selector} rule in index.css`);
   return rule;

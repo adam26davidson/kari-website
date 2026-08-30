@@ -60,17 +60,35 @@ body {
      which drop the second declaration as invalid; the order is therefore
      load-bearing.
 
-     `overflow: hidden` finishes the job. With no overflow declared on
-     `html`, the body's propagates to the viewport, so the document is not
-     a scroll container at all and nothing added later can make the header
-     scrollable away again. `hidden` rather than `clip` on purpose: a
-     `clip` box has no scrollable overflow region, which would blind the
-     horizontal-overflow assertion in e2e/screenshots.mjs.
+     The `overflow: hidden` that finishes the job lives in the
+     `@supports` block below, not here — see the note there.
 
      Pinned by src/test/viewport-shell.test.ts. */
   height: 100vh;
   height: 100dvh;
-  overflow: hidden;
+}
+
+/* With no overflow declared on `html`, the body's propagates to the
+   viewport, so the document is not a scroll container at all and nothing
+   added later can make the header scrollable away again. `hidden` rather
+   than `clip` on purpose: a `clip` box has no scrollable overflow region,
+   which would blind the horizontal-overflow assertion in
+   e2e/screenshots.mjs.
+
+   Gated on the same support the `100dvh` line above needs, because taking
+   the document's scroll away is only safe once the shell is guaranteed to
+   fit. A browser that drops `100dvh` (Safari <15.4, Chrome <108) keeps a
+   `100vh` shell, which while browser chrome is shown is taller than the
+   visible viewport — and there the document scroll is the only thing that
+   can reach the bottom strip, since scrolling the inner content moves it
+   within an off-screen box and never retracts the chrome. Ungated, that
+   strip would be clipped and unreachable for good: a regression, not a
+   fallback. With the gate, browsers without `dvh` keep exactly today's
+   behaviour, which is what the two halves of this fix promise together. */
+@supports (height: 100dvh) {
+  body {
+    overflow: hidden;
+  }
 }
 
 body::before {
