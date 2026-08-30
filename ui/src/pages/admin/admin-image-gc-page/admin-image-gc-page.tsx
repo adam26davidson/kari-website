@@ -45,14 +45,19 @@ function ImageThumbnail({ id }: { id: string }) {
  * `removed` marks the group whose objects a real run has just deleted:
  * their thumbnails are gone from storage, so the list says so instead of
  * asking for pictures that cannot come back.
+ *
+ * `run` identifies the report these images came from; see the thumbnail
+ * key below.
  */
 function ImageList({
   title,
   images,
+  run,
   removed = false,
 }: {
   title: string;
   images: Array<GcImage>;
+  run: number;
   removed?: boolean;
 }) {
   return (
@@ -71,7 +76,13 @@ function ImageList({
         <ul className="gc-images">
           {images.map((image) => (
             <li key={image.id}>
-              <ImageThumbnail id={image.id} />
+              {/*
+                Keyed by the run so a new report starts each tile over: the
+                placeholder invites her to preview again, and a failure
+                remembered from the previous report would make that
+                invitation a no-op.
+              */}
+              <ImageThumbnail key={run} id={image.id} />
             </li>
           ))}
         </ul>
@@ -92,6 +103,12 @@ export function AdminImageGcPage() {
   const getAccessTokenSilently = useAdminToken();
   const { showLoading, hideLoading, confirm, notify } = useAdminUi();
   const [report, setReport] = useState<GcReport | null>(null);
+  // Counts the reports that have arrived, so each one is a distinct render
+  // of the same image ids. Without it React keeps the previous report's
+  // thumbnails (same `key`, same position) along with any load failure they
+  // remembered, and re-previewing — the page's only refresh — would leave a
+  // picture that loads fine now stuck behind its placeholder.
+  const [run, setRun] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const runGc = async (dryRun: boolean) => {
@@ -102,6 +119,7 @@ export function AdminImageGcPage() {
     try {
       const result = await ImageService.gc(dryRun, getAccessTokenSilently);
       setReport(result);
+      setRun((previous) => previous + 1);
       if (!dryRun) {
         notify(`Deleted ${countOfImages(result.deleted.length)}`);
       }
@@ -164,14 +182,25 @@ export function AdminImageGcPage() {
             <ImageList
               title="No longer used (would be deleted)"
               images={report.orphaned}
+              run={run}
             />
           ) : (
-            <ImageList title="Deleted" images={report.deleted} removed />
+            <ImageList
+              title="Deleted"
+              images={report.deleted}
+              run={run}
+              removed
+            />
           )}
-          <ImageList title="Still in use (kept)" images={report.referenced} />
+          <ImageList
+            title="Still in use (kept)"
+            images={report.referenced}
+            run={run}
+          />
           <ImageList
             title="Uploaded in the last hour (kept)"
             images={report.skipped_recent}
+            run={run}
           />
         </div>
       )}

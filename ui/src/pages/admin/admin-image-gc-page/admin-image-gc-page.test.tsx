@@ -129,6 +129,35 @@ describe("AdminImageGcPage dry run", () => {
     expect(screen.getByText("Couldn't show this picture")).toBeTruthy();
   });
 
+  // The placeholder tells her to preview again, so previewing again has to
+  // actually retry the picture: a load failure is usually a passing network
+  // blip, and a tile stuck on "Couldn't show this picture" would have her
+  // confirming permanent deletion of a picture the page refuses to show.
+  it("retries a failed picture when a fresh report arrives", async () => {
+    const oneOrphan = {
+      ...dryRunReport,
+      orphaned: [image("orphan-1.png")],
+      referenced: [],
+      skipped_recent: [],
+    };
+    vi.mocked(ImageService.gc).mockResolvedValue(oneOrphan);
+    renderPage();
+    await clickPreview();
+
+    fireEvent.error(screen.getByAltText("orphan-1.png"));
+    expect(screen.getByText("Couldn't show this picture")).toBeTruthy();
+
+    // Same image id in the new report — the tile must still come back.
+    vi.mocked(ImageService.gc).mockResolvedValue({ ...oneOrphan });
+    await clickPreview();
+
+    expect(screen.queryByText("Couldn't show this picture")).toBeNull();
+    expect(screen.getByAltText("orphan-1.png")).toHaveAttribute(
+      "src",
+      "https://api.test.local/images/orphan-1.png?size=thumb",
+    );
+  });
+
   it("invites nothing rather than showing a blank list when a group is empty", async () => {
     vi.mocked(ImageService.gc).mockResolvedValue({
       ...dryRunReport,
