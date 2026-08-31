@@ -23,7 +23,7 @@
     "typecheck:e2e": "tsc -p tsconfig.e2e.json"
   },
   "devDependencies": {
-    "@aws-sdk/client-s3": "^3.1122.0",
+    "@aws-sdk/client-s3": "^3.1123.0",
     "@eslint/compat": "^2.1.0",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.62.1",
