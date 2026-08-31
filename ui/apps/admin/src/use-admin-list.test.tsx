@@ -11,7 +11,7 @@ interface Item {
 const getList = vi.fn<() => Promise<Array<Item>>>();
 const updateList = vi.fn<(list: Array<Item>) => Promise<void>>();
 
-vi.mock("hooks/use-admin-token", () => ({
+vi.mock("./hooks/use-admin-token", () => ({
   useAdminToken: () => async () => "token",
 }));
 
