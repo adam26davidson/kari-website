@@ -104,9 +104,10 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      # `npm run build` below type-checks src/** on its way to bundling, so
-      # this step is not the only thing standing between a type error and a
-      # red CI. It runs first so the failure is named "Typecheck" instead of
+      # `npm run build` below type-checks every workspace's source on its
+      # way to bundling, so this step is not the only thing standing between
+      # a type error and a red CI. It runs first so the failure is named
+      # "Typecheck" instead of
       # surfacing minutes later as a build failure, and so it fails before
       # the unit tests (which transpile without checking types) spend their
       # time. `tsc -b` is incremental, so the build's own pass is a no-op
@@ -235,7 +236,7 @@ jobs:
             echo ""
             echo "| Area | Lines | Functions |"
             echo "| --- | --- | --- |"
-            echo "| Frontend (\`ui/src\`) | ${ui_lines}% | ${ui_funcs}% |"
+            echo "| Frontend (\`ui/\`) | ${ui_lines}% | ${ui_funcs}% |"
             echo "| API (Rust) | ${api_lines}% | ${api_funcs}% |"
             echo ""
             echo "Per-file breakdown in the [job summary](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."

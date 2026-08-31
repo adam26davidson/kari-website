@@ -12,9 +12,11 @@
     "moduleDetection": "force",
     "noEmit": true,
 
-    /* The shared e2e config and the seed script are plain ESM .mjs (run
-       directly by node, outside any TS build) — check them here too, via
-       their JSDoc types */
+    /* The shared e2e config, the seed/screenshot scripts and the two node
+       scripts behind `npm run build` / `npm run preview` are plain ESM .mjs
+       (run directly by node, outside any TS build) — check them here too,
+       via their JSDoc types. The build and preview scripts belong in this
+       project rather than a fourth one: the e2e suite is what runs them. */
     "allowJs": true,
     "checkJs": true,
 
@@ -27,5 +29,10 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["e2e/**/*.ts", "e2e/**/*.mjs", "playwright.config.ts"]
+  "include": [
+    "e2e/**/*.ts",
+    "e2e/**/*.mjs",
+    "scripts/**/*.mjs",
+    "playwright.config.ts"
+  ]
 }

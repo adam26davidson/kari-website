@@ -33,5 +33,10 @@
   // tsconfig.node.json alongside vite.config.ts. It is listed here too so
   // its test in the config project may import it: a composite project has
   // to list every file in its program.
-  "include": ["src", "vite-bundle-budget.ts"]
+  "include": [
+    "apps/*/src",
+    "packages/*/src",
+    "test",
+    "vite-bundle-budget.ts"
+  ]
 }

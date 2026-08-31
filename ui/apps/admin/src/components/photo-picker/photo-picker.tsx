@@ -1,0 +1,72 @@
+import { faArrowPointer } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { useEffect, useId, useState } from "react";
+import "./photo-picker.css";
+import { AdminButton } from "../admin-button/admin-button";
+import { apiImageUrl } from "@kari/shared/utils/image-management-helpers";
+
+export function PhotoPicker({
+  imageFile,
+  fileName,
+  setImageFile,
+}: {
+  imageFile: File | null;
+  fileName: string;
+  setImageFile: (file: File | null) => void;
+}) {
+  const inputId = useId();
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!imageFile) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(imageFile);
+    setPreviewUrl(url);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [imageFile]);
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      const file: File = event.target.files[0];
+      setImageFile(file);
+    } else {
+      setImageFile(null);
+    }
+  };
+
+  return (
+    <div className="photo-picker">
+      <input
+        id={inputId}
+        type="file"
+        accept="image/*"
+        onChange={handleFileSelect}
+        hidden
+      />
+      {(previewUrl || fileName !== "") && (
+        <div className="photo-picker-selection">
+          <img
+            src={previewUrl ?? apiImageUrl(fileName, "thumb")}
+            alt="Selected"
+            className="photo-picker-image"
+            loading="lazy"
+            decoding="async"
+          />
+        </div>
+      )}
+      {/* Secondary: picking a photo is a step towards saving, not the
+          screen's primary action — the two used to carry identical
+          weight (#457). Sentence case, like every other button in the
+          admin ("Add an image", "Preview cleanup"); this one was the last
+          in Title Case. */}
+      <AdminButton htmlFor={inputId} variant="secondary">
+        <FontAwesomeIcon icon={faArrowPointer} />
+        {imageFile ? "Select a different image" : "Select an image"}
+      </AdminButton>
+    </div>
+  );
+}

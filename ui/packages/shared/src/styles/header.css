@@ -1,0 +1,209 @@
+/* One surface for both header bars. The bar floats over the background
+   photo, so how much of the photo shows through it decides how the nav
+   links, the admin user name and the logout icon read -- and because the
+   bar spans the full width, that used to vary along its own length: at
+   834px a bright patch of the photo sat under the right-hand end and the
+   last nav links ("Other works", "Photography") read white-on-pale while
+   the rest of the nav read fine (#392).
+
+   The tint is therefore opaque enough to carry the contrast on its own
+   rather than borrowing it from the dark part of whichever photo is set:
+   even over a pure-white photo the white text clears WCAG AAA and the grey
+   user name clears AA, and the bar renders as near enough the same shade
+   over a light photo as a dark one. The blur still lets a hint of the photo
+   through. Enforced by src/test/text-contrast.test.ts. */
+.header,
+.admin-header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  background-color: rgba(28, 49, 0, 0.86);
+  backdrop-filter: blur(10px);
+  color: white;
+}
+
+.header {
+  font-size: 25px;
+  padding: 15px 0px 15px 0px;
+}
+
+.admin-header {
+  font-size: 16px;
+  padding: 10px 0px 10px 0px;
+}
+
+.header-user-section {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  align-items: center;
+  margin-right: 20px;
+  align-self: center;
+}
+
+.header-user-name {
+  margin: 0px 20px 0px 10px;
+  color: #c9c9c9;
+}
+
+.header-user-name {
+  font-size: 18px;
+  font-family: "Roboto", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+}
+
+.header-title {
+  /* Fluid: shrinks through tablet widths (768-1100px) so the desktop
+     header fits without horizontal overflow; 40px from ~1100px up. */
+  font-size: clamp(30px, 3.6vw, 40px);
+  margin: 0px 20px 0px clamp(16px, 2.5vw, 40px);
+  color: white;
+  font-weight: var(--display-weight);
+  white-space: nowrap;
+}
+
+.admin-header-title {
+  font-size: 20px;
+  margin: 0px 20px 0px 40px;
+  color: white;
+  font-weight: var(--display-weight);
+}
+
+/* Below 768px the title div swaps to this class ALONE — neither
+   .header-title nor .admin-header-title applies — so its weight is decided
+   here or not at all, and the two bars want different answers. Each declares
+   the size it would otherwise inherit from its bar, so the weight is stated
+   next to the size that justifies it (and the type-scale guard can see the
+   pair). */
+.header-title-mobile {
+  flex: 1;
+  margin-left: 20px;
+}
+
+/* Public bar: 25px carries the light display weight just as the desktop
+   title's 30-40px does, so the site title reads the same at every width. */
+.header .header-title-mobile {
+  font-size: 25px;
+  font-weight: var(--display-weight);
+}
+
+/* Admin bar: 16px, well under the 18px the token is allowed at, so this one
+   keeps the 400 default — it is the only title that changes weight in this
+   PR, and it changes because a 16px hairline is the #356 defect itself. */
+.admin-header .header-title-mobile {
+  font-size: 16px;
+  font-weight: 400;
+}
+
+/* Narrow viewports, admin bar only. At 390px the bar has literally no slack
+   — the title's flex box ends exactly where the user block begins — and its
+   spacing is lopsided: 11px between the title and the person icon and 10px
+   between the icon and the name, against 20px around the name and 20px to
+   the right edge. The result reads as four things shoved together rather
+   than a title and a user block (design brief §1).
+
+   Rebalanced rather than widened: the slack is taken from the loose end
+   (the name's own margins and the right gutter) and, because the title is
+   `flex: 1` and its text is left-aligned, everything freed reappears as gap
+   between the title and the person icon. Net width goes DOWN, so this
+   cannot overflow the phone the way an added margin would. The breakpoint
+   matches useIsMobile()'s 768px, which is what swaps in
+   .header-title-mobile. */
+@media (max-width: 767.98px) {
+  .admin-header {
+    /* Vertical air to match: 10px made a 56px bar carrying a 36px button. */
+    padding: 14px 0px 14px 0px;
+  }
+
+  .admin-header .header-user-name {
+    margin: 0px 14px 0px 14px;
+  }
+
+  .admin-header .header-user-section {
+    margin-right: 16px;
+  }
+}
+
+/* Real <button> for keyboard access; neutralize default button chrome
+   so the hamburger icon looks exactly as it did as a bare icon. */
+.header-menu-button {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-left: 20px;
+  font: inherit;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.pages {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  flex-wrap: wrap;
+  flex: 1;
+  /* Fluid spacing and type: fixed 60px inter-link margins made the nav
+     ~666px wide, overflowing viewports between the 768px desktop
+     breakpoint and ~948px. gap/margins/font-size now scale with the
+     viewport and reach the old spacing on wide screens. */
+  gap: clamp(14px, 3.5vw, 60px);
+  /* Column gap only: the admin link below wraps to a second row between
+     768px and ~1000px, and at the fluid gap above that row would push the
+     bar ~27px taller than it has been. 4px keeps the wrapped row inside
+     the line box the site title already reserves, so the bar's height is
+     unchanged at every width. The nav links themselves never wrap (#221
+     fluid sizing), so this affects nothing else. */
+  row-gap: 4px;
+  margin: 0px clamp(16px, 2.5vw, 40px);
+  font-size: clamp(17px, 2.2vw, 20px);
+}
+
+.pages a {
+  text-decoration: none;
+  margin: 0px 0px 2px 0px;
+  color: white;
+  transition: opacity 0.5s;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.pages .active {
+  font-weight: bold;
+  opacity: 1;
+}
+
+.pages a:hover {
+  margin-bottom: 0px;
+  border-bottom: 2px solid white;
+  opacity: 1;
+  cursor: pointer;
+}
+
+/* The way into the admin app from the public site (#591). Not one of the
+   site's pages, so it is deliberately quieter than the nav links: smaller,
+   and dimmed until hovered or focused.
+
+   `margin-left: auto` pins it to the right-hand end of whichever nav row it
+   lands on. Which row that is depends on the width: the five nav links fill
+   the bar to within ~15px at 768px, so between 768px and about 1000px there
+   is no room for a sixth item and .pages wraps this one onto a second row.
+   That is the deliberate trade — the alternative was shrinking the nav's
+   type through the whole tablet band for a link that serves one person
+   (see #591's PR). At the auto margin it wraps to the right, reading as a
+   separate affordance rather than a stray nav item. */
+.pages .header-admin-link {
+  margin-left: auto;
+  font-size: 15px;
+  opacity: 0.7;
+}
+
+.pages .header-admin-link:hover,
+.pages .header-admin-link:focus-visible {
+  opacity: 1;
+}

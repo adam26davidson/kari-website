@@ -31,6 +31,10 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/test"]
+  // Every workspace's browser code. The shared package is consumed as
+  // TypeScript source (see packages/shared/package.json), so it belongs in
+  // the same program as the apps that import it rather than behind a build
+  // step of its own.
+  "include": ["apps/*/src", "packages/*/src"],
+  "exclude": ["**/*.test.ts", "**/*.test.tsx"]
 }

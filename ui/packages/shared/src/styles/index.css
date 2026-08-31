@@ -1,0 +1,204 @@
+/* Secondary text (attribution lines, image captions) on the translucent
+   cards. Darker than it looks like it needs to be on paper: the cards let
+   the background photo through, so the surface this sits on is never white,
+   and the admin-selectable photo moves its lightness around. This value
+   clears WCAG AAA over a mid-lightness photo and still clears AA at both
+   extremes, while staying lighter than the body text so the line still
+   reads as secondary (#343). The admin panels reuse it on the same
+   translucent grey (#354). Enforced by src/test/text-contrast.test.ts. */
+:root {
+  --muted-text: #3d3d3d;
+
+  /* Light foreground for the dark surfaces: the page itself (body text over
+     the background photo) and the filled admin controls. Declared as a token
+     so a control's legibility never depends on inheriting the body's colour
+     (#347). */
+  --light-text: #e6e6e6;
+
+  /* The type scale's weight axis, in one place (#356).
+
+     The default everywhere is 400: the body used to be 300, and in Noto
+     Serif JP at 14-16px a 300 stem renders as a hairline, so small text
+     read far lighter than its nominal colour however dark that colour was
+     (the real cause of #343, whose colour already passed AA). Four rules
+     were patched with an individual `font-weight: 400`, but anything new
+     inherited the problem again — and text that never declares a size at
+     all (the home blurb, injected blog HTML, `.loading`) could not be
+     protected by a rule about small text. So 400 is the default and the
+     light weight is an explicit opt-in:
+
+       font-weight: var(--display-weight);
+
+     which is allowed ONLY on a rule that also declares a `font-size` of
+     18px or more, where the light stems read as airy rather than faint.
+     `--muted-text` above remains the colour half of "this line is
+     secondary"; this is the weight half. Both enforced by
+     src/test/type-scale.test.ts. */
+  --display-weight: 300;
+}
+
+body {
+  font-family: "Noto Serif JP", serif;
+  font-optical-sizing: auto;
+  font-weight: 400;
+  font-style: normal;
+  margin: 0;
+  color: var(--light-text);
+  /* The shell is exactly as tall as the visible viewport, and the document
+     never scrolls (#558).
+
+     `vh` is the LARGE viewport height: on a phone it measures the page as
+     it would be with the URL bar and toolbars retracted, so while they are
+     shown the shell is taller than what the visitor can see and the
+     document becomes a scroll container of its own — one stacked on top of
+     the app's inner `.content` scroller. A gesture that moved the document
+     carried the header off the top of the screen, and the inner scroller
+     swallowed the gesture that should have brought it back. `dvh` is the
+     DYNAMIC viewport height, which tracks the chrome as it retracts, so
+     the shell can never exceed the visible area. The `vh` line above it is
+     the fallback for browsers without `dvh` (Safari <15.4, Chrome <108),
+     which drop the second declaration as invalid; the order is therefore
+     load-bearing.
+
+     The `overflow: hidden` that finishes the job lives in the
+     `@supports` block below, not here — see the note there.
+
+     Pinned by src/test/viewport-shell.test.ts. */
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* With no overflow declared on `html`, the body's propagates to the
+   viewport, so the document is not a scroll container at all and nothing
+   added later can make the header scrollable away again. `hidden` rather
+   than `clip` on purpose: a `clip` box has no scrollable overflow region,
+   which would blind the horizontal-overflow assertion in
+   e2e/screenshots.mjs.
+
+   Gated on the same support the `100dvh` line above needs, because taking
+   the document's scroll away is only safe once the shell is guaranteed to
+   fit. A browser that drops `100dvh` (Safari <15.4, Chrome <108) keeps a
+   `100vh` shell, which while browser chrome is shown is taller than the
+   visible viewport — and there the document scroll is the only thing that
+   can reach the bottom strip, since scrolling the inner content moves it
+   within an off-screen box and never retracts the chrome. Ungated, that
+   strip would be clipped and unreachable for good: a regression, not a
+   fallback. With the gate, browsers without `dvh` keep exactly today's
+   behaviour, which is what the two halves of this fix promise together. */
+@supports (height: 100dvh) {
+  body {
+    overflow: hidden;
+  }
+}
+
+body::before {
+  content: "";
+  position: fixed; /* Stay put while the page scrolls */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url("../assets/petals_on_ground.webp");
+  background-size: cover; /* Scale to fill any viewport, no tiling seam */
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.7; /* Adjust this value to control the transparency */
+  z-index: -1; /* Ensure the pseudo-element is behind the content */
+  pointer-events: none; /* Allows interaction with underlying elements */
+}
+
+/* Smaller variant (~51 kB vs ~146 kB) for narrow viewports */
+@media (max-width: 960px) {
+  body::before {
+    background-image: url("../assets/petals_on_ground_960.webp");
+  }
+}
+
+/* Admin-selected background: useSiteBackground sets the attribute and the
+   --site-background variable when site-settings.json names a custom photo.
+   The attribute selector outweighs both default rules above (media query
+   included), so this single rule overrides desktop and mobile alike. */
+body[data-custom-background]::before {
+  background-image: var(--site-background);
+}
+
+/* Keyboard focus ring, site-wide (#501). Every control used to rely on the
+   browser's default outline, which is a single colour and therefore has to
+   lose somewhere: the site puts controls on a near-black-green header bar
+   AND on near-white cards floating over an admin-chosen photo, so no one
+   colour reads on all of them.
+
+   Two layers instead: a white inner ring wrapped in a dark halo of the
+   header's own green. The layers contrast with each other, so whichever one
+   the surface swallows, the other still draws the shape. The box-shadow's
+   4px spread grows from the border edge outward and the outline paints over
+   its inner half, giving 2px white inside 2px green; both follow the
+   element's border-radius. Enforced by src/test/text-contrast.test.ts. */
+:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 0;
+  box-shadow: 0 0 0 4px #1c3100;
+}
+
+.whole-page {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  /* Same viewport-unit pair as `body`, and for the same reason (#558).
+     It cannot simply be `height: 100%`: `#root`, the element between this
+     and `body`, has auto height, so a percentage here has nothing to
+     resolve against. */
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+}
+
+/* Shared styles used across several components. These used to live in
+   component CSS files and worked everywhere only because Vite bundles all
+   CSS globally; they belong here where the sharing is explicit. */
+
+/* The "Loading..." indicator pages show while content is fetched — styled
+   as a card matching .load-error so it reads against the photo background.
+   Used by ContentPage, OtherWorksItem, and Home. */
+.loading {
+  margin: 80px auto 0;
+  padding: 16px 32px;
+  border-radius: 8px;
+  background-color: #f2efe9;
+  color: #181818;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  font-family: "Roboto", sans-serif;
+  font-size: 16px;
+  text-align: center;
+}
+
+/* Fade-and-rise entrance used by the home page card's children and the
+   public data list. The delay is opted into per element with an explicit
+   .fade-in-delay-N class so reordering siblings can't silently change an
+   element's timing (the delays used to be keyed by :nth-child position). */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  opacity: 0;
+  animation: fadeIn 0.8s ease-out forwards;
+}
+
+.fade-in-delay-1 {
+  animation-delay: 0.2s;
+}
+.fade-in-delay-2 {
+  animation-delay: 0.6s;
+}
+.fade-in-delay-3 {
+  animation-delay: 1s;
+}
