@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { spawn, type ChildProcess } from "node:child_process";
+import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,6 +18,13 @@ import { fileURLToPath } from "node:url";
 
 const UI_ROOT = path.resolve(fileURLToPath(import.meta.url), "../../..");
 const SERVE = path.join(UI_ROOT, "scripts", "serve.mjs");
+const DIST = path.join(UI_ROOT, "dist");
+
+// chmod 000 is how the unopenable-file case is staged, and it is not a real
+// restriction for root or on Windows — the stream would open and the test
+// would assert 500 against a healthy 200.
+const CAN_MAKE_UNREADABLE =
+  process.platform !== "win32" && process.getuid?.() !== 0;
 
 /** A port nothing is listening on, so parallel runs don't collide. */
 function freePort(): Promise<number> {
@@ -111,4 +119,38 @@ describe("the preview server", () => {
     expect(traversal.status).toBe(shell.status);
     expect(await traversal.text()).toBe(await shell.text());
   });
+
+  // The stat/open race this stands in for: `npm run build` empties dist/ via
+  // emptyOutDir while a request is in flight, so a file that passed the stat
+  // check is gone by the time the read stream opens. That race is not
+  // reproducible on demand, but it is the same code path as any other
+  // open-time failure — an 'error' event on a stream nothing is listening to
+  // — and chmod 000 produces one deterministically: stat still succeeds,
+  // open fails EACCES.
+  it.skipIf(!CAN_MAKE_UNREADABLE)(
+    "stays up when a file that passed the stat check cannot be opened",
+    async () => {
+      // dist/ need not exist here (the suite runs without a build in CI), and
+      // a directory this test created is not one it should leave behind.
+      const distExisted = fs.existsSync(DIST);
+      fs.mkdirSync(DIST, { recursive: true });
+      // Unique per process so parallel runs in one worktree cannot collide.
+      const name = `unreadable-${process.pid}.txt`;
+      const file = path.join(DIST, name);
+      try {
+        fs.writeFileSync(file, "unopenable");
+        fs.chmodSync(file, 0o000);
+
+        const unopenable = await fetch(`${origin}/${name}`);
+        expect(unopenable.status).toBe(500);
+        await unopenable.text();
+
+        await expect(fetch(origin + "/")).resolves.toBeDefined();
+        expect(server.exitCode).toBeNull();
+      } finally {
+        fs.rmSync(file, { force: true });
+        if (!distExisted) fs.rmSync(DIST, { force: true, recursive: true });
+      }
+    },
+  );
 });
