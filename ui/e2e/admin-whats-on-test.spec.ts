@@ -180,18 +180,15 @@ test.describe("admin: what's on test", () => {
       compared,
     );
 
-    // Reached the way the admin reaches it: the staging-only menu entry,
-    // which only the VITE_SHOW_TEST_STATUS builds register.
-    await page.goto("/admin");
+    await openWhatsOnTest(page);
+
+    // The staging-only menu entry is registered and owns this route — only
+    // the VITE_SHOW_TEST_STATUS builds have it at all.
     const menuItem = page.locator(".admin-menu-item", {
       hasText: "What's on test",
     });
-    await expect(menuItem).toBeVisible({ timeout: 60_000 });
-    await menuItem.click();
-    await expect(page).toHaveURL(/\/admin\/whats-on-test$/);
-    await expect(section(page).locator(".whats-on-test-shas")).toBeVisible({
-      timeout: 60_000,
-    });
+    await expect(menuItem).toHaveClass(/selected/);
+    await expect(menuItem).toHaveAttribute("href", "/admin/whats-on-test");
 
     // The compare ran between exactly the two shas in play.
     expect(compared).toEqual([
