@@ -26,12 +26,18 @@ const DIST = path.join(UI_ROOT, "dist");
 const CAN_MAKE_UNREADABLE =
   process.platform !== "win32" && process.getuid?.() !== 0;
 
-/** A port nothing is listening on, so parallel runs don't collide. */
+/**
+ * A port nothing is listening on, so parallel runs don't collide.
+ *
+ * The probe binds every interface rather than one address, so the port it
+ * reports is free on all of them — the binding test below needs one that is
+ * free on 127.0.0.1 and ::1 alike.
+ */
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const probe = net.createServer();
     probe.on("error", reject);
-    probe.listen(0, "localhost", () => {
+    probe.listen(0, () => {
       const address = probe.address();
       const port = typeof address === "object" && address ? address.port : 0;
       probe.close(() => resolve(port));
@@ -39,13 +45,36 @@ function freePort(): Promise<number> {
   });
 }
 
-let server: ChildProcess;
-let origin: string;
+/** Whether `host` can be bound here at all. @param host */
+function canBind(host: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const probe = net.createServer();
+    probe.on("error", () => resolve(false));
+    probe.listen(0, host, () => probe.close(() => resolve(true)));
+  });
+}
 
-beforeAll(async () => {
-  const port = await freePort();
-  origin = `http://localhost:${port}`;
-  server = spawn(process.execPath, [SERVE, "--port", String(port)], {
+/** Resolves if a TCP connection to `host:port` is accepted, rejects if not. */
+function connect(port: number, host: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const socket = net.connect({ port, host });
+    socket.once("connect", () => {
+      socket.destroy();
+      resolve();
+    });
+    socket.once("error", (error) => {
+      socket.destroy();
+      reject(error);
+    });
+  });
+}
+
+/** Start scripts/serve.mjs and wait until it answers on `origin`. */
+async function startServer(
+  args: string[],
+  origin: string,
+): Promise<ChildProcess> {
+  const child = spawn(process.execPath, [SERVE, ...args], {
     cwd: UI_ROOT,
     stdio: "ignore",
   });
@@ -54,12 +83,26 @@ beforeAll(async () => {
   for (let attempt = 0; attempt < 100; attempt++) {
     try {
       await fetch(origin + "/");
-      return;
+      return child;
     } catch {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
   }
-  throw new Error("preview server never started");
+  child.kill();
+  throw new Error(`preview server never started on ${origin}`);
+}
+
+// The binding test needs a second loopback address to prove the first one is
+// the only one bound; a machine without IPv6 loopback has no way to show it.
+const HAS_IPV6_LOOPBACK = await canBind("::1");
+
+let server: ChildProcess;
+let origin: string;
+
+beforeAll(async () => {
+  const port = await freePort();
+  origin = `http://localhost:${port}`;
+  server = await startServer(["--port", String(port)], origin);
 }, 20_000);
 
 afterAll(() => {
@@ -67,6 +110,33 @@ afterAll(() => {
 });
 
 describe("the preview server", () => {
+  // `--host` has to constrain the socket, not just the ready line: this
+  // stands in for `vite preview`, which binds loopback unless told
+  // otherwise, so a preview of an unreleased site must not be reachable
+  // from the rest of the network. From outside the process the way to see
+  // which addresses are bound is to bind ONE loopback address and watch the
+  // other refuse: `listen(port)` with no host binds every interface, so both
+  // would answer.
+  it.skipIf(!HAS_IPV6_LOOPBACK)(
+    "binds only the host it was given",
+    async () => {
+      const port = await freePort();
+      const child = await startServer(
+        ["--port", String(port), "--host", "127.0.0.1"],
+        `http://127.0.0.1:${port}`,
+      );
+
+      try {
+        await expect(connect(port, "::1")).rejects.toMatchObject({
+          code: "ECONNREFUSED",
+        });
+      } finally {
+        child.kill();
+      }
+    },
+    20_000,
+  );
+
   // dist/ may or may not exist when this runs (the unit suite is run without
   // a build in CI), so assert on what holds either way: a path that resolves
   // to no file is answered exactly like "/" is.

@@ -282,6 +282,12 @@ const server = http.createServer((request, response) => {
   guard(response, "request handler failed", () => handle(request, response));
 });
 
-server.listen(port, () => {
+// The host is passed to listen, not just printed: without it node binds
+// every interface, so a preview of an unreleased site would be reachable
+// from the whole network — `vite preview`, which this replaces, binds
+// loopback unless asked otherwise, and "localhost" below keeps that. Every
+// caller (playwright's webServer, the visual-review capture, the ready line
+// here) reaches it over localhost, so the default stays as-is for them.
+server.listen(port, host, () => {
   console.log(`  ➜  Local:   http://${host}:${port}/`);
 });
