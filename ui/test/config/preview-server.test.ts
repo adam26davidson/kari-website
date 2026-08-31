@@ -84,6 +84,26 @@ describe("the preview server", () => {
     expect(server.exitCode).toBeNull();
   });
 
+  // The request target is not a URL, and some of them are not even valid as
+  // relative references: "//" and "//@" are protocol-relative, so parsing
+  // them against http://localhost yields no host and throws. `curl
+  // --path-as-is http://localhost:4173//` sends exactly that request line, as
+  // does anything else that declines to normalize the target for us.
+  it("answers a target the URL parser rejects like any other unknown route", async () => {
+    const shell = await fetch(origin + "/");
+    const unparseable = await fetch(origin + "//");
+
+    expect(unparseable.status).toBe(shell.status);
+    expect(await unparseable.text()).toBe(await shell.text());
+  });
+
+  it("stays up after a target the URL parser rejects", async () => {
+    await fetch(origin + "//@");
+
+    await expect(fetch(origin + "/")).resolves.toBeDefined();
+    expect(server.exitCode).toBeNull();
+  });
+
   it("answers a traversal attempt with the shell", async () => {
     const shell = await fetch(origin + "/");
     const traversal = await fetch(origin + "/%2e%2e/package.json");

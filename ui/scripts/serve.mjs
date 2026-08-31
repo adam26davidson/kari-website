@@ -94,12 +94,36 @@ function resolveFile(pathname) {
     : null;
 }
 
+/**
+ * The path of a request target, or "/" when the URL parser rejects it.
+ *
+ * A request target is not a URL, and not every target is even valid as a
+ * relative reference: "//" and "//@" are protocol-relative, so parsing them
+ * against the origin leaves no host and `new URL` throws — which
+ * `curl --path-as-is http://localhost:4173//`, or a raw backslash in the
+ * path, is enough to trigger. That throw must not escape, for the reason
+ * resolveFile spells out above: it would kill playwright's webServer and
+ * fail the rest of the run with ECONNREFUSED. Falling back to "/" answers
+ * such a target with the public shell, exactly like any other route that
+ * matches no file.
+ *
+ * @param {string} target
+ * @returns {string}
+ */
+function requestPathname(target) {
+  try {
+    return new URL(target, `http://${host}`).pathname;
+  } catch {
+    return "/";
+  }
+}
+
 /** True for the admin app's own URL space. @param {string} pathname */
 const isAdminPath = (pathname) =>
   pathname === "/admin" || pathname.startsWith("/admin/");
 
 const server = http.createServer((request, response) => {
-  const pathname = new URL(request.url ?? "/", `http://${host}`).pathname;
+  const pathname = requestPathname(request.url ?? "/");
   const fallback = isAdminPath(pathname) ? ADMIN_INDEX : PUBLIC_INDEX;
   const file = resolveFile(pathname) ?? fallback;
   if (!fs.existsSync(file)) {
