@@ -66,15 +66,25 @@ const CONTENT_TYPES = {
  * The file dist/ should answer `pathname` with, or null when nothing
  * matches and the caller should fall back to an index document.
  *
- * Returns null rather than throwing for a path that escapes dist/ (`..`), so
- * a traversal attempt is answered with the SPA shell like any other unknown
- * route.
+ * Returns null rather than throwing for a path that escapes dist/ (`..`) or
+ * one that is not decodable at all (`/%zz`), so both are answered with the
+ * SPA shell like any other unknown route. The second case matters more than
+ * it looks: this handler has no error boundary above it, so a throw here is
+ * an uncaught exception that kills the process — and this server is
+ * playwright's webServer, so one stray request would fail the rest of an e2e
+ * or screenshot run with ECONNREFUSED.
  *
  * @param {string} pathname
  * @returns {string | null}
  */
 function resolveFile(pathname) {
-  const candidate = path.join(DIST, decodeURIComponent(pathname));
+  let decoded;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+  const candidate = path.join(DIST, decoded);
   const normalized = path.normalize(candidate);
   if (normalized !== DIST && !normalized.startsWith(DIST + path.sep)) {
     return null;
