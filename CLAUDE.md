@@ -7,7 +7,8 @@ with code in this repository.
 - `./scripts/setup-worktree.sh` - One-time setup for a fresh worktree (UI
   dependencies + the Playwright browser the visual check needs). Idempotent
   and cheap to re-run; see Parallel Sessions below.
-- `./scripts/dev.sh` - Start the whole dev stack (MinIO + seed + API + UI);
+- `./scripts/dev.sh` - Start the whole dev stack (MinIO + seed + API + both
+  UI dev servers, public and admin);
   `--aws` targets the real test bucket via SSO instead of local MinIO. It
   runs `setup-worktree.sh` first, so a stack always starts against
   lockfile-matching dependencies; that script's skip check keeps a warm
@@ -23,17 +24,23 @@ with code in this repository.
   the local toolchain it targets the local MinIO + localhost:3000 API from
   `.env.development`; the real AWS test bucket is opt-in via
   `./scripts/dev.sh --aws` — no vite mode silently reads AWS)
-- UI: `npm run dev:admin` - Start the ADMIN app's dev server. It is a
-  separate app (see UI Layout below), so `dev`/`dev.sh` do not start it;
-  #593 wires it into the dev stack. Note that its Auth0 callback is
+- UI: `npm run dev:admin` - Start the ADMIN app's dev server on its own port
+  (5174 by default, so two vites can run side by side). It is a separate app
+  (see UI Layout below), so plain `npm run dev` does not start it —
+  `dev.sh` does, alongside the public one. Note that its Auth0 callback is
   `<origin>/admin`, so logging in locally needs the port it comes up on
-  allowlisted in the Auth0 application.
+  allowlisted in the Auth0 application (5174 is; a parallel stack bumped to
+  5175 is not).
 - UI: `npm run build` - Build production UI (both apps, into one `ui/dist`)
 - UI: `npm run build:test` - Build UI for test environment
 - UI: `npm run preview` - Serve a built `ui/dist` on 4173. NOT `vite
   preview`: `ui/scripts/serve.mjs` stands in for it because the merged dist
-  needs two SPA fallback documents (`/admin*` gets the admin one). #593
-  replaces it with the prod-like arrangement.
+  needs two SPA fallback documents (`/admin*` gets the admin one). It is the
+  permanent local mirror of the deployed nginx vhost's fallback rule, not a
+  stopgap — running real nginx would make docker a prerequisite of
+  `preview`, `test:e2e` and the visual-review job without testing the actual
+  (out-of-repo, hand-maintained) vhost. The two are kept in step by hand:
+  change the rule in `serve.mjs` and the vhost needs the matching change.
 - UI: `npm run lint` - Lint TypeScript code
 - UI: `npm run typecheck` - Type-check app code, tests and the vite
   configs (`tsc -b`; every project sets `noEmit`, so nothing is written).

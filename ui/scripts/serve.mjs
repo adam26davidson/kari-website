@@ -7,14 +7,22 @@
 // answered with the PUBLIC index.html and render the public site instead of
 // the admin app.
 //
-// The rule here is the one the deployed nginx vhost will get in #593:
+// The rule here mirrors the deployed nginx vhost's (#593):
 //
 //   /admin, /admin/...   -> dist/admin/index.html when no file matches
 //   everything else      -> dist/index.html when no file matches
 //
-// This is deliberately a throwaway: #593 replaces it with the prod-like
-// arrangement (a second document root and the real nginx config), at which
-// point this file goes away.
+// That mirroring is the point, and it is permanent. This is the local stand-
+// in for the vhost, deliberately kept as a small node server rather than the
+// real nginx: nginx would make docker a hard dependency of `npm run preview`,
+// `npm run test:e2e` and the visual-review job, and STILL would not be the
+// deployed config, which is hand-maintained on the EC2 host and outside this
+// repo. So the two are kept in step by hand — a change to the fallback rule
+// here needs a matching change to the vhost's `location = /admin` and
+// `location ^~ /admin/` blocks (a `needs-human` ask; the reverse is just as
+// true, since e2e and the visual check only ever see this file's behaviour).
+//
+// test/config/preview-server.test.ts holds the robustness contract.
 //
 // Usage: node scripts/serve.mjs [--port 4173] [--host 127.0.0.1]
 // `--strictPort` is accepted and ignored — the port here is never negotiated,

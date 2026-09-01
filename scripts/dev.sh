@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # One-command dev stack (issues #194, #220).
 #
-#   scripts/dev.sh          hermetic local MinIO: compose up + seed + API + UI
+#   scripts/dev.sh          hermetic local MinIO: compose up + seed + API +
+#                           both UIs (public and admin)
 #   scripts/dev.sh --aws    no MinIO; API uses your SSO credentials against
 #                           the test.karidavidson.com bucket
 #
@@ -15,7 +16,8 @@
 # and exported to the UI/API, so every piece of one stack talks to that
 # stack only.
 #
-# Ctrl-C tears everything down (API, UI, and the MinIO container).
+# Ctrl-C tears everything down (API, both UI dev servers, and the MinIO
+# container).
 #
 # UI dependencies are installed by scripts/setup-worktree.sh, which this
 # script runs first; tests for that delegation live in
@@ -148,9 +150,12 @@ fi
 
 echo
 echo "Dev stack for $PWD:"
-echo "  API:  http://localhost:$KARI_API_PORT"
-echo "  S3:   $VITE_S3_URL"
-echo "  UI:   vite picks a free port and prints its URL below"
+echo "  API:    http://localhost:$KARI_API_PORT"
+echo "  S3:     $VITE_S3_URL"
+echo "  UI:     vite picks a free port and prints its URL below (5173 by"
+echo "          default)"
+echo "  Admin:  a second vite on 5174 by default, at /admin/ — logging in"
+echo "          needs that exact origin allowlisted in Auth0"
 echo
 
 # Run the API from the repo root on purpose: dotenv only finds api/.env when
@@ -164,5 +169,13 @@ pids+=($!)
 (cd ui && npm run dev) &
 pids+=($!)
 
-# Exit when either process dies; the EXIT trap tears down the rest.
+# The admin app is a separate vite build with its own dev server (#591), so
+# the stack needs both to be a whole site: the public header's "Admin" entry
+# is a plain link out of the SPA, and it lands on nothing without this
+# (issue #593). Its pid joins `pids` like every other child — a dev server
+# left running after Ctrl-C is a file watcher that outlives the session.
+(cd ui && npm run dev:admin) &
+pids+=($!)
+
+# Exit when any of the three dies; the EXIT trap tears down the rest.
 wait -n
