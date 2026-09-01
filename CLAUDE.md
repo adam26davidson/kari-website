@@ -177,6 +177,13 @@ Coverage thresholds are a ratchet: floors pinned just below current numbers
 (UI: `coverage.thresholds` in `ui/vitest.config.ts`; API: `--fail-under-lines`
 in the coverage CI job). When coverage rises meaningfully, bump the floors in
 the same PR — never lower them to make a PR pass.
+The UI floors are keyed by workspace glob — one group each for
+`apps/public/src/**`, `apps/admin/src/**` and `packages/shared/src/**`, so a
+regression in one cannot hide behind another's headroom, and deliberately no
+whole-run floor (those globs cover the whole measured set, so a top-level
+number would police an empty remainder; `ui/test/config/coverage-thresholds.test.ts`
+pins that shape). The PR coverage comment carries a row per workspace, which
+is the number to bump a floor from — never a local one (#398).
 Dependency updates are managed by Renovate (`renovate.json`); non-major updates
 auto-merge once these checks pass. The exception is a package still below
 1.0.0, where a "minor" bump is breaking by convention (cargo and npm alike):
