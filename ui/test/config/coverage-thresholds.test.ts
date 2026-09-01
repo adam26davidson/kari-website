@@ -21,7 +21,19 @@ import config from "../../vitest.config";
 // The config module is imported directly (like the other tests in here drive
 // real tooling rather than a copy of it), so what is asserted is the object
 // vitest itself will read.
-const thresholds = config.test?.coverage?.thresholds;
+//
+// `coverage` is a union over the providers, and the custom-provider arm has
+// no `thresholds` at all, so the property is narrowed to rather than read off
+// the union. `thresholds` is then itself a union of "whole-run floors" and
+// "glob-keyed groups"; it is widened to a plain record here because which of
+// the two shapes it is IS the thing under test, and the static type would
+// otherwise decide the question before a single assertion ran.
+// (An `interface` has no index signature, so the widening is a cast rather
+// than an annotation.)
+const coverage = config.test?.coverage;
+const thresholds = (
+  coverage && "thresholds" in coverage ? coverage.thresholds : undefined
+) as Record<string, unknown> | undefined;
 
 /** The workspaces the coverage `include` in vitest.config.ts spans. */
 const WORKSPACES = ["apps/public", "apps/admin", "packages/shared"];
@@ -37,12 +49,13 @@ describe("coverage thresholds", () => {
 
   it.each(WORKSPACES)("sets a floor group for %s", (workspace) => {
     const group = thresholds?.[`${workspace}/src/**`];
-    expect(group).toBeDefined();
     // Floors, not targets: only that each metric has a number, since the
     // numbers themselves move with every ratchet bump.
-    expect(typeof group?.lines).toBe("number");
-    expect(typeof group?.functions).toBe("number");
-    expect(typeof group?.branches).toBe("number");
+    expect(group).toMatchObject({
+      lines: expect.any(Number),
+      functions: expect.any(Number),
+      branches: expect.any(Number),
+    });
   });
 
   it("has a group for every workspace and no others", () => {
