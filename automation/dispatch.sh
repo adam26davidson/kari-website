@@ -832,7 +832,7 @@ if [ "$MODE" = run ]; then
   telegram_alerts
   telegram_lock_alerts
   # A reply from the phone means the maintainer just unblocked something;
-  # sitting out the rest of a 4h cadence wastes the moment. telegram.sh
+  # sitting out the rest of a 6h cadence wastes the moment. telegram.sh
   # drops this file when it posts a reply to an issue.
   if [ -e "$STATE_DIR/nudge" ]; then
     rm -f "$STATE_DIR/nudge"

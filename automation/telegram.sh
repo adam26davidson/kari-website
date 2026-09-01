@@ -226,7 +226,7 @@ not recorded on GitHub — see the tick journal" >/dev/null 2>&1 || true
     echo "telegram: could not clear needs-human/blocked on #$issue" >&2
   fi
   # An answer from the phone means something just got unblocked; waiting
-  # out the rest of a 4h cadence wastes the moment. dispatch.sh consumes
+  # out the rest of a 6h cadence wastes the moment. dispatch.sh consumes
   # this file on its next tick and treats every agent as due.
   touch "$NUDGE_FILE"
   send_message "✅ posted to issue #$issue; fleet nudged" \

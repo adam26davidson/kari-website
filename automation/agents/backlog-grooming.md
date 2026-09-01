@@ -29,7 +29,7 @@ already said and not say it again.
 
 - Never touch an issue labelled `in progress`: no labels, no comments,
   no closing. A worker is on it and the pipeline owns its labels.
-- Labels go stale mid-tick. The issue-pipeline runs every 4h and the
+- Labels go stale mid-tick. The issue-pipeline runs every 6h and the
   dispatcher backgrounds the two of you independently, so it can claim
   an issue (`in progress` + a branch comment) minutes after you listed
   the backlog. Step 1's snapshot therefore decides what you CONSIDER,
