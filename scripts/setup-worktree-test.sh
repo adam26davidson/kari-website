@@ -114,6 +114,22 @@ EOF
 chmod +x "$NPX_FAIL_BIN/npm" "$NPX_FAIL_BIN/npx" "$NPX_FAIL_BIN/node" \
   "$NPX_FAIL_BIN/cargo" "$NPX_FAIL_BIN/docker"
 
+# A stub dir for --aws mode. The minio-mode docker stub fails on purpose, so
+# every case above stops before the stack itself starts; --aws never calls
+# docker, so with an `aws` that succeeds the run reaches the part that starts
+# the API and the two UI dev servers. Nothing lingers: the stubs exit
+# immediately, so dev.sh's `wait -n` returns at once.
+AWS_BIN="$(mktemp -d)"
+WORKDIRS+=("$AWS_BIN")
+cp "$STUB_BIN/npm" "$STUB_BIN/npx" "$STUB_BIN/node" "$STUB_BIN/cargo" \
+  "$STUB_BIN/docker" "$AWS_BIN/"
+cat > "$AWS_BIN/aws" <<'EOF'
+#!/usr/bin/env bash
+echo "$PWD: aws $*" >>"$STUB_LOG"
+EOF
+chmod +x "$AWS_BIN/npm" "$AWS_BIN/npx" "$AWS_BIN/node" "$AWS_BIN/cargo" \
+  "$AWS_BIN/docker" "$AWS_BIN/aws"
+
 # A stub dir with node but deliberately no npm, for the missing-tool case.
 NO_NPM_BIN="$(mktemp -d)"
 WORKDIRS+=("$NO_NPM_BIN")
@@ -341,7 +357,20 @@ expect_not_contains "$r/exit-code" "0" "failed setup exits dev.sh non-zero"
 expect_not_contains "$r/stub.log" "docker" \
   "failed setup stops dev.sh before the stack starts"
 
-# 17. Argument handling still comes first, so --help stays instant.
+# 17. The stack is the whole site: the admin app is a separate vite build
+#     with its own dev server (#591), so dev.sh starts BOTH (issue #593).
+#     Started without the admin one, the public header's "Admin" link — a
+#     plain link out of the SPA — lands on nothing.
+r="$(new_repo)"
+STUB_PATH="$AWS_BIN" run_dev "$r" --aws
+expect_eq "$(grep -cxF "$r/ui: npm run dev" "$r/stub.log")" 1 \
+  "dev.sh starts the public app's dev server"
+expect_contains "$r/stub.log" "/ui: npm run dev:admin" \
+  "dev.sh starts the admin app's dev server"
+expect_contains "$r/stub.log" "cargo run" "dev.sh starts the API"
+expect_contains "$r/out" "Admin:" "dev.sh names the admin URL at startup"
+
+# 18. Argument handling still comes first, so --help stays instant.
 r="$(new_repo)"
 run_dev "$r" --help
 expect_contains "$r/out" "usage: scripts/dev.sh" "dev.sh --help prints usage"
