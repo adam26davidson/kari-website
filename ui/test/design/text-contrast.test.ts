@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { HEADER_COLOR_DEFAULTS } from "@kari/shared/utils/color";
 
 // The public haiku/haiga/photography pages render their attribution and
 // caption lines as small secondary text on a translucent card that floats
@@ -492,6 +491,21 @@ const headerOver = (photo: Rgb, selector: string): Rgb =>
 const headerDefault = (selector: string, property: string): string =>
   varFallback(declaration(headerCss, selector, property));
 
+/** One field of the shared HEADER_COLOR_DEFAULTS, as source text. */
+const HEADER_COLOR_DEFAULTS_SOURCE = (
+  read("packages/shared/src/utils/color.ts").match(
+    /HEADER_COLOR_DEFAULTS\s*=\s*\{([^}]*)\}/,
+  ) ?? []
+)[1];
+
+function headerColorDefault(field: string): string {
+  const match = HEADER_COLOR_DEFAULTS_SOURCE?.match(
+    new RegExp(`\\b${field}:\\s*"?([^",\\n]+)"?\\s*,`),
+  );
+  if (!match) throw new Error(`HEADER_COLOR_DEFAULTS declares no ${field}`);
+  return match[1].trim();
+}
+
 describe("the header bar over the background photo", () => {
   it("puts its nav links in the header's own foreground colour", () => {
     // Compared as defaults: the link colour is settable and the bar's own
@@ -533,23 +547,26 @@ describe("the header bar over the background photo", () => {
   });
 
   it("shares one set of defaults with the admin colour picker", () => {
-    // The admin previews and contrast-checks against HEADER_COLOR_DEFAULTS;
-    // if it drifted from the stylesheet it would be checking a bar nobody
-    // sees. Alpha compares to within a 0-255 step, which is as precisely as
+    // The admin page previews and contrast-checks against its own copy of
+    // these colours; if the two drifted it would be checking a bar nobody
+    // sees. Read as source text rather than imported, like every other
+    // assertion in this file — and because importing a source module from
+    // the config project puts a second, function-less coverage record on
+    // it. Alpha compares to within a 0-255 step, which is as precisely as
     // the picker's #rrggbbaa can state the stylesheet's 0.86.
     const tint = headerDefault(".header", "background-color");
     expect(parseColor(tint)).toEqual(
-      parseColor(HEADER_COLOR_DEFAULTS.background),
+      parseColor(headerColorDefault("background")),
     );
     expect(parseAlpha(tint)).toBeCloseTo(
-      HEADER_COLOR_DEFAULTS.backgroundAlpha,
+      Number(headerColorDefault("backgroundAlpha")),
       2,
     );
     expect(parseColor(headerDefault(".header-title", "color"))).toEqual(
-      parseColor(HEADER_COLOR_DEFAULTS.title),
+      parseColor(headerColorDefault("title")),
     );
     expect(parseColor(headerDefault(".pages a", "color"))).toEqual(
-      parseColor(HEADER_COLOR_DEFAULTS.nav),
+      parseColor(headerColorDefault("nav")),
     );
   });
 

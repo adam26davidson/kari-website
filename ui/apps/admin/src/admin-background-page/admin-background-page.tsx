@@ -16,8 +16,27 @@ import {
   prepareBackgroundImage,
 } from "@kari/shared/utils/background-image";
 import defaultBackground from "@kari/shared/assets/petals_on_ground.webp";
+import { HeaderColorsSection } from "./header-colors-section";
 
 const DEFAULT_SETTINGS: SiteSettings = { backgroundPhoto: "" };
+
+/** Every field the page edits, in the object it saves. */
+const SETTINGS_FIELDS = [
+  "backgroundPhoto",
+  "headerBackgroundColor",
+  "headerTitleColor",
+  "headerNavColor",
+] as const;
+
+/**
+ * Whether two settings objects say the same thing. The colours are
+ * optional, and the API answers with "" where freshly built local state has
+ * `undefined`, so the two have to compare equal — otherwise every load of a
+ * settings object written before the colours existed would look like an
+ * unsaved edit and the guard would fire on the way out.
+ */
+const sameSettings = (a: SiteSettings, b: SiteSettings) =>
+  SETTINGS_FIELDS.every((field) => (a[field] ?? "") === (b[field] ?? ""));
 
 export function AdminBackgroundPage() {
   const { isLoading, showLoading, hideLoading, notify } = useAdminUi();
@@ -31,9 +50,7 @@ export function AdminBackgroundPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const getAccessTokenSilently = useAdminToken();
 
-  useUnsavedChanges(
-    !!imageFile || settings.backgroundPhoto !== savedSettings.backgroundPhoto,
-  );
+  useUnsavedChanges(!!imageFile || !sameSettings(settings, savedSettings));
 
   const fetchData = async () => {
     showLoading("Loading site background...");
@@ -105,7 +122,16 @@ export function AdminBackgroundPage() {
       ) {
         setExistingImages([newSettings.backgroundPhoto, ...existingImages]);
       }
-      notify("Site background saved");
+      // Name what was actually saved: a colour edit that answered "Site
+      // background saved" would read as the wrong thing having been kept.
+      const colorsChanged = SETTINGS_FIELDS.slice(1).some(
+        (field) => (newSettings[field] ?? "") !== (savedSettings[field] ?? ""),
+      );
+      notify(
+        colorsChanged
+          ? "Background and header colours saved"
+          : "Site background saved",
+      );
     } catch (error) {
       console.error(error);
       notify(
@@ -202,6 +228,10 @@ export function AdminBackgroundPage() {
                   </div>
                 </details>
               )}
+              <HeaderColorsSection
+                settings={settings}
+                onChange={(change) => setSettings({ ...settings, ...change })}
+              />
               <AdminButton onClick={saveData}>Save</AdminButton>
             </div>
           </Card>

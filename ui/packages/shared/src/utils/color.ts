@@ -36,14 +36,16 @@ export const HEADER_COLOR_DEFAULTS = {
   nav: "#ffffff",
 } as const;
 
+/** WCAG AA for normal text — the line the admin's warning is drawn at. */
+export const CONTRAST_AA = 4.5;
+
 const HEX_COLOR = /^#(?:[0-9a-f]{6}|[0-9a-f]{8})$/i;
 
 /** Whether `value` is a `#rrggbb` or `#rrggbbaa` colour, and nothing else. */
 export const isHexColor = (value: string): boolean => HEX_COLOR.test(value);
 
-/** `value`'s channels, with alpha in 0..1, or null if it is not a hex colour. */
-export function parseHexColor(value: string): Rgba | null {
-  if (!isHexColor(value)) return null;
+/** The channels of a value already known to be a hex colour. */
+const channelsOf = (value: string): Rgba => {
   const digits = value.slice(1);
   const channel = (at: number) => parseInt(digits.slice(at, at + 2), 16);
   return {
@@ -52,7 +54,11 @@ export function parseHexColor(value: string): Rgba | null {
     b: channel(4),
     a: digits.length === 8 ? channel(6) / 255 : 1,
   };
-}
+};
+
+/** `value`'s channels, with alpha in 0..1, or null if it is not a hex colour. */
+export const parseHexColor = (value: string): Rgba | null =>
+  isHexColor(value) ? channelsOf(value) : null;
 
 /** `top` painted over the opaque backdrop `over`. */
 export const compositeOver = (top: Rgba, over: Rgb): Rgb => ({
@@ -95,7 +101,73 @@ export function splitHexAlpha(value: string): {
 } {
   return {
     color: value.slice(0, 7).toLowerCase(),
-    alpha:
-      value.length === 9 ? parseInt(value.slice(7, 9), 16) / 255 : 1,
+    alpha: value.length === 9 ? parseInt(value.slice(7, 9), 16) / 255 : 1,
   };
+}
+
+/** The header colours a settings object actually paints. */
+export interface HeaderColors {
+  /** The bar's opaque base colour, `#rrggbb`. */
+  background: string;
+  /** How much of that colour the bar shows, 0..1. */
+  backgroundAlpha: number;
+  title: string;
+  nav: string;
+}
+
+const orDefault = (value: string | undefined, fallback: string): string =>
+  value !== undefined && isHexColor(value) ? value : fallback;
+
+/**
+ * What the header will actually look like for a given settings object, with
+ * the built-in colour standing in wherever a setting is absent, empty or
+ * unparseable — exactly the substitution header.css's `var()` fallbacks
+ * make. The admin page previews and contrast-checks this rather than the
+ * raw fields, so what it shows is what a visitor would get.
+ */
+export function resolveHeaderColors(settings: {
+  headerBackgroundColor?: string;
+  headerTitleColor?: string;
+  headerNavColor?: string;
+}): HeaderColors {
+  const bar = orDefault(settings.headerBackgroundColor, "");
+  const { color, alpha } = bar
+    ? splitHexAlpha(bar)
+    : {
+        color: HEADER_COLOR_DEFAULTS.background,
+        alpha: HEADER_COLOR_DEFAULTS.backgroundAlpha,
+      };
+  return {
+    background: color,
+    backgroundAlpha: alpha,
+    title: orDefault(settings.headerTitleColor, HEADER_COLOR_DEFAULTS.title),
+    nav: orDefault(settings.headerNavColor, HEADER_COLOR_DEFAULTS.nav),
+  };
+}
+
+/**
+ * How well each of the two header foregrounds reads on the bar, as WCAG
+ * ratios.
+ *
+ * The bar is translucent over a photo the admin also chooses, so there is
+ * no single backdrop to measure against: the answer is taken at the WORSE
+ * of the two extremes, the bar over pure white and the bar over pure
+ * black. That is stricter than any real page — `body::before`'s opacity
+ * means the backdrop never actually reaches white — and deliberately so.
+ * It is what keeps the property #392 was fixed to establish: the tint has
+ * to carry the contrast on its own, whatever photograph is behind it.
+ */
+export function headerContrast(colors: HeaderColors): {
+  title: number;
+  nav: number;
+} {
+  const bar: Rgba = { ...channelsOf(colors.background), a: colors.backgroundAlpha };
+  const overWhite = compositeOver(bar, { r: 255, g: 255, b: 255 });
+  const overBlack = compositeOver(bar, { r: 0, g: 0, b: 0 });
+  const worst = (foreground: string) =>
+    Math.min(
+      contrastRatio(channelsOf(foreground), overWhite),
+      contrastRatio(channelsOf(foreground), overBlack),
+    );
+  return { title: worst(colors.title), nav: worst(colors.nav) };
 }
