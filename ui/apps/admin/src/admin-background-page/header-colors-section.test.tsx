@@ -199,10 +199,14 @@ describe("HeaderColorsSection contrast warning", () => {
     expect(linksWarning()).toBeInTheDocument();
   });
 
-  it("shows the measured contrast beside each note", () => {
-    renderSection();
+  // The ratio is how the note is DECIDED, not something the reader needs:
+  // "contrast 9.1 to 1" is the code's vocabulary, and the sentence beside it
+  // already says the only thing she can act on (design brief §3).
+  it("never shows the measured ratio, only the plain sentence", () => {
+    renderSection({ headerBackgroundColor: "#f5f5f5ff" });
 
-    // White on the built-in tint, at its worst backdrop.
-    expect(screen.getAllByText(/contrast \d+\.\d to 1/)).toHaveLength(2);
+    expect(screen.queryByText(/contrast/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\d+\.\d to 1/)).not.toBeInTheDocument();
+    expect(titleWarning()).toBeInTheDocument();
   });
 });

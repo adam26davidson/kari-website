@@ -72,6 +72,11 @@ const NOTES = {
  * How one of the two foregrounds reads on the chosen bar, said plainly.
  * Shown before a save and never blocking one: the numbers are a strict
  * worst case (see headerContrast), so this is advice, not a gate.
+ *
+ * The ratio itself is deliberately not shown. It is how this sentence is
+ * decided, not something the reader can act on — "contrast 9.1 to 1" is the
+ * code's vocabulary in a page otherwise written in hers (design brief §3),
+ * and the sentence beside it already carries the whole message.
  */
 function ContrastNote({
   messages,
@@ -88,9 +93,6 @@ function ContrastNote({
       }
     >
       {readable ? messages[0] : messages[1] + ADVICE}
-      <span className="header-colors-ratio">
-        contrast {ratio.toFixed(1)} to 1
-      </span>
     </p>
   );
 }

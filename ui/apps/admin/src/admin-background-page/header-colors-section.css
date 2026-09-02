@@ -73,6 +73,17 @@
   color: #181818;
 }
 
+/* The three rows read as one group of settings, so their swatches line up
+   in a column instead of each starting wherever its own label happened to
+   end ("Bar" vs "Page links" put them ~50px apart). A min-width rather
+   than a fixed width: a longer label is still allowed to push its own row
+   wider rather than being clipped, and at 390px the row simply wraps as
+   before. Excludes the see-through label, which is an aside INSIDE the bar
+   row, not a row of its own. */
+.header-colors-label:not(.see-through) {
+  min-width: 92px;
+}
+
 /* The bar's two controls read as one setting, so the second label is a
    quieter aside rather than a second heading. */
 .header-colors-label.see-through {
@@ -143,11 +154,10 @@
   min-width: 40px;
 }
 
+/* A plain paragraph: it carried a second child (the measured ratio) until
+   that was dropped as code vocabulary, and a one-child flex row is just a
+   more fragile way of writing a sentence. */
 .header-colors-note {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 10px;
   margin: 0;
   font-family: var(--font-ui);
   font-size: var(--admin-prose-size);
@@ -163,8 +173,3 @@
   color: #7c2d12;
 }
 
-.header-colors-ratio {
-  font-size: 13px;
-  color: var(--muted-text);
-  white-space: nowrap;
-}
