@@ -29,12 +29,13 @@ with code in this repository.
   (see UI Layout below), so plain `npm run dev` does not start it —
   `dev.sh` does, alongside the public one. Note that its Auth0 callback is
   `<origin>/admin`, so logging in locally needs the port it comes up on
-  allowlisted in the Auth0 application. No local admin port is allowlisted
-  yet — not even the default 5174 — so admin login fails there with a
-  callback mismatch until a human completes #633; a parallel stack bumped to
-  5175 would need its own entry on top of that. A fixed default port is what
-  makes that one-time allowlisting possible at all — until then, the local
-  admin app gets no further than its "Log In" button.
+  allowlisted in the Auth0 application. The default 5174 IS allowlisted
+  (#633: callback `http://localhost:5174/admin`, logout URL and web origin
+  `http://localhost:5174`), so a stack on the default port completes a real
+  login round-trip — local admin verification works, don't skip it. A
+  parallel stack that vite bumps to 5175 is NOT, and fails there with a
+  callback mismatch until someone adds that origin too (#630). A fixed
+  default port is what makes that one-time allowlisting possible at all.
 - UI: `npm run build` - Build production UI (both apps, into one `ui/dist`)
 - UI: `npm run build:test` - Build UI for test environment
 - UI: `npm run preview` - Serve a built `ui/dist` on 4173. NOT `vite
