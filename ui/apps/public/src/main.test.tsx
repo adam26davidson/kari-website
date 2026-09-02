@@ -1,10 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
-import type { RouteObject } from "react-router";
-// Deliberately the DOM entry point, matching main.tsx: react-router and
-// react-router/dom export DIFFERENT RouterProvider functions, so importing
-// the wrong one would make the identity assertion below silently vacuous.
-import { RouterProvider } from "react-router/dom";
+import { BrowserRouter } from "react-router";
 
 // main.tsx is the entry point: importing it mounts the app. Stub the DOM
 // renderer so the import is observable without actually booting React,
@@ -46,17 +42,29 @@ describe("main entry point", () => {
     expect(tree.type).toBe(React.StrictMode);
   });
 
-  // Auth0 is deliberately absent from the entry point: the provider is
-  // mounted per-route from a lazy chunk (see auth/admin-auth.tsx), so
-  // public visitors never download the SDK. Issue #272.
+  // Auth0 is deliberately absent from the entry point: the admin app is a
+  // separate build served under /admin, so public visitors never download
+  // the SDK. Issues #272 and #591.
   it("mounts the router without an Auth0 provider around it", async () => {
     const tree = await bootApp();
-    expect(tree.props.children.type).toBe(RouterProvider);
+    expect(tree.props.children.type).toBe(BrowserRouter);
   });
 
-  it("drives routing through a data router matching every path", async () => {
-    const routerProvider = (await bootApp()).props.children;
-    const routes: RouteObject[] = routerProvider.props.router.routes;
-    expect(routes.map((r) => r.path)).toEqual(["*"]);
+  // The declarative router, NOT a data router: createBrowserRouter pulls
+  // ~56 kB of data-router machinery into the entry chunk every visitor
+  // downloads, and the only thing that ever needed it -- the admin
+  // unsaved-changes guard's useBlocker -- lives in the admin app now
+  // (issue #533). App owns the route tree below this via descendant
+  // <Routes>, so there is nothing here to declare.
+  it("drives routing through the declarative router around App", async () => {
+    const router = (await bootApp()).props.children;
+    // No `router` prop is the tell that this is <BrowserRouter> and not
+    // RouterProvider: the two share nothing else at this level.
+    expect(router.props.router).toBeUndefined();
+    // Imported AFTER bootApp's vi.resetModules(), so this resolves to the
+    // same module instance main.tsx just rendered; a top-level import
+    // would be a different copy and the identity check would fail.
+    const { App } = await import("./app");
+    expect(router.props.children.type).toBe(App);
   });
 });

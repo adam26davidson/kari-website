@@ -37,7 +37,7 @@ export default defineConfig({
     // in the PR.
     //
     // "index" is the entry chunk every visitor downloads (currently
-    // ~322 kB). The former "admin" budget retired with #591: the admin
+    // ~253 kB). The former "admin" budget retired with #591: the admin
     // shell is no longer a chunk of this build at all, it is a separate
     // app, and bundleBudget rejects a budget whose chunk is never emitted.
     //
@@ -47,13 +47,15 @@ export default defineConfig({
     // into a red build. 25 kB is small enough that a new dependency or an
     // admin-only import leaking into the entry chunk still trips it, and
     // large enough that ordinary version drift does not.
+    //
     // index moved 294 -> 322 kB migrating react-router-dom 6 to
-    // react-router 7 (#460). Of that 322 kB, ~56 kB is data-router
-    // machinery pulled in by createBrowserRouter, which existed only so
-    // the admin unsaved-changes guard could call useBlocker -- a build
-    // with <BrowserRouter> measures 265 kB. Now that the admin lives in
-    // its own app, this one is free to drop the data router; #533 tracks
-    // it.
-    bundleBudget({ index: 347 }),
+    // react-router 7 (#460), then back down to 253 kB when #533 swapped
+    // this app's entry from createBrowserRouter + RouterProvider to the
+    // declarative <BrowserRouter>: that dropped 56.5 kB of data-router
+    // machinery (18.2 kB gzipped) which only the admin unsaved-changes
+    // guard's useBlocker ever needed, and the admin is its own app now.
+    // Keep it that way -- a data-router hook here would pull all of it
+    // back.
+    bundleBudget({ index: 278 }),
   ],
 });
