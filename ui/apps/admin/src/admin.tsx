@@ -32,7 +32,10 @@ const ADMIN_PAGES = [
   { id: "haiga", label: "Haiga" },
   { id: "photography", label: "Photography" },
   { id: "other-works", label: "Other works" },
-  { id: "background", label: "Background" },
+  // The route segment stays "background" — it is bookmarked, and
+  // e2e/screenshots.mjs captures it by path — while the label says what
+  // the page now covers: the photo, the header colours and the fonts.
+  { id: "background", label: "Appearance" },
   { id: "image-cleanup", label: "Image cleanup" },
 ] as const;
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { declaring, indexRule, declaration } from "./css-rules";
+import { DEFAULT_FONT_PAIRING } from "@kari/shared/utils/fonts";
 
 // The family half of the type scale (#483).
 //
@@ -52,4 +53,23 @@ describe("the family axis of the type scale", () => {
     expect([...used].sort()).toEqual([...ALLOWED].sort());
   });
 
+  // The admin's picker offers the built-in pairing as its first option and
+  // renders a sample of it. If that entry drifted from the stylesheet, the
+  // sample would show one thing and choosing it would produce another.
+  it("keeps the built-in pairing's stacks equal to the :root defaults", () => {
+    expect(DEFAULT_FONT_PAIRING.bodyFamily).toBe(DEFAULT_STACKS[BODY_TOKEN]);
+    expect(DEFAULT_FONT_PAIRING.uiFamily).toBe(DEFAULT_STACKS[UI_TOKEN]);
+    // Stored as "" so an unset field and the built-in choice are the same
+    // thing — the contract every reader of SiteSettings relies on.
+    expect(DEFAULT_FONT_PAIRING.id).toBe("");
+  });
+
+  // Likewise for the weight the pairing carries: the built-in one has to
+  // reproduce the token's own value, not merely a light-looking number.
+  it("keeps the built-in pairing's display weight equal to :root's", () => {
+    const root = indexRule(":root").block;
+    expect(String(DEFAULT_FONT_PAIRING.displayWeight)).toBe(
+      declaration(root, "--display-weight"),
+    );
+  });
 });

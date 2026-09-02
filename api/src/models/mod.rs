@@ -36,6 +36,11 @@ pub struct HomePageData {
 /// the format before applying it, so a hand-edited value can only ever
 /// degrade to the default appearance.
 ///
+/// `fontPairing` is the same contract in one field: the id of one of the
+/// typeface pairings the UI ships (an empty string being the built-in one).
+/// The API neither knows nor checks the list — an id it no longer
+/// recognises is ignored on the way out, exactly like a malformed colour.
+///
 /// Every field defaults so a settings object written before any of them
 /// existed still parses — important because the image GC treats a parse
 /// failure as fatal.
@@ -49,6 +54,8 @@ pub struct SiteSettings {
     pub header_title_color: String,
     #[serde(rename = "headerNavColor", default)]
     pub header_nav_color: String,
+    #[serde(rename = "fontPairing", default)]
+    pub font_pairing: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
