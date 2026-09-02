@@ -1,22 +1,29 @@
 import { describe, expect, it } from "vitest";
 import config from "../../vitest.config";
 
-// The coverage ratchet is enforced PER WORKSPACE (#593): one vitest run, but
-// a floor for apps/public, apps/admin and packages/shared each, so a drop in
-// one cannot hide behind the others' headroom. A single whole-run number let
-// exactly that happen — the admin app is a third of the source, and it could
-// shed several points of branch coverage while the total moved by a fraction.
+// The coverage ratchet has TWO layers (#593): whole-run floors, plus a floor
+// group per workspace for apps/public, apps/admin and packages/shared. They
+// are not redundant, because vitest's glob groups are not a partition of the
+// measured files — `resolveThresholds` (vitest/dist/coverage.js) builds one
+// coverage map per glob from the files that glob matches, and a `global` map
+// it fills from EVERY measured file, leftovers or not. So each layer catches
+// something the other cannot:
 //
-// Two failure modes make this worth asserting rather than trusting:
+// - Without the per-workspace groups, one workspace's regression hides behind
+//   another's headroom — the admin app is a third of the source and could
+//   shed several points of branch coverage while the run total moved by a
+//   fraction.
+// - Without the whole-run floors, any source file no glob names is measured,
+//   counted in the PR coverage comment, and policed by nothing. A fourth
+//   workspace under the coverage `include` (`apps/*/src/**`) is exactly that
+//   case, and it arrives silently: nothing fails, the number just stops
+//   meaning what it used to.
 //
-// - A glob that matches nothing passes VACUOUSLY. Vitest resolves threshold
-//   globs against its root (ui/), and reports no error for a group with no
-//   files, so `apps/publik/src/**` would enforce nothing at all while looking
-//   like enforcement.
-// - Vitest applies glob groups to their matching files and the top-level
-//   floors to *whatever is left over*. These globs cover the whole coverage
-//   `include`, so top-level floors would police an empty set: present,
-//   passing, and meaningless. Their absence is deliberate, and this pins it.
+// Both layers are asserted here rather than trusted, because a threshold can
+// be present and still enforce nothing: a glob that matches nothing passes
+// VACUOUSLY (vitest resolves these globs against its root, ui/, and reports
+// no error for a group with no files, so `apps/publik/src/**` would look like
+// enforcement while being none).
 //
 // The config module is imported directly (like the other tests in here drive
 // real tooling rather than a copy of it), so what is asserted is the object
@@ -25,9 +32,10 @@ import config from "../../vitest.config";
 // `coverage` is a union over the providers, and the custom-provider arm has
 // no `thresholds` at all, so the property is narrowed to rather than read off
 // the union. `thresholds` is then itself a union of "whole-run floors" and
-// "glob-keyed groups"; it is widened to a plain record here because which of
-// the two shapes it is IS the thing under test, and the static type would
-// otherwise decide the question before a single assertion ran.
+// "glob-keyed groups"; it is widened to a plain record here because the
+// config uses both at once, which neither arm of that union describes, and
+// the static type would otherwise decide the question before a single
+// assertion ran.
 // (An `interface` has no index signature, so the widening is a cast rather
 // than an annotation.)
 const coverage = config.test?.coverage;
@@ -37,6 +45,9 @@ const thresholds = (
 
 /** The workspaces the coverage `include` in vitest.config.ts spans. */
 const WORKSPACES = ["apps/public", "apps/admin", "packages/shared"];
+
+/** Vitest's whole-run metric keys; every other key is read as a glob. */
+const METRICS = ["lines", "functions", "branches"];
 
 describe("coverage thresholds", () => {
   it("runs in a node environment, without a DOM", () => {
@@ -58,15 +69,18 @@ describe("coverage thresholds", () => {
     });
   });
 
-  it("has a group for every workspace and no others", () => {
-    expect(Object.keys(thresholds ?? {}).sort()).toEqual(
+  it("has a glob group for every workspace and no others", () => {
+    const globs = Object.keys(thresholds ?? {}).filter(
+      (key) => !METRICS.includes(key),
+    );
+    expect(globs.sort()).toEqual(
       WORKSPACES.map((workspace) => `${workspace}/src/**`).sort(),
     );
   });
 
-  it("sets no whole-run floors, which would police an empty file set", () => {
-    for (const metric of ["lines", "functions", "branches", "statements"]) {
-      expect(thresholds).not.toHaveProperty(metric);
+  it("keeps whole-run floors as a backstop for files no glob names", () => {
+    for (const metric of METRICS) {
+      expect(thresholds?.[metric]).toEqual(expect.any(Number));
     }
   });
 });

@@ -29,16 +29,25 @@ export default defineConfig({
       // local Node (#398). Measure on CI before tightening these; the
       // coverage job's comment carries a row per workspace for exactly that.
       //
-      // One floor per workspace rather than one for the run (#593). Vitest
-      // applies a glob group to the files it matches and the top-level
-      // floors to everything left over; these three globs cover the whole
-      // `include` above, so there is deliberately no top-level floor — it
-      // would police an empty set. A single whole-run number also let one
-      // workspace's regression hide behind another's headroom, which the
-      // admin app (a third of the source) is big enough to do.
-      // test/config/coverage-thresholds.test.ts pins that shape, because a
+      // A floor per workspace ON TOP OF the whole-run floors (#593), not
+      // instead of them. The two layers police different things, because
+      // vitest's glob groups are NOT a partition: `resolveThresholds` builds
+      // one coverage map per glob from the files that glob matches, and a
+      // `global` map holding EVERY measured file — not the leftovers (see
+      // vitest/dist/coverage.js; its own doc comment says "global for all
+      // other files", which is wrong about its own loop). So:
+      //   - the per-workspace groups stop one workspace's regression from
+      //     hiding behind another's headroom, which the admin app (a third
+      //     of the source) is big enough to do;
+      //   - the top-level numbers are the backstop for anything no group
+      //     names — a fourth workspace under `apps/*/src/**` would otherwise
+      //     be measured, counted in the PR comment, and policed by nothing.
+      // test/config/coverage-thresholds.test.ts pins both layers, because a
       // glob matching nothing enforces nothing and still passes.
       thresholds: {
+        lines: 99.5,
+        functions: 99.9,
+        branches: 97.4,
         "apps/public/src/**": { lines: 99.4, functions: 99.9, branches: 95.4 },
         "apps/admin/src/**": { lines: 99.1, functions: 99.9, branches: 96.9 },
         "packages/shared/src/**": {

@@ -29,8 +29,12 @@ with code in this repository.
   (see UI Layout below), so plain `npm run dev` does not start it —
   `dev.sh` does, alongside the public one. Note that its Auth0 callback is
   `<origin>/admin`, so logging in locally needs the port it comes up on
-  allowlisted in the Auth0 application (5174 is; a parallel stack bumped to
-  5175 is not).
+  allowlisted in the Auth0 application. No local admin port is allowlisted
+  yet — not even the default 5174 — so admin login fails there with a
+  callback mismatch until a human completes #633; a parallel stack bumped to
+  5175 would need its own entry on top of that. A fixed default port is what
+  makes that one-time allowlisting possible at all — until then, the local
+  admin app gets no further than its "Log In" button.
 - UI: `npm run build` - Build production UI (both apps, into one `ui/dist`)
 - UI: `npm run build:test` - Build UI for test environment
 - UI: `npm run preview` - Serve a built `ui/dist` on 4173. NOT `vite
@@ -177,13 +181,17 @@ Coverage thresholds are a ratchet: floors pinned just below current numbers
 (UI: `coverage.thresholds` in `ui/vitest.config.ts`; API: `--fail-under-lines`
 in the coverage CI job). When coverage rises meaningfully, bump the floors in
 the same PR — never lower them to make a PR pass.
-The UI floors are keyed by workspace glob — one group each for
-`apps/public/src/**`, `apps/admin/src/**` and `packages/shared/src/**`, so a
-regression in one cannot hide behind another's headroom, and deliberately no
-whole-run floor (those globs cover the whole measured set, so a top-level
-number would police an empty remainder; `ui/test/config/coverage-thresholds.test.ts`
-pins that shape). The PR coverage comment carries a row per workspace, which
-is the number to bump a floor from — never a local one (#398).
+The UI ratchet has two layers, and both are load-bearing: whole-run floors,
+plus a group keyed by workspace glob — `apps/public/src/**`,
+`apps/admin/src/**`, `packages/shared/src/**`. Vitest's glob groups do not
+partition the run (it checks every glob's matches AND, separately, every
+measured file against the top-level numbers), so the groups stop one
+workspace's regression hiding behind another's headroom while the whole-run
+floors stay the backstop for any file no glob names — a fourth workspace
+would otherwise be policed by nothing.
+`ui/test/config/coverage-thresholds.test.ts` pins that shape. The PR coverage
+comment carries a row per workspace plus the total, which is the number to
+bump a floor from — never a local one (#398).
 Dependency updates are managed by Renovate (`renovate.json`); non-major updates
 auto-merge once these checks pass. The exception is a package still below
 1.0.0, where a "minor" bump is breaking by convention (cargo and npm alike):
