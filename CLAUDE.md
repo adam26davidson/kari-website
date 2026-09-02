@@ -89,10 +89,11 @@ scripts unless `allowScripts` in `ui/package.json` covers it, and ends the
 install with a warning naming everything it skipped. Every dependency that
 ships one is recorded there as `false` — reviewed and denied, not
 overlooked: the four `@fortawesome/*` scripts and `browser-tabs-lock`'s only
-`console.log` a banner, `@swc/core`'s quietly swaps in a `@swc/wasm`
-fallback we would rather fail loudly without, and `esbuild`'s can fetch a
-binary over the network that the lockfile's platform package already
-provides. Nothing needs to run, so `npm ci` is warning-free.
+`console.log` a banner, and `@swc/core`'s quietly swaps in a `@swc/wasm`
+fallback we would rather fail loudly without. Nothing needs to run, so
+`npm ci` is warning-free. (`esbuild`'s entry retired with #529: vite 8
+bundles rolldown, so esbuild is no longer in the tree at all — and
+rolldown's own platform binaries ship script-free.)
 That is the point of recording them: a warning appearing again means a NEW
 script arrived. Review it — `npm install-scripts ls` lists it — then
 `npm install-scripts deny <pkg>` (or `approve <pkg>`, if it genuinely must
