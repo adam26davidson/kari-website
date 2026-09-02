@@ -7,7 +7,8 @@ with code in this repository.
 - `./scripts/setup-worktree.sh` - One-time setup for a fresh worktree (UI
   dependencies + the Playwright browser the visual check needs). Idempotent
   and cheap to re-run; see Parallel Sessions below.
-- `./scripts/dev.sh` - Start the whole dev stack (MinIO + seed + API + UI);
+- `./scripts/dev.sh` - Start the whole dev stack (MinIO + seed + API + both
+  UI dev servers, public and admin);
   `--aws` targets the real test bucket via SSO instead of local MinIO. It
   runs `setup-worktree.sh` first, so a stack always starts against
   lockfile-matching dependencies; that script's skip check keeps a warm
@@ -23,17 +24,28 @@ with code in this repository.
   the local toolchain it targets the local MinIO + localhost:3000 API from
   `.env.development`; the real AWS test bucket is opt-in via
   `./scripts/dev.sh --aws` — no vite mode silently reads AWS)
-- UI: `npm run dev:admin` - Start the ADMIN app's dev server. It is a
-  separate app (see UI Layout below), so `dev`/`dev.sh` do not start it;
-  #593 wires it into the dev stack. Note that its Auth0 callback is
+- UI: `npm run dev:admin` - Start the ADMIN app's dev server on its own port
+  (5174 by default, so two vites can run side by side). It is a separate app
+  (see UI Layout below), so plain `npm run dev` does not start it —
+  `dev.sh` does, alongside the public one. Note that its Auth0 callback is
   `<origin>/admin`, so logging in locally needs the port it comes up on
-  allowlisted in the Auth0 application.
+  allowlisted in the Auth0 application. The default 5174 IS allowlisted
+  (#633: callback `http://localhost:5174/admin`, logout URL and web origin
+  `http://localhost:5174`), so a stack on the default port completes a real
+  login round-trip — local admin verification works, don't skip it. A
+  parallel stack that vite bumps to 5175 is NOT, and fails there with a
+  callback mismatch until someone adds that origin too (#630). A fixed
+  default port is what makes that one-time allowlisting possible at all.
 - UI: `npm run build` - Build production UI (both apps, into one `ui/dist`)
 - UI: `npm run build:test` - Build UI for test environment
 - UI: `npm run preview` - Serve a built `ui/dist` on 4173. NOT `vite
   preview`: `ui/scripts/serve.mjs` stands in for it because the merged dist
-  needs two SPA fallback documents (`/admin*` gets the admin one). #593
-  replaces it with the prod-like arrangement.
+  needs two SPA fallback documents (`/admin*` gets the admin one). It is the
+  permanent local mirror of the deployed nginx vhost's fallback rule, not a
+  stopgap — running real nginx would make docker a prerequisite of
+  `preview`, `test:e2e` and the visual-review job without testing the actual
+  (out-of-repo, hand-maintained) vhost. The two are kept in step by hand:
+  change the rule in `serve.mjs` and the vhost needs the matching change.
 - UI: `npm run lint` - Lint TypeScript code
 - UI: `npm run typecheck` - Type-check app code, tests and the vite
   configs (`tsc -b`; every project sets `noEmit`, so nothing is written).
@@ -170,6 +182,17 @@ Coverage thresholds are a ratchet: floors pinned just below current numbers
 (UI: `coverage.thresholds` in `ui/vitest.config.ts`; API: `--fail-under-lines`
 in the coverage CI job). When coverage rises meaningfully, bump the floors in
 the same PR — never lower them to make a PR pass.
+The UI ratchet has two layers, and both are load-bearing: whole-run floors,
+plus a group keyed by workspace glob — `apps/public/src/**`,
+`apps/admin/src/**`, `packages/shared/src/**`. Vitest's glob groups do not
+partition the run (it checks every glob's matches AND, separately, every
+measured file against the top-level numbers), so the groups stop one
+workspace's regression hiding behind another's headroom while the whole-run
+floors stay the backstop for any file no glob names — a fourth workspace
+would otherwise be policed by nothing.
+`ui/test/config/coverage-thresholds.test.ts` pins that shape. The PR coverage
+comment carries a row per workspace plus the total, which is the number to
+bump a floor from — never a local one (#398).
 Dependency updates are managed by Renovate (`renovate.json`); non-major updates
 auto-merge once these checks pass. The exception is a package still below
 1.0.0, where a "minor" bump is breaking by convention (cargo and npm alike):
