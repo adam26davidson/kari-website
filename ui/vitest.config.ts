@@ -82,7 +82,23 @@ export default defineConfig({
       // untested files. `include` now does that job on its own: every file
       // matching it is reported whether a test touched it or not, so the
       // whole-source scope above survives the upgrade unchanged.
-      include: ["apps/*/src/**", "packages/*/src/**"],
+      //
+      // The `*.{ts,tsx}` tail is load-bearing under vitest 4 and was not
+      // needed under 2 (#529). v4 also dropped the `extension` option and
+      // emptied the default `coverage.exclude`, so a bare `src/**` is now
+      // globbed literally: it swept in 38 stylesheets, two .webp
+      // backgrounds, an .svg and vite-env.d.ts, each reported at 0% because
+      // a CSS file cannot be "covered" at all. That is 42 files of pure
+      // noise dragging every number down, and it would have made the
+      // ratchet punish anyone who added a stylesheet. Naming the code
+      // extensions restores exactly the 82 source files vitest 2 measured
+      // -- narrower than the glob, identical in scope to before.
+      include: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+      ],
+      // Type-only declarations emit no code to cover.
+      exclude: ["**/*.d.ts"],
       // Ratchet floors: pinned just below current coverage so CI fails on
       // regressions. When coverage rises meaningfully, bump these in the
       // same PR (see CLAUDE.md). Floors, not targets — keep a small margin
@@ -111,16 +127,26 @@ export default defineConfig({
       //     be measured, counted in the PR comment, and policed by nothing.
       // test/config/coverage-thresholds.test.ts pins both layers, because a
       // glob matching nothing enforces nothing and still passes.
+      // These moved DOWN in #529, and not because anything stopped being
+      // tested: the same 928 tests over the same 82 files pass either side
+      // of the bump. vitest 4's v8 provider remaps coverage through
+      // ast-v8-to-istanbul instead of raw v8 ranges, and simply counts
+      // differently -- whole-run lines 99.62 -> 99.36, functions 100 ->
+      // 99.54, branches 97.70 -> 96.13. Where a function's percentage fell,
+      // its lines are still 100% (services/images.ts, services/
+      // test-helpers.ts): v4 resolves a function v2 folded into its parent,
+      // it does not find new untested code. Re-pinned from measurement, per
+      // CLAUDE.md, rather than carried over.
       thresholds: {
-        lines: 99.5,
-        functions: 99.9,
-        branches: 97.4,
-        "apps/public/src/**": { lines: 99.4, functions: 99.9, branches: 95.4 },
-        "apps/admin/src/**": { lines: 99.1, functions: 99.9, branches: 96.9 },
+        lines: 99.2,
+        functions: 99.4,
+        branches: 95.9,
+        "apps/public/src/**": { lines: 99.8, functions: 99.9, branches: 93.3 },
+        "apps/admin/src/**": { lines: 98.8, functions: 99.9, branches: 95.7 },
         "packages/shared/src/**": {
-          lines: 99.5,
-          functions: 99.9,
-          branches: 98.1,
+          lines: 99.8,
+          functions: 98.2,
+          branches: 97.4,
         },
       },
     },
