@@ -231,12 +231,28 @@ jobs:
           ui_funcs=$(jq -r '.total.functions.pct' ui/coverage/coverage-summary.json)
           api_lines=$(jq -r '(.data[0].totals.lines.percent * 10 | round) / 10' api/coverage.json)
           api_funcs=$(jq -r '(.data[0].totals.functions.percent * 10 | round) / 10' api/coverage.json)
+          # One row per npm workspace (#593). The UI ratchet floors are
+          # per-workspace, and a floor may only be tightened from CI's own
+          # numbers -- V8 line accounting differs between CI's Node 22 and a
+          # newer local Node (#398), so the whole-run total alone leaves a
+          # floor bump guesswork. Each row sums covered/total over the files
+          # under that workspace; a workspace with no files makes jq fail
+          # loudly rather than print a silent "null%".
+          ws_rows=$(jq -r '
+            def pct($files; $metric):
+              ([$files[].value[$metric].covered] | add) * 1000
+              / ([$files[].value[$metric].total] | add) | round / 10;
+            ["apps/public", "apps/admin", "packages/shared"][] as $ws
+            | [to_entries[] | select(.key | contains("/" + $ws + "/"))] as $files
+            | "| ↳ `\($ws)` | \(pct($files; "lines"))% | \(pct($files; "functions"))% |"
+          ' ui/coverage/coverage-summary.json)
           {
             echo "## Test coverage"
             echo ""
             echo "| Area | Lines | Functions |"
             echo "| --- | --- | --- |"
             echo "| Frontend (\`ui/\`) | ${ui_lines}% | ${ui_funcs}% |"
+            echo "$ws_rows"
             echo "| API (Rust) | ${api_lines}% | ${api_funcs}% |"
             echo ""
             echo "Per-file breakdown in the [job summary](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."

@@ -29,14 +29,15 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  // vite-bundle-budget.ts is build tooling, type-checked by
-  // tsconfig.node.json alongside vite.config.ts. It is listed here too so
-  // its test in the config project may import it: a composite project has
-  // to list every file in its program.
+  // vite-bundle-budget.ts and vitest.config.ts are build/test tooling,
+  // type-checked by tsconfig.node.json alongside vite.config.ts. They are
+  // listed here too so their tests in the config project may import them: a
+  // composite project has to list every file in its program.
   "include": [
     "apps/*/src",
     "packages/*/src",
     "test",
-    "vite-bundle-budget.ts"
+    "vite-bundle-budget.ts",
+    "vitest.config.ts"
   ]
 }
