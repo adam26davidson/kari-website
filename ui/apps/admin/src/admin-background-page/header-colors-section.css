@@ -85,11 +85,38 @@
      is the control rather than a stripe beside a label. */
   width: 52px;
   height: 36px;
-  padding: 2px;
-  border: 1px solid var(--admin-field-border);
-  border-radius: 3px;
-  background-color: var(--admin-field-bg);
+  /* A mount around the colour, not a form field around a value. The admin's
+     field tokens are near-white on a near-white card (--admin-field-bg is
+     rgb(240, 240, 240), .card is rgba(226, 226, 226, 0.8)), so a white or
+     near-white choice — which "Site title" and "Page links" both are by
+     default — rendered as a hairline box on that fill read as an EMPTY
+     input rather than as the colour currently set, while the dark green
+     "Bar" beside it read correctly. A mid warm grey the fill contrasts
+     with at BOTH ends of the range fixes that once for every choice,
+     rather than only for the light end. */
+  padding: 3px;
+  border: 1px solid #6f675d;
+  border-radius: 4px;
+  background-color: #8f877c;
   cursor: pointer;
+}
+
+/* Both engines draw the fill in a pseudo-element with a UA border of their
+   own. Stating it keeps the mount's inner edge one deliberate hairline
+   everywhere instead of a per-engine default, and it is what makes a white
+   fill a chip in its own right even where the mount is not visible. */
+.header-colors-swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.header-colors-swatch::-webkit-color-swatch {
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  border-radius: 2px;
+}
+
+.header-colors-swatch::-moz-color-swatch {
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  border-radius: 2px;
 }
 
 /* The bar's second control travels as one thing: label, slider and the
