@@ -173,24 +173,28 @@ export function HeaderColorsSection({
           onPick={(color) => setBar(color, colors.backgroundAlpha)}
           onUseDefault={() => onChange({ headerBackgroundColor: "" })}
         >
-          <label
-            className="header-colors-label see-through"
-            htmlFor="header-bar-see-through"
-          >
-            See-through
-          </label>
-          <input
-            id="header-bar-see-through"
-            type="range"
-            min="0"
-            max="100"
-            className="header-colors-slider"
-            value={seeThrough}
-            onChange={(event) =>
-              setBar(colors.background, 1 - Number(event.target.value) / 100)
-            }
-          />
-          <span className="header-colors-percent">{seeThrough}%</span>
+          {/* One group, so a narrow screen wraps the whole slider onto the
+              next line rather than stranding its label on this one. */}
+          <span className="header-colors-see-through">
+            <label
+              className="header-colors-label see-through"
+              htmlFor="header-bar-see-through"
+            >
+              See-through
+            </label>
+            <input
+              id="header-bar-see-through"
+              type="range"
+              min="0"
+              max="100"
+              className="header-colors-slider"
+              value={seeThrough}
+              onChange={(event) =>
+                setBar(colors.background, 1 - Number(event.target.value) / 100)
+              }
+            />
+            <span className="header-colors-percent">{seeThrough}%</span>
+          </span>
         </ColorControl>
 
         <ColorControl
