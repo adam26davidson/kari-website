@@ -13,11 +13,26 @@ beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
+const HEADER_COLOR_PROPERTIES = [
+  "--header-background",
+  "--header-title-color",
+  "--header-nav-color",
+];
+
 afterEach(() => {
   delete document.body.dataset.customBackground;
   document.body.style.removeProperty("--site-background");
+  for (const property of HEADER_COLOR_PROPERTIES) {
+    document.body.style.removeProperty(property);
+  }
   vi.unstubAllGlobals();
 });
+
+/** The three header custom properties as <body> currently has them. */
+const headerColors = () =>
+  HEADER_COLOR_PROPERTIES.map((property) =>
+    document.body.style.getPropertyValue(property),
+  );
 
 /**
  * Stand-in for the probe image the hook loads to find out whether this
@@ -157,5 +172,121 @@ describe("useSiteBackground", () => {
 
     expect(document.body.dataset.customBackground).toBeUndefined();
     expect(document.body.style.getPropertyValue("--site-background")).toBe("");
+  });
+});
+
+// The header's bar tint, title and nav colours are admin-settable (#482).
+// Each is published as a custom property header.css falls back from, so
+// "unset" has to mean "set nothing" — an unset property is what makes the
+// stylesheet paint the built-in colour.
+describe("useSiteBackground header colours", () => {
+  it("applies all three colours from the settings", async () => {
+    vi.mocked(SiteSettingsService.getFromS3).mockResolvedValue({
+      backgroundPhoto: "",
+      headerBackgroundColor: "#102030cc",
+      headerTitleColor: "#ffeedd",
+      headerNavColor: "#00ff00",
+    });
+
+    renderHook(() => useSiteBackground());
+
+    await waitFor(() =>
+      expect(headerColors()).toEqual(["#102030cc", "#ffeedd", "#00ff00"]),
+    );
+    // Colours without a photo: the hook used to return early here, which
+    // would have left every one of them unset.
+    expect(document.body.dataset.customBackground).toBeUndefined();
+  });
+
+  it("applies the colours alongside a custom background photo", async () => {
+    vi.mocked(SiteSettingsService.getFromS3).mockResolvedValue({
+      backgroundPhoto: "bg.webp",
+      headerTitleColor: "#ffeedd",
+    });
+
+    renderHook(() => useSiteBackground());
+
+    await waitFor(() =>
+      expect(document.body.dataset.customBackground).toBe("true"),
+    );
+    expect(headerColors()).toEqual(["", "#ffeedd", ""]);
+  });
+
+  it("leaves the other two alone when only one colour is set", async () => {
+    vi.mocked(SiteSettingsService.getFromS3).mockResolvedValue({
+      backgroundPhoto: "",
+      headerBackgroundColor: "#102030cc",
+      headerTitleColor: "",
+      headerNavColor: "",
+    });
+
+    renderHook(() => useSiteBackground());
+
+    await waitFor(() =>
+      expect(headerColors()).toEqual(["#102030cc", "", ""]),
+    );
+  });
+
+  it("ignores a value that is not a hex colour", async () => {
+    // A hand-edited or corrupt settings object must degrade to the
+    // built-in appearance, never to an unstyled bar.
+    vi.mocked(SiteSettingsService.getFromS3).mockResolvedValue({
+      backgroundPhoto: "",
+      headerBackgroundColor: "rebeccapurple",
+      headerTitleColor: "#fff",
+      headerNavColor: "#00ff00; position: fixed",
+    });
+
+    renderHook(() => useSiteBackground());
+
+    await waitFor(() =>
+      expect(SiteSettingsService.getFromS3).toHaveBeenCalledOnce(),
+    );
+    expect(headerColors()).toEqual(["", "", ""]);
+  });
+
+  it("keeps the default colours for a settings object without the fields", async () => {
+    // Every site-settings.json written before this feature is this shape.
+    vi.mocked(SiteSettingsService.getFromS3).mockResolvedValue({
+      backgroundPhoto: "bg.webp",
+    });
+
+    renderHook(() => useSiteBackground());
+
+    await waitFor(() =>
+      expect(document.body.dataset.customBackground).toBe("true"),
+    );
+    expect(headerColors()).toEqual(["", "", ""]);
+  });
+
+  it("keeps the default colours when the settings cannot be fetched", async () => {
+    vi.mocked(SiteSettingsService.getFromS3).mockRejectedValue(
+      new Error("Failed to fetch site settings (HTTP 404)"),
+    );
+
+    renderHook(() => useSiteBackground());
+
+    await waitFor(() =>
+      expect(SiteSettingsService.getFromS3).toHaveBeenCalledOnce(),
+    );
+    expect(headerColors()).toEqual(["", "", ""]);
+  });
+
+  it("removes the colours on unmount", async () => {
+    vi.mocked(SiteSettingsService.getFromS3).mockResolvedValue({
+      backgroundPhoto: "",
+      headerBackgroundColor: "#102030cc",
+      headerTitleColor: "#ffeedd",
+      headerNavColor: "#00ff00",
+    });
+
+    const { unmount } = renderHook(() => useSiteBackground());
+    await waitFor(() =>
+      expect(headerColors()).toEqual(["#102030cc", "#ffeedd", "#00ff00"]),
+    );
+
+    unmount();
+
+    expect(headerColors()).toEqual(["", "", ""]);
   });
 });

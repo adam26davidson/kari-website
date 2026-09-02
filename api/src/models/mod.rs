@@ -25,13 +25,30 @@ pub struct HomePageData {
 
 /// Site-wide settings stored as `site-settings.json`. `background_photo` is
 /// the `images/` file name the public site uses as its page background; an
-/// empty string means "use the built-in default background". The field
-/// defaults so a future settings object written without it still parses —
-/// important because the image GC treats a parse failure as fatal.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+/// empty string means "use the built-in default background".
+///
+/// The three header colours are the admin's overrides for the site header's
+/// bar tint, site title and nav links. Each is either an empty string ("use
+/// the built-in default", which is what the stylesheet's `var()` fallbacks
+/// paint) or a hex colour written by the admin UI: `#rrggbbaa` for the bar
+/// (one field carries the translucency the bar needs) and `#rrggbb` for the
+/// two text colours. The API stores whatever it is given; the UI validates
+/// the format before applying it, so a hand-edited value can only ever
+/// degrade to the default appearance.
+///
+/// Every field defaults so a settings object written before any of them
+/// existed still parses — important because the image GC treats a parse
+/// failure as fatal.
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct SiteSettings {
     #[serde(rename = "backgroundPhoto", default)]
     pub background_photo: String,
+    #[serde(rename = "headerBackgroundColor", default)]
+    pub header_background_color: String,
+    #[serde(rename = "headerTitleColor", default)]
+    pub header_title_color: String,
+    #[serde(rename = "headerNavColor", default)]
+    pub header_nav_color: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

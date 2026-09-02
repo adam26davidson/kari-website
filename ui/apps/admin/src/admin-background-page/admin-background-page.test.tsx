@@ -263,6 +263,69 @@ describe("AdminBackgroundPage saving", () => {
   });
 });
 
+describe("AdminBackgroundPage header colours", () => {
+  /** Renders the loaded page and picks a colour in one of the swatches. */
+  async function renderAndPickColor(label: string, value: string) {
+    const utils = await renderLoaded();
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    return utils;
+  }
+
+  it("saves the colours alongside the background photo", async () => {
+    const { notify } = await renderAndPickColor("Page links", "#00ff00");
+
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() =>
+      expect(SiteSettingsService.update).toHaveBeenCalledWith(
+        { backgroundPhoto: "current.webp", headerNavColor: "#00ff00" },
+        expect.any(Function),
+      ),
+    );
+    // The confirmation names what was actually saved.
+    expect(notify).toHaveBeenCalledWith("Background and header colours saved");
+  });
+
+  it("shows the stored colours when the page loads", async () => {
+    vi.mocked(SiteSettingsService.getFromApi).mockResolvedValue({
+      backgroundPhoto: "current.webp",
+      headerTitleColor: "#ffee00",
+    });
+
+    await renderLoaded();
+
+    expect(screen.getByLabelText("Site title")).toHaveValue("#ffee00");
+  });
+
+  it("keeps the photo confirmation when only the photo changed", async () => {
+    const { notify } = await renderLoaded();
+
+    fireEvent.click(screen.getByLabelText("Use other.jpg as the background"));
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("Site background saved"),
+    );
+  });
+
+  it("keeps the edited colours on screen when the save fails", async () => {
+    vi.mocked(SiteSettingsService.update).mockRejectedValue(
+      new Error("network down"),
+    );
+    const { notify } = await renderAndPickColor("Page links", "#00ff00");
+
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith(
+        "Failed to save — your change was not saved",
+        "error",
+      ),
+    );
+    expect(screen.getByLabelText("Page links")).toHaveValue("#00ff00");
+  });
+});
+
 describe("AdminBackgroundPage unsaved-changes guard", () => {
   it("navigates away without confirmation while clean", async () => {
     const { adminUi, router } = await renderLoaded();
@@ -292,6 +355,47 @@ describe("AdminBackgroundPage unsaved-changes guard", () => {
     );
     await answerNo(adminUi);
     expect(router.state.location.pathname).toBe("/background");
+  });
+
+  it("asks before discarding an unsaved colour choice", async () => {
+    const { adminUi, router } = await renderLoaded();
+    fireEvent.change(screen.getByLabelText("Site title"), {
+      target: { value: "#ffee00" },
+    });
+
+    await act(async () => {
+      router.navigate("/haiku");
+    });
+
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      "You have unsaved changes. Discard them?",
+      expect.any(Function),
+      expect.any(Function),
+    );
+    await answerNo(adminUi);
+    expect(router.state.location.pathname).toBe("/background");
+  });
+
+  it("treats a colour put back to the default as no change at all", async () => {
+    // Settings saved before the colours existed lack the fields entirely,
+    // so "put this one back" leaves "" against an absent field. The two
+    // mean the same thing and have to compare equal, or she is asked to
+    // discard changes she has just undone.
+    vi.mocked(SiteSettingsService.getFromApi).mockResolvedValue({
+      backgroundPhoto: "current.webp",
+    });
+    const { adminUi, router } = await renderLoaded();
+    fireEvent.change(screen.getByLabelText("Site title"), {
+      target: { value: "#ffee00" },
+    });
+    fireEvent.click(screen.getByText("Use default"));
+
+    await act(async () => {
+      router.navigate("/haiku");
+    });
+
+    expect(router.state.location.pathname).toBe("/haiku");
+    expect(adminUi.confirm).not.toHaveBeenCalled();
   });
 
   it("does not block leaving after a save", async () => {

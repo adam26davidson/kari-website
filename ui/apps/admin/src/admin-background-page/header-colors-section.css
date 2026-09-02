@@ -1,0 +1,170 @@
+.header-colors {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Its own colour, not the card's inheritance. The page's <h2> wears the
+   shared .admin-section-heading class, but that class is only enforced on
+   <h2>s — a sub-heading left inheriting the body's --light-text renders
+   near-white on this pale card, which is exactly the #457 defect. */
+.header-colors-heading {
+  margin: 0;
+  font-family: "Roboto", sans-serif;
+  font-size: 17px;
+  font-weight: 400;
+  color: #181818;
+}
+
+/* A stand-in for the photograph behind the real bar: light at one end and
+   dark at the other, because that variation along the bar's own length is
+   what a see-through tint has to survive (#392). */
+.header-colors-preview {
+  width: 100%;
+  border-radius: 3px;
+  overflow: hidden;
+  background: linear-gradient(90deg, #efe9dd 0%, #8d8a72 55%, #34382a 100%);
+}
+
+.header-colors-preview-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 20px;
+  padding: 12px 14px;
+  font-family: "Roboto", sans-serif;
+}
+
+.header-colors-preview-title {
+  font-size: 22px;
+  font-weight: var(--display-weight);
+  white-space: nowrap;
+}
+
+.header-colors-preview-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: 15px;
+}
+
+.header-colors-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+.header-colors-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.header-colors-label {
+  font-family: "Roboto", sans-serif;
+  font-size: 15px;
+  color: #181818;
+}
+
+/* The bar's two controls read as one setting, so the second label is a
+   quieter aside rather than a second heading. */
+.header-colors-label.see-through {
+  font-size: 14px;
+  color: var(--muted-text);
+}
+
+.header-colors-swatch {
+  /* Comfortable to hit on a phone, and tall enough that the colour itself
+     is the control rather than a stripe beside a label. */
+  width: 52px;
+  height: 36px;
+  /* A mount around the colour, not a form field around a value. The admin's
+     field tokens are near-white on a near-white card (--admin-field-bg is
+     rgb(240, 240, 240), .card is rgba(226, 226, 226, 0.8)), so a white or
+     near-white choice — which "Site title" and "Page links" both are by
+     default — rendered as a hairline box on that fill read as an EMPTY
+     input rather than as the colour currently set, while the dark green
+     "Bar" beside it read correctly. A mid warm grey the fill contrasts
+     with at BOTH ends of the range fixes that once for every choice,
+     rather than only for the light end. */
+  padding: 3px;
+  border: 1px solid #6f675d;
+  border-radius: 4px;
+  background-color: #8f877c;
+  cursor: pointer;
+}
+
+/* Both engines draw the fill in a pseudo-element with a UA border of their
+   own. Stating it keeps the mount's inner edge one deliberate hairline
+   everywhere instead of a per-engine default, and it is what makes a white
+   fill a chip in its own right even where the mount is not visible. */
+.header-colors-swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.header-colors-swatch::-webkit-color-swatch {
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  border-radius: 2px;
+}
+
+.header-colors-swatch::-moz-color-swatch {
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  border-radius: 2px;
+}
+
+/* The bar's second control travels as one thing: label, slider and the
+   number it shows. */
+.header-colors-see-through {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.header-colors-slider {
+  flex: 1;
+  min-width: 110px;
+  max-width: 200px;
+  cursor: pointer;
+}
+
+.header-colors-percent {
+  font-family: "Roboto", sans-serif;
+  font-size: 14px;
+  color: var(--muted-text);
+  /* Fixed so the row does not shuffle as the number changes width. */
+  min-width: 40px;
+}
+
+.header-colors-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0;
+  font-family: "Roboto", sans-serif;
+  font-size: var(--admin-prose-size);
+  max-width: var(--admin-prose-measure);
+  color: var(--muted-text);
+}
+
+/* Advice, not an error: a warm dark brown that reads on the card at every
+   background photo (4.9:1 at the worst), rather than the admin's danger
+   red, which would say "you have broken something" about a choice that
+   saves perfectly well. */
+.header-colors-note.hard-to-read {
+  color: #7c2d12;
+}
+
+.header-colors-ratio {
+  font-size: 13px;
+  color: var(--muted-text);
+  white-space: nowrap;
+}

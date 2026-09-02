@@ -341,19 +341,36 @@ async fn update_home_page_store_outage_is_500() {
 
 // ---------------------------------------------------------------- site settings
 
+/// Every settings field at its default — what a bucket with no
+/// site-settings.json, and every object written before a field existed,
+/// answers with.
+fn default_site_settings() -> serde_json::Value {
+    json!({
+        "backgroundPhoto": "",
+        "headerBackgroundColor": "",
+        "headerTitleColor": "",
+        "headerNavColor": "",
+    })
+}
+
 #[tokio::test]
 async fn get_site_settings_is_default_when_absent() {
     let (_, app) = setup();
     assert_eq!(
         send(app, get("/site-settings")).await,
-        (StatusCode::OK, json!({"backgroundPhoto": ""}))
+        (StatusCode::OK, default_site_settings())
     );
 }
 
 #[tokio::test]
 async fn site_settings_round_trip_through_store() {
     let (store, app) = setup();
-    let data = json!({"backgroundPhoto": "bg.webp"});
+    let data = json!({
+        "backgroundPhoto": "bg.webp",
+        "headerBackgroundColor": "#123456cc",
+        "headerTitleColor": "#ffeedd",
+        "headerNavColor": "#001122",
+    });
     let (status, body) = send(app.clone(), put_json("/site-settings", data.clone())).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body, json!({"message": "Site settings updated"}));
@@ -373,7 +390,24 @@ async fn get_site_settings_tolerates_missing_background_field() {
     let (_, app) = setup_with(InMemoryStore::default().with_object("site-settings.json", "{}"));
     assert_eq!(
         send(app, get("/site-settings")).await,
-        (StatusCode::OK, json!({"backgroundPhoto": ""}))
+        (StatusCode::OK, default_site_settings())
+    );
+}
+
+#[tokio::test]
+async fn get_site_settings_tolerates_a_legacy_object_without_colours() {
+    // Everything stored before the header colours existed is this shape.
+    // It has to keep parsing — a 500 here would brick the GC sweep too —
+    // and the missing colours have to read back as "use the defaults".
+    let (_, app) = setup_with(
+        InMemoryStore::default()
+            .with_object("site-settings.json", r#"{"backgroundPhoto":"bg.webp"}"#),
+    );
+    let mut expected = default_site_settings();
+    expected["backgroundPhoto"] = json!("bg.webp");
+    assert_eq!(
+        send(app, get("/site-settings")).await,
+        (StatusCode::OK, expected)
     );
 }
 

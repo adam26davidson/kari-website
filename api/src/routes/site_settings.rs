@@ -21,8 +21,10 @@ pub async fn get_site_settings_handler(
                 .map_err(|e| AppError::internal("Stored site settings are invalid", e))?;
             Ok(Json(json!(settings)))
         }
-        // The object not existing yet legitimately means "all defaults".
-        Err(S3Error::NotFound) => Ok(Json(json!({"backgroundPhoto": ""}))),
+        // The object not existing yet legitimately means "all defaults" —
+        // serialized from the model so this answer cannot drift from it as
+        // settings are added.
+        Err(S3Error::NotFound) => Ok(Json(json!(SiteSettings::default()))),
         Err(e) => Err(AppError::internal("Failed to fetch site settings", e)),
     }
 }
