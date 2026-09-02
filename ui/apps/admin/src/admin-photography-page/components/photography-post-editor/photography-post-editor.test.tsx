@@ -111,12 +111,9 @@ describe("PhotographyPostEditor", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Subtitle" }), {
       target: { value: "Inland" },
     });
-    fireEvent.change(
-      screen.getByRole("textbox", { name: "Blurb (optional)" }),
-      {
-        target: { value: "New blurb" },
-      },
-    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Blurb (optional)" }), {
+      target: { value: "New blurb" },
+    });
     expect(setPost.mock.calls[0][0].subtitle).toBe("Inland");
     expect(setPost.mock.calls[1][0].blurb).toBe("New blurb");
   });

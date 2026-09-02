@@ -312,7 +312,9 @@ describe("AdminHaikuPage routing", () => {
     const { router } = renderPage("/haiku/no-such-id");
 
     expect(await screen.findByText("old pond")).toBeInTheDocument();
-    await waitFor(() => expect(router.state.location.pathname).toBe("/haiku"));
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe("/haiku"),
+    );
   });
 
   it("returns to the list on browser back", async () => {

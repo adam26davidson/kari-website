@@ -1,11 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useAdminList } from "./use-admin-list";
 import { mockAdminUi, renderWithAdminUi } from "./admin-ui-test-helpers";
 
@@ -129,7 +123,9 @@ describe("useAdminList saving", () => {
       [{ id: "n1", name: "new" }],
       expect.any(Function),
     );
-    expect(adminUi.showLoading).toHaveBeenLastCalledWith("Updating widgets...");
+    expect(adminUi.showLoading).toHaveBeenLastCalledWith(
+      "Updating widgets...",
+    );
     expect(adminUi.notify).toHaveBeenCalledWith("Widget saved");
     // The saved list became the local list.
     expect(screen.getByText("new")).toBeInTheDocument();

@@ -64,10 +64,10 @@ describe("OtherWorksItem", () => {
     renderItem();
 
     const image = await screen.findByAltText("in post");
-    // The <img> is in the DOM the moment the injected HTML commits, but the
-    // capture-phase listener is attached by a PASSIVE effect, so it can
-    // still be one flush behind. A browser fires this event off the network
-    // stack long afterwards; let the effect run so the test does too.
+    // The <img> is in the DOM as soon as the injected HTML commits, but the
+    // listener below is attached by a PASSIVE effect and can still be one
+    // flush behind. A browser fires this event off the network stack long
+    // afterwards; let the effect run so the test does too.
     await act(async () => {});
     // `error` does not bubble; the component listens in the capture phase.
     image.dispatchEvent(new Event("error"));

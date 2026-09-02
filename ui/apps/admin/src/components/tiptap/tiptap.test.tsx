@@ -25,11 +25,13 @@ afterEach(() => {
 
 // Toolbar buttons carry aria-labels from their config names, so they can
 // be looked up through their accessible name.
-const getButton = (name: string) => screen.getByRole("button", { name });
+const getButton = (name: string) =>
+  screen.getByRole("button", { name });
 
 // The link panel's input is the only named textbox; the editor itself is a
 // contenteditable textbox with no accessible name.
-const getLinkInput = () => screen.getByRole("textbox", { name: "link url" });
+const getLinkInput = () =>
+  screen.getByRole("textbox", { name: "link url" });
 const queryLinkInput = () =>
   screen.queryByRole("textbox", { name: "link url" });
 
@@ -41,7 +43,7 @@ const renderTiptap = (content = "<p>hello</p>") => {
       content={content}
       setContent={setContent}
       onAddImage={onAddImage}
-    />,
+    />
   );
   return { container, setContent, onAddImage };
 };
@@ -58,7 +60,7 @@ describe("Tiptap toolbar", () => {
     expect(groups[2].querySelectorAll("button")).toHaveLength(2);
     // link, unlink and image render as bare buttons in the button row
     expect(container.querySelectorAll(".button-group > button")).toHaveLength(
-      3,
+      3
     );
     expect(container.querySelectorAll(".button-group button")).toHaveLength(12);
   });
@@ -78,9 +80,7 @@ describe("Tiptap toolbar", () => {
     // matches and the select falls back to no selection
     renderTiptap("<pre><code>const x = 1;</code></pre>");
 
-    expect(screen.getByRole("combobox", { name: "text style" })).toHaveValue(
-      "",
-    );
+    expect(screen.getByRole("combobox", { name: "text style" })).toHaveValue("");
   });
 
   it("labels every toolbar button and the block-style select", () => {
@@ -89,11 +89,11 @@ describe("Tiptap toolbar", () => {
     for (const button of container.querySelectorAll(".button-group button")) {
       expect(button).toHaveAttribute("aria-label");
       expect(button.getAttribute("title")).toBe(
-        button.getAttribute("aria-label"),
+        button.getAttribute("aria-label")
       );
     }
     expect(
-      screen.getByRole("combobox", { name: "text style" }),
+      screen.getByRole("combobox", { name: "text style" })
     ).toBeInTheDocument();
   });
 
@@ -102,7 +102,7 @@ describe("Tiptap toolbar", () => {
     renderTiptap();
     const messages = warn.mock.calls.map((call) => call.join(" "));
     expect(
-      messages.filter((m) => m.includes("Duplicate extension names")),
+      messages.filter((m) => m.includes("Duplicate extension names"))
     ).toEqual([]);
   });
 
@@ -118,7 +118,7 @@ describe("Tiptap toolbar", () => {
       expect(button.className).toContain("is-active");
       await user.click(button);
       expect(button.className).not.toContain("is-active");
-    },
+    }
   );
 
   it("tracks the active text alignment across the alignment buttons", async () => {
@@ -131,7 +131,7 @@ describe("Tiptap toolbar", () => {
     expect(center.className).toContain("is-active");
     expect(left.className).not.toContain("is-active");
     expect(setContent).toHaveBeenCalledWith(
-      '<p style="text-align: center">hello</p>',
+      '<p style="text-align: center">hello</p>'
     );
 
     await user.click(left);
@@ -146,14 +146,14 @@ describe("Tiptap toolbar", () => {
     await user.click(getButton("bullet-list"));
     expect(getButton("bullet-list").className).toContain("is-active");
     expect(setContent).toHaveBeenLastCalledWith(
-      "<ul><li><p>hello</p></li></ul>",
+      "<ul><li><p>hello</p></li></ul>"
     );
 
     await user.click(getButton("ordered-list"));
     expect(getButton("ordered-list").className).toContain("is-active");
     expect(getButton("bullet-list").className).not.toContain("is-active");
     expect(setContent).toHaveBeenLastCalledWith(
-      "<ol><li><p>hello</p></li></ol>",
+      "<ol><li><p>hello</p></li></ol>"
     );
   });
 
@@ -180,7 +180,7 @@ describe("Tiptap toolbar", () => {
   it("enables unlink on a link and strips it on click", async () => {
     const user = userEvent.setup();
     const { setContent } = renderTiptap(
-      '<p><a href="https://x.test/">hello</a></p>',
+      '<p><a href="https://x.test/">hello</a></p>'
     );
     const unlink = getButton("unlink");
     const link = getButton("link");
@@ -226,7 +226,7 @@ describe("Tiptap toolbar", () => {
   it("applies a typed url as a link", async () => {
     const user = userEvent.setup();
     const { setContent } = renderTiptap(
-      '<p><a href="https://old.test/">hello</a></p>',
+      '<p><a href="https://old.test/">hello</a></p>'
     );
 
     await user.click(getButton("link"));
@@ -235,7 +235,7 @@ describe("Tiptap toolbar", () => {
     await user.click(getButton("apply"));
 
     expect(setContent).toHaveBeenLastCalledWith(
-      expect.stringContaining('href="https://example.com"'),
+      expect.stringContaining('href="https://example.com"')
     );
     expect(queryLinkInput()).toBeNull();
   });
@@ -243,7 +243,7 @@ describe("Tiptap toolbar", () => {
   it("submits the panel with Enter", async () => {
     const user = userEvent.setup();
     const { setContent } = renderTiptap(
-      '<p><a href="https://old.test/">hello</a></p>',
+      '<p><a href="https://old.test/">hello</a></p>'
     );
 
     await user.click(getButton("link"));
@@ -251,7 +251,7 @@ describe("Tiptap toolbar", () => {
     await user.type(getLinkInput(), "https://enter.test/{Enter}");
 
     expect(setContent).toHaveBeenLastCalledWith(
-      expect.stringContaining('href="https://enter.test/"'),
+      expect.stringContaining('href="https://enter.test/"')
     );
     expect(queryLinkInput()).toBeNull();
   });
@@ -259,7 +259,7 @@ describe("Tiptap toolbar", () => {
   it("removes the link when the panel is submitted empty", async () => {
     const user = userEvent.setup();
     const { setContent } = renderTiptap(
-      '<p><a href="https://x.test/">hello</a></p>',
+      '<p><a href="https://x.test/">hello</a></p>'
     );
 
     await user.click(getButton("link"));
@@ -282,7 +282,7 @@ describe("Tiptap toolbar", () => {
     await user.click(getButton("apply"));
 
     expect(screen.getByRole("alert")).toHaveTextContent(
-      /only http\(s\), mailto, tel and relative URLs are allowed/,
+      /only http\(s\), mailto, tel and relative URLs are allowed/
     );
     expect(getLinkInput()).toHaveValue("javascript:alert(1)");
     expect(setContent).not.toHaveBeenCalled();
@@ -303,7 +303,7 @@ describe("Tiptap toolbar", () => {
     await user.click(getButton("apply"));
 
     expect(screen.getByRole("alert")).toHaveTextContent(
-      /this block cannot hold a link/,
+      /this block cannot hold a link/
     );
     expect(getLinkInput()).toHaveValue("https://example.com");
     expect(setContent).not.toHaveBeenCalled();
@@ -370,8 +370,8 @@ describe("Tiptap toolbar", () => {
     // (admin-other-works-page matches pending files against it)
     await waitFor(() =>
       expect(setContent).toHaveBeenCalledWith(
-        expect.stringContaining(`title="${id}"`),
-      ),
+        expect.stringContaining(`title="${id}"`)
+      )
     );
     const html = setContent.mock.calls.at(-1)?.[0] as string;
     expect(html).toContain('src="data:image/png;base64');

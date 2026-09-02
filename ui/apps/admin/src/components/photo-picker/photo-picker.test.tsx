@@ -26,16 +26,14 @@ const makeFile = (name: string) =>
 describe("PhotoPicker", () => {
   it("shows no preview when there is no file and no fileName", () => {
     render(
-      <PhotoPicker imageFile={null} fileName="" setImageFile={() => {}} />,
+      <PhotoPicker imageFile={null} fileName="" setImageFile={() => {}} />
     );
     expect(screen.queryByAltText("Selected")).not.toBeInTheDocument();
     expect(screen.getByText("Select an image")).toBeInTheDocument();
   });
 
   it("stays secondary to the editor's Save button", () => {
-    render(
-      <PhotoPicker imageFile={null} fileName="" setImageFile={() => {}} />,
-    );
+    render(<PhotoPicker imageFile={null} fileName="" setImageFile={() => {}} />);
     expect(screen.getByRole("button", { name: /Select an image/ })).toHaveClass(
       "secondary",
     );
@@ -49,12 +47,12 @@ describe("PhotoPicker", () => {
         imageFile={null}
         fileName="cat.png"
         setImageFile={() => {}}
-      />,
+      />
     );
     const preview = screen.getByAltText("Selected");
     expect(preview).toHaveAttribute(
       "src",
-      "https://api.test.local/images/cat.png?size=thumb",
+      "https://api.test.local/images/cat.png?size=thumb"
     );
     expect(preview).toHaveAttribute("loading", "lazy");
     expect(preview).toHaveAttribute("decoding", "async");
@@ -64,26 +62,26 @@ describe("PhotoPicker", () => {
   it("creates the object URL once per file, not once per render", () => {
     const file = makeFile("new.png");
     const { rerender } = render(
-      <PhotoPicker imageFile={file} fileName="" setImageFile={() => {}} />,
+      <PhotoPicker imageFile={file} fileName="" setImageFile={() => {}} />
     );
 
     expect(screen.getByAltText("Selected")).toHaveAttribute(
       "src",
-      "blob:mock-1",
+      "blob:mock-1"
     );
 
     rerender(
-      <PhotoPicker imageFile={file} fileName="" setImageFile={() => {}} />,
+      <PhotoPicker imageFile={file} fileName="" setImageFile={() => {}} />
     );
     rerender(
-      <PhotoPicker imageFile={file} fileName="" setImageFile={() => {}} />,
+      <PhotoPicker imageFile={file} fileName="" setImageFile={() => {}} />
     );
 
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     expect(revokeObjectURL).not.toHaveBeenCalled();
     expect(screen.getByAltText("Selected")).toHaveAttribute(
       "src",
-      "blob:mock-1",
+      "blob:mock-1"
     );
   });
 
@@ -93,7 +91,7 @@ describe("PhotoPicker", () => {
         imageFile={makeFile("a.png")}
         fileName=""
         setImageFile={() => {}}
-      />,
+      />
     );
 
     rerender(
@@ -101,14 +99,14 @@ describe("PhotoPicker", () => {
         imageFile={makeFile("b.png")}
         fileName=""
         setImageFile={() => {}}
-      />,
+      />
     );
 
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock-1");
     expect(createObjectURL).toHaveBeenCalledTimes(2);
     expect(screen.getByAltText("Selected")).toHaveAttribute(
       "src",
-      "blob:mock-2",
+      "blob:mock-2"
     );
   });
 
@@ -118,11 +116,11 @@ describe("PhotoPicker", () => {
         imageFile={makeFile("a.png")}
         fileName=""
         setImageFile={() => {}}
-      />,
+      />
     );
 
     rerender(
-      <PhotoPicker imageFile={null} fileName="" setImageFile={() => {}} />,
+      <PhotoPicker imageFile={null} fileName="" setImageFile={() => {}} />
     );
 
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock-1");
@@ -135,7 +133,7 @@ describe("PhotoPicker", () => {
         imageFile={makeFile("a.png")}
         fileName=""
         setImageFile={() => {}}
-      />,
+      />
     );
 
     unmount();
@@ -145,12 +143,12 @@ describe("PhotoPicker", () => {
   it("passes the chosen file to setImageFile", async () => {
     const setImageFile = vi.fn();
     render(
-      <PhotoPicker imageFile={null} fileName="" setImageFile={setImageFile} />,
+      <PhotoPicker imageFile={null} fileName="" setImageFile={setImageFile} />
     );
 
     const file = makeFile("chosen.png");
     const input = document.querySelector(
-      "input[type=file]",
+      "input[type=file]"
     ) as HTMLInputElement;
     await userEvent.upload(input, file);
 

@@ -44,14 +44,18 @@ vi.mock("../hooks/use-admin-token", () => ({
 }));
 
 function renderPage() {
-  return renderAdminPage(<AdminBackgroundPage />, "/:section", "/background");
+  return renderAdminPage(
+    <AdminBackgroundPage />,
+    "/:section",
+    "/background",
+  );
 }
 
-// The page has TWO independent loads: the settings (which the heading
+// The page runs TWO independent loads: the settings (which the heading
 // waits on) and the list of already-uploaded images. Waiting only for the
-// heading returns while the image list is still in flight, so a test could
-// interact with a half-loaded page — and the second load landing mid-test
-// re-renders it underneath. Wait for both.
+// heading returns while the image list is still in flight, leaving tests
+// to interact with a half-loaded page and the second load to re-render it
+// underneath them. Wait for both.
 async function renderLoaded() {
   const utils = renderPage();
   await screen.findByText("Site background");
@@ -76,7 +80,10 @@ beforeEach(() => {
     backgroundPhoto: "current.webp",
   });
   vi.mocked(SiteSettingsService.update).mockResolvedValue(undefined);
-  vi.mocked(ImageService.list).mockResolvedValue(["current.webp", "other.jpg"]);
+  vi.mocked(ImageService.list).mockResolvedValue([
+    "current.webp",
+    "other.jpg",
+  ]);
   vi.mocked(ImageService.upload).mockResolvedValue("uploaded.webp");
   vi.mocked(ImageService.setPublished).mockResolvedValue(undefined);
   // The preparation step passes files through untouched in these tests.
@@ -154,7 +161,9 @@ describe("AdminBackgroundPage saving", () => {
   it("publishes a picked existing image before referencing it", async () => {
     const { notify } = await renderLoaded();
 
-    fireEvent.click(screen.getByLabelText("Use other.jpg as the background"));
+    fireEvent.click(
+      screen.getByLabelText("Use other.jpg as the background"),
+    );
     fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() =>
@@ -171,10 +180,10 @@ describe("AdminBackgroundPage saving", () => {
       expect.any(Function),
     );
     // The image must be public before the settings reference it.
-    const publishOrder = vi.mocked(ImageService.setPublished).mock
-      .invocationCallOrder[0];
-    const updateOrder = vi.mocked(SiteSettingsService.update).mock
-      .invocationCallOrder[0];
+    const publishOrder =
+      vi.mocked(ImageService.setPublished).mock.invocationCallOrder[0];
+    const updateOrder =
+      vi.mocked(SiteSettingsService.update).mock.invocationCallOrder[0];
     expect(publishOrder).toBeLessThan(updateOrder);
   });
 
@@ -196,10 +205,10 @@ describe("AdminBackgroundPage saving", () => {
       { backgroundPhoto: "uploaded.webp" },
       expect.any(Function),
     );
-    const uploadOrder = vi.mocked(ImageService.upload).mock
-      .invocationCallOrder[0];
-    const updateOrder = vi.mocked(SiteSettingsService.update).mock
-      .invocationCallOrder[0];
+    const uploadOrder =
+      vi.mocked(ImageService.upload).mock.invocationCallOrder[0];
+    const updateOrder =
+      vi.mocked(SiteSettingsService.update).mock.invocationCallOrder[0];
     expect(uploadOrder).toBeLessThan(updateOrder);
     // The upload was already published; no separate publish call.
     expect(ImageService.setPublished).not.toHaveBeenCalled();
@@ -339,7 +348,9 @@ describe("AdminBackgroundPage unsaved-changes guard", () => {
 
   it("asks before discarding an unsaved background choice", async () => {
     const { adminUi, router } = await renderLoaded();
-    fireEvent.click(screen.getByLabelText("Use other.jpg as the background"));
+    fireEvent.click(
+      screen.getByLabelText("Use other.jpg as the background"),
+    );
 
     await navigateInTest(router, "/haiku");
 

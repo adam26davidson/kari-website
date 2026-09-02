@@ -283,9 +283,7 @@ describe("AdminPhotographyPage creation", () => {
   // dialog has been handed to confirm().
   async function openCreateConfirmation() {
     const { container, notify, adminUi } = await renderPage();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Add a photography post" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Add a photography post" }));
     return { container, notify, adminUi };
   }
 
@@ -444,9 +442,7 @@ describe("AdminPhotographyPage load failure", () => {
 
     await screen.findByText("Failed to load photography posts.");
     // No editable list — saving one would overwrite the real data.
-    expect(
-      screen.queryByRole("button", { name: "Add a photography post" }),
-    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add a photography post" })).toBeNull();
 
     // Retry reloads and shows the list.
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
