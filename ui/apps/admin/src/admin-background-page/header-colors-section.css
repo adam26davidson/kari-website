@@ -13,7 +13,7 @@
    near-white on this pale card, which is exactly the #457 defect. */
 .header-colors-heading {
   margin: 0;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
   font-size: 17px;
   font-weight: 400;
   color: #181818;
@@ -35,7 +35,7 @@
   align-items: baseline;
   gap: 6px 20px;
   padding: 12px 14px;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
 }
 
 .header-colors-preview-title {
@@ -68,7 +68,7 @@
 }
 
 .header-colors-label {
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
   font-size: 15px;
   color: #181818;
 }
@@ -136,7 +136,7 @@
 }
 
 .header-colors-percent {
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
   color: var(--muted-text);
   /* Fixed so the row does not shuffle as the number changes width. */
@@ -149,7 +149,7 @@
   align-items: baseline;
   gap: 4px 10px;
   margin: 0;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
   font-size: var(--admin-prose-size);
   max-width: var(--admin-prose-measure);
   color: var(--muted-text);

@@ -61,7 +61,7 @@
 
 .header-user-name {
   font-size: 18px;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
   font-weight: 400;
   font-style: normal;
 }

@@ -35,10 +35,32 @@
      secondary"; this is the weight half. Both enforced by
      src/test/type-scale.test.ts. */
   --display-weight: 300;
+
+  /* The type scale's family axis, in one place (#483).
+
+     Two faces, and only two: `--font-body` is the reading face, declared
+     on `body` and inherited by everything that never says otherwise (the
+     poems, the blog HTML, the header title and nav links); `--font-ui` is
+     the interface face, spent on controls, panels and notices. The values
+     here are the site's built-in pairing and the appearance every fallback
+     path lands on — no pairing chosen, settings unreachable, stored id not
+     one we ship.
+
+     They are tokens rather than repeated literals so a pairing can be
+     changed at RUNTIME: useSiteBackground redeclares both on <body> (plus
+     --display-weight) when site-settings.json names one of the pairings in
+     packages/shared/src/utils/fonts.ts, which re-points every rule below at
+     once. A rule that spells a family out instead would be the one thing
+     that pairing silently cannot move, so no rule may — enforced by
+     test/design/font-tokens.test.ts. The static <link>s in both index.html
+     files preload exactly these two families, which is why the built-in
+     pairing never flashes. */
+  --font-body: "Noto Serif JP", serif;
+  --font-ui: "Roboto", sans-serif;
 }
 
 body {
-  font-family: "Noto Serif JP", serif;
+  font-family: var(--font-body);
   font-optical-sizing: auto;
   font-weight: 400;
   font-style: normal;
@@ -168,7 +190,7 @@ body[data-custom-background]::before {
   background-color: #f2efe9;
   color: #181818;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
   font-size: 16px;
   text-align: center;
 }

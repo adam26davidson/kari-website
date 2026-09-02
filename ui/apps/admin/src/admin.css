@@ -69,7 +69,7 @@
   margin: 0px;
   transition: color 0.2s;
   font-size: 18px;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
   font-weight: var(--display-weight);
   font-style: normal;
 }
@@ -125,7 +125,7 @@ textarea {
      made every search box and editor field read like a code editor rather
      than a writing surface (#457). Nothing here is code — it is haiku,
      titles and captions. */
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
   /* The 400px default above must never push a field past its card,
      whatever the viewport (#259). */
@@ -183,7 +183,7 @@ input[type="checkbox"] {
 }
 
 .admin-field-label {
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
   /* Regular, never the display hairline: this is 14px text (#356). */
   font-weight: 400;
   font-size: 14px;
@@ -200,7 +200,7 @@ input[type="checkbox"] {
    Enforced by src/test/text-contrast.test.ts. */
 .admin-section-heading {
   margin: 0;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
   /* Regular, not the bold <h2> default: calm and warm over slick (design
      brief §1). This is the treatment the site-background page already had
      and the one the others now match. */
@@ -210,7 +210,7 @@ input[type="checkbox"] {
 
 .admin-section-explanation {
   margin: 0;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
   font-size: var(--admin-prose-size);
   /* Wrap into a readable column rather than running the card's full
      width — the shared measure, so every paragraph on the card breaks in
@@ -353,7 +353,7 @@ input[type="checkbox"] {
   z-index: 1001;
   background-color: rgba(0, 0, 0, 0.6);
   font-size: 20px;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
   font-weight: 400;
   font-style: normal;
 }
@@ -386,7 +386,7 @@ input[type="checkbox"] {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   text-align: center;
   font-size: 17px;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
   font-weight: 400;
 }
 
@@ -400,7 +400,7 @@ input[type="checkbox"] {
   border-radius: 6px;
   color: white;
   font-size: 16px;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   animation: admin-toast-in 0.2s ease-out;
 }
