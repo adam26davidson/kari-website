@@ -11,7 +11,18 @@
    even over a pure-white photo the white text clears WCAG AAA and the grey
    user name clears AA, and the bar renders as near enough the same shade
    over a light photo as a dark one. The blur still lets a hint of the photo
-   through. Enforced by src/test/text-contrast.test.ts. */
+   through. Enforced by ui/test/design/text-contrast.test.ts.
+
+   Since #482 the bar tint, the site title and the nav links are each
+   admin-settable, published by useSiteBackground as the custom properties
+   below. The literals here are therefore the DEFAULT appearance, which is
+   what paints whenever a setting is unset, empty or unparseable — and what
+   the contrast test still pins. An admin-chosen tint has to carry the same
+   contrast on its own; that is the admin page's job, which warns before a
+   save when a pairing would be hard to read.
+
+   The blur is deliberately NOT settable: it is what turns whatever photo
+   is behind the bar into an even surface, so it applies to every tint. */
 .header,
 .admin-header {
   display: flex;
@@ -19,7 +30,7 @@
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  background-color: rgba(28, 49, 0, 0.86);
+  background-color: var(--header-background, rgba(28, 49, 0, 0.86));
   backdrop-filter: blur(10px);
   color: white;
 }
@@ -60,7 +71,7 @@
      header fits without horizontal overflow; 40px from ~1100px up. */
   font-size: clamp(30px, 3.6vw, 40px);
   margin: 0px 20px 0px clamp(16px, 2.5vw, 40px);
-  color: white;
+  color: var(--header-title-color, white);
   font-weight: var(--display-weight);
   white-space: nowrap;
 }
@@ -68,7 +79,7 @@
 .admin-header-title {
   font-size: 20px;
   margin: 0px 20px 0px 40px;
-  color: white;
+  color: var(--header-title-color, white);
   font-weight: var(--display-weight);
 }
 
@@ -81,6 +92,11 @@
 .header-title-mobile {
   flex: 1;
   margin-left: 20px;
+  /* Stated rather than inherited from the bar for the same reason the
+     weight is: below 768px this class applies ALONE, so an admin-chosen
+     title colour would apply on every desktop and silently miss every
+     phone if this were left to inheritance (#482). */
+  color: var(--header-title-color, white);
 }
 
 /* Public bar: 25px carries the light display weight just as the desktop
@@ -135,7 +151,11 @@
   padding: 0;
   margin-left: 20px;
   font: inherit;
-  color: inherit;
+  /* The nav colour, not the bar's: below 768px this button IS the nav, so
+     it belongs to the setting the admin picks for the page links — and to
+     the contrast warning that guards that pairing. Inheriting the bar's
+     fixed white would leave it invisible on a light custom tint (#482). */
+  color: var(--header-nav-color, white);
   display: flex;
   align-items: center;
   cursor: pointer;
@@ -167,7 +187,7 @@
 .pages a {
   text-decoration: none;
   margin: 0px 0px 2px 0px;
-  color: white;
+  color: var(--header-nav-color, white);
   transition: opacity 0.5s;
   text-align: center;
   white-space: nowrap;
@@ -178,9 +198,12 @@
   opacity: 1;
 }
 
+/* The underline follows the link colour: it is the same mark, drawn under
+   the word rather than through it, so it can never be a colour the link
+   itself is not. */
 .pages a:hover {
   margin-bottom: 0px;
-  border-bottom: 2px solid white;
+  border-bottom: 2px solid var(--header-nav-color, white);
   opacity: 1;
   cursor: pointer;
 }

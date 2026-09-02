@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { HEADER_COLOR_DEFAULTS } from "@kari/shared/utils/color";
 
 // The public haiku/haiga/photography pages render their attribution and
 // caption lines as small secondary text on a translucent card that floats
@@ -81,6 +82,24 @@ function parseColor(value: string): Rgb {
 function parseAlpha(value: string): number {
   const parts = value.match(/[\d.]+/g);
   return parts && parts.length > 3 ? Number(parts[3]) : 1;
+}
+
+/**
+ * The fallback half of a `var(--x, fallback)` declaration, or the value
+ * unchanged when it is not one.
+ *
+ * Since #482 the header's three colours are admin-settable, so what the
+ * stylesheet declares is "whatever is set, or this literal". The literal is
+ * exactly what this file can and should pin: the DEFAULT appearance — what
+ * every visitor sees until an admin changes it, and what an unset, empty,
+ * corrupt or unfetchable setting falls back to. The chosen colours are
+ * checked where they are chosen, by the contrast warning on the admin
+ * Background page; a test of what a browser actually computes for a set
+ * value would need computed styles rather than this parse (#481).
+ */
+function varFallback(value: string): string {
+  const match = value.match(/^var\(\s*--[\w-]+\s*,([\s\S]+)\)$/);
+  return match ? match[1].trim() : value;
 }
 
 /** `over` shown through `top` at `alpha` opacity. */
@@ -464,12 +483,73 @@ const HEADER_BARS: ReadonlyArray<[string, string]> = [
 ];
 
 const headerOver = (photo: Rgb, selector: string): Rgb =>
-  surfaceOver(photo, declaration(headerCss, selector, "background-color"));
+  surfaceOver(
+    photo,
+    varFallback(declaration(headerCss, selector, "background-color")),
+  );
+
+/** The default a header colour falls back to, as declared. */
+const headerDefault = (selector: string, property: string): string =>
+  varFallback(declaration(headerCss, selector, property));
 
 describe("the header bar over the background photo", () => {
   it("puts its nav links in the header's own foreground colour", () => {
-    expect(declaration(headerCss, ".pages a", "color")).toBe(
-      declaration(headerCss, ".header", "color"),
+    // Compared as defaults: the link colour is settable and the bar's own
+    // `color` is not, so what has to match is what each paints when
+    // nothing is set.
+    expect(parseColor(headerDefault(".pages a", "color"))).toEqual(
+      parseColor(declaration(headerCss, ".header", "color")),
+    );
+  });
+
+  // Three settings, three custom properties, one default each. The
+  // stylesheet is the only place a default may live, so these pin that the
+  // properties are wired at all and that the shared constant the admin
+  // page previews and warns from is the same appearance.
+  it.each([
+    ["the bar tint", ".header", "background-color", "--header-background"],
+    ["the site title", ".header-title", "color", "--header-title-color"],
+    ["the mobile title", ".header-title-mobile", "color", "--header-title-color"],
+    ["the admin title", ".admin-header-title", "color", "--header-title-color"],
+    ["the nav links", ".pages a", "color", "--header-nav-color"],
+    ["the menu button", ".header-menu-button", "color", "--header-nav-color"],
+  ])("makes %s settable, with a default to fall back to", (
+    _name,
+    selector,
+    property,
+    token,
+  ) => {
+    const value = declaration(headerCss, selector, property);
+    expect(value).toContain(`var(${token},`);
+    expect(varFallback(value)).not.toBe(value);
+  });
+
+  it("draws the hover underline in the nav link's own colour", () => {
+    // The underline is the same mark as the word above it; a settable link
+    // colour with a fixed underline would come apart on the first change.
+    expect(declaration(headerCss, ".pages a:hover", "border-bottom")).toContain(
+      "var(--header-nav-color,",
+    );
+  });
+
+  it("shares one set of defaults with the admin colour picker", () => {
+    // The admin previews and contrast-checks against HEADER_COLOR_DEFAULTS;
+    // if it drifted from the stylesheet it would be checking a bar nobody
+    // sees. Alpha compares to within a 0-255 step, which is as precisely as
+    // the picker's #rrggbbaa can state the stylesheet's 0.86.
+    const tint = headerDefault(".header", "background-color");
+    expect(parseColor(tint)).toEqual(
+      parseColor(HEADER_COLOR_DEFAULTS.background),
+    );
+    expect(parseAlpha(tint)).toBeCloseTo(
+      HEADER_COLOR_DEFAULTS.backgroundAlpha,
+      2,
+    );
+    expect(parseColor(headerDefault(".header-title", "color"))).toEqual(
+      parseColor(HEADER_COLOR_DEFAULTS.title),
+    );
+    expect(parseColor(headerDefault(".pages a", "color"))).toEqual(
+      parseColor(HEADER_COLOR_DEFAULTS.nav),
     );
   });
 

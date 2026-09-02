@@ -1,5 +1,7 @@
 import { useEffect } from "react";
+import { SiteSettings } from "../models";
 import { SiteSettingsService } from "../services/site-settings";
+import { isHexColor } from "../utils/color";
 import {
   legacyS3ImageUrl,
   s3ImageUrl,
@@ -11,15 +13,43 @@ const applyBackground = (url: string) => {
 };
 
 /**
- * Applies the admin-selected site background photo, if one is set.
+ * The settings field each header colour is read from, and the custom
+ * property header.css reads it back through. Every one of those rules names
+ * the built-in colour as its `var()` fallback, so leaving a property unset
+ * is exactly "use the default" — which is what an unset, empty or
+ * unparseable value has to mean (#482).
+ */
+const HEADER_COLOR_PROPERTIES: ReadonlyArray<[keyof SiteSettings, string]> = [
+  ["headerBackgroundColor", "--header-background"],
+  ["headerTitleColor", "--header-title-color"],
+  ["headerNavColor", "--header-nav-color"],
+];
+
+const applyHeaderColors = (settings: SiteSettings) => {
+  for (const [field, property] of HEADER_COLOR_PROPERTIES) {
+    // Absent (a settings object written before this feature) and "" both
+    // mean "default", and so does anything that is not a hex colour: the
+    // stylesheet has to be left holding its own fallback rather than
+    // handed a value a browser would either drop or, worse, honour.
+    const value = settings[field] ?? "";
+    if (isHexColor(value)) {
+      document.body.style.setProperty(property, value);
+    }
+  }
+};
+
+/**
+ * Applies the admin-selected site appearance: the background photo, if one
+ * is set, and the header's bar/title/nav colours, if any are.
  *
  * The page background is painted by `body::before` (index.css) with the
  * bundled default image. When site-settings.json names a custom photo,
  * this hook sets `data-custom-background` on <body> plus the
  * `--site-background` CSS variable, which a higher-specificity rule in
  * index.css uses to override the default (desktop and mobile variants
- * alike). Any fetch failure — including the settings object simply not
- * existing yet — leaves the default background in place.
+ * alike). The header colours work the same way, as custom properties
+ * header.css falls back from. Any fetch failure — including the settings
+ * object simply not existing yet — leaves the default appearance in place.
  */
 export function useSiteBackground(): void {
   useEffect(() => {
@@ -27,7 +57,12 @@ export function useSiteBackground(): void {
     const apply = async () => {
       try {
         const settings = await SiteSettingsService.getFromS3();
-        if (cancelled || !settings.backgroundPhoto) return;
+        if (cancelled) return;
+        // Independent of the photo: a site can have custom header colours
+        // over the built-in background, so this must not sit behind the
+        // "no photo configured" return below.
+        applyHeaderColors(settings);
+        if (!settings.backgroundPhoto) return;
         const photo = settings.backgroundPhoto;
         applyBackground(s3ImageUrl(photo));
         // CSS has no onError, so probe the directory-layout key separately
@@ -50,6 +85,9 @@ export function useSiteBackground(): void {
       cancelled = true;
       delete document.body.dataset.customBackground;
       document.body.style.removeProperty("--site-background");
+      for (const [, property] of HEADER_COLOR_PROPERTIES) {
+        document.body.style.removeProperty(property);
+      }
     };
   }, []);
 }
