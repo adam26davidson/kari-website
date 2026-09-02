@@ -1,9 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { AdminHaikuPage } from "./admin-haiku-page";
 import { Haiku } from "@kari/shared/models";
 import { HaikuService } from "@kari/shared/services/haiku";
-import { answerNo, answerYes, renderAdminPage } from "../admin-ui-test-helpers";
+import {
+  answerNo,
+  answerYes,
+  navigateInTest,
+  renderAdminPage,
+} from "../admin-ui-test-helpers";
 
 vi.mock("@kari/shared/services/haiku", () => ({
   HaikuService: {
@@ -307,18 +312,14 @@ describe("AdminHaikuPage routing", () => {
     const { router } = renderPage("/haiku/no-such-id");
 
     expect(await screen.findByText("old pond")).toBeInTheDocument();
-    await waitFor(() =>
-      expect(router.state.location.pathname).toBe("/haiku"),
-    );
+    await waitFor(() => expect(router.state.location.pathname).toBe("/haiku"));
   });
 
   it("returns to the list on browser back", async () => {
     const { router } = renderPage();
     await openFirstHaiku();
 
-    await act(async () => {
-      router.navigate(-1);
-    });
+    await navigateInTest(router, -1);
 
     expect(await screen.findByText("summer grass")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/line 1/)).toBeNull();

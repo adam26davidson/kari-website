@@ -19,14 +19,10 @@ describe("AdminTextArea", () => {
     // capture the value inside the handler: the controlled textarea is
     // reset by the re-render, so the event target mutates afterwards
     const seen: string[] = [];
-    const onChange = vi.fn(
-      (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        seen.push(e.target.value);
-      },
-    );
-    render(
-      <AdminTextArea value="" placeholder="Blurb" onChange={onChange} />,
-    );
+    const onChange = vi.fn((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      seen.push(e.target.value);
+    });
+    render(<AdminTextArea value="" placeholder="Blurb" onChange={onChange} />);
 
     fireEvent.change(screen.getByPlaceholderText("Blurb"), {
       target: { value: "new text" },

@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { AdminPhotographyPage } from "./admin-photography-page";
 import { PhotographyPost } from "@kari/shared/models";
 import { PhotographyService } from "@kari/shared/services/photography";
 import { TokenGetter } from "@kari/shared/services/http";
 import { ImageService } from "@kari/shared/services/images";
-import { answerYes, renderAdminPage } from "../admin-ui-test-helpers";
+import {
+  answerYes,
+  navigateInTest,
+  renderAdminPage,
+} from "../admin-ui-test-helpers";
 
 vi.mock("@kari/shared/services/photography", () => ({
   PhotographyService: {
@@ -279,7 +283,9 @@ describe("AdminPhotographyPage creation", () => {
   // dialog has been handed to confirm().
   async function openCreateConfirmation() {
     const { container, notify, adminUi } = await renderPage();
-    fireEvent.click(screen.getByRole("button", { name: "Add a photography post" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add a photography post" }),
+    );
     return { container, notify, adminUi };
   }
 
@@ -438,7 +444,9 @@ describe("AdminPhotographyPage load failure", () => {
 
     await screen.findByText("Failed to load photography posts.");
     // No editable list — saving one would overwrite the real data.
-    expect(screen.queryByRole("button", { name: "Add a photography post" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Add a photography post" }),
+    ).toBeNull();
 
     // Retry reloads and shows the list.
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
@@ -511,9 +519,7 @@ describe("AdminPhotographyPage routing", () => {
     fireEvent.click(iconButton(container, "pencil"));
     await screen.findByLabelText("Title");
 
-    await act(async () => {
-      router.navigate(-1);
-    });
+    await navigateInTest(router, -1);
 
     await waitFor(() => expect(screen.queryByLabelText("Title")).toBeNull());
     iconButton(container, "pencil");

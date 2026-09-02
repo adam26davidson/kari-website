@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AdminBackgroundPage } from "./admin-background-page";
 import { ImageService } from "@kari/shared/services/images";
@@ -8,7 +8,11 @@ import {
   BackgroundImageError,
   prepareBackgroundImage,
 } from "@kari/shared/utils/background-image";
-import { answerNo, renderAdminPage } from "../admin-ui-test-helpers";
+import {
+  answerNo,
+  navigateInTest,
+  renderAdminPage,
+} from "../admin-ui-test-helpers";
 
 vi.mock("@kari/shared/services/images", () => ({
   ImageService: {
@@ -40,16 +44,18 @@ vi.mock("../hooks/use-admin-token", () => ({
 }));
 
 function renderPage() {
-  return renderAdminPage(
-    <AdminBackgroundPage />,
-    "/:section",
-    "/background",
-  );
+  return renderAdminPage(<AdminBackgroundPage />, "/:section", "/background");
 }
 
+// The page has TWO independent loads: the settings (which the heading
+// waits on) and the list of already-uploaded images. Waiting only for the
+// heading returns while the image list is still in flight, so a test could
+// interact with a half-loaded page — and the second load landing mid-test
+// re-renders it underneath. Wait for both.
 async function renderLoaded() {
   const utils = renderPage();
   await screen.findByText("Site background");
+  await screen.findByText(/Pick an already-uploaded image/);
   return { ...utils, notify: utils.adminUi.notify };
 }
 
@@ -70,10 +76,7 @@ beforeEach(() => {
     backgroundPhoto: "current.webp",
   });
   vi.mocked(SiteSettingsService.update).mockResolvedValue(undefined);
-  vi.mocked(ImageService.list).mockResolvedValue([
-    "current.webp",
-    "other.jpg",
-  ]);
+  vi.mocked(ImageService.list).mockResolvedValue(["current.webp", "other.jpg"]);
   vi.mocked(ImageService.upload).mockResolvedValue("uploaded.webp");
   vi.mocked(ImageService.setPublished).mockResolvedValue(undefined);
   // The preparation step passes files through untouched in these tests.
@@ -151,9 +154,7 @@ describe("AdminBackgroundPage saving", () => {
   it("publishes a picked existing image before referencing it", async () => {
     const { notify } = await renderLoaded();
 
-    fireEvent.click(
-      screen.getByLabelText("Use other.jpg as the background"),
-    );
+    fireEvent.click(screen.getByLabelText("Use other.jpg as the background"));
     fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() =>
@@ -170,10 +171,10 @@ describe("AdminBackgroundPage saving", () => {
       expect.any(Function),
     );
     // The image must be public before the settings reference it.
-    const publishOrder =
-      vi.mocked(ImageService.setPublished).mock.invocationCallOrder[0];
-    const updateOrder =
-      vi.mocked(SiteSettingsService.update).mock.invocationCallOrder[0];
+    const publishOrder = vi.mocked(ImageService.setPublished).mock
+      .invocationCallOrder[0];
+    const updateOrder = vi.mocked(SiteSettingsService.update).mock
+      .invocationCallOrder[0];
     expect(publishOrder).toBeLessThan(updateOrder);
   });
 
@@ -195,10 +196,10 @@ describe("AdminBackgroundPage saving", () => {
       { backgroundPhoto: "uploaded.webp" },
       expect.any(Function),
     );
-    const uploadOrder =
-      vi.mocked(ImageService.upload).mock.invocationCallOrder[0];
-    const updateOrder =
-      vi.mocked(SiteSettingsService.update).mock.invocationCallOrder[0];
+    const uploadOrder = vi.mocked(ImageService.upload).mock
+      .invocationCallOrder[0];
+    const updateOrder = vi.mocked(SiteSettingsService.update).mock
+      .invocationCallOrder[0];
     expect(uploadOrder).toBeLessThan(updateOrder);
     // The upload was already published; no separate publish call.
     expect(ImageService.setPublished).not.toHaveBeenCalled();
@@ -330,9 +331,7 @@ describe("AdminBackgroundPage unsaved-changes guard", () => {
   it("navigates away without confirmation while clean", async () => {
     const { adminUi, router } = await renderLoaded();
 
-    await act(async () => {
-      router.navigate("/haiku");
-    });
+    await navigateInTest(router, "/haiku");
 
     expect(router.state.location.pathname).toBe("/haiku");
     expect(adminUi.confirm).not.toHaveBeenCalled();
@@ -340,13 +339,9 @@ describe("AdminBackgroundPage unsaved-changes guard", () => {
 
   it("asks before discarding an unsaved background choice", async () => {
     const { adminUi, router } = await renderLoaded();
-    fireEvent.click(
-      screen.getByLabelText("Use other.jpg as the background"),
-    );
+    fireEvent.click(screen.getByLabelText("Use other.jpg as the background"));
 
-    await act(async () => {
-      router.navigate("/haiku");
-    });
+    await navigateInTest(router, "/haiku");
 
     expect(adminUi.confirm).toHaveBeenCalledWith(
       "You have unsaved changes. Discard them?",
@@ -363,9 +358,7 @@ describe("AdminBackgroundPage unsaved-changes guard", () => {
       target: { value: "#ffee00" },
     });
 
-    await act(async () => {
-      router.navigate("/haiku");
-    });
+    await navigateInTest(router, "/haiku");
 
     expect(adminUi.confirm).toHaveBeenCalledWith(
       "You have unsaved changes. Discard them?",
@@ -390,9 +383,7 @@ describe("AdminBackgroundPage unsaved-changes guard", () => {
     });
     fireEvent.click(screen.getByText("Use default"));
 
-    await act(async () => {
-      router.navigate("/haiku");
-    });
+    await navigateInTest(router, "/haiku");
 
     expect(router.state.location.pathname).toBe("/haiku");
     expect(adminUi.confirm).not.toHaveBeenCalled();
@@ -405,9 +396,7 @@ describe("AdminBackgroundPage unsaved-changes guard", () => {
       expect(notify).toHaveBeenCalledWith("Site background saved"),
     );
 
-    await act(async () => {
-      router.navigate("/haiku");
-    });
+    await navigateInTest(router, "/haiku");
 
     expect(router.state.location.pathname).toBe("/haiku");
     expect(adminUi.confirm).not.toHaveBeenCalled();

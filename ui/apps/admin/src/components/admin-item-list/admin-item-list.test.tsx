@@ -526,13 +526,12 @@ describe("AdminItemList", () => {
   });
 
   describe("the destructive row control", () => {
-    const DELETE = ".admin-data-list-item-controls .admin-button.danger-secondary";
+    const DELETE =
+      ".admin-data-list-item-controls .admin-button.danger-secondary";
     /** What the controls' own rhythm leaves between two neighbours. */
-    const neighbourGap = px(
-      listCss,
-      ".admin-data-list-item-controls",
-      "gap",
-    ) + 2 * px(adminCss, ".admin-icon-button", "margin");
+    const neighbourGap =
+      px(listCss, ".admin-data-list-item-controls", "gap") +
+      2 * px(adminCss, ".admin-icon-button", "margin");
 
     // Colour and a word are not on their own enough: the brief asks that a
     // destructive action never be the closest thing to the one she reaches

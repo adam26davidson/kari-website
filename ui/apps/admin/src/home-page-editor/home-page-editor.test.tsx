@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HomePageEditor } from "./home-page-editor";
 import { ImageService } from "@kari/shared/services/images";
@@ -7,6 +7,7 @@ import { HomePageService } from "@kari/shared/services/home-page";
 import {
   answerNo,
   answerYes,
+  navigateInTest,
   renderAdminPage,
 } from "../admin-ui-test-helpers";
 
@@ -190,9 +191,7 @@ describe("HomePageEditor unsaved-changes guard", () => {
     const { adminUi, router } = renderPage();
     await screen.findByDisplayValue("hello");
 
-    await act(async () => {
-      router.navigate("/haiku");
-    });
+    await navigateInTest(router, "/haiku");
 
     expect(router.state.location.pathname).toBe("/haiku");
     expect(adminUi.confirm).not.toHaveBeenCalled();
@@ -203,9 +202,7 @@ describe("HomePageEditor unsaved-changes guard", () => {
     const textarea = await screen.findByDisplayValue("hello");
     fireEvent.change(textarea, { target: { value: "changed blurb" } });
 
-    await act(async () => {
-      router.navigate("/haiku");
-    });
+    await navigateInTest(router, "/haiku");
 
     expect(adminUi.confirm).toHaveBeenCalledWith(
       "You have unsaved changes. Discard them?",
@@ -220,9 +217,7 @@ describe("HomePageEditor unsaved-changes guard", () => {
   it("asks before discarding a freshly picked photo and leaves on Yes", async () => {
     const { adminUi, router } = await renderAndPickImage();
 
-    await act(async () => {
-      router.navigate("/haiku");
-    });
+    await navigateInTest(router, "/haiku");
 
     expect(adminUi.confirm).toHaveBeenCalledWith(
       "You have unsaved changes. Discard them?",
@@ -242,9 +237,7 @@ describe("HomePageEditor unsaved-changes guard", () => {
     fireEvent.click(screen.getByText("Save"));
     await waitFor(() => expect(notify).toHaveBeenCalledWith("Home page saved"));
 
-    await act(async () => {
-      router.navigate("/haiku");
-    });
+    await navigateInTest(router, "/haiku");
 
     expect(router.state.location.pathname).toBe("/haiku");
     expect(adminUi.confirm).not.toHaveBeenCalled();
@@ -263,9 +256,7 @@ describe("HomePageEditor unsaved-changes guard", () => {
       ),
     );
 
-    await act(async () => {
-      router.navigate("/haiku");
-    });
+    await navigateInTest(router, "/haiku");
 
     expect(adminUi.confirm).toHaveBeenCalledWith(
       "You have unsaved changes. Discard them?",

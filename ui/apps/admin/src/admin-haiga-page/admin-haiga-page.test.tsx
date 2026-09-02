@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { AdminHaigaPage } from "./admin-haiga-page";
 import { Haiga } from "@kari/shared/models";
 import { HaigaService } from "@kari/shared/services/haiga";
 import { TokenGetter } from "@kari/shared/services/http";
 import { ImageService } from "@kari/shared/services/images";
-import { answerYes, renderAdminPage } from "../admin-ui-test-helpers";
+import {
+  answerYes,
+  navigateInTest,
+  renderAdminPage,
+} from "../admin-ui-test-helpers";
 
 function renderPage(initialEntry?: string) {
   return renderAdminPage(<AdminHaigaPage />, "/haiga/:id?", initialEntry);
@@ -427,9 +431,7 @@ describe("AdminHaigaPage routing", () => {
     expect(
       await screen.findByRole("button", { name: "Edit" }),
     ).toBeInTheDocument();
-    await waitFor(() =>
-      expect(router.state.location.pathname).toBe("/haiga"),
-    );
+    await waitFor(() => expect(router.state.location.pathname).toBe("/haiga"));
   });
 
   it("returns to the list on browser back", async () => {
@@ -437,9 +439,7 @@ describe("AdminHaigaPage routing", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
     await screen.findByRole("button", { name: "Save" });
 
-    await act(async () => {
-      router.navigate(-1);
-    });
+    await navigateInTest(router, -1);
 
     expect(
       await screen.findByRole("button", { name: "Edit" }),

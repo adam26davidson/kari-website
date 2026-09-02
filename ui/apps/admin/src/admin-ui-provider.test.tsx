@@ -6,8 +6,7 @@ import { AdminUiProvider } from "./admin-ui-provider";
 // A consumer exposing every context function as a button, so the tests
 // drive the provider exactly the way the admin pages do.
 function Consumer() {
-  const { isLoading, showLoading, hideLoading, confirm, notify } =
-    useAdminUi();
+  const { isLoading, showLoading, hideLoading, confirm, notify } = useAdminUi();
   return (
     <div>
       <div>isLoading: {String(isLoading)}</div>
