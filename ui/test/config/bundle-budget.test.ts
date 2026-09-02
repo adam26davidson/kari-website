@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { OutputBundle } from "rollup";
+// vite 8 bundles rolldown instead of rollup+esbuild, so "rollup" is no longer
+// a package in the tree to import types from (#529). Vite re-exports the
+// equivalent shapes through its `Rollup` compat namespace, which is what the
+// Plugin hook signatures below are actually written in terms of.
+import type { Rollup } from "vite";
 import { bundleBudget } from "../../vite-bundle-budget";
 
 // The build-time ratchet behind issue #272. Route-level code splitting
@@ -48,7 +52,7 @@ function check(budgetsInKb: Record<string, number>, outputs: Output[]) {
     // The hook uses none of rollup's plugin context.
     {} as ThisParameterType<typeof generateBundle>,
     {} as Parameters<typeof generateBundle>[0],
-    bundle as unknown as OutputBundle,
+    bundle as unknown as Rollup.OutputBundle,
     false,
   );
 }
@@ -64,9 +68,9 @@ function messageFrom(run: () => void): string {
 }
 
 describe("bundleBudget", () => {
-  // This file lives in the node-environment "config" project (see
-  // vitest.workspace.ts): it drives build tooling and never touches the
-  // DOM, so it must not pay for a jsdom environment.
+  // This file lives in the node-environment "config" project (see the
+  // `projects` block in vitest.config.ts): it drives build tooling and never
+  // touches the DOM, so it must not pay for a jsdom environment.
   it("runs in a node environment, without a DOM", () => {
     expect(typeof document).toBe("undefined");
   });

@@ -121,7 +121,9 @@ threaded through every `npm ci` in CI.
   documented pre-push command (see Parallel Sessions below), so the check
   is mechanical rather than remembered; `npm run test` / `test:run` stay
   typecheck-free to keep the inner loop fast.
-  The vitest suite is split into two projects (`ui/vitest.workspace.ts`):
+  The vitest suite is split into two projects (the `projects` block in
+  `ui/vitest.config.ts`; it lived in a separate `vitest.workspace.ts` until
+  vitest 4 removed workspace files, #529):
   `unit` (jsdom) for app code, and `config` (node) for tests that assert on
   this package's own tooling. Config-level tests go in
   `ui/test/config/` (with the CSS design invariants in `ui/test/design/`);

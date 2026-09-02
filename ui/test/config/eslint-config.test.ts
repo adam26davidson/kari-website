@@ -27,8 +27,9 @@ const literalPatterns = gitignorePatterns.filter(
 describe("eslint config ignore patterns", () => {
   const eslint = new ESLint();
 
-  // This file lives in the node-environment "config" project (see
-  // vitest.workspace.ts): it drives ESLint's own API and never touches the
+  // This file lives in the node-environment "config" project (see the
+  // `projects` block in vitest.config.ts): it drives ESLint's own API and
+  // never touches the
   // DOM, so it must not pay for a jsdom environment. Asserting the absence of
   // a DOM global keeps it from silently drifting back into the jsdom project.
   it("runs in a node environment, without a DOM", () => {
