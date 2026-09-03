@@ -383,15 +383,23 @@ describe("AdminBackgroundPage fonts", () => {
     ).toBeChecked();
   });
 
-  it("treats a settings object without the field as no unsaved change", async () => {
-    // Every site-settings.json written before this feature lacks it, and
-    // the picker resolves that to the built-in pairing. Choosing that same
-    // pairing stores "", which has to compare equal to the absent field or
-    // she is asked to discard an edit she never made.
-    const { adminUi, router } = await renderLoaded();
+  it("treats a pairing put back to the built-in one as no change at all", async () => {
+    // Every site-settings.json written before this feature lacks the field,
+    // and the picker resolves that to the built-in pairing. Choosing that
+    // same pairing stores "", which has to compare equal to the absent
+    // field or she is asked to discard an edit she has just undone.
+    //
+    // The detour through a custom pairing is what makes this test able to
+    // fail: the built-in radio starts out checked, and React fires no
+    // onChange for a click on an already-checked radio, so clicking it
+    // straight away would edit nothing and pass no matter what.
+    const { adminUi, router } = await renderAndPickFonts();
     fireEvent.click(
       screen.getByRole("radio", { name: new RegExp(DEFAULT_PAIRING.label) }),
     );
+    expect(
+      screen.getByRole("radio", { name: new RegExp(DEFAULT_PAIRING.label) }),
+    ).toBeChecked();
 
     await act(async () => {
       router.navigate("/haiku");
