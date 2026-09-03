@@ -65,8 +65,11 @@ migration (#212, #232–#238, #240). New admin work should move toward it
 and never add to the legacy CSS. Where a page is still on the legacy
 styling, apply the principles *within* it — copy, spacing, empty, error
 and success states cost nothing to get right — rather than half-migrate
-it. Use stock shadcn components and their default neutral theme; the
-warmth comes from spacing, copy and behavior, not custom colors.
+it. Use stock shadcn components, themed per
+the authoritative design reference in `docs/design/admin-redesign/`
+(warm palette, dark-green and maroon accents, Geist + Newsreader);
+the warmth comes from that palette *and* from spacing, copy and
+behavior.
 
 ## Out of scope
 
