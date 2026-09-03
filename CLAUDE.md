@@ -89,10 +89,11 @@ scripts unless `allowScripts` in `ui/package.json` covers it, and ends the
 install with a warning naming everything it skipped. Every dependency that
 ships one is recorded there as `false` — reviewed and denied, not
 overlooked: the four `@fortawesome/*` scripts and `browser-tabs-lock`'s only
-`console.log` a banner, `@swc/core`'s quietly swaps in a `@swc/wasm`
-fallback we would rather fail loudly without, and `esbuild`'s can fetch a
-binary over the network that the lockfile's platform package already
-provides. Nothing needs to run, so `npm ci` is warning-free.
+`console.log` a banner, and `@swc/core`'s quietly swaps in a `@swc/wasm`
+fallback we would rather fail loudly without. Nothing needs to run, so
+`npm ci` is warning-free. (`esbuild`'s entry retired with #529: vite 8
+bundles rolldown, so esbuild is no longer in the tree at all — and
+rolldown's own platform binaries ship script-free.)
 That is the point of recording them: a warning appearing again means a NEW
 script arrived. Review it — `npm install-scripts ls` lists it — then
 `npm install-scripts deny <pkg>` (or `approve <pkg>`, if it genuinely must
@@ -120,7 +121,9 @@ threaded through every `npm ci` in CI.
   documented pre-push command (see Parallel Sessions below), so the check
   is mechanical rather than remembered; `npm run test` / `test:run` stay
   typecheck-free to keep the inner loop fast.
-  The vitest suite is split into two projects (`ui/vitest.workspace.ts`):
+  The vitest suite is split into two projects (the `projects` block in
+  `ui/vitest.config.ts`; it lived in a separate `vitest.workspace.ts` until
+  vitest 4 removed workspace files, #529):
   `unit` (jsdom) for app code, and `config` (node) for tests that assert on
   this package's own tooling. Config-level tests go in
   `ui/test/config/` (with the CSS design invariants in `ui/test/design/`);

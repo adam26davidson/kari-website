@@ -34,7 +34,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react-swc": "^4.3.3",
-    "@vitest/coverage-v8": "^2.1.9",
+    "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^10.9.1",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -44,8 +44,8 @@
     "prettier": "^3.9.6",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.69.0",
-    "vite": "^5.4.21",
-    "vitest": "^2.1.9"
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
   },
   "allowScripts": {
     "@fortawesome/fontawesome-common-types": false,
@@ -53,8 +53,7 @@
     "@fortawesome/free-regular-svg-icons": false,
     "@fortawesome/free-solid-svg-icons": false,
     "@swc/core": false,
-    "browser-tabs-lock": false,
-    "esbuild": false
+    "browser-tabs-lock": false
   },
   "overrides": {
     "eslint-plugin-jsx-a11y": {

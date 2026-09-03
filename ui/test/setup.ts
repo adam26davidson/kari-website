@@ -33,5 +33,20 @@ globalThis.Request = class extends NativeRequest {
 
 afterEach(() => {
   cleanup();
+  // Both calls are needed, and neither replaces the other (#529).
+  //
+  // Up to vitest 2, restoreAllMocks() called mockRestore() on every
+  // registered mock, so it doubled as the reset for the plain vi.fn()s that
+  // vi.mock factories are built from. vitest 3 narrowed it: it now only
+  // walks the spies vi.spyOn registered, and a vi.fn() keeps its call
+  // history and implementation for the rest of the file. That silently
+  // leaks state between tests -- call counts accumulate, and a
+  // mockResolvedValue set in one test still answers in the next.
+  //
+  // resetAllMocks() is the half that covers those: it calls mockReset() on
+  // every registered mock, clearing calls and implementations alike.
+  // restoreAllMocks() is still the half that un-spies vi.spyOn, which the
+  // object-URL polyfill above depends on.
+  vi.resetAllMocks();
   vi.restoreAllMocks();
 });

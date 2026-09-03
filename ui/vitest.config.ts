@@ -1,15 +1,73 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig, configDefaults } from "vitest/config";
+import react from "@vitejs/plugin-react-swc";
 
 // Vitest configuration for unit/component tests. Kept separate from
 // vite.config.ts so the build config stays focused on bundling.
 //
-// Which tests run, and in which environment, is defined per project in
-// vitest.workspace.ts. What stays here is everything Vitest scopes to the
-// whole run rather than to a project -- coverage above all, which must keep
+// Which tests run, and in which environment, is defined per project in the
+// `projects` block below. Everything Vitest scopes to the whole run rather
+// than to a project stays outside it -- coverage above all, which must keep
 // measuring every workspace's source across both projects.
+//
+// The two projects lived in their own vitest.workspace.ts until #529: vitest
+// 4 removed the workspace file (and `defineWorkspace` with it) in favour of
+// this inline `projects` array. Same two projects, same settings.
+
+// The suite splits into two projects along what each test actually needs from
+// the runtime:
+//
+// - "unit" holds the app and shared-package component/unit tests, which
+//   render React and therefore need jsdom. It spans every workspace
+//   (apps/public, apps/admin, packages/shared): one run, one coverage
+//   number, which is what the CI ratchet reads.
+// - "config" holds tests that assert on this package's own tooling and on
+//   invariants that span the workspaces -- the eslint ignore derivation, the
+//   bundle-budget plugin, the app-boundary guard, and the CSS design
+//   invariants, which read stylesheets from BOTH apps. They drive real tool
+//   APIs or the filesystem and never touch the DOM, so standing up a jsdom
+//   environment and the DOM test setup for them is pure overhead.
+const configTests = "test/**/*.test.ts";
+
+// Shared by both projects so a test reads the same way wherever it lives.
+const shared = {
+  globals: true,
+  // Default values for the Vite env vars the app reads at import time.
+  // Individual tests can override with vi.stubEnv().
+  env: {
+    VITE_API_URL: "https://api.test.local",
+    VITE_S3_URL: "https://s3.test.local",
+  },
+};
+
 export default defineConfig({
   test: {
-    workspace: "./vitest.workspace.ts",
+    projects: [
+      {
+        plugins: [react()],
+        test: {
+          ...shared,
+          name: "unit",
+          environment: "jsdom",
+          setupFiles: ["./test/setup.ts"],
+          include: ["{apps,packages}/*/src/**/*.test.{ts,tsx}"],
+          // Playwright specs live in e2e/ and must not be run by Vitest.
+          // Config tests are excluded here because the "config" project
+          // below owns them.
+          exclude: [...configDefaults.exclude, "e2e/**", configTests],
+          // Components import their own .css files; we don't need to
+          // process them for logic/render tests.
+          css: false,
+        },
+      },
+      {
+        test: {
+          ...shared,
+          name: "config",
+          environment: "node",
+          include: [configTests],
+        },
+      },
+    ],
     coverage: {
       provider: "v8",
       // json-summary feeds the CI coverage comment on PRs.
@@ -19,7 +77,28 @@ export default defineConfig({
       // `test/` is deliberately absent — vitest's own default excludes cover
       // `test/**`, and what lives there is test code plus the readers those
       // tests drive.
-      include: ["apps/*/src/**", "packages/*/src/**"],
+      //
+      // vitest 4 dropped `coverage.all`, which used to be what pulled in
+      // untested files. `include` now does that job on its own: every file
+      // matching it is reported whether a test touched it or not, so the
+      // whole-source scope above survives the upgrade unchanged.
+      //
+      // The `*.{ts,tsx}` tail is load-bearing under vitest 4 and was not
+      // needed under 2 (#529). v4 also dropped the `extension` option and
+      // emptied the default `coverage.exclude`, so a bare `src/**` is now
+      // globbed literally: it swept in 38 stylesheets, two .webp
+      // backgrounds, an .svg and vite-env.d.ts, each reported at 0% because
+      // a CSS file cannot be "covered" at all. That is 42 files of pure
+      // noise dragging every number down, and it would have made the
+      // ratchet punish anyone who added a stylesheet. Naming the code
+      // extensions restores exactly the 82 source files vitest 2 measured
+      // -- narrower than the glob, identical in scope to before.
+      include: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+      ],
+      // Type-only declarations emit no code to cover.
+      exclude: ["**/*.d.ts"],
       // Ratchet floors: pinned just below current coverage so CI fails on
       // regressions. When coverage rises meaningfully, bump these in the
       // same PR (see CLAUDE.md). Floors, not targets — keep a small margin
@@ -33,9 +112,13 @@ export default defineConfig({
       // instead of them. The two layers police different things, because
       // vitest's glob groups are NOT a partition: `resolveThresholds` builds
       // one coverage map per glob from the files that glob matches, and a
-      // `global` map holding EVERY measured file — not the leftovers (see
-      // vitest/dist/coverage.js; its own doc comment says "global for all
-      // other files", which is wrong about its own loop). So:
+      // `global` map holding EVERY measured file — not the leftovers. Its
+      // own doc comment ("global for all other files") is wrong about its
+      // own loop, but the loop is unambiguous, and vitest 4 spells the
+      // intent out in a second comment right above it: "Global threshold is
+      // for all files, even if they are included by glob patterns"
+      // (packages/vitest/src/node/coverage.ts upstream; shipped in
+      // vitest/dist/chunks/coverage.*.js). So:
       //   - the per-workspace groups stop one workspace's regression from
       //     hiding behind another's headroom, which the admin app (a third
       //     of the source) is big enough to do;
@@ -44,16 +127,26 @@ export default defineConfig({
       //     be measured, counted in the PR comment, and policed by nothing.
       // test/config/coverage-thresholds.test.ts pins both layers, because a
       // glob matching nothing enforces nothing and still passes.
+      // These moved DOWN in #529, and not because anything stopped being
+      // tested: the same 928 tests over the same 82 files pass either side
+      // of the bump. vitest 4's v8 provider remaps coverage through
+      // ast-v8-to-istanbul instead of raw v8 ranges, and simply counts
+      // differently -- whole-run lines 99.62 -> 99.36, functions 100 ->
+      // 99.54, branches 97.70 -> 96.13. Where a function's percentage fell,
+      // its lines are still 100% (services/images.ts, services/
+      // test-helpers.ts): v4 resolves a function v2 folded into its parent,
+      // it does not find new untested code. Re-pinned from measurement, per
+      // CLAUDE.md, rather than carried over.
       thresholds: {
-        lines: 99.5,
-        functions: 99.9,
-        branches: 97.4,
-        "apps/public/src/**": { lines: 99.4, functions: 99.9, branches: 95.4 },
-        "apps/admin/src/**": { lines: 99.1, functions: 99.9, branches: 96.9 },
+        lines: 99.2,
+        functions: 99.4,
+        branches: 95.9,
+        "apps/public/src/**": { lines: 99.8, functions: 99.9, branches: 93.3 },
+        "apps/admin/src/**": { lines: 98.8, functions: 99.9, branches: 95.7 },
         "packages/shared/src/**": {
-          lines: 99.5,
-          functions: 99.9,
-          branches: 98.1,
+          lines: 99.8,
+          functions: 98.2,
+          branches: 97.4,
         },
       },
     },
