@@ -395,10 +395,13 @@ describe("the admin icon buttons", () => {
     expect(declared("color")).not.toBe("inherit");
   });
 
+  // `adminColor`, not `resolveColor`: since #565 the glyph is
+  // `var(--admin-primary)`, which lives in the ADMIN :root, not the shared
+  // one — the same reason the ring below already resolved that way.
   it("put a glyph on their fill that meets WCAG AA", () => {
     expect(
       contrastRatio(
-        resolveColor(declared("color")),
+        adminColor(declared("color")),
         parseColor(declared("background-color")),
       ),
     ).toBeGreaterThanOrEqual(4.5);
@@ -462,6 +465,39 @@ describe("the admin icon buttons", () => {
     // Edit's outline is the same brown the icon circles beside it wear, so
     // the row reads as one family with one exception.
     expect(adminColor(edit)).toEqual(adminColor(declared("border")));
+  });
+});
+
+// The one obvious next action on every admin screen — Save, Upload, Add —
+// and the only place the brown carries white TEXT rather than a border or a
+// glyph. The danger red has had this check since #457; the brown could not
+// have it, because the hex it was written in was repeated across six
+// stylesheets with nothing to resolve (#565). Now that both live in the
+// admin :root as tokens, the primary gets the same numbers as the red.
+describe("the admin's filled primary button", () => {
+  const filled = (selector: string, property: string) =>
+    declaration(adminButtonCss, selector, property);
+  const label = adminColor(filled(".admin-button", "color"));
+
+  // Both states, not just the resting one: hover darkens the fill, so if a
+  // future hover brown went the other way the label would be checked
+  // against a colour it never actually sits on.
+  it.each([
+    ["resting", ".admin-button"],
+    ["hovered", ".admin-button:hover"],
+  ])("keeps its label legible while %s", (_state, selector) => {
+    expect(
+      contrastRatio(label, adminColor(filled(selector, "background-color"))),
+    ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // Hover has to be VISIBLE as well as legible — a state change nobody can
+  // see is not feedback. Not a WCAG threshold; just "these are two colours".
+  it("darkens visibly under the pointer", () => {
+    const resting = adminColor(filled(".admin-button", "background-color"));
+    const hovered = adminColor(filled(".admin-button:hover", "background-color"));
+    expect(hovered).not.toEqual(resting);
+    expect(relativeLuminance(hovered)).toBeLessThan(relativeLuminance(resting));
   });
 });
 

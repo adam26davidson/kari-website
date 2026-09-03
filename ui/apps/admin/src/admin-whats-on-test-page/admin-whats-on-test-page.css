@@ -32,7 +32,7 @@
   margin: 0;
   padding: 12px 16px;
   border-radius: 6px;
-  background-color: #a33327;
+  background-color: var(--admin-danger);
   color: white;
   overflow-wrap: anywhere;
 }
