@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { AdminPhotographyPage } from "./admin-photography-page";
 import { PhotographyPost } from "@kari/shared/models";
 import { PhotographyService } from "@kari/shared/services/photography";
 import { TokenGetter } from "@kari/shared/services/http";
 import { ImageService } from "@kari/shared/services/images";
-import { answerYes, renderAdminPage } from "../admin-ui-test-helpers";
+import {
+  answerYes,
+  navigateInTest,
+  renderAdminPage,
+} from "../admin-ui-test-helpers";
 
 vi.mock("@kari/shared/services/photography", () => ({
   PhotographyService: {
@@ -511,9 +515,7 @@ describe("AdminPhotographyPage routing", () => {
     fireEvent.click(iconButton(container, "pencil"));
     await screen.findByLabelText("Title");
 
-    await act(async () => {
-      router.navigate(-1);
-    });
+    await navigateInTest(router, -1);
 
     await waitFor(() => expect(screen.queryByLabelText("Title")).toBeNull());
     iconButton(container, "pencil");

@@ -37,7 +37,7 @@ export default defineConfig({
     // in the PR.
     //
     // "index" is the entry chunk every visitor downloads (currently
-    // ~253 kB). The former "admin" budget retired with #591: the admin
+    // ~298 kB). The former "admin" budget retired with #591: the admin
     // shell is no longer a chunk of this build at all, it is a separate
     // app, and bundleBudget rejects a budget whose chunk is never emitted.
     //
@@ -56,6 +56,16 @@ export default defineConfig({
     // guard's useBlocker ever needed, and the admin is its own app now.
     // Keep it that way -- a data-router hook here would pull all of it
     // back.
-    bundleBudget({ index: 278 }),
+    //
+    // 250 -> 298 kB on the React 18.3.1 -> 19.2.8 + react-router 7 -> 8
+    // upgrade (#534); 95.9 kB gzipped. All of that is React
+    // itself, not anything this app imports: measured on the same tree,
+    // React 19 with react-router 7 still on it came in LARGER, at 300.9 kB
+    // by vite's measure against 299.0 kB with v8, so react-router 8 is
+    // ~1.9 kB smaller than v7 here and React 19 accounts for the whole
+    // ~50 kB rise. There is no lazy chunk to move it into -- every page
+    // needs react-dom -- so the budget rises with it rather than the
+    // weight being deferred.
+    bundleBudget({ index: 325 }),
   ],
 });

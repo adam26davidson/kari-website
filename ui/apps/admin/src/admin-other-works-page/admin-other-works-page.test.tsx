@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { AdminOtherWorksPage } from "./admin-other-works-page";
 import { BlogPost } from "@kari/shared/models";
 import { BlogService } from "@kari/shared/services/blog";
 import { ImageService } from "@kari/shared/services/images";
 import { TokenGetter } from "@kari/shared/services/http";
-import { answerYes, renderAdminPage } from "../admin-ui-test-helpers";
+import {
+  answerYes,
+  navigateInTest,
+  renderAdminPage,
+} from "../admin-ui-test-helpers";
 import {
   applyTimeZone,
   restoreHostTimeZoneAfterEach,
@@ -1127,9 +1131,7 @@ describe("AdminOtherWorksPage routing", () => {
     fireEvent.click(iconButton(container, "pencil"));
     await screen.findByPlaceholderText("post content");
 
-    await act(async () => {
-      router.navigate(-1);
-    });
+    await navigateInTest(router, -1);
 
     await waitFor(() =>
       expect(screen.queryByPlaceholderText("post content")).toBeNull(),

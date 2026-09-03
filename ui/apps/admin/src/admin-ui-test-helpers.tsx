@@ -1,6 +1,11 @@
 import { Mock, vi } from "vitest";
 import { act, render } from "@testing-library/react";
-import { createMemoryRouter, RouterProvider } from "react-router";
+import {
+  createMemoryRouter,
+  DataRouter,
+  RouterProvider,
+  To,
+} from "react-router";
 import { AdminUi, AdminUiContext } from "./admin-ui-context";
 
 /** AdminUi with every function mocked, for asserting page behavior. */
@@ -59,6 +64,38 @@ export function renderAdminPage(
   );
   const utils = render(<RouterProvider router={router} />);
   return { ...utils, adminUi, router };
+}
+
+/**
+ * Navigates the test router, the way a real in-app navigation would.
+ *
+ * The extra `act` before the navigation is load-bearing, not belt-and-
+ * braces. react-router registers the unsaved-changes predicate through a
+ * PASSIVE effect (`useBlocker` -> `router.getBlocker(key, fn)`), and that
+ * effect re-runs whenever `isDirty` changes, because the predicate is a
+ * fresh closure each render. So between "the page became clean" and "the
+ * router knows it is clean" there is one pending passive effect.
+ *
+ * A real user never sees that gap: React flushes pending passive effects
+ * before it dispatches the next discrete event, so the click that follows
+ * a save or an undo always meets the fresh predicate. Calling
+ * `router.navigate()` straight from a test is not a React event and forces
+ * no such flush, so it can hit the STALE predicate and be blocked — the
+ * guard offering to discard changes that were already saved. Flushing
+ * first is what reproduces the browser's ordering.
+ *
+ * Only visible on React 19 (issue #534), which defers passive effects more
+ * than 18 did: the same tests were already racing, and simply won.
+ */
+export async function navigateInTest(router: DataRouter, to: To | number) {
+  await act(async () => {});
+  await act(async () => {
+    // The two arms look identical on purpose: `navigate` is overloaded
+    // (a path, or a history delta -- navigate(-1) is the back button) and
+    // TypeScript will not resolve an overload against the `To | number`
+    // union, so the call has to be made once per narrowed type.
+    await (typeof to === "number" ? router.navigate(to) : router.navigate(to));
+  });
 }
 
 /**

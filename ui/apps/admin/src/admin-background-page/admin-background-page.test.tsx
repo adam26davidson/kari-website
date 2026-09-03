@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AdminBackgroundPage } from "./admin-background-page";
 import { ImageService } from "@kari/shared/services/images";
@@ -8,7 +8,11 @@ import {
   BackgroundImageError,
   prepareBackgroundImage,
 } from "@kari/shared/utils/background-image";
-import { answerNo, renderAdminPage } from "../admin-ui-test-helpers";
+import {
+  answerNo,
+  navigateInTest,
+  renderAdminPage,
+} from "../admin-ui-test-helpers";
 import {
   DEFAULT_FONT_PAIRING as DEFAULT_PAIRING,
   FONT_PAIRINGS,
@@ -54,9 +58,15 @@ function renderPage() {
   );
 }
 
+// The page runs TWO independent loads: the settings (which the heading
+// waits on) and the list of already-uploaded images. Waiting only for the
+// heading returns while the image list is still in flight, leaving tests
+// to interact with a half-loaded page and the second load to re-render it
+// underneath them. Wait for both.
 async function renderLoaded() {
   const utils = renderPage();
   await screen.findByText("Site background");
+  await screen.findByText(/Pick an already-uploaded image/);
   return { ...utils, notify: utils.adminUi.notify };
 }
 
@@ -401,9 +411,7 @@ describe("AdminBackgroundPage fonts", () => {
       screen.getByRole("radio", { name: new RegExp(DEFAULT_PAIRING.label) }),
     ).toBeChecked();
 
-    await act(async () => {
-      router.navigate("/haiku");
-    });
+    await navigateInTest(router, "/haiku");
 
     expect(router.state.location.pathname).toBe("/haiku");
     expect(adminUi.confirm).not.toHaveBeenCalled();
@@ -412,9 +420,7 @@ describe("AdminBackgroundPage fonts", () => {
   it("asks before discarding an unsaved font choice", async () => {
     const { adminUi, router } = await renderAndPickFonts();
 
-    await act(async () => {
-      router.navigate("/haiku");
-    });
+    await navigateInTest(router, "/haiku");
 
     expect(adminUi.confirm).toHaveBeenCalledWith(
       "You have unsaved changes. Discard them?",
@@ -430,9 +436,7 @@ describe("AdminBackgroundPage unsaved-changes guard", () => {
   it("navigates away without confirmation while clean", async () => {
     const { adminUi, router } = await renderLoaded();
 
-    await act(async () => {
-      router.navigate("/haiku");
-    });
+    await navigateInTest(router, "/haiku");
 
     expect(router.state.location.pathname).toBe("/haiku");
     expect(adminUi.confirm).not.toHaveBeenCalled();
@@ -444,9 +448,7 @@ describe("AdminBackgroundPage unsaved-changes guard", () => {
       screen.getByLabelText("Use other.jpg as the background"),
     );
 
-    await act(async () => {
-      router.navigate("/haiku");
-    });
+    await navigateInTest(router, "/haiku");
 
     expect(adminUi.confirm).toHaveBeenCalledWith(
       "You have unsaved changes. Discard them?",
@@ -463,9 +465,7 @@ describe("AdminBackgroundPage unsaved-changes guard", () => {
       target: { value: "#ffee00" },
     });
 
-    await act(async () => {
-      router.navigate("/haiku");
-    });
+    await navigateInTest(router, "/haiku");
 
     expect(adminUi.confirm).toHaveBeenCalledWith(
       "You have unsaved changes. Discard them?",
@@ -490,9 +490,7 @@ describe("AdminBackgroundPage unsaved-changes guard", () => {
     });
     fireEvent.click(screen.getByText("Use default"));
 
-    await act(async () => {
-      router.navigate("/haiku");
-    });
+    await navigateInTest(router, "/haiku");
 
     expect(router.state.location.pathname).toBe("/haiku");
     expect(adminUi.confirm).not.toHaveBeenCalled();
@@ -505,9 +503,7 @@ describe("AdminBackgroundPage unsaved-changes guard", () => {
       expect(notify).toHaveBeenCalledWith("Site background saved"),
     );
 
-    await act(async () => {
-      router.navigate("/haiku");
-    });
+    await navigateInTest(router, "/haiku");
 
     expect(router.state.location.pathname).toBe("/haiku");
     expect(adminUi.confirm).not.toHaveBeenCalled();
