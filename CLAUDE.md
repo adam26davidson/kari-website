@@ -43,8 +43,12 @@ Repo:
 - `aws sso login` — before running the API against AWS
 - `./scripts/sync_s3_prod_to_test.sh` — sync production S3 to test
 
-CI (`.github/workflows/ci.yml`) runs every one of these on each pull
-request, plus a `coverage` job that posts a coverage comment.
+CI (`.github/workflows/ci.yml`) runs the lint, typecheck, test, build and
+coverage commands above on each pull request, plus a `coverage` job that
+posts a coverage comment. It does NOT run the dev-loop or AWS ones
+(`dev.sh`, `setup-worktree.sh`, `npm run dev`, `cargo watch`,
+`aws sso login`, `sync_s3_prod_to_test.sh`) — a break in those surfaces
+locally or not at all, so verify them yourself.
 
 ## Read the doc before you start
 

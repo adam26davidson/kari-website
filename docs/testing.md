@@ -33,10 +33,20 @@ specs plus the plain-`.mjs` node scripts, which are a separate TS project.
 
 ## What CI runs
 
-`.github/workflows/ci.yml` runs every command in CLAUDE.md's list on each
-pull request, and a `coverage` job posts a whole-codebase coverage comment
-on the PR (per-file breakdown in the job summary). Coverage is measured
-over ALL source files, not a curated subset — don't narrow the scope.
+`.github/workflows/ci.yml` runs the lint, typecheck, test, build and
+coverage commands from CLAUDE.md's list on each pull request, and a
+`coverage` job posts a whole-codebase coverage comment on the PR (per-file
+breakdown in the job summary). Coverage is measured over ALL source files,
+not a curated subset — don't narrow the scope.
+
+The dev-loop and AWS commands in that list are NOT run by CI (`dev.sh`,
+`setup-worktree.sh`, `npm run dev`, `cargo watch`, `aws sso login`,
+`sync_s3_prod_to_test.sh`), so a breakage there shows up locally or not
+at all. Two near-misses worth knowing: `npm run preview` IS covered,
+because the e2e job's Playwright `webServer` runs
+`npm run build:test && npm run preview`; and `setup-worktree.sh` is
+covered only by its test harness (`scripts/setup-worktree-test.sh`), not
+by being run for real.
 
 ## The coverage ratchet
 
