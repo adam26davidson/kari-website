@@ -3,7 +3,8 @@
 The visual design for the admin's shadcn/Tailwind migration (#592 and the
 per-page issues #233–#238, #472, #240). The PNGs in this directory are the
 design: one board per screen per width, rendered from the maintainer's
-design canvas (2026-09-02). Where a PR's result and these boards disagree,
+design canvas (2026-09-02) — with one deliberate gap, the tablet editors
+(see Boards below). Where a PR's result and these boards disagree,
 follow the boards unless the design brief's behavioral principles
 (`docs/ui-design-brief.md`) say otherwise; copy IN the boards is sample
 content, not final copy — keep the real pages' wording where it already
@@ -63,6 +64,15 @@ swash behind them.
 | Image cleanup | `Cleanup`, `CleanupTablet`, `CleanupMobile` |
 | Nav           | `MobileMenu` (open state) |
 | Tokens        | `Theme` |
+
+The four editors (`HaikuEditor`, `HaigaEditor`, `PhotoEditor`,
+`WorksEditor`) have desktop and mobile boards only — there is no
+`*EditorTablet` board and none is coming. Derive the tablet editor from
+its desktop board, swapping the 280px sidebar for the shell's 72px icon
+rail: the title + action row and the editor card keep their desktop
+structure and span the content column the rail leaves, exactly as the
+card does on the `*Tablet` list boards; form fields stay full-width
+within the card. Every other screen has all three widths.
 
 Notable deliberate decisions, beyond restyling:
 
