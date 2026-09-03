@@ -77,9 +77,12 @@
 }
 
 .admin-background-thumb.selected {
-  border-color: #6d3513;
+  border-color: var(--admin-primary);
 }
 
+/* Softer than the chosen thumb's border, so hovering previews the mark
+   without claiming to be it. The 71% is the alpha the literal `#6d3513b5`
+   carried before the brown became a token (#565). */
 .admin-background-thumb:hover {
-  border-color: #6d3513b5;
+  border-color: color-mix(in srgb, var(--admin-primary) 71%, transparent);
 }

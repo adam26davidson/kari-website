@@ -5,7 +5,7 @@
   color: #f9f5f2;
   /* Opaque: the old 71%-alpha fill took on whatever was behind the card
      and read as washed out over light photos (#278, #321). */
-  background-color: #6d3513;
+  background-color: var(--admin-primary);
   border-width: 0px;
   font-size: 16px;
   width: fit-content;
@@ -16,12 +16,12 @@
 }
 
 .admin-button:hover {
-  background-color: #552a0f;
+  background-color: var(--admin-primary-hover);
   cursor: pointer;
 }
 
 .admin-button:active {
-  background-color: #552a0f;
+  background-color: var(--admin-primary-hover);
 }
 
 /* Quiet on the card: the thing standing beside the primary (Close, Select
@@ -30,7 +30,7 @@
 .admin-button.secondary {
   background-color: #f2efe9;
   color: #4a2a14;
-  border: 1px solid #6d3513;
+  border: 1px solid var(--admin-primary);
   /* The border would otherwise add 2px to the height and leave this
      sitting a hair taller than the filled primary next to it. */
   padding: 9px;

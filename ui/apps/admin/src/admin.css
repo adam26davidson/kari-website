@@ -10,6 +10,16 @@
      both spend this token rather than repeating the hex. */
   --admin-danger: #a33327;
   --admin-danger-hover: #872a20;
+  /* The one brown, and the darker one every primary control answers the
+     pointer with. Same argument as the red above, arrived at the long way
+     round: this hex was written out in six stylesheets, so changing the
+     admin's primary colour was a sweep rather than an edit, and a contrast
+     test could not resolve it through a token the way it already could for
+     the danger pair (#565). Anything tinted the admin's own brown — a
+     filled button, an outlined one's ring, an icon circle's glyph, a
+     checkbox's tick, a selected thumbnail's border — spends these. */
+  --admin-primary: #6d3513;
+  --admin-primary-hover: #552a0f;
   /* One reading measure and one size for admin body prose. Both, because
      `ch` resolves against the element's own font-size: the what's-on-test
      panel had a 15px explanation capped at 60ch sitting above 16px notes
@@ -156,7 +166,7 @@ textarea {
    was the loudest thing in the other-works editor. Tinted to the admin's
    primary brown, once, so any checkbox added later inherits it. */
 input[type="checkbox"] {
-  accent-color: #6d3513;
+  accent-color: var(--admin-primary);
 }
 
 /* A labelled form field: the visible label sitting above its control.
@@ -312,11 +322,11 @@ input[type="checkbox"] {
   font: inherit;
   /* Explicit, not inherited: the glyph's legibility must not depend on an
      ancestor's text colour (#347). */
-  color: #6d3513;
+  color: var(--admin-primary);
   /* Opaque, like .admin-button: a translucent fill reads washed out over
      a light card or photo (#278, #321). */
   background-color: #f2efe9;
-  border: 1px solid #6d3513;
+  border: 1px solid var(--admin-primary);
   border-radius: 50%;
   transition: background-color 0.2s;
 }
@@ -335,11 +345,6 @@ input[type="checkbox"] {
    shapes answer the pointer identically. */
 .admin-icon-button:hover {
   background-color: #e4ded3;
-  cursor: pointer;
-}
-
-.admin-image-upload:hover {
-  background-color: #552a0f;
   cursor: pointer;
 }
 
