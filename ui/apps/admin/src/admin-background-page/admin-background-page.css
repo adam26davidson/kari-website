@@ -27,7 +27,7 @@
   min-width: 0;
   box-sizing: border-box;
   color: #181818;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
 }
 
 .admin-background-default-preview {

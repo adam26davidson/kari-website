@@ -9,6 +9,13 @@ import {
   prepareBackgroundImage,
 } from "@kari/shared/utils/background-image";
 import { answerNo, renderAdminPage } from "../admin-ui-test-helpers";
+import {
+  DEFAULT_FONT_PAIRING as DEFAULT_PAIRING,
+  FONT_PAIRINGS,
+} from "@kari/shared/utils/fonts";
+
+/** Any pairing that is not the built-in one. */
+const CUSTOM_PAIRING = FONT_PAIRINGS[1];
 
 vi.mock("@kari/shared/services/images", () => ({
   ImageService: {
@@ -91,7 +98,7 @@ describe("AdminBackgroundPage initial load", () => {
     renderPage();
 
     expect(
-      await screen.findByText("Failed to load the site background settings."),
+      await screen.findByText("Failed to load the site's appearance settings."),
     ).toBeInTheDocument();
     expect(screen.queryByText("Save")).not.toBeInTheDocument();
   });
@@ -283,7 +290,7 @@ describe("AdminBackgroundPage header colours", () => {
       ),
     );
     // The confirmation names what was actually saved.
-    expect(notify).toHaveBeenCalledWith("Background and header colours saved");
+    expect(notify).toHaveBeenCalledWith("Header colours saved");
   });
 
   it("shows the stored colours when the page loads", async () => {
@@ -323,6 +330,99 @@ describe("AdminBackgroundPage header colours", () => {
       ),
     );
     expect(screen.getByLabelText("Page links")).toHaveValue("#00ff00");
+  });
+});
+
+describe("AdminBackgroundPage fonts", () => {
+  /** Renders the loaded page and chooses a non-default font pairing. */
+  async function renderAndPickFonts() {
+    const utils = await renderLoaded();
+    fireEvent.click(
+      screen.getByRole("radio", { name: new RegExp(CUSTOM_PAIRING.label) }),
+    );
+    return utils;
+  }
+
+  it("saves the chosen pairing by id, alongside everything else", async () => {
+    const { notify } = await renderAndPickFonts();
+
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() =>
+      expect(SiteSettingsService.update).toHaveBeenCalledWith(
+        { backgroundPhoto: "current.webp", fontPairing: CUSTOM_PAIRING.id },
+        expect.any(Function),
+      ),
+    );
+    expect(notify).toHaveBeenCalledWith("Site fonts saved");
+  });
+
+  it("names the whole page when fonts and colours changed together", async () => {
+    const { notify } = await renderAndPickFonts();
+    fireEvent.change(screen.getByLabelText("Page links"), {
+      target: { value: "#00ff00" },
+    });
+
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("Appearance settings saved"),
+    );
+  });
+
+  it("shows the stored pairing when the page loads", async () => {
+    vi.mocked(SiteSettingsService.getFromApi).mockResolvedValue({
+      backgroundPhoto: "current.webp",
+      fontPairing: CUSTOM_PAIRING.id,
+    });
+
+    await renderLoaded();
+
+    expect(
+      screen.getByRole("radio", { name: new RegExp(CUSTOM_PAIRING.label) }),
+    ).toBeChecked();
+  });
+
+  it("treats a pairing put back to the built-in one as no change at all", async () => {
+    // Every site-settings.json written before this feature lacks the field,
+    // and the picker resolves that to the built-in pairing. Choosing that
+    // same pairing stores "", which has to compare equal to the absent
+    // field or she is asked to discard an edit she has just undone.
+    //
+    // The detour through a custom pairing is what makes this test able to
+    // fail: the built-in radio starts out checked, and React fires no
+    // onChange for a click on an already-checked radio, so clicking it
+    // straight away would edit nothing and pass no matter what.
+    const { adminUi, router } = await renderAndPickFonts();
+    fireEvent.click(
+      screen.getByRole("radio", { name: new RegExp(DEFAULT_PAIRING.label) }),
+    );
+    expect(
+      screen.getByRole("radio", { name: new RegExp(DEFAULT_PAIRING.label) }),
+    ).toBeChecked();
+
+    await act(async () => {
+      router.navigate("/haiku");
+    });
+
+    expect(router.state.location.pathname).toBe("/haiku");
+    expect(adminUi.confirm).not.toHaveBeenCalled();
+  });
+
+  it("asks before discarding an unsaved font choice", async () => {
+    const { adminUi, router } = await renderAndPickFonts();
+
+    await act(async () => {
+      router.navigate("/haiku");
+    });
+
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      "You have unsaved changes. Discard them?",
+      expect.any(Function),
+      expect.any(Function),
+    );
+    await answerNo(adminUi);
+    expect(router.state.location.pathname).toBe("/background");
   });
 });
 

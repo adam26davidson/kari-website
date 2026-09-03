@@ -13,7 +13,7 @@
    near-white on this pale card, which is exactly the #457 defect. */
 .header-colors-heading {
   margin: 0;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
   font-size: 17px;
   font-weight: 400;
   color: #181818;
@@ -35,7 +35,7 @@
   align-items: baseline;
   gap: 6px 20px;
   padding: 12px 14px;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
 }
 
 .header-colors-preview-title {
@@ -68,9 +68,20 @@
 }
 
 .header-colors-label {
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
   font-size: 15px;
   color: #181818;
+}
+
+/* The three rows read as one group of settings, so their swatches line up
+   in a column instead of each starting wherever its own label happened to
+   end ("Bar" vs "Page links" put them ~50px apart). A min-width rather
+   than a fixed width: a longer label is still allowed to push its own row
+   wider rather than being clipped, and at 390px the row simply wraps as
+   before. Excludes the see-through label, which is an aside INSIDE the bar
+   row, not a row of its own. */
+.header-colors-label:not(.see-through) {
+  min-width: 92px;
 }
 
 /* The bar's two controls read as one setting, so the second label is a
@@ -136,20 +147,19 @@
 }
 
 .header-colors-percent {
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
   color: var(--muted-text);
   /* Fixed so the row does not shuffle as the number changes width. */
   min-width: 40px;
 }
 
+/* A plain paragraph: it carried a second child (the measured ratio) until
+   that was dropped as code vocabulary, and a one-child flex row is just a
+   more fragile way of writing a sentence. */
 .header-colors-note {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 10px;
   margin: 0;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
   font-size: var(--admin-prose-size);
   max-width: var(--admin-prose-measure);
   color: var(--muted-text);
@@ -163,8 +173,3 @@
   color: #7c2d12;
 }
 
-.header-colors-ratio {
-  font-size: 13px;
-  color: var(--muted-text);
-  white-space: nowrap;
-}

@@ -1,0 +1,107 @@
+.font-pairing {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Its own colour for the same reason .header-colors-heading has one: the
+   shared .admin-section-heading class is only enforced on <h2>s, and a
+   sub-heading left inheriting the body's --light-text renders near-white on
+   this pale card (#457). */
+.font-pairing-heading {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 400;
+  color: #181818;
+}
+
+.font-pairing-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* One card per choice, the whole card clickable — the sample IS the label,
+   so the target should be the sample, not a dot beside it. */
+.font-pairing-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 12px;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  /* Slightly lighter than the card it sits on, so the options read as a
+     group of separate things without needing lines between them. */
+  background-color: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+}
+
+.font-pairing-option:hover {
+  border-color: #6d3513b5;
+}
+
+/* The chosen one is marked twice — the radio and this border — because at
+   a glance the samples differ from each other far more than the dots do. */
+.font-pairing-option.chosen {
+  border-color: #6d3513;
+  background-color: rgba(255, 255, 255, 0.75);
+}
+
+.font-pairing-radio {
+  /* Nudged onto the name's line rather than the top of the card. */
+  margin: 4px 0 0;
+  flex: none;
+  cursor: pointer;
+}
+
+.font-pairing-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.font-pairing-name {
+  font-family: var(--font-ui);
+  font-size: 15px;
+  color: #181818;
+}
+
+.font-pairing-description {
+  font-family: var(--font-ui);
+  font-size: var(--admin-prose-size);
+  max-width: var(--admin-prose-measure);
+  color: var(--muted-text);
+}
+
+/* The sample itself: no font-family here on purpose — it is set inline
+   from the pairing's own stack (see font-pairing-section.tsx). */
+.font-pairing-sample {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+  /* Reading size, not caption size: the point is how the poems will look. */
+  font-size: 20px;
+  color: #181818;
+}
+
+/* Long enough to break awkwardly at 390px if left to wrap mid-phrase. */
+.font-pairing-sample-line {
+  overflow-wrap: anywhere;
+}
+
+.font-pairing-caption {
+  font-size: 14px;
+  color: var(--muted-text);
+  overflow-wrap: anywhere;
+}

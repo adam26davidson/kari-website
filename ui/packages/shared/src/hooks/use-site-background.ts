@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { SiteSettings } from "../models";
 import { SiteSettingsService } from "../services/site-settings";
 import { isHexColor } from "../utils/color";
+import { ensureFontStylesheet, getFontPairing } from "../utils/fonts";
 import {
   legacyS3ImageUrl,
   s3ImageUrl,
@@ -39,8 +40,38 @@ const applyHeaderColors = (settings: SiteSettings) => {
 };
 
 /**
+ * The custom properties a chosen pairing publishes, mirroring
+ * HEADER_COLOR_PROPERTIES: index.css defines all three in `:root`, so
+ * leaving them unset is what makes the built-in typefaces paint.
+ */
+const FONT_PROPERTIES = [
+  "--font-body",
+  "--font-ui",
+  "--display-weight",
+] as const;
+
+const applyFontPairing = (settings: SiteSettings) => {
+  // Absent, "" and an id we no longer ship all mean "the site's usual
+  // fonts", which is the appearance an unset token already produces.
+  const pairing = getFontPairing(settings.fontPairing);
+  if (!pairing) return;
+  // The stylesheet first: the properties below are inert until the faces
+  // they name have somewhere to come from.
+  ensureFontStylesheet(pairing);
+  document.body.style.setProperty("--font-body", pairing.bodyFamily);
+  document.body.style.setProperty("--font-ui", pairing.uiFamily);
+  // The pairing carries its own light weight because most of these faces
+  // have no 300 cut; see utils/fonts.ts.
+  document.body.style.setProperty(
+    "--display-weight",
+    String(pairing.displayWeight),
+  );
+};
+
+/**
  * Applies the admin-selected site appearance: the background photo, if one
- * is set, and the header's bar/title/nav colours, if any are.
+ * is set, the header's bar/title/nav colours, if any are, and — only when
+ * the caller opts in — the chosen typeface pairing.
  *
  * The page background is painted by `body::before` (index.css) with the
  * bundled default image. When site-settings.json names a custom photo,
@@ -50,8 +81,16 @@ const applyHeaderColors = (settings: SiteSettings) => {
  * alike). The header colours work the same way, as custom properties
  * header.css falls back from. Any fetch failure — including the settings
  * object simply not existing yet — leaves the default appearance in place.
+ *
+ * `applyFonts` is opt-in because BOTH apps call this hook, for the shared
+ * background, and the typeface setting is the public site's alone: the
+ * admin is a workshop, not a page of the site, and #212/#592 own what it
+ * is set in. Only apps/public passes it.
  */
-export function useSiteBackground(): void {
+export function useSiteBackground(
+  options: { applyFonts?: boolean } = {},
+): void {
+  const { applyFonts = false } = options;
   useEffect(() => {
     let cancelled = false;
     const apply = async () => {
@@ -62,6 +101,7 @@ export function useSiteBackground(): void {
         // over the built-in background, so this must not sit behind the
         // "no photo configured" return below.
         applyHeaderColors(settings);
+        if (applyFonts) applyFontPairing(settings);
         if (!settings.backgroundPhoto) return;
         const photo = settings.backgroundPhoto;
         applyBackground(s3ImageUrl(photo));
@@ -88,6 +128,13 @@ export function useSiteBackground(): void {
       for (const [, property] of HEADER_COLOR_PROPERTIES) {
         document.body.style.removeProperty(property);
       }
+      // The injected <link> is deliberately left behind; see
+      // ensureFontStylesheet.
+      for (const property of FONT_PROPERTIES) {
+        document.body.style.removeProperty(property);
+      }
     };
+    // applyFonts is a compile-time choice per app, never a changing value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }

@@ -17,26 +17,57 @@ import {
 } from "@kari/shared/utils/background-image";
 import defaultBackground from "@kari/shared/assets/petals_on_ground.webp";
 import { HeaderColorsSection } from "./header-colors-section";
+import { FontPairingSection } from "./font-pairing-section";
 
 const DEFAULT_SETTINGS: SiteSettings = { backgroundPhoto: "" };
 
+/**
+ * Every field the page edits, grouped by the thing it changes, with what a
+ * save that touched only that group should say it saved.
+ *
+ * Grouped rather than listed because the confirmation has to name what was
+ * actually kept: "Site background saved" after a font change would read as
+ * the wrong thing having been saved. The groups also stop that message
+ * being derived positionally — it used to be "every field but the first",
+ * which silently mis-reports the moment a field is appended.
+ */
+const SETTINGS_GROUPS = [
+  { message: "Site background saved", fields: ["backgroundPhoto"] },
+  {
+    message: "Header colours saved",
+    fields: ["headerBackgroundColor", "headerTitleColor", "headerNavColor"],
+  },
+  { message: "Site fonts saved", fields: ["fontPairing"] },
+] as const satisfies ReadonlyArray<{
+  message: string;
+  fields: ReadonlyArray<keyof SiteSettings>;
+}>;
+
+/** What a save that touched more than one group (or none) says. */
+const MIXED_SAVE_MESSAGE = "Appearance settings saved";
+
 /** Every field the page edits, in the object it saves. */
-const SETTINGS_FIELDS = [
-  "backgroundPhoto",
-  "headerBackgroundColor",
-  "headerTitleColor",
-  "headerNavColor",
-] as const;
+const SETTINGS_FIELDS = SETTINGS_GROUPS.flatMap((group) => group.fields);
 
 /**
- * Whether two settings objects say the same thing. The colours are
- * optional, and the API answers with "" where freshly built local state has
- * `undefined`, so the two have to compare equal — otherwise every load of a
- * settings object written before the colours existed would look like an
- * unsaved edit and the guard would fire on the way out.
+ * Whether two settings objects say the same thing. Everything but the photo
+ * is optional, and the API answers with "" where freshly built local state
+ * has `undefined`, so the two have to compare equal — otherwise every load
+ * of a settings object written before the colours or the fonts existed
+ * would look like an unsaved edit and the guard would fire on the way out.
  */
 const sameSettings = (a: SiteSettings, b: SiteSettings) =>
   SETTINGS_FIELDS.every((field) => (a[field] ?? "") === (b[field] ?? ""));
+
+/** What to tell her a save kept, given what it actually changed. */
+const saveMessage = (next: SiteSettings, previous: SiteSettings) => {
+  const changed = SETTINGS_GROUPS.filter((group) =>
+    group.fields.some(
+      (field) => (next[field] ?? "") !== (previous[field] ?? ""),
+    ),
+  );
+  return changed.length === 1 ? changed[0].message : MIXED_SAVE_MESSAGE;
+};
 
 export function AdminBackgroundPage() {
   const { isLoading, showLoading, hideLoading, notify } = useAdminUi();
@@ -53,7 +84,7 @@ export function AdminBackgroundPage() {
   useUnsavedChanges(!!imageFile || !sameSettings(settings, savedSettings));
 
   const fetchData = async () => {
-    showLoading("Loading site background...");
+    showLoading("Loading the site's appearance...");
     setLoadFailed(false);
     try {
       const [loadedSettings, images] = await Promise.all([
@@ -79,7 +110,7 @@ export function AdminBackgroundPage() {
   }, []);
 
   const saveData = async () => {
-    showLoading("Updating site background...");
+    showLoading("Saving the site's appearance...");
     try {
       const newSettings = { ...settings };
       if (imageFile) {
@@ -122,16 +153,7 @@ export function AdminBackgroundPage() {
       ) {
         setExistingImages([newSettings.backgroundPhoto, ...existingImages]);
       }
-      // Name what was actually saved: a colour edit that answered "Site
-      // background saved" would read as the wrong thing having been kept.
-      const colorsChanged = SETTINGS_FIELDS.slice(1).some(
-        (field) => (newSettings[field] ?? "") !== (savedSettings[field] ?? ""),
-      );
-      notify(
-        colorsChanged
-          ? "Background and header colours saved"
-          : "Site background saved",
-      );
+      notify(saveMessage(newSettings, savedSettings));
     } catch (error) {
       console.error(error);
       notify(
@@ -160,7 +182,7 @@ export function AdminBackgroundPage() {
   if (loadFailed) {
     return (
       <LoadError
-        message="Failed to load the site background settings."
+        message="Failed to load the site's appearance settings."
         onRetry={fetchData}
       />
     );
@@ -229,6 +251,10 @@ export function AdminBackgroundPage() {
                 </details>
               )}
               <HeaderColorsSection
+                settings={settings}
+                onChange={(change) => setSettings({ ...settings, ...change })}
+              />
+              <FontPairingSection
                 settings={settings}
                 onChange={(change) => setSettings({ ...settings, ...change })}
               />

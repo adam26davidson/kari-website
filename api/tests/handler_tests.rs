@@ -350,6 +350,7 @@ fn default_site_settings() -> serde_json::Value {
         "headerBackgroundColor": "",
         "headerTitleColor": "",
         "headerNavColor": "",
+        "fontPairing": "",
     })
 }
 
@@ -370,6 +371,7 @@ async fn site_settings_round_trip_through_store() {
         "headerBackgroundColor": "#123456cc",
         "headerTitleColor": "#ffeedd",
         "headerNavColor": "#001122",
+        "fontPairing": "shippori",
     });
     let (status, body) = send(app.clone(), put_json("/site-settings", data.clone())).await;
     assert_eq!(status, StatusCode::OK);
@@ -395,10 +397,11 @@ async fn get_site_settings_tolerates_missing_background_field() {
 }
 
 #[tokio::test]
-async fn get_site_settings_tolerates_a_legacy_object_without_colours() {
-    // Everything stored before the header colours existed is this shape.
-    // It has to keep parsing — a 500 here would brick the GC sweep too —
-    // and the missing colours have to read back as "use the defaults".
+async fn get_site_settings_tolerates_a_legacy_object_without_appearance_fields() {
+    // Everything stored before the header colours and the font pairing
+    // existed is this shape. It has to keep parsing — a 500 here would
+    // brick the GC sweep too — and every missing field has to read back as
+    // "use the defaults".
     let (_, app) = setup_with(
         InMemoryStore::default()
             .with_object("site-settings.json", r#"{"backgroundPhoto":"bg.webp"}"#),

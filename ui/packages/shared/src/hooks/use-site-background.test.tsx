@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { useSiteBackground } from "./use-site-background";
 import { SiteSettingsService } from "../services/site-settings";
+import { getFontPairing } from "../utils/fonts";
 
 vi.mock("../services/site-settings", () => ({
   SiteSettingsService: {
@@ -19,11 +20,16 @@ const HEADER_COLOR_PROPERTIES = [
   "--header-nav-color",
 ];
 
+const FONT_PROPERTIES = ["--font-body", "--font-ui", "--display-weight"];
+
 afterEach(() => {
   delete document.body.dataset.customBackground;
   document.body.style.removeProperty("--site-background");
-  for (const property of HEADER_COLOR_PROPERTIES) {
+  for (const property of [...HEADER_COLOR_PROPERTIES, ...FONT_PROPERTIES]) {
     document.body.style.removeProperty(property);
+  }
+  for (const link of document.head.querySelectorAll("link[data-font-pairing]")) {
+    link.remove();
   }
   vi.unstubAllGlobals();
 });
@@ -32,6 +38,18 @@ afterEach(() => {
 const headerColors = () =>
   HEADER_COLOR_PROPERTIES.map((property) =>
     document.body.style.getPropertyValue(property),
+  );
+
+/** The three font custom properties as <body> currently has them. */
+const fontProperties = () =>
+  FONT_PROPERTIES.map((property) =>
+    document.body.style.getPropertyValue(property),
+  );
+
+/** The pairing ids whose stylesheets have been added to <head>. */
+const linkedPairings = () =>
+  Array.from(document.head.querySelectorAll("link[data-font-pairing]")).map(
+    (link) => link.getAttribute("data-font-pairing"),
   );
 
 /**
@@ -288,5 +306,116 @@ describe("useSiteBackground header colours", () => {
     unmount();
 
     expect(headerColors()).toEqual(["", "", ""]);
+  });
+});
+
+// The typeface pairing is admin-settable too (#483), but unlike the colours
+// it is published only when the caller asks for it: this hook runs in the
+// admin app as well, and the admin chrome stays on the site's built-in
+// faces whatever the public site is set to.
+describe("useSiteBackground fonts", () => {
+  const SHIPPORI = getFontPairing("shippori")!;
+
+  it("applies the chosen pairing's two faces and its display weight", async () => {
+    vi.mocked(SiteSettingsService.getFromS3).mockResolvedValue({
+      backgroundPhoto: "",
+      fontPairing: "shippori",
+    });
+
+    renderHook(() => useSiteBackground({ applyFonts: true }));
+
+    await waitFor(() =>
+      expect(fontProperties()).toEqual([
+        SHIPPORI.bodyFamily,
+        SHIPPORI.uiFamily,
+        String(SHIPPORI.displayWeight),
+      ]),
+    );
+    expect(linkedPairings()).toEqual(["shippori"]);
+  });
+
+  it("applies fonts alongside a photo and colours, not instead of them", async () => {
+    vi.mocked(SiteSettingsService.getFromS3).mockResolvedValue({
+      backgroundPhoto: "bg.webp",
+      headerTitleColor: "#ffeedd",
+      fontPairing: "shippori",
+    });
+
+    renderHook(() => useSiteBackground({ applyFonts: true }));
+
+    await waitFor(() =>
+      expect(document.body.dataset.customBackground).toBe("true"),
+    );
+    expect(headerColors()).toEqual(["", "#ffeedd", ""]);
+    expect(fontProperties()[0]).toBe(SHIPPORI.bodyFamily);
+  });
+
+  it("leaves the admin's own chrome alone when fonts are not opted into", async () => {
+    // The admin app calls this hook for the background photo. If the
+    // pairing came with it, choosing new site fonts would silently restyle
+    // the workshop as well as the site.
+    vi.mocked(SiteSettingsService.getFromS3).mockResolvedValue({
+      backgroundPhoto: "bg.webp",
+      fontPairing: "shippori",
+    });
+
+    renderHook(() => useSiteBackground());
+
+    await waitFor(() =>
+      expect(document.body.dataset.customBackground).toBe("true"),
+    );
+    expect(fontProperties()).toEqual(["", "", ""]);
+    expect(linkedPairings()).toEqual([]);
+  });
+
+  it.each([
+    ["a settings object written before the field existed", undefined],
+    ["an explicitly empty pairing", ""],
+    ["a pairing id we do not ship", "helvetica-forever"],
+  ])("keeps the built-in faces for %s", async (_name, fontPairing) => {
+    vi.mocked(SiteSettingsService.getFromS3).mockResolvedValue({
+      backgroundPhoto: "",
+      ...(fontPairing === undefined ? {} : { fontPairing }),
+    });
+
+    renderHook(() => useSiteBackground({ applyFonts: true }));
+
+    await waitFor(() =>
+      expect(SiteSettingsService.getFromS3).toHaveBeenCalledOnce(),
+    );
+    // Unset, not set-to-the-default: an unset token is what makes the
+    // stylesheet paint its own value.
+    expect(fontProperties()).toEqual(["", "", ""]);
+    expect(linkedPairings()).toEqual([]);
+  });
+
+  it("keeps the built-in faces when the settings cannot be fetched", async () => {
+    vi.mocked(SiteSettingsService.getFromS3).mockRejectedValue(
+      new Error("Failed to fetch site settings (HTTP 404)"),
+    );
+
+    renderHook(() => useSiteBackground({ applyFonts: true }));
+
+    await waitFor(() =>
+      expect(SiteSettingsService.getFromS3).toHaveBeenCalledOnce(),
+    );
+    expect(fontProperties()).toEqual(["", "", ""]);
+  });
+
+  it("removes the font properties on unmount", async () => {
+    vi.mocked(SiteSettingsService.getFromS3).mockResolvedValue({
+      backgroundPhoto: "",
+      fontPairing: "shippori",
+    });
+
+    const { unmount } = renderHook(() => useSiteBackground({ applyFonts: true }));
+    await waitFor(() => expect(fontProperties()[0]).toBe(SHIPPORI.bodyFamily));
+
+    unmount();
+
+    expect(fontProperties()).toEqual(["", "", ""]);
+    // The stylesheet link deliberately stays: it is cached and inert, and
+    // dropping it would cost a fresh swap on the next mount.
+    expect(linkedPairings()).toEqual(["shippori"]);
   });
 });
