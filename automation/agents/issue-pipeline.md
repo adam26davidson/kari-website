@@ -1,7 +1,7 @@
 ---
 name: issue-pipeline
 enabled: true
-every: 2h
+every: 6h
 model: fable
 fallback: opus   # capacity errors switch mid-session; a Fable quota
                  # exhaustion retries the whole tick on Opus (#515)
@@ -16,7 +16,7 @@ about the failure in Phase C rather than aborting everything.
 
 ## Budget
 
-    MAX_IN_FLIGHT = 3
+    MAX_IN_FLIGHT = 1
 
 That is the only place this number is written down, and the tick cadence
 lives in the `every:` frontmatter above — those two values are the whole
@@ -443,7 +443,7 @@ hands over the kept branch and/or patch.
 2. Walk the slices in step 3's order, reading a candidate fully
    (`gh issue view <n> --comments`) only when you reach it, and stop
    reading once you have your selection(s) — the shortlist exists so a
-   tick reads a handful of issues, not ~130 bodies every 2 hours.
+   tick reads a handful of issues, not ~130 bodies every 6 hours.
    For each candidate you reach, judge readiness: is the desired
    outcome unambiguous enough to build
    without product decisions you'd be guessing at? If not, post ONE

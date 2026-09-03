@@ -195,7 +195,7 @@ What you can send:
 
 A nudge is a file the next tick consumes: it treats every enabled agent
 as due, so an answer is acted on within one 15-minute poll instead of
-waiting out the rest of a 2h cadence. `--dry-run` and `--status` never
+waiting out the rest of a 6h cadence. `--dry-run` and `--status` never
 poll and never consume it — diagnostics change nothing.
 
 What the dispatcher sends, each rate-limited to one message per
