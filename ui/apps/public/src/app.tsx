@@ -49,7 +49,9 @@ function RouteFallback() {
 export function App() {
   const [showingMobileMenu, setShowingMobileMenu] = useState(false);
   const isMobile = useIsMobile();
-  useSiteBackground();
+  // The typefaces are the public site's setting alone — the admin app calls
+  // the same hook without this option, so its chrome stays put (#483).
+  useSiteBackground({ applyFonts: true });
   // No /admin route and no Auth0 boundary: the admin section is a separate
   // app served under /admin (issue #591), reached from the header by a plain
   // link that leaves this SPA.

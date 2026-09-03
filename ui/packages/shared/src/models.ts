@@ -31,12 +31,20 @@ export interface HomePageData {
  * redeployed, so every reader has to treat absent and "" identically.
  * Anything that is not a hex colour of the right length is ignored by
  * useSiteBackground, which leaves the built-in appearance in place.
+ *
+ * fontPairing is the id of one of the typeface pairings in
+ * utils/fonts.ts — "", or absent, meaning the site's built-in pair. It is
+ * an id rather than a family name so the set of possible values is one we
+ * have actually looked at on the real pages; an id that is not in that
+ * list is ignored the same way an unparseable colour is, leaving the
+ * stylesheet's own defaults in place.
  */
 export interface SiteSettings {
   backgroundPhoto: string;
   headerBackgroundColor?: string;
   headerTitleColor?: string;
   headerNavColor?: string;
+  fontPairing?: string;
 }
 
 export interface BlogPost {

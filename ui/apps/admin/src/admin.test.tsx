@@ -107,7 +107,7 @@ describe("Admin menu", () => {
       "Haiga",
       "Photography",
       "Other works",
-      "Background",
+      "Appearance",
       "Image cleanup",
     ]);
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
@@ -132,7 +132,7 @@ describe("Admin menu", () => {
     ["Haiga", "haiga-page-stub"],
     ["Photography", "photography-page-stub"],
     ["Other works", "other-works-page-stub"],
-    ["Background", "background-page-stub"],
+    ["Appearance", "background-page-stub"],
     ["Image cleanup", "image-gc-page-stub"],
   ])("switches to %s on click", (label, stub) => {
     renderAdmin();

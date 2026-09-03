@@ -95,7 +95,7 @@
      on .admin-data-list-item below. */
   backdrop-filter: blur(10px);
   color: var(--muted-text);
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
 }
 
 /* The count sits under the search box and should stay quiet: it is a

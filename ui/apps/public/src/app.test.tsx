@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { App } from "./app";
 import { useIsMobile } from "@kari/shared/hooks/use-is-mobile";
-import { SiteSettingsService } from "@kari/shared/services/site-settings";
+import { useSiteBackground } from "@kari/shared/hooks/use-site-background";
 
 // App is a shell: Header + routes. Mock the lazy page modules to light
 // stubs so these tests exercise routing without pulling in every page's
@@ -33,14 +33,13 @@ vi.mock("@kari/shared/hooks/use-is-mobile", () => ({
 }));
 
 // App calls useSiteBackground, which reads site-settings.json straight
-// from S3. Nothing here asserts on the background, and an unstubbed call
-// reaches for a hostname that does not resolve — a real network attempt
-// per test, each one logging a fetch failure over the run's output. The
-// hook's own behaviour is covered in use-site-background.test.tsx.
-vi.mock("@kari/shared/services/site-settings", () => ({
-  SiteSettingsService: {
-    getFromS3: vi.fn(),
-  },
+// from S3; unstubbed it reaches for a hostname that does not resolve — a
+// real network attempt per test, each one logging a fetch failure over the
+// run's output. Mocked at the hook rather than at the service it calls, so
+// the OPTIONS App passes are assertable here (see the applyFonts test
+// below); the hook's own behaviour is covered in use-site-background.test.tsx.
+vi.mock("@kari/shared/hooks/use-site-background", () => ({
+  useSiteBackground: vi.fn(),
 }));
 
 function renderApp(path: string) {
@@ -52,12 +51,9 @@ function renderApp(path: string) {
 }
 
 beforeEach(() => {
-  vi.mocked(useIsMobile).mockReturnValue(false);
   // Re-stubbed per test: setup.ts's vi.restoreAllMocks() drops any
   // implementation set at mock-declaration time.
-  vi.mocked(SiteSettingsService.getFromS3).mockResolvedValue({
-    backgroundPhoto: "",
-  });
+  vi.mocked(useIsMobile).mockReturnValue(false);
 });
 
 afterEach(() => {
@@ -97,6 +93,17 @@ describe("App", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(container.querySelector(".content")).toBeEmptyDOMElement();
+  });
+
+  // The single line that turns admin-chosen typefaces on for the whole
+  // public site (#483). `applyFonts` defaults to false — both apps call
+  // this hook for the shared background, and only this one wants the
+  // fonts — so dropping the argument would silently stop every public
+  // page honouring the setting while every other test here, the hook's
+  // own tests and the e2e run all stayed green.
+  it("opts the public site into the admin's font pairing", () => {
+    renderApp("/");
+    expect(useSiteBackground).toHaveBeenCalledWith({ applyFonts: true });
   });
 
   it("redirects /blog to /other-works", async () => {

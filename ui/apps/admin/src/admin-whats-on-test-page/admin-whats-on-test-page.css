@@ -14,7 +14,7 @@
   border-radius: 3px;
   background-color: rgba(226, 226, 226, 0.8);
   backdrop-filter: blur(10px);
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
   color: #181818;
 }
 

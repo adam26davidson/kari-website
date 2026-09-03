@@ -23,5 +23,5 @@
   justify-content: center;
   width: fit-content;
   color: #181818;
-  font-family: "Roboto", sans-serif;
+  font-family: var(--font-ui);
 }
