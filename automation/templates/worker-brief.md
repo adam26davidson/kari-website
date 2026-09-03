@@ -137,8 +137,8 @@ scoped enough to plan yourself.
   the MinIO container); the dispatcher reaps whatever survives your
   session, but a stack left running wastes RAM for the rest of it. Without `E2E_AUTH0_*` env vars you can only
   capture public pages — note in the PR that admin pages rely on CI's
-  visual review, and see CLAUDE.md's Visual Checks section for how much
-  local capture is worth when the change is admin-only.
+  visual review, and read `docs/visual-checks.md` for how much local
+  capture is worth when the change is admin-only.
 - Admin UI changes (anything that changes what `/admin` shows,
   including copy and empty/error/success states): read
   `docs/ui-design-brief.md` first and self-check against its reviewer
