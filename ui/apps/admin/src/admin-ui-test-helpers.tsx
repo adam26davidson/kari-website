@@ -90,7 +90,10 @@ export function renderAdminPage(
 export async function navigateInTest(router: DataRouter, to: To | number) {
   await act(async () => {});
   await act(async () => {
-    // A number is a history delta: navigate(-1) is the back button.
+    // The two arms look identical on purpose: `navigate` is overloaded
+    // (a path, or a history delta -- navigate(-1) is the back button) and
+    // TypeScript will not resolve an overload against the `To | number`
+    // union, so the call has to be made once per narrowed type.
     await (typeof to === "number" ? router.navigate(to) : router.navigate(to));
   });
 }
