@@ -61,8 +61,5 @@ would otherwise be policed by nothing.
 The PR coverage comment carries a row per workspace plus the total, which
 is the number to bump a floor from — never a local one (#398).
 
-The coverage floors in `ui/vitest.config.ts` are the most conflict-prone
-lines in the repo when several PRs are open. If two PRs both bump them,
-whichever merges second must re-measure on the merged tree
-(`npm run test:coverage`) and set floors just below the NEW actuals — don't
-blindly keep either side of the conflict.
+When two open PRs both bump the floors, CLAUDE.md's Parallel Sessions
+section has the rule for resolving the conflict.

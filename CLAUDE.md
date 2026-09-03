@@ -43,26 +43,35 @@ Repo:
 - `aws sso login` — before running the API against AWS
 - `./scripts/sync_s3_prod_to_test.sh` — sync production S3 to test
 
-### Read before you start
-
-- Before starting a dev stack, running `test:e2e` locally, logging into
-  the local admin app, or working in a fresh worktree:
-  `docs/local-development.md`.
-- Before adding tests, or when a coverage floor fails: `docs/testing.md`.
-- Before changing any `*.sh` (anywhere, including `automation/`) or any
-  `.github/workflows/*`: `docs/linting.md` — and run
-  `./scripts/lint-workflows.sh` before pushing.
-- Before adding, removing or upgrading a dependency by hand, or when
-  `npm ci` warns or fails to resolve: `docs/dependency-management.md`.
-- Before touching image upload, storage or GC code, and before running a
-  bucket migration: `docs/image-storage.md`.
-- Before changing anything the `/admin` pages show (components, copy,
-  empty/error/success states, dialogs): `docs/ui-design-brief.md`.
-- One-time deployment infrastructure setup:
-  `docs/test-deployment-setup.md`.
-
-CI (`.github/workflows/ci.yml`) runs all of the above on every pull
+CI (`.github/workflows/ci.yml`) runs every one of these on each pull
 request, plus a `coverage` job that posts a coverage comment.
+
+## Read the doc before you start
+
+Each line below is a trigger. If you are about to do the thing on the
+left, read the doc on the right FIRST — the rules in this file are
+deliberately short, and the doc holds the part that bites.
+
+- Starting a dev stack, running `test:e2e` locally, logging into the
+  local admin app, working in a fresh worktree, or touching
+  `ui/scripts/serve.mjs` (it mirrors the deployed nginx vhost by hand) →
+  `docs/local-development.md`
+- Adding or changing tests, or a coverage floor has failed →
+  `docs/testing.md`
+- Changing any `*.sh` (anywhere, including `automation/`) or any
+  `.github/workflows/*` → `docs/linting.md`, and run
+  `./scripts/lint-workflows.sh` before pushing
+- Adding, removing or upgrading a dependency by hand, editing
+  `renovate.json`, or `npm ci` warned or failed to resolve →
+  `docs/dependency-management.md`
+- Touching image upload, storage or GC code, or running a bucket
+  migration → `docs/image-storage.md`
+- Capturing screenshots for an admin-only change, or reproducing
+  something CI's visual review reported → `docs/visual-checks.md`
+- Changing anything the `/admin` pages show (components, copy,
+  empty/error/success states, dialogs) → `docs/ui-design-brief.md`
+- Setting up deployment infrastructure (one-time) →
+  `docs/test-deployment-setup.md`
 
 ## UI Layout (npm workspaces)
 
@@ -204,16 +213,13 @@ right".
   lower the branch percentage even when every test passes.
 - `test:coverage` runs `npm run typecheck` first, so that covers the type
   check; add `npm run typecheck:e2e` yourself if you touched `e2e/`.
-  Neither vitest (which transpiles without checking types) nor eslint (not
-  type-aware here) sees type errors, so a bare `vitest run` + `lint` can be
-  green while CI's build fails on something as small as an implicit-`any`
-  callback parameter in a `*.test.tsx` — and that failure takes the e2e and
-  screenshot jobs down with it, since their webServer builds the test
-  bundle.
+  Neither vitest nor eslint sees type errors here, so a bare `vitest run`
+  + `lint` can be green while CI's build fails — and that failure takes
+  the e2e and screenshot jobs down with it.
 - Before pushing shell or workflow changes (`*.sh` anywhere in the repo,
   including `automation/`, and `.github/workflows/*`), run
-  `./scripts/lint-workflows.sh`. It is the same script CI's `shell-lint`
-  job runs, and it needs nothing installed; see `docs/linting.md`.
+  `./scripts/lint-workflows.sh` — the same script CI's `shell-lint` job
+  runs, needing nothing installed.
 - Undoing a temporary edit (a mutation-test tweak, a debug print): copy the
   file aside first (`cp f f.bak`, restore with `cp f.bak f`) or `git stash`
   / commit WIP. Never `git checkout -- <file>` or `git restore <file>` for
