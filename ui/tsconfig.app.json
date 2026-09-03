@@ -36,5 +36,17 @@
   // the same program as the apps that import it rather than behind a build
   // step of its own.
   "include": ["apps/*/src", "packages/*/src"],
-  "exclude": ["**/*.test.ts", "**/*.test.tsx"]
+  // `packages/*/src/test/**` is test infrastructure, not browser code: only
+  // *.test.* files import it, and it touches process.env. It has to be
+  // excluded here for the same reason the test files themselves are --
+  // "types": [] above leaves Node globals undeclared. Until vitest 4 it got
+  // away with being in this program, because vitest 2's types referenced
+  // Node's and so declared `process` transitively for anything importing
+  // vitest; vitest 4 stopped doing that, which surfaced it (#529).
+  // tsconfig.test.json includes packages/*/src in full, so these files are
+  // still type-checked -- there, with Node types, which is where they run.
+  // Excluding a file only drops it as a ROOT of this program: if browser
+  // code ever imports it, TypeScript pulls it back in and the missing
+  // `process` fails the build again, which is the guard working.
+  "exclude": ["**/*.test.ts", "**/*.test.tsx", "packages/*/src/test/**"]
 }
