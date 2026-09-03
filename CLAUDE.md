@@ -3,60 +3,69 @@
 This file provides guidance to Claude Code (claude.ai/code) when working
 with code in this repository.
 
-## Build Commands
-- `./scripts/setup-worktree.sh` - One-time setup for a fresh worktree (UI
-  dependencies + the Playwright browser the visual check needs). Idempotent
-  and cheap to re-run; see Parallel Sessions below.
-- `./scripts/dev.sh` - Start the whole dev stack (MinIO + seed + API + both
-  UI dev servers, public and admin);
-  `--aws` targets the real test bucket via SSO instead of local MinIO. It
-  runs `setup-worktree.sh` first, so a stack always starts against
-  lockfile-matching dependencies; that script's skip check keeps a warm
-  start cheap.
-  Stacks are per-worktree: compose's directory-based project naming keeps
-  each worktree's MinIO container separate, and dev.sh uses the default
-  ports (MinIO 9000, API 3000) when free but picks free ports otherwise
-  (override with `KARI_MINIO_PORT` / `KARI_API_PORT`; `KARI_MINIO_PORT=0`
-  means ephemeral). It prints the chosen URLs at startup and wires them
-  into the UI/API via env vars, so N stacks can run in parallel and
-  `docker compose down` in one worktree never touches another's stack.
-- UI: `npm run dev` - Start the PUBLIC site's dev server (like the rest of
-  the local toolchain it targets the local MinIO + localhost:3000 API from
-  `.env.development`; the real AWS test bucket is opt-in via
-  `./scripts/dev.sh --aws` — no vite mode silently reads AWS)
-- UI: `npm run dev:admin` - Start the ADMIN app's dev server on its own port
-  (5174 by default, so two vites can run side by side). It is a separate app
-  (see UI Layout below), so plain `npm run dev` does not start it —
-  `dev.sh` does, alongside the public one. Note that its Auth0 callback is
-  `<origin>/admin`, so logging in locally needs the port it comes up on
-  allowlisted in the Auth0 application. The default 5174 IS allowlisted
-  (#633: callback `http://localhost:5174/admin`, logout URL and web origin
-  `http://localhost:5174`), so a stack on the default port completes a real
-  login round-trip — local admin verification works, don't skip it. A
-  parallel stack that vite bumps to 5175 is NOT, and fails there with a
-  callback mismatch until someone adds that origin too (#630). A fixed
-  default port is what makes that one-time allowlisting possible at all.
-- UI: `npm run build` - Build production UI (both apps, into one `ui/dist`)
-- UI: `npm run build:test` - Build UI for test environment
-- UI: `npm run preview` - Serve a built `ui/dist` on 4173. NOT `vite
-  preview`: `ui/scripts/serve.mjs` stands in for it because the merged dist
-  needs two SPA fallback documents (`/admin*` gets the admin one). It is the
-  permanent local mirror of the deployed nginx vhost's fallback rule, not a
-  stopgap — running real nginx would make docker a prerequisite of
-  `preview`, `test:e2e` and the visual-review job without testing the actual
-  (out-of-repo, hand-maintained) vhost. The two are kept in step by hand:
-  change the rule in `serve.mjs` and the vhost needs the matching change.
-- UI: `npm run lint` - Lint TypeScript code
-- UI: `npm run typecheck` - Type-check app code, tests and the vite
-  configs (`tsc -b`; every project sets `noEmit`, so nothing is written).
-  CI's Frontend job runs it as its own step, so a type error is named
-  rather than buried in a build failure. `npm run typecheck:e2e` covers the
-  Playwright specs plus the plain-`.mjs` node scripts, which are a separate
-  TS project.
-- API: `cargo watch -x 'run dev'` - Run API in watch mode
-- API: `cargo build` - Build the Rust API
+It holds the standing rules — what applies whatever you are touching. The
+reference detail behind them lives in `docs/`, reached from a trigger line
+in the rule that needs it. When a trigger matches what you are about to do,
+READ that doc first; never work from a guess at what it probably says.
+
+## Commands
+
+UI commands run from `ui/`, cargo commands from `api/` (the one exception,
+`migrate-images`, runs from the repo root — see `docs/image-storage.md`).
+
+UI:
+- `npm run dev` / `npm run dev:admin` — public / admin dev server
+- `npm run build` / `npm run build:test` — production / test-env build
+  (both apps into one `ui/dist`)
+- `npm run preview` — serve a built `ui/dist` on 4173
+- `npm run lint` — eslint
+- `npm run typecheck` — app code, tests and vite configs;
+  `npm run typecheck:e2e` — Playwright specs and `.mjs` node scripts
+- `npm run test` / `npm run test:run` — vitest, watch / once
+- `npm run test:coverage` — typecheck, then vitest with coverage
+- `npm run test:e2e` — Playwright e2e against a local seeded stack
+
+API:
+- `cargo watch -x 'run dev'` — run in watch mode; `cargo build`
+- `cargo test` — integration tests
+- `cargo clippy --all-targets -- -D warnings` — CI enforces no warnings
+- `cargo fmt --check`
+- `cargo llvm-cov --summary-only` — coverage (needs cargo-llvm-cov)
+
+Repo:
+- `./scripts/setup-worktree.sh` — fresh-worktree setup (UI dependencies +
+  the Playwright browser the visual check needs). Idempotent and cheap to
+  re-run.
+- `./scripts/dev.sh` — the whole dev stack (MinIO + seed + API + both UI
+  dev servers). `--aws` targets the real test bucket via SSO.
+- `./scripts/lint-workflows.sh` — actionlint + shellcheck over `.github/`
+  and every `*.sh` in the repo
+- `aws sso login` — before running the API against AWS
+- `./scripts/sync_s3_prod_to_test.sh` — sync production S3 to test
+
+### Read before you start
+
+- Before starting a dev stack, running `test:e2e` locally, logging into
+  the local admin app, or working in a fresh worktree:
+  `docs/local-development.md`.
+- Before adding tests, or when a coverage floor fails: `docs/testing.md`.
+- Before changing any `*.sh` (anywhere, including `automation/`) or any
+  `.github/workflows/*`: `docs/linting.md` — and run
+  `./scripts/lint-workflows.sh` before pushing.
+- Before adding, removing or upgrading a dependency by hand, or when
+  `npm ci` warns or fails to resolve: `docs/dependency-management.md`.
+- Before touching image upload, storage or GC code, and before running a
+  bucket migration: `docs/image-storage.md`.
+- Before changing anything the `/admin` pages show (components, copy,
+  empty/error/success states, dialogs): `docs/ui-design-brief.md`.
+- One-time deployment infrastructure setup:
+  `docs/test-deployment-setup.md`.
+
+CI (`.github/workflows/ci.yml`) runs all of the above on every pull
+request, plus a `coverage` job that posts a coverage comment.
 
 ## UI Layout (npm workspaces)
+
 `ui/` is an npm workspace root with three workspaces (#591). One
 `ui/package-lock.json`, one `npm ci`, one `node_modules` — every command
 above still runs from `ui/`.
@@ -83,153 +92,31 @@ admin-only import from public code would still resolve and ship.
 `ui/test/config/app-boundaries.test.ts` is what actually enforces the
 split — keep it passing rather than working around it.
 
-## Dependency Install Scripts
-npm 12 (what recent Node ships locally) blocks a dependency's install
-scripts unless `allowScripts` in `ui/package.json` covers it, and ends the
-install with a warning naming everything it skipped. Every dependency that
-ships one is recorded there as `false` — reviewed and denied, not
-overlooked: the four `@fortawesome/*` scripts and `browser-tabs-lock`'s only
-`console.log` a banner, and `@swc/core`'s quietly swaps in a `@swc/wasm`
-fallback we would rather fail loudly without. Nothing needs to run, so
-`npm ci` is warning-free. (`esbuild`'s entry retired with #529: vite 8
-bundles rolldown, so esbuild is no longer in the tree at all — and
-rolldown's own platform binaries ship script-free.)
-That is the point of recording them: a warning appearing again means a NEW
-script arrived. Review it — `npm install-scripts ls` lists it — then
-`npm install-scripts deny <pkg>` (or `approve <pkg>`, if it genuinely must
-run) and commit the `package.json` change. Never silence it with
-`--dangerously-allow-all-scripts`. CI is on Node 22 / npm 10, which predates
-the field and ignores it, so this is about local output and local intent.
+## Coverage Is a Ratchet
 
-## The eslint-plugin-jsx-a11y Peer Override
-`overrides` in `ui/package.json` pins `eslint-plugin-jsx-a11y`'s `eslint`
-peer to `$eslint` (whatever the root resolves). Without it `npm ci` fails
-`ERESOLVE`: the plugin's last release (6.10.2, October 2024) declares
-`eslint@^3 || … || ^9`, and this package is on eslint 10. The plugin itself
-runs fine under 10 — `jsx-a11y/alt-text`, the one rule the config enables,
-still fires; #528 tracks removing the override once upstream ships a release
-that accepts eslint 10. This is a stale peer RANGE, not a stale plugin, so
-prefer the override to dropping the plugin (that would silently lose the
-alt-text check). Don't reach for `--legacy-peer-deps` — it would have to be
-threaded through every `npm ci` in CI.
+Coverage thresholds are floors pinned just below current numbers (UI:
+`coverage.thresholds` in `ui/vitest.config.ts`; API: `--fail-under-lines`
+in the coverage CI job). When coverage rises meaningfully, bump the floors
+in the same PR — NEVER lower them to make a PR pass. Bump from the PR
+coverage comment's numbers, never a local run (#398). Coverage is measured
+over ALL source files, not a curated subset — don't narrow the scope.
 
-## Test Commands
-- UI: `npm run test` - Vitest in watch mode
-- UI: `npm run test:run` - Vitest once (used in CI)
-- UI: `npm run test:coverage` - Type-check (`npm run typecheck`), then
-  vitest with coverage. The typecheck runs first because this is the
-  documented pre-push command (see Parallel Sessions below), so the check
-  is mechanical rather than remembered; `npm run test` / `test:run` stay
-  typecheck-free to keep the inner loop fast.
-  The vitest suite is split into two projects (the `projects` block in
-  `ui/vitest.config.ts`; it lived in a separate `vitest.workspace.ts` until
-  vitest 4 removed workspace files, #529):
-  `unit` (jsdom) for app code, and `config` (node) for tests that assert on
-  this package's own tooling. Config-level tests go in
-  `ui/test/config/` (with the CSS design invariants in `ui/test/design/`);
-  everything else defaults to `unit`. Coverage stays configured once in
-  `ui/vitest.config.ts` and is measured across both, over every workspace.
-- UI: `npm run test:e2e` - Playwright e2e tests (seeds a local S3, builds the
-  test-mode bundle, previews it, and runs smoke + visitor journeys; admin
-  journeys additionally run when `E2E_AUTH0_USERNAME` / `E2E_AUTH0_PASSWORD`
-  are set, as they are in CI). The stack is fully local and hermetic — no
-  AWS account or shared bucket. Two things must be running:
-  1. a throwaway MinIO standing in for S3, on host port 9000 (the default):
-     `docker compose up -d --wait minio` (defined in `docker-compose.yml`)
-  2. the API on localhost:3000: `cargo run` in `api/` (its `.env` already
-     targets the local MinIO; run `node e2e/seed.mjs` in `ui/` first so the
-     bucket exists for the API's health probe)
-  A dev stack started by `./scripts/dev.sh` satisfies both prerequisites
-  when it got the default ports (it prints which ports it chose). Against a
-  stack on non-default ports, export `VITE_S3_URL` / `VITE_API_URL` when
-  running `test:e2e` — env vars override `.env.test` for the seeds, specs,
-  and the built bundle alike.
-  CI starts both itself; `ui/e2e/seed.mjs` (re-run on every `test:e2e`)
-  seeds deterministic fixture content, so results never depend on what
-  happens to be in a real bucket
-- API: `cargo test` - Run Rust integration tests
-- API: `cargo llvm-cov --summary-only` - Coverage report (needs cargo-llvm-cov)
-- API: `cargo clippy --all-targets -- -D warnings` - Lint (CI enforces no
-  warnings)
-- API: `cargo fmt --check` - Formatting check
-- Workflows + shell: `./scripts/lint-workflows.sh` - four checks:
-  actionlint over `.github/` (schema, action inputs, `${{ }}` expressions,
-  shellcheck over every embedded `run:` script); every job sets a job-level
-  `timeout-minutes`; shellcheck over every `*.sh` in the repo; and every
-  pinned docker image in those scripts carries the
-  `# renovate: datasource=docker` comment that `renovate.json`'s
-  customManager keys off (without it the pin is invisible to Renovate).
-  Nothing to install — actionlint, shellcheck and yq each fall back to a
-  pinned docker image when the binary is missing, so there is never a
-  reason to hand-roll a `docker run koalaman/shellcheck` of your own. This
-  is the script CI's `shell-lint` job runs, so run it locally before
-  pushing any change to a `*.sh` file or to `.github/workflows/*`.
-  CI runs it as `--images`, which ignores installed binaries and uses the
-  pins for every tool; an installed shellcheck is whatever release the
-  machine has, and releases disagree about real findings (0.9 reds a trap
-  handler as SC2317 that the pinned 0.11 reports as SC2329). So if a local
-  run disagrees with CI, re-run with `--images` (or
-  `KARI_LINT_FORCE_IMAGES=1`) — that, not your `shellcheck --version`, is
-  the definition of clean. That
-  job also runs the shell test harnesses `automation/dispatch-test.sh`,
-  `scripts/setup-worktree-test.sh` and `scripts/lint-workflows-test.sh`.
-  Changing the lint script? Re-run its tests:
-  `bash scripts/lint-workflows-test.sh` (needs jq plus either python3 +
-  PyYAML or a real mikefarah yq, whichever the machine has)
-
-CI (`.github/workflows/ci.yml`) runs all of the above on every pull request,
-and a `coverage` job posts a whole-codebase coverage comment on each PR
-(per-file breakdown in the job summary). Coverage is measured over ALL
-source files, not a curated subset — don't narrow the scope.
-Coverage thresholds are a ratchet: floors pinned just below current numbers
-(UI: `coverage.thresholds` in `ui/vitest.config.ts`; API: `--fail-under-lines`
-in the coverage CI job). When coverage rises meaningfully, bump the floors in
-the same PR — never lower them to make a PR pass.
-The UI ratchet has two layers, and both are load-bearing: whole-run floors,
-plus a group keyed by workspace glob — `apps/public/src/**`,
-`apps/admin/src/**`, `packages/shared/src/**`. Vitest's glob groups do not
-partition the run (it checks every glob's matches AND, separately, every
-measured file against the top-level numbers), so the groups stop one
-workspace's regression hiding behind another's headroom while the whole-run
-floors stay the backstop for any file no glob names — a fourth workspace
-would otherwise be policed by nothing.
-`ui/test/config/coverage-thresholds.test.ts` pins that shape. The PR coverage
-comment carries a row per workspace plus the total, which is the number to
-bump a floor from — never a local one (#398).
-Dependency updates are managed by Renovate (`renovate.json`); non-major updates
-auto-merge once these checks pass. The exception is a package still below
-1.0.0, where a "minor" bump is breaking by convention (cargo and npm alike):
-those are labelled `major-update` and wait for a human, while 0.x patch bumps
-still auto-merge. To validate that file, pin the version —
-`npx --yes --package renovate@latest renovate-config-validator renovate.json`.
-A bare `--package renovate` can resolve a stale cached major that rejects
-current config keys (a renovate 37 in the npx cache rejected
-`managerFilePatterns`).
+`docs/testing.md` has the mechanics: the two ratchet layers, the vitest
+project split, and what to do when two open PRs both bump the floors.
 
 ## Visual Checks (required for UI changes)
-Tests assert behavior, not appearance — features have shipped green while an
-image overflowed its card or text was illegible against the background. So
-after ANY change that can affect how the UI looks (components, CSS, layout,
-`index.html`, UI dependency bumps), before claiming the work is done or
-opening a PR:
-1. In a freshly created worktree, run `./scripts/setup-worktree.sh` first —
-   nothing installable is shared from the main clone, and the capture script
-   fails without it (details under Parallel Sessions below). Then, with the
-   dev stack running (`./scripts/dev.sh`), run `node e2e/screenshots.mjs` in
-   `ui/` (add `--routes /,/haiku` to limit to affected pages; `--base-url`
-   to target a non-default server). The `in ui/` is load-bearing, and it
-   applies to any ad-hoc Playwright probe you write too: Node resolves
-   `@playwright/test` upward from the SCRIPT's own directory, not from the
-   cwd, so a probe dropped in `/tmp` or at the repo root dies with
-   `ERR_MODULE_NOT_FOUND` instead of finding `ui/node_modules`. Put
-   throwaway probes under `ui/e2e/` and run them from `ui/`.
-   Full-page desktop + tablet + mobile PNGs land in
-   `ui/e2e/screenshots/`, and the script asserts no horizontal
-   overflow at each captured width plus a few assert-only widths (exits
-   non-zero, naming the widest element, if a page overflows). Admin pages
-   (lists, editors, image cleanup) are captured too when
-   `E2E_AUTH0_USERNAME` / `E2E_AUTH0_PASSWORD` are set (as they are in CI);
-   without them the script captures the public pages only and says so.
+
+Tests assert behavior, not appearance — features have shipped green while
+an image overflowed its card or text was illegible against the background.
+So after ANY change that can affect how the UI looks (components, CSS,
+layout, `index.html`, UI dependency bumps), before claiming the work is
+done or opening a PR:
+
+1. With the dev stack running (`./scripts/dev.sh`), run
+   `node e2e/screenshots.mjs` from `ui/`. In a fresh worktree run
+   `./scripts/setup-worktree.sh` first or the capture script fails. PNGs
+   land in `ui/e2e/screenshots/`; the script also fails on horizontal
+   overflow, naming the widest element.
 2. Actually LOOK at each screenshot (Read the PNG files) and check for:
    content overflowing its container, clipped/squashed/stretched images,
    text that is hard to read against its actual rendered background,
@@ -237,36 +124,22 @@ opening a PR:
 3. Fix what you find and re-capture until the pages look right. Mention in
    the PR that the visual check was done and what it covered.
 
-CI runs the same check on PRs touching `ui/**`
-(`.github/workflows/visual-review.yml`): it captures the same screenshots
-against the seeded e2e stack and Claude reviews them, posting an advisory
-sticky PR comment (needs the `CLAUDE_CODE_OAUTH_TOKEN` repo secret, from
-`claude setup-token` — usage draws from the Claude Pro/Max subscription,
-deliberately never API credits; skips with a notice when absent). Advisory
-means treat findings as a reviewer's notes —
-address or create github issues for them, but the job never blocks a merge.
+CI runs the same capture on PRs touching `ui/**` and Claude reviews the
+images, posting an advisory PR comment — treat its findings as a
+reviewer's notes: address them or file issues, but the job never blocks a
+merge.
 
-Admin UI changes also have a design brief, `docs/ui-design-brief.md`:
-the admin should feel friendly and welcoming to its one non-technical
-user, and every change to what it shows (components, copy, empty/error/
-success states, dialogs) is judged against that brief's checklist as
-well as the visual check. Read it before starting such a change; the
+`docs/visual-checks.md` covers the rest: script flags, what CI's review
+job needs, how to download the exact images it saw, and how much local
+capture is worth when the change is admin-only and you have no
+`E2E_AUTH0_*` credentials (read it before deciding to skip a capture).
+
+Admin UI changes also have a design brief, `docs/ui-design-brief.md`: the
+admin should feel friendly and welcoming to its one non-technical user,
+and every change to what it shows is judged against that brief's checklist
+as well as the visual check. Read it before starting such a change; the
 visual check asks "does it look right", the brief asks "does it feel
 right".
-
-Admin-only changes without local credentials: when a change is confined to
-components only the admin pages render (e.g. `tiptap.tsx`, reachable only
-through the admin blog post editor) and you have no `E2E_AUTH0_*` env vars,
-local capture cannot exercise what you changed. Still run it, but know its
-purpose there is narrower: the horizontal-overflow assertions plus a
-public-page regression baseline, nothing more. Don't over-invest in
-studying public PNGs that cannot show your change — CI's visual review is
-the authoritative appearance check for admin pages, and say so in the PR.
-To reproduce a finding CI reported, download the exact images the reviewer
-saw rather than recreating them locally:
-`gh run download <run-id> -n visual-review-screenshots`. Issue #266
-(compile-time-gated fake auth) is the real fix — it would let local capture
-cover admin pages without Auth0 credentials.
 
 ## Working on GitHub Issues
 - If a github issue doesn't exist yet for what you are working on, create one.
@@ -318,19 +191,10 @@ cover admin pages without Auth0 credentials.
   the repo tree (`grep -r`, test globs, docker build contexts). Don't put
   worktrees inside the repo; harness-managed ones under `.claude/worktrees/`
   are the exception — leave those to the tooling that created them.
-- Fresh worktree setup (do this first, it is not shared from the main
-  clone): run `./scripts/setup-worktree.sh` before ANY UI command. It
-  installs `ui/node_modules` (`npm ci`, up to a minute on a cold npm cache)
-  and the Playwright chromium build the visual check needs. Without it,
-  tests and lint die with `command not found`, and
-  `node e2e/screenshots.mjs` with `ERR_MODULE_NOT_FOUND`, before any of them
-  do real work. Re-running is cheap and safe: it skips `npm ci` when
-  `ui/node_modules` already matches the lockfile, and Playwright's browsers
-  live in a cache outside `node_modules` (`~/.cache/ms-playwright`), so that
-  step is a quick no-op unless the machine is fresh or Playwright was
-  bumped. Pass `--force` to reinstall dependencies regardless. Changing this
-  script, or dev.sh's delegation to it? Re-run the tests:
-  `bash scripts/setup-worktree-test.sh`.
+- Run `./scripts/setup-worktree.sh` in a fresh worktree before ANY UI
+  command — nothing installable is shared from the main clone, so without
+  it tests, lint and the screenshot script all die before doing real work.
+  Details in `docs/local-development.md`.
 - Commit only explicitly listed paths (`git add <paths>`, never `git add -A`
   in a shared tree); treat any file outside your issue's scope as owned by
   another session.
@@ -348,8 +212,8 @@ cover admin pages without Auth0 credentials.
   bundle.
 - Before pushing shell or workflow changes (`*.sh` anywhere in the repo,
   including `automation/`, and `.github/workflows/*`), run
-  `./scripts/lint-workflows.sh` — see Test Commands above. It is the same
-  script CI's `shell-lint` job runs, and it needs nothing installed.
+  `./scripts/lint-workflows.sh`. It is the same script CI's `shell-lint`
+  job runs, and it needs nothing installed; see `docs/linting.md`.
 - Undoing a temporary edit (a mutation-test tweak, a debug print): copy the
   file aside first (`cp f f.bak`, restore with `cp f.bak f`) or `git stash`
   / commit WIP. Never `git checkout -- <file>` or `git restore <file>` for
@@ -393,66 +257,10 @@ harness-free:
 - Error handling: Proper type checking and error handling
 - keep things DRY (important)
 
-## AWS Integration
-- Deploys (`.github/workflows/deploy.yml`): every CI-green merge to `main`
-  auto-deploys to the test environment (test.karidavidson.com); the prod
-  deploy job then waits on the `production` GitHub Environment's required
-  reviewer. Both bundles are built up front from the CI-validated commit, so
-  approval promotes exactly what was reviewed on test. One-time
-  infrastructure setup: `docs/test-deployment-setup.md`.
-- Login: `aws sso login` before running API locally
-- S3 sync: `./scripts/sync_s3_prod_to_test.sh` to sync production S3 to test
-- Image GC: `POST /images/gc` (admin JWT) sweeps orphaned `images/` objects.
-  Dry-run by default; pass `?dry_run=false` to actually delete. Objects
-  modified within the last hour are always skipped (in-flight uploads), and
-  any manifest fetch/parse failure aborts the sweep before anything is deleted.
-  It classifies per IMAGE, not per object (below), so a whole prefix is kept,
-  skipped or deleted together — and reports that way too: `referenced`,
-  `orphaned`, `skipped_recent` and `deleted` each hold one
-  `{ id, keys }` entry per image, id-sorted, so the admin page's counts are
-  counts of pictures rather than of storage objects (#454).
-- Image storage layout: every uploaded image owns a key PREFIX, not one
-  object — `images/<id>/original.<ext>` (the untouched upload) plus
-  `images/<id>/thumb.jpg` (generated server-side at upload time; admin grids
-  and previews render it). The id is still the `<uuid>.<ext>` name
-  `POST /images` returns, so every stored reference (`backgroundPhoto`,
-  `haiga.image`, ...) is unchanged and only URL construction knows about
-  variants: the API takes `GET /images/<id>?size=thumb` (falling back to the
-  original when a variant is missing), while the public site, reading S3
-  directly, fetches the full path. `api/src/services/image_keys.rs` is the
-  ONE place key shapes live — build keys there, never by string-formatting.
-- Bucket migration: `migrate-images`, a subcommand of the API binary, copies
-  legacy `images/<name>` objects into the new layout, backfills thumbnails
-  and rewrites the S3 URLs in published blog HTML. Dry-run by default, and
-  idempotent, so run it, deploy, then run it again to catch uploads in
-  between. Run it from the REPO ROOT (not from `api/`):
-  `BUCKET_NAME=test.karidavidson.com cargo run --manifest-path api/Cargo.toml
-  -- migrate-images [--apply]`
-  The working directory is load-bearing, for the same reason `scripts/dev.sh`
-  starts the API from the root: `dotenv` searches the cwd and its ancestors,
-  so from `api/` it loads `api/.env` and sets `AWS_ENDPOINT_URL` to the dev
-  stack's MinIO, `AWS_REGION` to `us-east-1` and the `kari-e2e` static keys.
-  Unsetting them on the command line does NOT help — `env -u` makes them
-  unset, which is exactly the case `dotenv` fills in — so from `api/` the
-  command refuses to run ("Refusing to run against the local endpoint"), and
-  adding `--allow-local` to get past that migrates local MinIO while you
-  believe you are migrating the real bucket. From the root there is no `.env`
-  to find, so the SSO credential chain and profile region are in charge.
-  `--allow-local` is only for a deliberate rehearsal against the dev stack
-  (run it from `api/`, where `api/.env` supplies MinIO's endpoint and keys).
-  The migration is copy-only — the legacy objects stay — but it is not
-  optional before a deploy of the code that reads the new layout: the API
-  falls back to the legacy key, yet the PUBLIC site reads S3 directly, and
-  S3 has no fallback of its own. The UI therefore retries a failed public
-  image at `images/<id>` (`fallBackToLegacyS3Image` in
-  `image-management-helpers.ts`, wired into every public `<img>`, the
-  injected blog HTML and the site-background hook), so an unmigrated bucket
-  costs one wasted request per image rather than a broken page. Migrate
-  anyway, promptly — the fallback is a safety net, not the intended path,
-  and it retires with the legacy layout (#452).
-  Don't press "Image cleanup" between migrating a bucket and
-  deploying the code that understands it. Caveat for local rehearsals: MinIO
-  is filesystem-backed and will not LIST `images/<id>/…` while an object
-  exists at the exact key `images/<id>`, so a rehearsal there cannot exercise
-  the both-layouts-coexist paths (real S3, which the deployed buckets are,
-  lists both).
+## Deploys
+Every CI-green merge to `main` auto-deploys to the test environment
+(test.karidavidson.com) via `.github/workflows/deploy.yml`; the prod deploy
+job then waits on the `production` GitHub Environment's required reviewer.
+Both bundles are built up front from the CI-validated commit, so approval
+promotes exactly what was reviewed on test. One-time infrastructure setup:
+`docs/test-deployment-setup.md`.
