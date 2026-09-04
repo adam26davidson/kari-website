@@ -15,6 +15,23 @@ if (typeof window.URL.revokeObjectURL !== "function") {
   window.URL.revokeObjectURL = () => {};
 }
 
+// jsdom implements no geometry on Range at all, and ProseMirror's
+// scrollToSelection measures the caret through one (prosemirror-view's
+// coordsAtPos -> singleRect(textRange(...))). Every editor command that ends
+// in focus() reaches it, so without these the tiptap tests die on
+// "target.getClientRects is not a function" as an uncaught exception rather
+// than a test failure. jsdom does no layout, so zeroes are the honest answer;
+// ProseMirror treats a zero rect as "nothing to scroll to" and moves on.
+if (typeof Range.prototype.getClientRects !== "function") {
+  Range.prototype.getClientRects = () =>
+    Object.assign([] as DOMRect[], {
+      item: () => null,
+    }) as unknown as DOMRectList;
+}
+if (typeof Range.prototype.getBoundingClientRect !== "function") {
+  Range.prototype.getBoundingClientRect = () => new DOMRect();
+}
+
 // react-router's data router (createMemoryRouter in tests) constructs a
 // Request carrying jsdom's AbortSignal, which Node's undici Request rejects
 // with a brand check jsdom's implementation can't satisfy. Nothing in the

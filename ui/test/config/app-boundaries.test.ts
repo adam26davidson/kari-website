@@ -57,12 +57,12 @@ const SHARED_IMPORTS = importsUnder("packages/shared/src");
  */
 const ADMIN_ONLY_PACKAGES = [
   "@auth0/auth0-react",
-  "@tiptap/starter-kit",
-  "@tiptap/react",
-  "@tiptap/pm",
-  "@tiptap/extension-image",
-  "@tiptap/extension-link",
-  "@tiptap/extension-text-align",
+  // The whole @tiptap scope rather than the handful the admin app names
+  // today: which packages the editor pulls in is Tiptap's business, not
+  // ours, and it changes under us (the 2 -> 3 upgrade folded Link into
+  // StarterKit and split the lists into @tiptap/extension-list). isFrom
+  // matches any subpath, so one entry covers the scope for good.
+  "@tiptap",
 ];
 
 /** Whether `specifier` is (or is a subpath of) `pkg`. */

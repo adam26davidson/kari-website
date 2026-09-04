@@ -17,7 +17,6 @@ import "./tiptap.css";
 
 import TextAlign from "@tiptap/extension-text-align";
 import Image from "@tiptap/extension-image";
-import Link from "@tiptap/extension-link";
 import { Editor, EditorContent, useEditor } from "@tiptap/react";
 import { FormEvent, useState } from "react";
 import StarterKit from "@tiptap/starter-kit";
@@ -380,11 +379,26 @@ export function Tiptap({
   onAddImage: (image: File, id: string) => void;
 }) {
   const editor = useEditor({
+    // Tiptap 3 stopped re-rendering the React tree on every transaction.
+    // The toolbar reads isActive() straight off the editor during render,
+    // so without this the buttons and the block-style select freeze at
+    // whatever the document looked like when the editor was created.
+    shouldRerenderOnTransaction: true,
     extensions: [
-      // StarterKit already bundles Document, ListItem, and Dropcursor —
-      // registering them again triggers Tiptap's duplicate-extension warning.
-      StarterKit,
-      Link,
+      // StarterKit already bundles Document, ListItem, Dropcursor and —
+      // since Tiptap 3 — Link; registering any of them again triggers
+      // Tiptap's duplicate-extension warning.
+      StarterKit.configure({
+        // Two more of Tiptap 3's StarterKit additions change the schema,
+        // and the blog posts already in the bucket were written without
+        // them. Underline would start parsing stored <u> tags as a mark
+        // the toolbar offers no way to remove, and TrailingNode appends
+        // an empty paragraph to any document ending in a list or an
+        // image — which getHTML() then reports as an edit, so merely
+        // opening an old post would queue a save. Both stay off.
+        underline: false,
+        trailingNode: false,
+      }),
       Image.configure({
         HTMLAttributes: {
           className: "blog-post-image",
