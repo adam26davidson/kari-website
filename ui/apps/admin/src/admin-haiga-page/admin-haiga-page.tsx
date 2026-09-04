@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import "./admin-haiga-page.css";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate, useParams } from "react-router";
 import { Haiga } from "@kari/shared/models";

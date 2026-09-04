@@ -45,14 +45,16 @@
   cursor: pointer;
 }
 
+/* The same softened brown the background thumbnails hover to, for the same
+   reason: a preview of the mark, not the mark (#565). */
 .font-pairing-option:hover {
-  border-color: #6d3513b5;
+  border-color: color-mix(in srgb, var(--admin-primary) 71%, transparent);
 }
 
 /* The chosen one is marked twice — the radio and this border — because at
    a glance the samples differ from each other far more than the dots do. */
 .font-pairing-option.chosen {
-  border-color: #6d3513;
+  border-color: var(--admin-primary);
   background-color: rgba(255, 255, 255, 0.75);
 }
 

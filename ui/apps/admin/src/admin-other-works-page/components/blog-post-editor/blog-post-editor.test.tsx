@@ -175,12 +175,16 @@ describe("BlogPostEditor", () => {
   // A ticked checkbox is the one control the browser still paints itself,
   // and it paints it system blue — the only blue on a screen of warm
   // browns. jsdom applies no stylesheet, so the tint is read from the CSS.
+  // Since #565 the tint is the shared `--admin-primary` token rather than a
+  // repeated hex, so what this pins is "the admin's brown", not "some
+  // literal colour" — which is the stronger claim anyway. That the token
+  // itself is defined, and defined once, is ui/test/design's job.
   it("tints the checkbox with the admin's own colour, not the browser's", () => {
     const adminCss = readFileSync("apps/admin/src/admin.css", "utf-8").replace(
       /\/\*[\s\S]*?\*\//g,
       "",
     );
     const block = adminCss.match(/input\[type="checkbox"\]\s*\{([^}]*)\}/)?.[1];
-    expect(block).toMatch(/accent-color\s*:\s*#[0-9a-f]{6}/i);
+    expect(block).toMatch(/accent-color\s*:\s*var\(\s*--admin-primary\s*\)/i);
   });
 });
