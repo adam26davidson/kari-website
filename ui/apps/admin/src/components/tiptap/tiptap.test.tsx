@@ -130,8 +130,11 @@ describe("Tiptap toolbar", () => {
     await user.click(center);
     expect(center.className).toContain("is-active");
     expect(left.className).not.toContain("is-active");
+    // Tiptap 3's TextAlign extension terminates the inline style with a
+    // semicolon; Tiptap 2 did not. Cosmetic in the stored HTML, and the
+    // public site's renderer is indifferent to it.
     expect(setContent).toHaveBeenCalledWith(
-      '<p style="text-align: center">hello</p>'
+      '<p style="text-align: center;">hello</p>'
     );
 
     await user.click(left);
@@ -375,6 +378,21 @@ describe("Tiptap toolbar", () => {
     );
     const html = setContent.mock.calls.at(-1)?.[0] as string;
     expect(html).toContain('src="data:image/png;base64');
+  });
+
+  it("does not append a trailing paragraph to a document ending in a list", async () => {
+    // Tiptap 3's StarterKit bundles TrailingNode, which would add an empty
+    // paragraph after a closing list or image. getHTML() reports that as an
+    // edit, so an untouched post would come back from the editor changed and
+    // queue a pointless save. The extension is configured off; this pins it.
+    const user = userEvent.setup();
+    const { setContent } = renderTiptap("<ul><li><p>only item</p></li></ul>");
+
+    await user.click(getButton("ordered-list"));
+
+    expect(setContent).toHaveBeenLastCalledWith(
+      "<ol><li><p>only item</p></li></ol>"
+    );
   });
 
   it("closes the picker without side effects when no file is chosen", async () => {

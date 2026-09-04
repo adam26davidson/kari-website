@@ -61,7 +61,6 @@ const ADMIN_ONLY_PACKAGES = [
   "@tiptap/react",
   "@tiptap/pm",
   "@tiptap/extension-image",
-  "@tiptap/extension-link",
   "@tiptap/extension-text-align",
 ];
 
