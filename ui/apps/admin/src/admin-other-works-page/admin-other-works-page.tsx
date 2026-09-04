@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import "./admin-other-works-page.css";
 import "../admin.css";
 import { v4 as uuidv4 } from "uuid";
@@ -11,8 +11,8 @@ import {
 import { formatPostDate, todayAsPostDate } from "@kari/shared/utils/date-helpers";
 import { BlogService } from "@kari/shared/services/blog";
 import { BlogPostSummary } from "@kari/shared/components/blog-post-summary/blog-post-summary";
-import { BlogPostEditor } from "./components/blog-post-editor/blog-post-editor";
 import { ImageService } from "@kari/shared/services/images";
+import { lazyWithRetry } from "@kari/shared/components/error-boundary/lazy-with-retry";
 import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { AdminItemList } from "../components/admin-item-list/admin-item-list";
 import { useAdminToken } from "../hooks/use-admin-token";
@@ -23,6 +23,21 @@ import { useUnsavedChanges } from "../use-unsaved-changes";
 import { saveBlogPost } from "./blog-post-save";
 
 const LIST_PATH = "/other-works";
+
+// The one lazy boundary in the admin app (#419). The editor is the only
+// thing in the tree that touches tiptap/prosemirror, and that stack is
+// about half of the admin bundle; loading it statically made every admin
+// page — this page's own list included — pay for it. Everything else here
+// stays statically imported, per the note in app.tsx.
+//
+// The chunk is named `blog-post-editor` and budgeted in
+// apps/admin/vite.config.ts, so a static import creeping back in fails the
+// build by name rather than silently re-inflating `index`.
+const BlogPostEditor = lazyWithRetry(() =>
+  import("./components/blog-post-editor/blog-post-editor").then((m) => ({
+    default: m.BlogPostEditor,
+  })),
+);
 
 export function AdminOtherWorksPage() {
   const getAccessTokenSilently = useAdminToken();
@@ -264,16 +279,21 @@ export function AdminOtherWorksPage() {
   }
 
   return openPost ? (
-    <BlogPostEditor
-      post={openPost}
-      content={openPostContent}
-      setContent={setOpenPostContent}
-      setPost={setOpenPost}
-      saveDisabled={!openPostIsValid()}
-      onSave={saveOpenPost}
-      onClose={closeOpenPost}
-      onAddImage={onAddImage}
-    />
+    // Local boundary: the page frame and admin menu stay put while the
+    // editor's chunk arrives. The same quiet "Loading..." treatment the
+    // whats-on-test route uses.
+    <Suspense fallback={<div className="loading">Loading...</div>}>
+      <BlogPostEditor
+        post={openPost}
+        content={openPostContent}
+        setContent={setOpenPostContent}
+        setPost={setOpenPost}
+        saveDisabled={!openPostIsValid()}
+        onSave={saveOpenPost}
+        onClose={closeOpenPost}
+        onAddImage={onAddImage}
+      />
+    </Suspense>
   ) : (
     <AdminItemList
       items={postList}

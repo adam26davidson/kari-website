@@ -15,6 +15,12 @@ import { Admin } from "./admin";
  * Its pages are imported statically rather than lazily: this whole app is
  * already the chunk that only a maintainer downloads, so splitting inside
  * it would buy a logged-in user round trips, not savings.
+ *
+ * The tiptap editor stack is the deliberate exception (#419). It is about
+ * half the app's weight, and only one page can show an editor, so it is
+ * lazily loaded from admin-other-works-page.tsx: one round trip when a
+ * post is opened, in exchange for every other admin page — including that
+ * page's own list — no longer downloading it.
  */
 export function App() {
   const [showingMobileMenu, setShowingMobileMenu] = useState(false);

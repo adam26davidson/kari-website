@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
+import { bundleBudget } from "../../vite-bundle-budget";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const uiRoot = fileURLToPath(new URL("../..", import.meta.url));
@@ -9,10 +10,30 @@ const uiRoot = fileURLToPath(new URL("../..", import.meta.url));
 // URL the built index.html references and the router is mounted with a
 // matching basename (see src/main.tsx).
 //
-// No bundle budget here: the admin section is maintainer-facing and behind
-// a login, and the whole point of splitting it out (#591) is that its weight
-// is no longer something a visitor pays for. The public app keeps its
-// ratchet.
+// This app had no bundle budget for a while after #591: its weight is not
+// something a visitor pays for, so the public app kept the only ratchet.
+// The admin then grew to a 1,095 kB entry chunk, half of it the tiptap /
+// prosemirror editor stack that every admin page loaded whether or not it
+// ever showed an editor. #419 moved that stack behind a lazy import in
+// admin-other-works-page.tsx; these two budgets keep it there.
+//
+// - "index" is the chunk loaded on every admin page (649 kB after the
+//   split, down from 1,095 kB).
+// - "blog-post-editor" is the lazy chunk holding the editor, tiptap,
+//   prosemirror and their CSS (445 kB), fetched only when a post is
+//   opened.
+//
+// Budgeting the lazy chunk is the real regression guard, and it guards in
+// both directions: bundleBudget also fails when a budgeted chunk is never
+// emitted, so re-introducing a static import of the editor — which would
+// dissolve this chunk back into "index" — fails the build by name instead
+// of quietly doubling what the admin downloads.
+//
+// Both sit roughly 25 kB above today's size, the same headroom and for the
+// same reason as the public app's budget: Renovate auto-merges non-major
+// bumps, and a budget pinned to the byte turns every routine patch release
+// red. Treat a failure like a coverage-floor failure — move the weight
+// into a lazily loaded chunk, or raise the number and say why in the PR.
 export default defineConfig({
   root: here,
   base: "/admin/",
@@ -32,5 +53,5 @@ export default defineConfig({
     // Only dist/admin is emptied; the public build owns the rest of dist/.
     emptyOutDir: true,
   },
-  plugins: [react()],
+  plugins: [react(), bundleBudget({ index: 675, "blog-post-editor": 470 })],
 });
