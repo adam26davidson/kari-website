@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Editor } from "@tiptap/react";
 import { Tiptap } from "./tiptap";
+import { LINK_EXAMPLES } from "./link-refusal-message";
 
 // useEditor returns null until the editor instance exists. That never
 // happens in these tests, so the toolbar's null guard is only reachable by
@@ -337,9 +338,16 @@ describe("Tiptap toolbar", () => {
     await user.type(getLinkInput(), "javascript:alert(1)");
     await user.click(getButton("apply"));
 
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      /only http\(s\), mailto, tel and relative URLs are allowed/
-    );
+    // The suggestions are derived from the editor the component actually
+    // configured, so this asserts them against that live editor rather
+    // than against a copy of the sentence.
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(/That link was not applied\. Try /);
+    for (const { href } of LINK_EXAMPLES) {
+      expect(alert).toHaveTextContent(href);
+      expect(getEditor().can().setLink({ href })).toBe(true);
+    }
+
     expect(getLinkInput()).toHaveValue("javascript:alert(1)");
     expect(setContent).not.toHaveBeenCalled();
     expect(getButton("link").className).not.toContain("is-active");

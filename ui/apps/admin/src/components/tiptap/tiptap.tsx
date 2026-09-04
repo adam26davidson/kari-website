@@ -23,16 +23,16 @@ import StarterKit from "@tiptap/starter-kit";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { v4 as uuidv4 } from "uuid";
 
+import { linkRefusedMessage } from "./link-refusal-message";
+
 const HEADING_LEVELS = [1, 2, 3] as const;
 
 // The Link extension reports a refusal by returning false from setLink
-// rather than by throwing, so the panel shows one of these instead of
-// failing silently. A URL can be refused for what it is (a protocol
-// outside the allow-list: javascript:, data:, ...) or for where it lands
-// (a block that holds no marks at all).
-const LINK_REFUSED_MESSAGE =
-  "That link was not applied: only http(s), mailto, tel and relative " +
-  "URLs are allowed.";
+// rather than by throwing, so the panel says so instead of failing
+// silently. A URL can be refused for what it is (a protocol outside the
+// allow-list: javascript:, data:, ...) -- linkRefusedMessage asks the live
+// editor what to suggest instead -- or for where it lands (a block that
+// holds no marks at all), which is this message.
 const LINK_UNSUPPORTED_HERE_MESSAGE =
   "That link was not applied: this block cannot hold a link.";
 
@@ -228,7 +228,7 @@ const MenuBar = ({
       editor.chain().focus().extendMarkRange("link").setLink({ href }).run();
 
     if (!applied) {
-      setLinkError(LINK_REFUSED_MESSAGE);
+      setLinkError(linkRefusedMessage(editor));
       return;
     }
 
