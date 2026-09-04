@@ -60,7 +60,7 @@ swash behind them.
 | Haiga         | `HaigaList`, `HaigaTablet`, `HaigaListMobile`, `HaigaEditor`, `HaigaEditorMobile` |
 | Photography   | `PhotoList`, `PhotoTablet`, `PhotoListMobile`, `PhotoEditor`, `PhotoEditorMobile` |
 | Other works   | `WorksList`, `WorksTablet`, `WorksListMobile`, `WorksEditor`, `WorksEditorMobile` |
-| Background    | `Background`, `BackgroundTablet`, `BackgroundMobile` |
+| Appearance    | `Appearance`, `AppearanceTablet`, `AppearanceMobile` |
 | Image cleanup | `Cleanup`, `CleanupTablet`, `CleanupMobile` |
 | Nav           | `MobileMenu` (open state) |
 | Tokens        | `Theme` |
@@ -80,6 +80,14 @@ Notable deliberate decisions, beyond restyling:
   above, and the admin drops the public site's background photo and
   header-colour settings entirely — it has its own fixed look (settles
   the direction of #642).
+- The Appearance page (nav label "Appearance", palette icon) groups its
+  three settings into cards — Site background, Header colours, Fonts —
+  side by side at desktop, stacked below, with the page's one Save in a
+  footer row. The header-colours card keeps the preview bar, swatches,
+  see-through slider and "Use default" per colour; its two readability
+  sentences are shown in BOTH states on purpose (reads-clearly, and
+  may-be-hard-to-read with its advice). The font options render in
+  their real Google families, sample lines and caption included.
 - List rows keep Edit / move arrows / outlined Delete with labels, per
   #457; search + one primary "Add …" button live in the list card's
   header row.
