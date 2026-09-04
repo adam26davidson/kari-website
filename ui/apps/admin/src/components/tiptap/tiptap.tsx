@@ -398,6 +398,16 @@ export function Tiptap({
         // opening an old post would queue a save. Both stay off.
         underline: false,
         trailingNode: false,
+        link: {
+          // Link defaults to opening its href on click, and since its
+          // other default puts target="_blank" on every anchor, clicking
+          // a link in the editor opened a new tab instead of putting the
+          // cursor in the text — so editing a link's wording meant
+          // clicking beside it. Only the click behaviour is overridden
+          // here: target="_blank" is what the published post wants, so
+          // the rest of HTMLAttributes stays as it is.
+          openOnClick: false,
+        },
       }),
       Image.configure({
         HTMLAttributes: {

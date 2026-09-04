@@ -1,12 +1,18 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { Editor } from "@tiptap/react";
 import { Tiptap } from "./tiptap";
 
 // useEditor returns null until the editor instance exists. That never
 // happens in these tests, so the toolbar's null guard is only reachable by
 // forcing the hook to withhold the editor for one test.
-const editorState = vi.hoisted(() => ({ withheld: false }));
+// The same wrapper keeps the last editor instance to hand, which is the
+// only way a test can reach the extensions the component configured.
+const editorState = vi.hoisted(() => ({
+  withheld: false,
+  editor: null as Editor | null,
+}));
 
 vi.mock("@tiptap/react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tiptap/react")>();
@@ -14,13 +20,23 @@ vi.mock("@tiptap/react", async (importOriginal) => {
     ...actual,
     useEditor: ((...args: Parameters<typeof actual.useEditor>) => {
       const editor = actual.useEditor(...args);
+      editorState.editor = editor;
       return editorState.withheld ? null : editor;
     }) as typeof actual.useEditor,
   };
 });
 
+const getEditor = () => {
+  const editor = editorState.editor;
+  if (!editor) {
+    throw new Error("the editor was never created");
+  }
+  return editor;
+};
+
 afterEach(() => {
   editorState.withheld = false;
+  editorState.editor = null;
 });
 
 // Toolbar buttons carry aria-labels from their config names, so they can
@@ -194,6 +210,43 @@ describe("Tiptap toolbar", () => {
     await user.click(unlink);
     expect(setContent).toHaveBeenLastCalledWith("<p>hello</p>");
     expect(getButton("unlink")).toBeDisabled();
+  });
+
+  it("does not open the link target when a link is clicked", () => {
+    // A real click cannot reach the Link extension's handler under jsdom:
+    // ProseMirror's own mousedown listener runs first and calls
+    // posAtCoords, which needs document.elementFromPoint — jsdom has no
+    // layout and no such method, so it throws before handleClick is ever
+    // consulted. Invoking the prop the way EditorView does exercises the
+    // configured extension's real click plugin instead of a stand-in.
+    // jsdom's window.open only logs "Not implemented", so the spy both
+    // records the call and silences it.
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    const { container } = renderTiptap(
+      '<p><a href="https://x.test/">hello</a></p>'
+    );
+    const view = getEditor().view;
+    const anchor = container.querySelector(".editor a");
+    expect(anchor).not.toBeNull();
+
+    const event = new MouseEvent("click", { button: 0, bubbles: true });
+    Object.defineProperty(event, "target", { value: anchor });
+    const handled = view.someProp("handleClick", (handler) =>
+      handler(view, 1, event)
+    );
+
+    expect(open).not.toHaveBeenCalled();
+    // Unhandled, so ProseMirror goes on to place the cursor in the text.
+    expect(handled).toBeFalsy();
+  });
+
+  it("keeps target=_blank on stored links so published posts open in a new tab", () => {
+    const { container } = renderTiptap(
+      '<p><a href="https://x.test/">hello</a></p>'
+    );
+    const anchor = container.querySelector(".editor a");
+
+    expect(anchor).toHaveAttribute("target", "_blank");
   });
 
   it("opens the link panel from the link button and closes it again", async () => {
