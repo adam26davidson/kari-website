@@ -98,7 +98,16 @@ function clearReloadedFlag(storage: StorageLike | null): void {
  *    reload, so a persistent failure falls through to the
  *    ErrorBoundary, which shows tailored "new version deployed" copy.
  */
-export function lazyWithRetry<T extends ComponentType>(
+// The constraint is React's own `lazy` signature, verbatim: a bare
+// `ComponentType` means `ComponentType<{}>`, which admits only components
+// with no required props — fine while the only lazy component took none,
+// but it rejected the blog-post editor (#419). Narrower stand-ins don't
+// work: `ComponentType<never>` satisfies neither `lazy` nor
+// `LazyExoticComponent`, both of which are themselves written against
+// `ComponentType<any>`. `T` is still inferred as the concrete component,
+// so callers get full prop checking at the JSX site.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function lazyWithRetry<T extends ComponentType<any>>(
   factory: () => Promise<{ default: T }>,
   hooks: LazyRetryHooks = {},
 ): LazyExoticComponent<T> {
