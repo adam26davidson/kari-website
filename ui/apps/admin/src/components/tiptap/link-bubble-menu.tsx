@@ -5,34 +5,9 @@ import { Editor } from "@tiptap/react";
 // this app declaring those two extensions itself rather than leaning on
 // @tiptap/react listing them as optional dependencies.
 import { BubbleMenu } from "@tiptap/react/menus";
-import type { EditorView } from "@tiptap/pm/view";
 
+import { shouldShowLinkBubble } from "./link-bubble-visibility";
 import "./link-bubble-menu.css";
-
-/**
- * Whether the link bubble belongs on screen. A custom predicate replaces
- * the plugin's default outright, so the parts of the default that still
- * apply are repeated here: an editor that is not editable offers no link
- * actions, and the menu has to stay up while one of its own buttons holds
- * focus, or pressing that button would dismiss it before the click landed.
- *
- * What the default would not allow is the case this menu exists for. It
- * refuses an empty selection, and a cursor resting in a link — which is
- * what clicking a link now does, since #682 stopped the click navigating —
- * is exactly that.
- */
-export const shouldShowLinkBubble = ({
-  editor,
-  element,
-  view,
-}: {
-  editor: Editor;
-  element: HTMLElement;
-  view: EditorView;
-}) =>
-  editor.isEditable &&
-  editor.isActive("link") &&
-  (view.hasFocus() || element.contains(document.activeElement));
 
 /**
  * The address of the link under the cursor, with the actions for it: open

@@ -5,7 +5,7 @@ import type { Editor } from "@tiptap/react";
 import type { EditorView } from "@tiptap/pm/view";
 import { Tiptap } from "./tiptap";
 import { LINK_EXAMPLES } from "./link-refusal-message";
-import { shouldShowLinkBubble } from "./link-bubble-menu";
+import { shouldShowLinkBubble } from "./link-bubble-visibility";
 
 // useEditor returns null until the editor instance exists. That never
 // happens in these tests, so the toolbar's null guard is only reachable by
