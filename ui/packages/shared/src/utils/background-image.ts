@@ -45,8 +45,9 @@ export async function validateBackgroundImage(file: File): Promise<void> {
 
   if (file.size > MAX_UPLOAD_BYTES) {
     throw new BackgroundImageError(
-      "This photo is too big to upload (over 9 MB). Please save a smaller " +
-        "copy and try again — the site will resize it from there.",
+      "This photo is too big to upload (over 9 MB). Please pick a smaller " +
+        "one, or export a reduced-size copy from your photo app and try " +
+        "again — the site resizes it for the web from there.",
     );
   }
 }
