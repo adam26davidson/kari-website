@@ -115,6 +115,11 @@ export function PhotographyPostEditor({
       <div className="photography-post-editor-images">
         <AdminItemList
           items={images}
+          // A new post starts with no images, so this list is empty at the
+          // exact moment she has just made one. Named, because the default
+          // noun would greet her with "No items yet" — the code's word, not
+          // hers (#473, design brief §3).
+          noun="images"
           addLabel="Add an image"
           // Secondary: Save, in the header above, is this screen's one
           // primary. Filled, these two competed as equals (#457).

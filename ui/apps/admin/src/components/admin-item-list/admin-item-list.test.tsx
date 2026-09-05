@@ -16,6 +16,7 @@ const items = [
  * a test can assert what the browser back button does.
  */
 function renderList(overrides?: {
+  items?: Array<{ id: string; name: string }>;
   title?: string;
   onEdit?: (id: string) => void;
   hideEdit?: boolean;
@@ -35,7 +36,7 @@ function renderList(overrides?: {
         path: "/things",
         element: (
           <AdminItemList
-            items={items}
+            items={overrides?.items ?? items}
             title={overrides?.title}
             addLabel="Add a thing"
             addVariant={overrides?.addVariant}
@@ -258,6 +259,59 @@ describe("AdminItemList", () => {
     expect(
       container.querySelectorAll(".admin-data-list-item.compact"),
     ).toHaveLength(3);
+  });
+
+  // A section with nothing in it rendered nothing at all between the
+  // search box and the add button — a bare empty area where the design
+  // brief (§7, "Empty states invite") asks for an explanation and the one
+  // action that fills it (#473).
+  describe("a section with nothing in it", () => {
+    it("invites the first one instead of showing a bare gap", () => {
+      renderList({ items: [], title: "Things", ...searchable });
+      expect(
+        screen.getByText("No things yet. Add your first one."),
+      ).toBeInTheDocument();
+      // The invitation is not a dead end: the action it names is right
+      // there (design brief §7, §8).
+      expect(
+        screen.getByRole("button", { name: "Add a thing" }),
+      ).toBeInTheDocument();
+    });
+
+    it("stands on the same legible backing as the search notice", () => {
+      const { container } = renderList({ items: [] });
+      expect(
+        container.querySelector(".admin-data-list-empty"),
+      ).toHaveTextContent("No items yet. Add your first one.");
+    });
+
+    it("stays out of the way as soon as there is something to show", () => {
+      renderList(searchable);
+      expect(screen.queryByText(/yet\./)).toBeNull();
+    });
+
+    // With nothing in the section there is nothing a query could have
+    // missed, so blaming the search ("No things match ...") would send her
+    // looking for a spelling mistake instead of telling her the section is
+    // empty.
+    it("says the section is empty rather than blaming the search", () => {
+      renderList({ items: [], ...searchable });
+      search("beta");
+      expect(
+        screen.getByText("No things yet. Add your first one."),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/match/)).toBeNull();
+    });
+
+    // Once there ARE items, an unmatched query is the search's story again.
+    it("leaves an unmatched query to the search notice", () => {
+      renderList(searchable);
+      search("nothing here");
+      expect(
+        screen.getByText('No things match "nothing here"'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/yet\./)).toBeNull();
+    });
   });
 
   describe("search", () => {
