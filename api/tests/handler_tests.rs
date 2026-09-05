@@ -18,8 +18,10 @@ use common::store::{state_with_store, InMemoryStore};
 use common::{build_jwks, signed_token, TokenOptions};
 use http_body_util::BodyExt;
 use kari_website_api::routes::create_router;
+use kari_website_api::routes::images::under_rendition_gate;
 use kari_website_api::services::image_keys::{original_key, variant_key, ImageVariant};
 use kari_website_api::services::object_store::ObjectStore;
+use kari_website_api::services::thumbnail::MAX_SOURCE_EDGE;
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
@@ -104,6 +106,12 @@ fn multipart_request(uri: &str, body: Vec<u8>) -> Request<Body> {
             header::CONTENT_TYPE,
             format!("multipart/form-data; boundary={BOUNDARY}"),
         )
+        // Real clients send this and hyper adds it on the wire, but calling
+        // the router through `oneshot` skips hyper entirely. It matters for
+        // the body-limit layer: with a known length tower-http rejects an
+        // over-size upload up front with 413, and without one it can only
+        // truncate the stream mid-read, which surfaces as a confusing 400.
+        .header(header::CONTENT_LENGTH, body.len())
         .body(Body::from(body))
         .unwrap()
 }
@@ -960,6 +968,148 @@ async fn upload_drops_unusable_extensions() {
 }
 
 #[tokio::test]
+async fn upload_image_accepts_a_body_larger_than_the_old_10mb_cap() {
+    // #706: the browser no longer downscales before uploading, so a DSLR
+    // original has to survive the request-body limit intact. The bytes are
+    // zero-filled rather than an encoded image — the limit layer runs long
+    // before the decoder, and encoding 12 MB of pixels would only be slow.
+    let _tracing = common::capture_tracing();
+    let (store, app) = setup();
+    let req = multipart_upload(
+        "/images?isPublished=true",
+        Some("photo.jpg"),
+        &vec![0u8; 12 * 1024 * 1024],
+    );
+    let (status, body) = send(app, req).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let file_name = uploaded_file_name(&body, ".jpg");
+    assert_eq!(
+        store
+            .get(&original_key(&file_name))
+            .expect("stored")
+            .data
+            .len(),
+        12 * 1024 * 1024
+    );
+}
+
+#[tokio::test]
+async fn upload_image_rejects_a_body_over_the_limit() {
+    // The ceiling still exists: past it tower-http answers 413 from the
+    // Content-Length alone, before the handler ever runs.
+    let (_, app) = setup();
+    let req = multipart_upload(
+        "/images?isPublished=true",
+        Some("photo.jpg"),
+        &vec![0u8; 26 * 1024 * 1024],
+    );
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+}
+
+#[tokio::test]
+async fn a_non_upload_route_keeps_the_smaller_body_limit() {
+    // Only POST /images is allowed 25 MiB; every other secure route keeps
+    // the 10 MiB it always had, because a blog post that large is a bug or
+    // an attack and each accepted byte is buffered in memory on a micro
+    // host. Content-Length matters for the same reason it does in
+    // `multipart_request` — without it the layer can only truncate, and the
+    // truncation surfaces as a 400.
+    let (_, app) = setup();
+    let body = vec![b'x'; 11 * 1024 * 1024];
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/blog-content")
+        .header(header::AUTHORIZATION, bearer())
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::CONTENT_LENGTH, body.len())
+        .body(Body::from(body))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+}
+
+#[tokio::test]
+async fn two_uploads_at_once_both_succeed() {
+    // Rendition generation is serialized process-wide by RENDITION_GATE so
+    // one decode's memory is the whole process's peak. Serialized must not
+    // mean deadlocked or dropped: both uploads still complete, and both
+    // originals and both sets of renditions land in the store.
+    let _tracing = common::capture_tracing();
+    let (store, app) = setup();
+    let first = multipart_upload(
+        "/images?isPublished=true",
+        Some("one.png"),
+        &png_bytes(600, 400),
+    );
+    let second = multipart_upload(
+        "/images?isPublished=true",
+        Some("two.png"),
+        &png_bytes(500, 300),
+    );
+
+    let (a, b) = tokio::join!(
+        send(app.clone(), first),
+        // A second router handle over the SAME state: the gate is a static,
+        // so it spans both requests regardless.
+        send(app, second)
+    );
+
+    for (status, body) in [a, b] {
+        assert_eq!(status, StatusCode::OK);
+        let file_name = uploaded_file_name(&body, ".png");
+        assert!(store.contains(&original_key(&file_name)));
+        for variant in ImageVariant::ALL {
+            assert!(store.contains(&variant_key(&file_name, variant)));
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_cancelled_upload_holds_the_rendition_gate_until_its_decode_finishes() {
+    // A blocking task cannot be cancelled. When the request future is dropped
+    // mid-decode — the admin's client or a proxy times out on a multi-second
+    // decode, or she navigates away and retries — the decode runs on to
+    // completion, detached, still holding its hundreds of megabytes. Its gate
+    // permit has to run on with it: released early, the retry would start a
+    // second decode alongside the first and the process would pay the peak
+    // twice, which is the exact doubling the gate exists to prevent.
+    use std::time::Duration;
+
+    let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+    let (finish_tx, finish_rx) = std::sync::mpsc::channel::<()>();
+    let mut decode = Box::pin(under_rendition_gate(move || {
+        started_tx
+            .send(())
+            .expect("the test awaits the start signal");
+        finish_rx.recv().expect("the test releases the decode");
+    }));
+    tokio::select! {
+        _ = &mut decode => panic!("the decode cannot finish before it is released"),
+        started = started_rx => started.expect("the decode signals that it started"),
+    }
+
+    // The request goes away while the decode is still running.
+    drop(decode);
+
+    let retry = tokio::time::timeout(Duration::from_millis(250), under_rendition_gate(|| ())).await;
+    assert!(
+        retry.is_err(),
+        "a cancelled upload must not hand its permit on while its own decode is still allocating"
+    );
+
+    // And once the detached decode really finishes, the gate opens again.
+    finish_tx.send(()).expect("the decode is still waiting");
+    tokio::time::timeout(Duration::from_secs(10), under_rendition_gate(|| ()))
+        .await
+        .expect("the gate reopens when the decode finishes")
+        .expect("the gated task does not panic");
+}
+
+#[tokio::test]
 async fn upload_with_malformed_multipart_body_is_400() {
     // The content type promises multipart but the body never contains the
     // boundary, so reading the first field fails.
@@ -1151,6 +1301,30 @@ async fn upload_of_undecodable_bytes_still_succeeds_without_renditions() {
         store.get(&original_key(&file_name)).expect("stored").data,
         b"PNGDATA"
     );
+    for variant in ImageVariant::ALL {
+        assert!(!store.contains(&variant_key(&file_name, variant)));
+    }
+}
+
+#[tokio::test]
+async fn upload_image_stores_no_renditions_for_an_image_wider_than_max_source_edge() {
+    // #706: raising the request-body cap lets in originals whose DECODED
+    // size could dwarf the upload itself, so the decoder refuses anything
+    // past MAX_SOURCE_EDGE. A refused decode is the existing degraded path:
+    // the original is still stored and served, just without renditions.
+    let _tracing = common::capture_tracing();
+    let (store, app) = setup();
+    // A 1 px-tall strip: absurdly wide, but a tiny file to encode.
+    let req = multipart_upload(
+        "/images?isPublished=true",
+        Some("wide.png"),
+        &png_bytes(MAX_SOURCE_EDGE + 1, 1),
+    );
+    let (status, body) = send(app, req).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let file_name = uploaded_file_name(&body, ".png");
+    assert!(store.contains(&original_key(&file_name)));
     for variant in ImageVariant::ALL {
         assert!(!store.contains(&variant_key(&file_name, variant)));
     }

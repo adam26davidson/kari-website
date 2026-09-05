@@ -69,6 +69,24 @@ describe("validateBackgroundImage", () => {
     expect(bitmap.close).toHaveBeenCalled();
   });
 
+  it("accepts a DSLR-sized original the old 9 MB ceiling refused", async () => {
+    // #706: with the browser-side downscale gone, a 20 MB camera JPEG is
+    // sent as-is — it must not be blocked before it ever reaches the API.
+    mockBitmap(8256, 5504);
+    await expect(
+      validateBackgroundImage(fileOfSize(20_000_000, "dslr.jpg")),
+    ).resolves.toBeUndefined();
+  });
+
+  it("names the real ceiling when it refuses a file", async () => {
+    // The number in the message is derived from MAX_UPLOAD_BYTES; pinning it
+    // here catches the copy drifting away from the limit again.
+    mockBitmap(8000, 6000);
+    await expect(
+      validateBackgroundImage(fileOfSize(MAX_UPLOAD_BYTES + 1)),
+    ).rejects.toThrow(/over 25 MB/);
+  });
+
   it("accepts a file exactly on the upload limit", async () => {
     mockBitmap(2000, 1500);
     await expect(

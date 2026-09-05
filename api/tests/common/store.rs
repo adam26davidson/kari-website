@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 use async_trait::async_trait;
+use bytes::Bytes;
 use jsonwebtoken::jwk::JwkSet;
 use kari_website_api::middleware::auth::JwksCache;
 use kari_website_api::routes::health::HealthCache;
@@ -207,7 +208,7 @@ impl ObjectStore for InMemoryStore {
             .ok_or(S3Error::NotFound)
     }
 
-    async fn put_object(&self, key: &str, data: Vec<u8>, public: bool) -> Result<(), S3Error> {
+    async fn put_object(&self, key: &str, data: Bytes, public: bool) -> Result<(), S3Error> {
         self.check_fail()?;
         if self.fail_puts.load(Ordering::SeqCst) {
             return Err(S3Error::OperationFailed(
@@ -229,7 +230,10 @@ impl ObjectStore for InMemoryStore {
         self.objects.lock().unwrap().insert(
             key.to_string(),
             StoredObject {
-                data,
+                // `StoredObject` keeps `Vec<u8>` so every assertion in the
+                // test suite reads unchanged; only the trait moved to
+                // `Bytes`.
+                data: data.to_vec(),
                 public,
                 last_modified: Some(SystemTime::now()),
             },

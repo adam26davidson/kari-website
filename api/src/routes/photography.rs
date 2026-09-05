@@ -30,7 +30,7 @@ pub async fn update_photography_handler(
 
     state
         .s3_service
-        .put_object("photography.json", posts_str.into_bytes(), true)
+        .put_object("photography.json", posts_str.into(), true)
         .await
         .map_err(|e| AppError::internal("Failed to update photography posts", e))?;
 

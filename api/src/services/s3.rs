@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use aws_sdk_s3::error::SdkError;
 use aws_sdk_s3::{primitives::ByteStream, types::MetadataDirective, Client};
 use aws_smithy_http::label::{fmt_string, EncodingStrategy};
+use bytes::Bytes;
 use std::error::Error;
 use std::fmt;
 use std::time::SystemTime;
@@ -111,7 +112,7 @@ impl ObjectStore for S3Service {
         Ok(data.to_vec())
     }
 
-    async fn put_object(&self, key: &str, data: Vec<u8>, public: bool) -> Result<(), S3Error> {
+    async fn put_object(&self, key: &str, data: Bytes, public: bool) -> Result<(), S3Error> {
         // set tag public=
         self.client
             .put_object()
