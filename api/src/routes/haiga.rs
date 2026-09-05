@@ -28,7 +28,7 @@ pub async fn update_haiga_handler(
 
     state
         .s3_service
-        .put_object("haiga.json", haiga_str.into_bytes(), true)
+        .put_object("haiga.json", haiga_str.into(), true)
         .await
         .map_err(|e| AppError::internal("Failed to update haiga", e))?;
 

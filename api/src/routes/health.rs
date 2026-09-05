@@ -54,7 +54,7 @@ async fn probe(s3: &dyn ObjectStore) -> Result<(), String> {
         .unwrap_or_default()
         .as_secs()
         .to_string();
-    s3.put_object("_health", stamp.into_bytes(), false)
+    s3.put_object("_health", stamp.into(), false)
         .await
         .map_err(|e| format!("S3 write probe failed: {e}"))?;
 

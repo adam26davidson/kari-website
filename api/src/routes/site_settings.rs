@@ -38,7 +38,7 @@ pub async fn update_site_settings_handler(
 
     state
         .s3_service
-        .put_object(SITE_SETTINGS_KEY, settings_str.into_bytes(), true)
+        .put_object(SITE_SETTINGS_KEY, settings_str.into(), true)
         .await
         .map_err(|e| AppError::internal("Failed to update site settings", e))?;
 

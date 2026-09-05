@@ -1009,6 +1009,65 @@ async fn upload_image_rejects_a_body_over_the_limit() {
 }
 
 #[tokio::test]
+async fn a_non_upload_route_keeps_the_smaller_body_limit() {
+    // Only POST /images is allowed 25 MiB; every other secure route keeps
+    // the 10 MiB it always had, because a blog post that large is a bug or
+    // an attack and each accepted byte is buffered in memory on a micro
+    // host. Content-Length matters for the same reason it does in
+    // `multipart_request` — without it the layer can only truncate, and the
+    // truncation surfaces as a 400.
+    let (_, app) = setup();
+    let body = vec![b'x'; 11 * 1024 * 1024];
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/blog-content")
+        .header(header::AUTHORIZATION, bearer())
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::CONTENT_LENGTH, body.len())
+        .body(Body::from(body))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+}
+
+#[tokio::test]
+async fn two_uploads_at_once_both_succeed() {
+    // Rendition generation is serialized process-wide by RENDITION_GATE so
+    // one decode's memory is the whole process's peak. Serialized must not
+    // mean deadlocked or dropped: both uploads still complete, and both
+    // originals and both sets of renditions land in the store.
+    let _tracing = common::capture_tracing();
+    let (store, app) = setup();
+    let first = multipart_upload(
+        "/images?isPublished=true",
+        Some("one.png"),
+        &png_bytes(600, 400),
+    );
+    let second = multipart_upload(
+        "/images?isPublished=true",
+        Some("two.png"),
+        &png_bytes(500, 300),
+    );
+
+    let (a, b) = tokio::join!(
+        send(app.clone(), first),
+        // A second router handle over the SAME state: the gate is a static,
+        // so it spans both requests regardless.
+        send(app, second)
+    );
+
+    for (status, body) in [a, b] {
+        assert_eq!(status, StatusCode::OK);
+        let file_name = uploaded_file_name(&body, ".png");
+        assert!(store.contains(&original_key(&file_name)));
+        for variant in ImageVariant::ALL {
+            assert!(store.contains(&variant_key(&file_name, variant)));
+        }
+    }
+}
+
+#[tokio::test]
 async fn upload_with_malformed_multipart_body_is_400() {
     // The content type promises multipart but the body never contains the
     // boundary, so reading the first field fails.

@@ -21,6 +21,39 @@ use tracing::Level;
 use crate::AppState;
 
 pub fn create_router(state: AppState) -> Router {
+    // The image upload is the ONLY route allowed a 25 MiB body. Everything
+    // else keeps the 10 MiB it has always had: a blog post or a manifest
+    // that large is a bug or an attack, and every byte accepted is a byte
+    // buffered in memory on a micro EC2 host that runs two copies of this
+    // API.
+    //
+    // 25 MiB covers a DSLR JPEG, which the admin now uploads untouched: the
+    // browser-side downscale was removed in #453, so the original is the
+    // source of truth and every rendition is derived here (#706). What the
+    // upload then costs to DECODE is bounded separately — see
+    // `MAX_DECODE_BYTES` and the rendition gate in `routes::images`.
+    //
+    // Two things outside this file are pinned to this number:
+    //   - `MAX_UPLOAD_BYTES` in
+    //     `ui/packages/shared/src/utils/background-image.ts` sits just
+    //     BELOW it, so the admin gets a friendly "too big" message instead
+    //     of a bare 413;
+    //   - the deployed nginx vhosts' `client_max_body_size` must be at
+    //     least this, or nginx rejects the upload before it arrives. Those
+    //     vhosts are hand-maintained on the host, not in this repo (#714) —
+    //     raise them alongside any change here.
+    //
+    // `GET /images` rides along only because axum cannot merge two routers
+    // that each define `/images`; a GET carries no body, so the larger limit
+    // is inert for it.
+    let upload_routes = Router::new()
+        .route("/images", post(images::upload_image_handler))
+        .route("/images", get(images::list_images_handler))
+        .layer(DefaultBodyLimit::disable())
+        .layer(RequestBodyLimitLayer::new(
+            25 * 1024 * 1024, /* 25 MiB */
+        ));
+
     let secure_routes = Router::new()
         .route("/haiku", put(haiku::update_haiku_handler))
         .route("/haiga", put(haiga::update_haiga_handler))
@@ -31,8 +64,6 @@ pub fn create_router(state: AppState) -> Router {
             "/site-settings",
             put(site_settings::update_site_settings_handler),
         )
-        .route("/images", post(images::upload_image_handler))
-        .route("/images", get(images::list_images_handler))
         .route("/images/gc", post(images::gc_images_handler))
         .route(
             "/images/{filename}/set-published",
@@ -44,22 +75,10 @@ pub fn create_router(state: AppState) -> Router {
         .route("/blog-content/{id}", get(blog::get_blog_post_content))
         .route("/blog-content/{id}", delete(blog::delete_blog_post_content))
         .layer(DefaultBodyLimit::disable())
-        // 25 MiB covers a DSLR JPEG, which the admin now uploads untouched:
-        // the browser-side downscale was removed in #453, so the original is
-        // the source of truth and every rendition is derived here (#706).
-        //
-        // Two things outside this file are pinned to this number:
-        //   - `MAX_UPLOAD_BYTES` in
-        //     `ui/packages/shared/src/utils/background-image.ts` sits just
-        //     BELOW it, so the admin gets a friendly "too big" message
-        //     instead of a bare 413;
-        //   - the deployed nginx vhosts' `client_max_body_size` must be at
-        //     least this, or nginx rejects the upload before it arrives.
-        //     Those vhosts are hand-maintained on the host, not in this
-        //     repo — raise them alongside any change here.
-        .layer(RequestBodyLimitLayer::new(
-            25 * 1024 * 1024, /* 25 MiB */
-        ))
+        .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024 /* 10mb */))
+        // Applied to the merged router so auth still covers the upload
+        // route, whose body limit had to be layered separately above.
+        .merge(upload_routes)
         .layer(middleware::from_fn_with_state(
             state.clone(),
             crate::middleware::auth::auth_middleware,

@@ -213,7 +213,7 @@ async fn backfill_variant(
 
     let key = variant_key(id, variant);
     store
-        .put_object(&key, rendition, public)
+        .put_object(&key, rendition.into(), public)
         .await
         .map_err(|e| format!("{id}: could not store {key}: {e}"))?;
     Ok(key)
@@ -301,7 +301,7 @@ pub async fn migrate_images(
             continue;
         }
         store
-            .put_object(&key, rewritten.into_bytes(), true)
+            .put_object(&key, rewritten.into(), true)
             .await
             .map_err(|e| MigrationError(format!("failed to rewrite {key}: {e}")))?;
         tracing::info!("rewrote image urls in {}", key);
