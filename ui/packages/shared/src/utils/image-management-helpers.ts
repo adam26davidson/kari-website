@@ -9,7 +9,18 @@ const MAX_EXTENSION_LEN = 16;
  * the image's prefix; the set is closed on both sides, so a typo is a
  * compile error here and a 400 there.
  */
-export type ImageVariant = "thumb";
+export type ImageVariant = "thumb" | "background";
+
+/**
+ * File name of each variant inside an image's prefix, mirroring the API's
+ * `image_keys.rs`. Both are JPEG whatever the original was — the API's
+ * encoder is JPEG-only — so these are fixed names rather than ones carrying
+ * the id's own extension.
+ */
+const VARIANT_FILES: Record<ImageVariant, string> = {
+  thumb: "thumb.jpg",
+  background: "background.jpg",
+};
 
 /**
  * The extension the API gave an image's stored objects, derived from its id
@@ -38,6 +49,18 @@ const imageExtension = (id: string) => {
  */
 export const s3ImageUrl = (id: string) =>
   `${S3_URL}/images/${id}/original${imageExtension(id)}`;
+
+/**
+ * Public URL of an image's server-derived rendition. Same reasoning as
+ * {@link s3ImageUrl}: S3 cannot select an object by query parameter, so the
+ * variant is a path segment.
+ *
+ * A variant only exists for images uploaded (or migrated) since it shipped,
+ * so a caller has to be ready to fall back to the original — see
+ * `use-site-background.ts`.
+ */
+export const s3VariantImageUrl = (id: string, variant: ImageVariant) =>
+  `${S3_URL}/images/${id}/${VARIANT_FILES[variant]}`;
 
 /**
  * Public URL of an image at the PRE-migration key, where every image was a

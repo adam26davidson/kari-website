@@ -7,6 +7,7 @@ import {
   legacyS3ImageUrl,
   onS3ImageError,
   s3ImageUrl,
+  s3VariantImageUrl,
   apiImageUrl,
 } from "./image-management-helpers";
 
@@ -36,6 +37,29 @@ describe("image-management-helpers", () => {
     it("ignores an unusable extension, as the API does", () => {
       expect(s3ImageUrl("photo.averyveryverylongextension")).toBe(
         `${S3}/images/photo.averyveryverylongextension/original`,
+      );
+    });
+  });
+
+  describe("s3VariantImageUrl", () => {
+    it("points at the variant's own object inside the image's directory", () => {
+      expect(s3VariantImageUrl("photo.jpg", "background")).toBe(
+        `${S3}/images/photo.jpg/background.jpg`,
+      );
+      expect(s3VariantImageUrl("photo.jpg", "thumb")).toBe(
+        `${S3}/images/photo.jpg/thumb.jpg`,
+      );
+    });
+
+    it("keeps the .jpg name whatever the original's extension was", () => {
+      // The API's encoder is JPEG-only, so a variant of a PNG is a JPEG —
+      // deriving the name from the id would ask S3 for a key that is not
+      // there.
+      expect(s3VariantImageUrl("drawing.png", "background")).toBe(
+        `${S3}/images/drawing.png/background.jpg`,
+      );
+      expect(s3VariantImageUrl("noextension", "background")).toBe(
+        `${S3}/images/noextension/background.jpg`,
       );
     });
   });
