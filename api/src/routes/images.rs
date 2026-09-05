@@ -3,8 +3,10 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use bytes::Bytes;
 use std::collections::BTreeMap;
 use std::time::{Duration, SystemTime};
+use tokio::sync::Semaphore;
 use uuid::Uuid;
 
 use crate::error::AppError;
@@ -25,6 +27,55 @@ use crate::{
 /// yet written the manifest that references it, so a fresh object can look
 /// orphaned while it is actually about to be referenced.
 const GC_SAFETY_MARGIN: Duration = Duration::from_secs(60 * 60);
+
+/// Only one image is decoded at a time, process-wide.
+///
+/// Rendition generation is the memory peak of the whole API — see
+/// [`MAX_DECODE_BYTES`](crate::services::thumbnail::MAX_DECODE_BYTES) for
+/// the budget — and `spawn_blocking`'s pool is effectively unbounded, so
+/// without this N simultaneous uploads cost N times that peak. This API runs
+/// on a micro EC2 host alongside a second copy of itself, so the peak has to
+/// be a property of the process rather than of the request rate. There is
+/// exactly one admin: a second concurrent upload waits a few seconds, and
+/// its original is already stored by then either way.
+///
+/// The permit covers the decode ONLY — never the body read or the S3 puts,
+/// which are I/O-bound and hold no pixel buffers. It is held by the decode
+/// itself rather than by the request that started it, so a cancelled request
+/// cannot release it early; see [`under_rendition_gate`].
+static RENDITION_GATE: Semaphore = Semaphore::const_new(1);
+
+/// Run one image decode on a blocking thread, holding [`RENDITION_GATE`] for
+/// as long as it allocates.
+///
+/// The permit is moved INTO the blocking closure rather than held by the
+/// caller's future, and that placement is the whole point. A blocking task
+/// cannot be cancelled: if the request future is dropped mid-decode — the
+/// admin's client or a proxy timing out on a multi-second decode, or her
+/// navigating away and retrying — the `JoinHandle` is dropped but the decode
+/// runs on to completion, detached, still holding its buffers. A permit held
+/// by that dropped future would be released while its decode was still
+/// allocating, so the retry would start a second decode alongside the first
+/// and the process would pay the peak twice — exactly the doubling this gate
+/// exists to prevent, under exactly the conditions it targets. Inside the
+/// closure the permit lives precisely as long as the memory does.
+pub async fn under_rendition_gate<F, T>(decode: F) -> Result<T, tokio::task::JoinError>
+where
+    F: FnOnce() -> T + Send + 'static,
+    T: Send + 'static,
+{
+    // `acquire()` on a static borrows for `'static`, so the permit can be
+    // moved across the `spawn_blocking` boundary.
+    let permit = RENDITION_GATE
+        .acquire()
+        .await
+        .expect("the rendition gate is a static and is never closed");
+    tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        decode()
+    })
+    .await
+}
 
 /// Server-generated object name for an upload: a fresh UUID plus the
 /// sanitized extension of the client's filename. The UUID makes distinct
@@ -122,6 +173,15 @@ pub async fn upload_image_handler(
         }
     }
 
+    // Buffered exactly once from here on: the put and the rendition decode
+    // both need the whole body, and `Bytes` hands the second one a refcount
+    // instead of a second copy of a file that can now be 25 MB (#706).
+    let data = Bytes::from(data);
+
+    // The original is stored BEFORE any rendition, and deliberately so: the
+    // GC safety margin above assumes it, and an upload whose decode fails or
+    // panics must still leave the original in the bucket. Do not restructure
+    // this into generate-then-put.
     state
         .s3_service
         .put_object(&key, data.clone(), is_published)
@@ -149,11 +209,13 @@ pub async fn upload_image_handler(
 /// `GET /images/:id?size=…` falls back to the original. Failures are
 /// logged, not returned — and one variant failing to store does not stop
 /// the others being written.
-async fn store_renditions(state: &AppState, id: &str, data: Vec<u8>, is_published: bool) {
-    // Decoding a camera original allocates tens of megabytes and takes real
-    // CPU: never on the async runtime's thread. One blocking task for all
-    // variants, so the decode is paid for once.
-    let generated = tokio::task::spawn_blocking(move || make_renditions(&data)).await;
+async fn store_renditions(state: &AppState, id: &str, data: Bytes, is_published: bool) {
+    // Decoding a camera original allocates hundreds of megabytes and takes
+    // real CPU: never on the async runtime's thread. One blocking task for
+    // all variants, so the decode is paid for once. The gate is released
+    // before the S3 puts below: holding it across network I/O would
+    // serialize uploads for no memory benefit.
+    let generated = under_rendition_gate(move || make_renditions(&data)).await;
     let renditions = match generated {
         Ok(Ok(renditions)) => renditions,
         Ok(Err(e)) => {
@@ -167,7 +229,11 @@ async fn store_renditions(state: &AppState, id: &str, data: Vec<u8>, is_publishe
     };
     for (variant, bytes) in renditions {
         let key = variant_key(id, variant);
-        if let Err(e) = state.s3_service.put_object(&key, bytes, is_published).await {
+        if let Err(e) = state
+            .s3_service
+            .put_object(&key, bytes.into(), is_published)
+            .await
+        {
             tracing::warn!("Failed to store {}: {}", key, e);
         }
     }

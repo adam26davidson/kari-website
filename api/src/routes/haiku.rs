@@ -28,7 +28,7 @@ pub async fn update_haiku_handler(
 
     state
         .s3_service
-        .put_object("haiku.json", haiku_str.into_bytes(), true)
+        .put_object("haiku.json", haiku_str.into(), true)
         .await
         .map_err(|e| AppError::internal("Failed to update haiku", e))?;
 

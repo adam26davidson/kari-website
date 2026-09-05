@@ -318,3 +318,106 @@ fn exif_orientation(orientation: u16) -> Vec<u8> {
     exif.extend_from_slice(&0u32.to_le_bytes()); // no next IFD
     exif
 }
+
+// ------------------------------------------------ decoded-size ceiling
+
+/// A PNG that declares `width` x `height` of 8-bit RGB in its IHDR and then
+/// carries no usable pixel data at all.
+///
+/// The decoded-size ceiling has to refuse an image from its HEADER, before a
+/// single pixel is read — that is the whole point of it, and a fixture made
+/// of real pixels could not tell the difference between refusing early and
+/// surviving the allocation. It also keeps these tests free: encoding a real
+/// 81 MP PNG costs ~15 s and 243 MB, which is a strange price to pay in a
+/// test about not spending 243 MB.
+fn png_header_only(width: u32, height: u32) -> Vec<u8> {
+    /// PNG chunk: big-endian length, four-byte type, payload, CRC-32 over
+    /// type and payload.
+    fn chunk(kind: &[u8; 4], payload: &[u8]) -> Vec<u8> {
+        fn crc32(bytes: &[u8]) -> u32 {
+            let mut crc = 0xFFFF_FFFFu32;
+            for &byte in bytes {
+                crc ^= u32::from(byte);
+                for _ in 0..8 {
+                    crc = if crc & 1 == 0 {
+                        crc >> 1
+                    } else {
+                        (crc >> 1) ^ 0xEDB8_8320
+                    };
+                }
+            }
+            !crc
+        }
+
+        let mut body = kind.to_vec();
+        body.extend_from_slice(payload);
+        let mut out = (payload.len() as u32).to_be_bytes().to_vec();
+        out.extend_from_slice(&body);
+        out.extend_from_slice(&crc32(&body).to_be_bytes());
+        out
+    }
+
+    let mut ihdr = width.to_be_bytes().to_vec();
+    ihdr.extend_from_slice(&height.to_be_bytes());
+    // 8 bits per channel, colour type 2 (RGB), deflate, no filter, no
+    // interlace — so bytes-per-pixel is 3, as a camera JPEG's would be.
+    ihdr.extend_from_slice(&[8, 2, 0, 0, 0]);
+
+    let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+    png.extend_from_slice(&chunk(b"IHDR", &ihdr));
+    // A zlib header and nothing else: enough for the decoder to be built
+    // (which is where the size is checked), never enough to decode.
+    png.extend_from_slice(&chunk(b"IDAT", &[0x78, 0x01]));
+    png.extend_from_slice(&chunk(b"IEND", &[]));
+    png
+}
+
+#[test]
+fn make_renditions_refuses_a_source_whose_decoded_size_exceeds_the_byte_cap() {
+    // 9000x9000 passes MAX_SOURCE_EDGE on BOTH dimensions and would still
+    // decode to 81 MP x 3 B = 243 MB — more than this API is allowed to
+    // hold on its micro host. That gap is exactly what MAX_DECODE_BYTES
+    // closes: a per-dimension edge limit is not a memory limit, and a
+    // 16-bit source would blow through it by twice as much again.
+    let err = make_renditions(&png_header_only(9000, 9000)).expect_err("should refuse to decode");
+    let message = err.to_string();
+    assert!(
+        message.contains("decode limit"),
+        "the error should name the decode limit: {message}"
+    );
+}
+
+#[test]
+fn the_decode_cap_still_admits_the_largest_camera_in_circulation() {
+    // 9504x6336 is a 61 MP full-frame sensor: 172 MiB decoded, inside
+    // MAX_DECODE_BYTES with headroom. It must keep being accepted —
+    // refusing it would leave the untouched original as the file every
+    // visitor downloads as the site background.
+    //
+    // Only the size check runs here (the fixture has no pixels, so the
+    // decode itself then fails); that a large real image scales correctly
+    // once admitted is pinned by
+    // `background_scales_a_huge_image_down_to_its_own_max_edge`.
+    let err = make_renditions(&png_header_only(9504, 6336)).expect_err("no pixel data to decode");
+    let message = err.to_string();
+    assert!(
+        !message.contains("decode limit"),
+        "61 MP is inside the budget and must not be refused: {message}"
+    );
+}
+
+#[test]
+fn background_applies_exif_orientation_like_the_thumbnail_does() {
+    // Orientation is applied AFTER scaling now — to a <=2560 px rendition
+    // rather than to the full-size source, which is what stops a portrait
+    // camera photo holding two full-size buffers at once. Rotating later
+    // must not mean rotating less, so the second variant is pinned too.
+    let jpeg = jpeg_with_orientation(&png_bytes(1200, 800), 6);
+    let background = make_rendition(&jpeg, ImageVariant::Background).expect("rendition");
+    let decoded = image::load_from_memory(&background).expect("background decodes");
+    assert_eq!(
+        (decoded.width(), decoded.height()),
+        (800, 1200),
+        "a 'rotate 90' 1200x800 source describes an upright 800x1200 image"
+    );
+}

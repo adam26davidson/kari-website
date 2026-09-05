@@ -26,6 +26,7 @@ use aws_smithy_runtime_api::http::StatusCode;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::DateTime;
+use bytes::Bytes;
 use kari_website_api::services::object_store::ObjectStore;
 use kari_website_api::services::s3::{S3Error, S3Service};
 use std::sync::{Arc, Mutex};
@@ -139,7 +140,7 @@ async fn put_object_sends_body_and_public_tag() {
     let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
 
     service
-        .put_object("photos/dog.jpg", b"dog bytes".to_vec(), true)
+        .put_object("photos/dog.jpg", Bytes::from_static(b"dog bytes"), true)
         .await
         .expect("put should succeed");
 
@@ -154,7 +155,7 @@ async fn put_object_tags_private_uploads_as_not_public() {
     let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
 
     service
-        .put_object("drafts/wip.jpg", b"draft bytes".to_vec(), false)
+        .put_object("drafts/wip.jpg", Bytes::from_static(b"draft bytes"), false)
         .await
         .expect("put should succeed");
 
@@ -177,7 +178,7 @@ async fn put_object_sets_no_cache_on_json_documents() {
     let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
 
     service
-        .put_object("haiga.json", b"[]".to_vec(), true)
+        .put_object("haiga.json", Bytes::from_static(b"[]"), true)
         .await
         .expect("put should succeed");
 
@@ -194,7 +195,7 @@ async fn put_object_sets_no_cache_on_blog_html_content() {
     let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
 
     service
-        .put_object("blog/post-1.html", b"<p>hi</p>".to_vec(), true)
+        .put_object("blog/post-1.html", Bytes::from_static(b"<p>hi</p>"), true)
         .await
         .expect("put should succeed");
 
@@ -209,7 +210,7 @@ async fn put_object_leaves_cache_control_unset_on_images() {
     let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
 
     service
-        .put_object("images/dog.jpg", b"jpeg bytes".to_vec(), true)
+        .put_object("images/dog.jpg", Bytes::from_static(b"jpeg bytes"), true)
         .await
         .expect("put should succeed");
 
@@ -223,7 +224,7 @@ async fn put_object_maps_service_error_to_operation_failed() {
     let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
 
     let err = service
-        .put_object("k", b"data".to_vec(), false)
+        .put_object("k", Bytes::from_static(b"data"), false)
         .await
         .expect_err("403 should be an error");
 
@@ -424,7 +425,11 @@ async fn put_object_sets_content_type_from_the_key() {
     let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
 
     service
-        .put_object("images/x.jpg/original.jpg", b"jpeg".to_vec(), true)
+        .put_object(
+            "images/x.jpg/original.jpg",
+            Bytes::from_static(b"jpeg"),
+            true,
+        )
         .await
         .expect("put should succeed");
 
@@ -439,7 +444,7 @@ async fn put_object_sets_content_type_on_json_documents() {
     let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
 
     service
-        .put_object("haiku.json", b"[]".to_vec(), true)
+        .put_object("haiku.json", Bytes::from_static(b"[]"), true)
         .await
         .expect("put should succeed");
 
@@ -454,7 +459,7 @@ async fn put_object_leaves_content_type_unset_for_an_unguessable_key() {
     let service = S3Service::new(mock_client!(aws_sdk_s3, [&rule]), BUCKET.to_string());
 
     service
-        .put_object("_health", b"ok".to_vec(), false)
+        .put_object("_health", Bytes::from_static(b"ok"), false)
         .await
         .expect("put should succeed");
 
@@ -634,7 +639,7 @@ async fn s3_service_round_trips_against_live_bucket() {
     let s3_service = S3Service::new(client, test_bucket);
 
     let test_key = "test-key.txt";
-    let test_data = b"Hello, world!".to_vec();
+    let test_data = Bytes::from_static(b"Hello, world!");
 
     s3_service
         .put_object(test_key, test_data.clone(), false)

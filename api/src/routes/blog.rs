@@ -44,7 +44,7 @@ pub async fn update_blog_posts_handler(
     // been exposed; the admin retries and the public list catches up.
     state
         .s3_service
-        .put_object(BLOG_POSTS_ALL_KEY, all_posts_str.into_bytes(), false)
+        .put_object(BLOG_POSTS_ALL_KEY, all_posts_str.into(), false)
         .await
         .map_err(|e| AppError::internal("Failed to update blog posts", e))?;
 
@@ -54,7 +54,7 @@ pub async fn update_blog_posts_handler(
 
     state
         .s3_service
-        .put_object(BLOG_POSTS_PUBLIC_KEY, published_str.into_bytes(), true)
+        .put_object(BLOG_POSTS_PUBLIC_KEY, published_str.into(), true)
         .await
         .map_err(|e| AppError::internal("Failed to update public blog posts", e))?;
 
@@ -71,7 +71,7 @@ pub async fn update_blog_post_content(
         .s3_service
         .put_object(
             &key,
-            blog_post_data.content.into_bytes(),
+            blog_post_data.content.into(),
             blog_post_data.is_published,
         )
         .await

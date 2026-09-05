@@ -5,6 +5,7 @@
 //! implementation. `S3Service` is the only production implementation.
 
 use async_trait::async_trait;
+use bytes::Bytes;
 use std::time::SystemTime;
 
 use crate::services::s3::S3Error;
@@ -32,7 +33,15 @@ pub trait ObjectStore: Send + Sync {
     /// under stable keys, so browsers revalidate them on every use instead
     /// of trusting second-granularity `Last-Modified` freshness (#90).
     /// Image keys get no `Cache-Control` and keep long-lived caching.
-    async fn put_object(&self, key: &str, data: Vec<u8>, public: bool) -> Result<(), S3Error>;
+    ///
+    /// Takes [`Bytes`] rather than `Vec<u8>` so an upload's body is buffered
+    /// exactly once: the image handler has to keep the bytes for rendition
+    /// generation as well as for this put, and with `Bytes` that second
+    /// handle is a refcount bump instead of a second 25 MB allocation on a
+    /// host with ~1 GiB of RAM. `ByteStream::from(Bytes)` is zero-copy too,
+    /// and `Bytes::from` is zero-copy from both `Vec<u8>` and `String`, so
+    /// the document callers pay nothing for the change.
+    async fn put_object(&self, key: &str, data: Bytes, public: bool) -> Result<(), S3Error>;
 
     /// Replace the `public=` tag on an existing object; `NotFound` if the
     /// object does not exist.

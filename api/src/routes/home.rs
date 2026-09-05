@@ -30,7 +30,7 @@ pub async fn update_home_page_handler(
 
     state
         .s3_service
-        .put_object("home-page.json", home_page_data_str.into_bytes(), true)
+        .put_object("home-page.json", home_page_data_str.into(), true)
         .await
         .map_err(|e| AppError::internal("Failed to update home page data", e))?;
 
