@@ -23,6 +23,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { v4 as uuidv4 } from "uuid";
 
+import { LinkBubbleMenu } from "./link-bubble-menu";
 import { linkRefusedMessage } from "./link-refusal-message";
 
 const HEADING_LEVELS = [1, 2, 3] as const;
@@ -190,11 +191,21 @@ const MenuBar = ({
     return null;
   }
 
-  const toggleLinkPanel = () => {
+  // Opening the panel prefills it with whatever link the cursor is in, so
+  // the bubble menu's "edit" and the toolbar's link button land in the same
+  // place with the same value.
+  const openLinkPanel = () => {
     setLinkError(null);
-    setLinkDraft(
-      linkDraft === null ? (editor.getAttributes("link").href ?? "") : null,
-    );
+    setLinkDraft(editor.getAttributes("link").href ?? "");
+  };
+
+  const toggleLinkPanel = () => {
+    if (linkDraft !== null) {
+      setLinkError(null);
+      setLinkDraft(null);
+      return;
+    }
+    openLinkPanel();
   };
 
   // The draft is passed in rather than read from state so the caller's
@@ -331,6 +342,12 @@ const MenuBar = ({
           <FontAwesomeIcon icon={faImage} />
         </button>
       </div>
+      {/* One link surface at a time: while the panel is open it holds the
+          address being edited, and a bubble still showing the old one over
+          the same words would only be in the way. */}
+      {linkDraft === null && (
+        <LinkBubbleMenu editor={editor} onEdit={openLinkPanel} />
+      )}
       {linkDraft !== null && (
         <form
           className="link-popover"

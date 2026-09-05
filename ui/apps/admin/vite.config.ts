@@ -20,8 +20,11 @@ const uiRoot = fileURLToPath(new URL("../..", import.meta.url));
 // - "index" is the chunk loaded on every admin page (649 kB after the
 //   split, down from 1,095 kB).
 // - "blog-post-editor" is the lazy chunk holding the editor, tiptap,
-//   prosemirror and their CSS (445 kB), fetched only when a post is
-//   opened.
+//   prosemirror and their CSS (499 kB), fetched only when a post is
+//   opened. It was 445 kB until #427 added the link bubble menu, which
+//   pulls in @tiptap/react/menus, the bubble/floating menu extensions and
+//   floating-ui — 54 kB, and all of it in this chunk rather than "index",
+//   which is what the split was for.
 //
 // Budgeting the lazy chunk is the real regression guard, and it guards in
 // both directions: bundleBudget also fails when a budgeted chunk is never
@@ -53,5 +56,5 @@ export default defineConfig({
     // Only dist/admin is emptied; the public build owns the rest of dist/.
     emptyOutDir: true,
   },
-  plugins: [react(), bundleBudget({ index: 675, "blog-post-editor": 470 })],
+  plugins: [react(), bundleBudget({ index: 675, "blog-post-editor": 525 })],
 });
