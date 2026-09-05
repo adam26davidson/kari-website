@@ -28,7 +28,7 @@
    Image) must not carry the same weight as the one obvious next action
    (#457). Outlined rather than filled, in the same brown family. */
 .admin-button.secondary {
-  background-color: #f2efe9;
+  background-color: var(--card-surface);
   color: #4a2a14;
   border: 1px solid var(--admin-primary);
   /* The border would otherwise add 2px to the height and leave this
@@ -55,7 +55,7 @@
    .secondary in the danger colour, so it reads as "this removes something"
    without competing with the Save it sits below (design brief §2). */
 .admin-button.danger-secondary {
-  background-color: #f2efe9;
+  background-color: var(--card-surface);
   color: var(--admin-danger-hover);
   border: 1px solid var(--admin-danger);
   padding: 9px;

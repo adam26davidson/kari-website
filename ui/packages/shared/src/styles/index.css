@@ -15,6 +15,72 @@
      (#347). */
   --light-text: #e6e6e6;
 
+  /* Primary foreground for the PALE surfaces — the translucent panels and
+     the opaque notice cards below. The counterpart to --light-text: the two
+     are chosen against opposite ends of the site, and a rule that picks the
+     wrong one is invisible rather than merely off. --muted-text above is the
+     secondary weight of this same foreground. */
+  --dark-text: #181818;
+
+  /* Secondary text on the dark header bar — the admin user name. What
+     --muted-text is on the pale panels, this is on the bar: a step down
+     from --light-text that still clears WCAG AA over the bar tint at its
+     worst (a pure-white background photo). Pinned by
+     test/design/text-contrast.test.ts. */
+  --muted-light-text: #c9c9c9;
+
+  /* The surface tints, in one place (#480).
+     ------------------------------------------------------------------
+     Every panel on this site floats over the admin-chosen background
+     photo, so none of them can borrow its contrast from what is behind
+     it: the photo moves, and on a wide bar it moves ALONG the panel (a
+     bright patch under one end of the header made the last two nav links
+     read white-on-pale while the rest of the nav was fine, #392). Each
+     tint is therefore opaque enough to carry its foreground on its own
+     over a pure-white photo, and the floors that say so live in
+     test/design/text-contrast.test.ts.
+
+     That argument used to be re-derived wherever a tint was spelled, and
+     the values drifted between the copies. They are declared once here so
+     the contrast floor has one thing to check and one thing to change.
+
+     Alpha variants go through `color-mix` on the base colour rather than
+     a second hex with a suffix, so the family stays one colour — the same
+     pattern the admin's --admin-primary uses (#565). */
+
+  /* The translucent grey panel: the public data list and home card, and
+     every admin panel, sidebar and row. Three alphas, one grey — the
+     admin's card sits a little lighter and its editor pane a little
+     heavier than the public list. */
+  --panel-surface: #e2e2e2;
+  --panel-tint: color-mix(in srgb, var(--panel-surface) 80%, transparent);
+  --panel-tint-soft: color-mix(in srgb, var(--panel-surface) 75%, transparent);
+  --panel-tint-strong: color-mix(in srgb, var(--panel-surface) 85%, transparent);
+
+  /* The OPAQUE pale card: the loading indicator, the two error notices and
+     the admin's quiet buttons. Opaque on purpose — these say something has
+     gone wrong or is taking a moment, and a message about a failure is the
+     last thing that should be competing with a photograph. */
+  --card-surface: #f2efe9;
+
+  /* The site's one brown. It is the "do the obvious next thing" colour on
+     both sides of the site: the public share/download buttons and the
+     error notice's Reload, and every filled admin control. Spelled once
+     here; apps/admin/src/admin.css re-exports it under its own semantic
+     name. Pinned by test/design/color-tokens.test.ts. */
+  --primary: #6d3513;
+  --primary-hover: #552a0f;
+
+  /* The dark green the header bar is tinted with by default, and the same
+     green the focus ring's outer halo is drawn in — the ring has to read
+     on the bar, so it is deliberately the bar's own colour rather than a
+     near-miss. Since #482 the bar tint is admin-settable and this is the
+     DEFAULT it falls back to; packages/shared/src/utils/color.ts holds the
+     same default for the admin's colour picker, and the contrast test
+     reconciles the two. */
+  --header-surface: #1c3100;
+  --header-tint: color-mix(in srgb, var(--header-surface) 86%, transparent);
+
   /* The type scale's weight axis, in one place (#356).
 
      The default everywhere is 400: the body used to be 300, and in Noto
@@ -159,7 +225,7 @@ body[data-custom-background]::before {
 :focus-visible {
   outline: 2px solid #ffffff;
   outline-offset: 0;
-  box-shadow: 0 0 0 4px #1c3100;
+  box-shadow: 0 0 0 4px var(--header-surface);
 }
 
 .whole-page {
@@ -180,19 +246,36 @@ body[data-custom-background]::before {
    component CSS files and worked everywhere only because Vite bundles all
    CSS globally; they belong here where the sharing is explicit. */
 
-/* The "Loading..." indicator pages show while content is fetched — styled
-   as a card matching .load-error so it reads against the photo background.
-   Used by ContentPage, OtherWorksItem, and Home. */
-.loading {
+/* The notice card: the three things the site says to a visitor when it has
+   nothing else to show — "Loading...", "couldn't load this", and the error
+   boundary's "something went wrong". They are one object seen in three
+   states, so they are one definition rather than three that happened to
+   match (#542): the surface, the foreground, the lift off the photo and
+   the interface face were copied into all three files, and the copies had
+   already started being maintained separately.
+
+   Only what is genuinely common lives here. Each of the three keeps the
+   size and layout that make it what it is — the loading line is a single
+   compact row, the two error notices are a taller centred column — in its
+   own file, so nothing here has to be overridden and load order cannot
+   decide the outcome. */
+.loading,
+.load-error,
+.error-boundary {
   margin: 80px auto 0;
-  padding: 16px 32px;
   border-radius: 8px;
-  background-color: #f2efe9;
-  color: #181818;
+  background-color: var(--card-surface);
+  color: var(--dark-text);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   font-family: var(--font-ui);
   font-size: 16px;
   text-align: center;
+}
+
+/* The "Loading..." indicator pages show while content is fetched. Used by
+   ContentPage, OtherWorksItem, and Home. */
+.loading {
+  padding: 16px 32px;
 }
 
 /* Fade-and-rise entrance used by the home page card's children and the

@@ -16,7 +16,7 @@
   font-family: var(--font-ui);
   font-size: 17px;
   font-weight: 400;
-  color: #181818;
+  color: var(--dark-text);
 }
 
 /* A stand-in for the photograph behind the real bar: light at one end and
@@ -70,7 +70,7 @@
 .header-colors-label {
   font-family: var(--font-ui);
   font-size: 15px;
-  color: #181818;
+  color: var(--dark-text);
 }
 
 /* The three rows read as one group of settings, so their swatches line up
@@ -98,7 +98,7 @@
   height: 36px;
   /* A mount around the colour, not a form field around a value. The admin's
      field tokens are near-white on a near-white card (--admin-field-bg is
-     rgb(240, 240, 240), .card is rgba(226, 226, 226, 0.8)), so a white or
+     rgb(240, 240, 240), .card is --panel-tint-soft), so a white or
      near-white choice — which "Site title" and "Page links" both are by
      default — rendered as a hairline box on that fill read as an EMPTY
      input rather than as the colour currently set, while the dark green

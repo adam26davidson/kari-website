@@ -1,5 +1,5 @@
 .admin-haiku-list-line {
-  color: #181818;
+  color: var(--dark-text);
   font-size: 18px;
 }
 

@@ -17,9 +17,17 @@
      test could not resolve it through a token the way it already could for
      the danger pair (#565). Anything tinted the admin's own brown — a
      filled button, an outlined one's ring, an icon circle's glyph, a
-     checkbox's tick, a selected thumbnail's border — spends these. */
-  --admin-primary: #6d3513;
-  --admin-primary-hover: #552a0f;
+     checkbox's tick, a selected thumbnail's border — spends these.
+
+     Aliases, not definitions, since #480: the public site spends the same
+     brown on its share and download buttons and on the error notice's
+     Reload, so a hex here would have been the seventh copy rather than the
+     one. It is declared in packages/shared/src/styles/index.css, which
+     both apps import; these names stay because "the admin's primary" is
+     what the rules below mean, and because a future admin palette can
+     re-point them without touching the public site. */
+  --admin-primary: var(--primary);
+  --admin-primary-hover: var(--primary-hover);
   /* One reading measure and one size for admin body prose. Both, because
      `ch` resolves against the element's own font-size: the what's-on-test
      panel had a 15px explanation capped at 60ch sitting above 16px notes
@@ -51,7 +59,7 @@
   flex-shrink: 0;
   height: calc(100% - 15px);
   padding-top: 15px;
-  background-color: rgba(226, 226, 226, 0.8);
+  background-color: var(--panel-tint);
   /* Blur what shows through so the menu text always sits on a calm,
      near-solid backing regardless of the photo behind it (#307). */
   backdrop-filter: blur(10px);
@@ -85,16 +93,16 @@
 }
 
 .admin-menu-item.selected {
-  color: #181818;
+  color: var(--dark-text);
 }
 
 .admin-menu-item:hover {
-  color: #181818;
+  color: var(--dark-text);
   cursor: pointer;
 }
 
 .admin-menu-item:active {
-  color: #181818;
+  color: var(--dark-text);
 }
 
 .admin-content {
@@ -130,7 +138,7 @@ textarea {
   border-radius: 3px;
   border: 1px solid var(--admin-field-border);
   background-color: var(--admin-field-bg);
-  color: #181818;
+  color: var(--dark-text);
   /* Sans-serif, like the rest of the admin: the monospace this used to be
      made every search box and editor field read like a code editor rather
      than a writing surface (#457). Nothing here is code — it is haiku,
@@ -215,7 +223,7 @@ input[type="checkbox"] {
      brief §1). This is the treatment the site-background page already had
      and the one the others now match. */
   font-weight: 400;
-  color: #181818;
+  color: var(--dark-text);
 }
 
 .admin-section-explanation {
@@ -325,7 +333,7 @@ input[type="checkbox"] {
   color: var(--admin-primary);
   /* Opaque, like .admin-button: a translucent fill reads washed out over
      a light card or photo (#278, #321). */
-  background-color: #f2efe9;
+  background-color: var(--card-surface);
   border: 1px solid var(--admin-primary);
   border-radius: 50%;
   transition: background-color 0.2s;
@@ -364,8 +372,8 @@ input[type="checkbox"] {
 }
 
 .admin-loading-message {
-  background-color: #f2efe9;
-  color: #181818;
+  background-color: var(--card-surface);
+  color: var(--dark-text);
   padding: 16px 32px;
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
@@ -383,8 +391,8 @@ input[type="checkbox"] {
 }
 
 .admin-confirmation-dialog {
-  background-color: #f2efe9;
-  color: #181818;
+  background-color: var(--card-surface);
+  color: var(--dark-text);
   max-width: 440px;
   padding: 28px 36px;
   border-radius: 8px;

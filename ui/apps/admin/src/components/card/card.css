@@ -1,5 +1,5 @@
 .card {
-  background-color: rgba(226, 226, 226, 0.75);
+  background-color: var(--panel-tint-soft);
   backdrop-filter: blur(10px);
   display: flex;
   flex-direction: row;

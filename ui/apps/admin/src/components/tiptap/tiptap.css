@@ -26,7 +26,7 @@
   height: content-fit;
   margin: 10px;
   /* The body text must not inherit the page's light-on-photo color */
-  color: #181818;
+  color: var(--dark-text);
   overflow-wrap: anywhere;
 }
 
@@ -148,7 +148,7 @@
   min-width: 0;
   padding: 5px;
   font-size: 14px;
-  color: #181818;
+  color: var(--dark-text);
   background-color: white;
   border: 1px solid var(--admin-field-border);
   border-radius: 3px;

@@ -11,10 +11,10 @@
   border-radius: 3px;
   /* Same translucent card treatment as the other admin pages so the
      text doesn't sit directly on the photo background (#210) */
-  background-color: rgba(226, 226, 226, 0.8);
+  background-color: var(--panel-tint);
   backdrop-filter: blur(10px);
   font-family: var(--font-ui);
-  color: #181818;
+  color: var(--dark-text);
 }
 
 .gc-error {

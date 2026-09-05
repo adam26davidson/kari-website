@@ -34,7 +34,7 @@
   /* Same blurred, near-solid backing as the other admin cards (.card,
      .admin-image-gc-page) — without the blur this panel read as far more
      translucent than the home editor (#278). */
-  background-color: rgba(226, 226, 226, 0.85);
+  background-color: var(--panel-tint-strong);
   backdrop-filter: blur(10px);
   border-radius: 3px;
 }
