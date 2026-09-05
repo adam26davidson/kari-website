@@ -1,0 +1,47 @@
+/* The bubble that floats over a link the cursor is resting in. Its skin is
+   the toolbar link panel's (.link-popover in tiptap.css), so the editor
+   offers one look for link editing wherever it happens; the greys are
+   repeated the way the rest of this editor's stylesheets repeat them,
+   pending the tokenisation the admin's browns got in #565.
+
+   Position, width, visibility and opacity are set inline by the bubble-menu
+   plugin, so nothing here may declare them: floating-ui owns where this
+   sits, and this file owns what it looks like once it gets there. */
+.link-bubble {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* Narrow enough to sit beside the words it belongs to at 390px, where
+     the plugin's shift middleware nudges it back on screen. */
+  max-width: 280px;
+  padding: 6px 8px;
+  border-radius: 3px;
+  background-color: rgb(232, 232, 232);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.link-bubble-address {
+  /* A long url would push the actions off the bubble, so it gets an
+     ellipsis and keeps the whole address in its title. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 150px;
+  font-size: 13px;
+  color: var(--admin-primary);
+}
+
+.link-bubble button {
+  padding: 5px;
+  font-size: 14px;
+  background-color: rgb(212, 212, 212);
+  color: rgb(55, 55, 55);
+  border-width: 0px;
+  border-radius: 3px;
+}
+
+.link-bubble button:hover {
+  background-color: rgb(72, 72, 72);
+  color: rgb(232, 232, 232);
+  cursor: pointer;
+}

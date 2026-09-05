@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Editor } from "@tiptap/react";
+import type { EditorView } from "@tiptap/pm/view";
 import { Tiptap } from "./tiptap";
 import { LINK_EXAMPLES } from "./link-refusal-message";
+import { shouldShowLinkBubble } from "./link-bubble-menu";
 
 // useEditor returns null until the editor instance exists. That never
 // happens in these tests, so the toolbar's null guard is only reachable by
@@ -468,5 +470,127 @@ describe("Tiptap toolbar", () => {
     Object.defineProperty(fileInput, "files", { value: [] });
     fileInput.onchange?.(new Event("change"));
     expect(onAddImage).not.toHaveBeenCalled();
+  });
+});
+
+// The bubble menu that appears over a link the cursor is sitting in.
+describe("Tiptap link bubble menu", () => {
+  const LINKED = '<p><a href="https://x.test/">hello</a></p>';
+
+  // shouldShow receives the live view; only its focus report matters here,
+  // and jsdom cannot supply a real one (see focusEditor below), so the
+  // predicate is asked directly with the focus state each case is about.
+  const askPredicate = (focused: boolean, element?: HTMLElement) =>
+    shouldShowLinkBubble({
+      editor: getEditor(),
+      element: element ?? document.createElement("div"),
+      view: { hasFocus: () => focused } as unknown as EditorView,
+    });
+
+  // jsdom implements no layout and does not treat a contenteditable element
+  // as focusable, so editor.commands.focus() leaves document.activeElement
+  // on the body and view.hasFocus() false — the bubble would never appear.
+  // Stubbing the view's focus report and then moving the cursor for real
+  // drives the plugin through its own show path: a collapsed selection
+  // skips the 250 ms update debounce, so the menu is up synchronously.
+  const focusEditor = async (pos = 2) => {
+    const editor = getEditor();
+    vi.spyOn(editor.view, "hasFocus").mockReturnValue(true);
+    await act(async () => {
+      editor.commands.setTextSelection(pos);
+    });
+  };
+
+  const queryBubble = () =>
+    screen.queryByRole("group", { name: "link actions" });
+
+  it("shows the bubble for a cursor inside a link in a focused editor", () => {
+    renderTiptap(LINKED);
+    expect(askPredicate(true)).toBe(true);
+  });
+
+  it("keeps the bubble away from text that is not a link", () => {
+    renderTiptap();
+    expect(askPredicate(true)).toBe(false);
+  });
+
+  it("hides the bubble once focus leaves both the editor and the bubble", () => {
+    renderTiptap(LINKED);
+    expect(askPredicate(false)).toBe(false);
+  });
+
+  it("keeps the bubble up while focus is inside the bubble itself", () => {
+    // Clicking "edit" or "remove" moves focus off the editor and into the
+    // menu; the menu has to survive its own buttons being pressed.
+    renderTiptap(LINKED);
+    const element = document.createElement("div");
+    const button = document.createElement("button");
+    element.appendChild(button);
+    document.body.appendChild(element);
+    button.focus();
+
+    expect(document.activeElement).toBe(button);
+    expect(askPredicate(false, element)).toBe(true);
+  });
+
+  it("offers no bubble while the editor is read-only", () => {
+    renderTiptap(LINKED);
+    act(() => {
+      getEditor().setEditable(false);
+    });
+
+    expect(askPredicate(true)).toBe(false);
+  });
+
+  it("shows the link's address with edit and remove actions", async () => {
+    renderTiptap(LINKED);
+    await focusEditor();
+
+    expect(queryBubble()).toBeInTheDocument();
+    const address = screen.getByRole("link", { name: "https://x.test/" });
+    expect(address).toHaveAttribute("href", "https://x.test/");
+    // The address is a peek at where the link goes, so it must not navigate
+    // the admin away from the post being written.
+    expect(address).toHaveAttribute("target", "_blank");
+    expect(address).toHaveAttribute("rel", "noopener noreferrer");
+    expect(getButton("edit")).toBeInTheDocument();
+    expect(getButton("remove")).toBeInTheDocument();
+  });
+
+  it("shows no bubble in a document with no link under the cursor", async () => {
+    renderTiptap();
+    await focusEditor();
+
+    expect(queryBubble()).toBeNull();
+    expect(screen.queryByRole("button", { name: "edit" })).toBeNull();
+  });
+
+  it("opens the toolbar's link panel prefilled from the edit action", async () => {
+    const user = userEvent.setup();
+    const { setContent } = renderTiptap(LINKED);
+    await focusEditor();
+
+    await user.click(getButton("edit"));
+
+    // The panel is the one place a url is typed, so edit reuses it rather
+    // than offering a second input inside the bubble.
+    expect(getLinkInput()).toHaveValue("https://x.test/");
+    expect(getButton("link")).toHaveAttribute("aria-expanded", "true");
+    // ...and the bubble stands down while the panel is open, so only one
+    // link surface is ever on screen at a time.
+    await waitFor(() => expect(queryBubble()).toBeNull());
+    expect(setContent).not.toHaveBeenCalled();
+  });
+
+  it("strips the link from the remove action", async () => {
+    const user = userEvent.setup();
+    const { setContent } = renderTiptap(LINKED);
+    await focusEditor();
+
+    await user.click(getButton("remove"));
+
+    expect(setContent).toHaveBeenLastCalledWith("<p>hello</p>");
+    expect(getButton("unlink")).toBeDisabled();
+    await waitFor(() => expect(queryBubble()).toBeNull());
   });
 });
