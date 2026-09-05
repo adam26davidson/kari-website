@@ -166,7 +166,20 @@ export function AdminItemList<T extends { id: string }>({
         ) : (
           controls
         )}
-        {filtering && visibleItems.length === 0 && (
+        {/* Two ways for the list to come up empty, and they want opposite
+            answers. A section with nothing in it used to render nothing at
+            all between the search box and the add button — a bare gap where
+            the brief asks for an explanation and the one action that fills
+            it (#473, design brief §7). An unmatched query keeps its own
+            notice, but only once there IS something to have missed:
+            blaming the search on an empty section would send her looking
+            for a spelling mistake. */}
+        {items.length === 0 && (
+          <p className="admin-data-list-empty">
+            No {noun} yet. Add your first one.
+          </p>
+        )}
+        {items.length > 0 && filtering && visibleItems.length === 0 && (
           <p className="admin-data-list-empty">
             No {noun} match &quot;{query.trim()}&quot;
           </p>

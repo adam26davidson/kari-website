@@ -135,6 +135,18 @@ describe("PhotographyPostEditor", () => {
     expect(makeImages().map((e) => e.id)).not.toContain(updated[3].id);
   });
 
+  // A brand new post starts with no images, so this is the first thing the
+  // editor shows her — and it showed a bare gap. In her words, too: the
+  // list's default noun would have said "No items yet" (#473, design brief
+  // §3, §7).
+  it("invites a first image when the post has none", () => {
+    renderEditor({ images: [] });
+    expect(
+      screen.getByText("No images yet. Add your first one."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/No items yet/)).toBeNull();
+  });
+
   // A bare red circle beside the caption box said nothing about whether it
   // removed the caption, the photo or the post (#457, design brief §3).
   it("names what the per-image delete removes", () => {
