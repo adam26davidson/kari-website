@@ -57,7 +57,9 @@ pub fn create_router(state: AppState) -> Router {
         //     least this, or nginx rejects the upload before it arrives.
         //     Those vhosts are hand-maintained on the host, not in this
         //     repo — raise them alongside any change here.
-        .layer(RequestBodyLimitLayer::new(25 * 1024 * 1024 /* 25 MiB */))
+        .layer(RequestBodyLimitLayer::new(
+            25 * 1024 * 1024, /* 25 MiB */
+        ))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             crate::middleware::auth::auth_middleware,

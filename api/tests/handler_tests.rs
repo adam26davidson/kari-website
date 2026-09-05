@@ -19,8 +19,8 @@ use common::{build_jwks, signed_token, TokenOptions};
 use http_body_util::BodyExt;
 use kari_website_api::routes::create_router;
 use kari_website_api::services::image_keys::{original_key, variant_key, ImageVariant};
-use kari_website_api::services::thumbnail::MAX_SOURCE_EDGE;
 use kari_website_api::services::object_store::ObjectStore;
+use kari_website_api::services::thumbnail::MAX_SOURCE_EDGE;
 use serde_json::{json, Value};
 use tower::ServiceExt;
 
@@ -984,7 +984,11 @@ async fn upload_image_accepts_a_body_larger_than_the_old_10mb_cap() {
     assert_eq!(status, StatusCode::OK);
     let file_name = uploaded_file_name(&body, ".jpg");
     assert_eq!(
-        store.get(&original_key(&file_name)).expect("stored").data.len(),
+        store
+            .get(&original_key(&file_name))
+            .expect("stored")
+            .data
+            .len(),
         12 * 1024 * 1024
     );
 }
