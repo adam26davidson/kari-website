@@ -142,17 +142,71 @@ const adminButtonCss = read(
   "apps/admin/src/components/admin-button/admin-button.css",
 );
 
+// Since #480 almost nothing in these stylesheets is a literal any more: the
+// surfaces and the palette live as custom properties in the shared `:root`,
+// the admin's `:root` re-exports two of them under its own names, and an
+// alpha variant is written as a `color-mix` on its base rather than as a
+// second hex. So a declaration has to be RESOLVED before it can be
+// composited, and the resolver below is what every assertion in this file
+// goes through.
+
+/** The `:root` blocks a custom property may be declared in. */
+const ROOT_SHEETS = [indexCss, adminCss];
+
+/** The value declared for `token`, in whichever `:root` declares it. */
+function tokenValue(token: string): string {
+  for (const css of ROOT_SHEETS) {
+    const match = ruleBlock(css, ":root").match(
+      new RegExp(`(?:^|;)\\s*${token}\\s*:\\s*([^;]+)`),
+    );
+    if (match) return match[1].trim();
+  }
+  throw new Error(`No :root declares ${token}`);
+}
+
+/** A colour and the opacity it is painted at. */
+interface Surface {
+  rgb: Rgb;
+  alpha: number;
+}
+
 /**
- * The one colour in an admin declaration, following a `var(--token)` to the
- * admin `:root` (where the danger pair lives) rather than the site one. The
- * value may be a shorthand — `1px solid var(--admin-danger)`.
+ * A colour value with its indirections resolved: `var(--token)` followed to
+ * whichever `:root` declares it, through as many aliases as it takes
+ * (`--admin-primary` is `var(--primary)`), and
+ * `color-mix(in srgb, <colour> N%, transparent)` collapsed to that colour
+ * at N% opacity — which is exactly what a browser paints for it, and what
+ * the alpha-suffixed hexes these replaced used to say directly.
  */
-function adminColor(value: string): Rgb {
-  const token = value.match(/var\(\s*(--[\w-]+)\s*\)/);
-  const resolved = token ? declaration(adminCss, ":root", token[1]) : value;
-  return parseColor(
-    resolved.match(/#[0-9a-f]{3,8}|rgba?\([^)]*\)/i)?.[0] ?? resolved,
+function resolveSurface(value: string, depth = 0): Surface {
+  if (depth > 8) throw new Error(`Colour reference loops at "${value}"`);
+  const token = value.match(/^var\(\s*(--[\w-]+)\s*\)$/);
+  if (token) return resolveSurface(tokenValue(token[1]), depth + 1);
+  const mix = value.match(
+    /^color-mix\(\s*in srgb\s*,\s*(.+?)\s+([\d.]+)%\s*,\s*transparent\s*\)$/,
   );
+  if (mix) {
+    const base = resolveSurface(mix[1].trim(), depth + 1);
+    return { rgb: base.rgb, alpha: base.alpha * (Number(mix[2]) / 100) };
+  }
+  return { rgb: parseColor(value), alpha: parseAlpha(value) };
+}
+
+/**
+ * The one colour in a declaration, resolved. The value may be a shorthand
+ * that carries other things too — `1px solid var(--admin-danger)`,
+ * `0 0 0 4px var(--header-surface)`, `2px solid #ffffff`.
+ */
+function colorOf(value: string): Rgb {
+  const trimmed = value.trim();
+  // A whole-value function is taken whole: picking "the colour inside" a
+  // `color-mix` with a regex would stop at the first `)`, which is the
+  // one closing its `var()` argument.
+  if (/^(?:var|color-mix)\(/.test(trimmed)) return resolveSurface(trimmed).rgb;
+  const found = trimmed.match(
+    /var\(\s*--[\w-]+\s*\)|#[0-9a-f]{3,8}|rgba?\([^)]*\)|\b(?:white|black)\b/i,
+  );
+  return resolveSurface(found?.[0] ?? trimmed).rgb;
 }
 
 /** Every public rule that renders small secondary text on the card. */
@@ -167,13 +221,7 @@ const SECONDARY_TEXT_RULES: ReadonlyArray<[string, string, string]> = [
   ],
 ];
 
-/** A colour declaration, following one level of `var(--token)` to :root. */
-function resolveColor(value: string): Rgb {
-  const token = value.match(/^var\(\s*(--[\w-]+)\s*\)$/);
-  return parseColor(token ? declaration(indexCss, ":root", token[1]) : value);
-}
-
-const mutedText = () => resolveColor("var(--muted-text)");
+const mutedText = () => colorOf("var(--muted-text)");
 
 const BLACK: Rgb = [0, 0, 0];
 const WHITE: Rgb = [255, 255, 255];
@@ -190,8 +238,10 @@ const backgroundLayerOver = (photo: Rgb): Rgb =>
   );
 
 /** A translucent surface as it actually renders over a given photo. */
-const surfaceOver = (photo: Rgb, tint: string): Rgb =>
-  composite(parseColor(tint), backgroundLayerOver(photo), parseAlpha(tint));
+const surfaceOver = (photo: Rgb, tint: string): Rgb => {
+  const { rgb, alpha } = resolveSurface(tint);
+  return composite(rgb, backgroundLayerOver(photo), alpha);
+};
 
 // The card as it actually renders: a translucent panel over the background
 // layer. The photo can be anything, so the card's lightness spans a range;
@@ -229,7 +279,7 @@ describe("secondary text on the public cards", () => {
   });
 
   it("stays visually secondary to the body text it sits under", () => {
-    const bodyText = parseColor(
+    const bodyText = colorOf(
       declaration(haikuCss, ".haiku-list-line", "color"),
     );
     const card = cardOver(MID_GREY);
@@ -357,7 +407,7 @@ describe("the admin section headings", () => {
   it.each([[".admin-section-heading"], [".admin-section-explanation"]])(
     "%s stays legible on the card whatever photo is behind it",
     (selector) => {
-      const color = resolveColor(declaration(adminCss, selector, "color"));
+      const color = colorOf(declaration(adminCss, selector, "color"));
       for (const photo of [BLACK, MID_GREY, WHITE]) {
         expect(
           contrastRatio(color, adminCardOver(photo)),
@@ -368,10 +418,10 @@ describe("the admin section headings", () => {
 
   it("keeps the explanation line secondary to the heading above it", () => {
     const card = adminCardOver(MID_GREY);
-    const heading = resolveColor(
+    const heading = colorOf(
       declaration(adminCss, ".admin-section-heading", "color"),
     );
-    const explanation = resolveColor(
+    const explanation = colorOf(
       declaration(adminCss, ".admin-section-explanation", "color"),
     );
     expect(contrastRatio(explanation, card)).toBeLessThan(
@@ -395,14 +445,14 @@ describe("the admin icon buttons", () => {
     expect(declared("color")).not.toBe("inherit");
   });
 
-  // `adminColor`, not `resolveColor`: since #565 the glyph is
-  // `var(--admin-primary)`, which lives in the ADMIN :root, not the shared
-  // one — the same reason the ring below already resolved that way.
+  // Resolved rather than parsed: since #565 the glyph is
+  // `var(--admin-primary)`, which since #480 is itself an alias for the
+  // shared `--primary` — two hops from anything a regex could composite.
   it("put a glyph on their fill that meets WCAG AA", () => {
     expect(
       contrastRatio(
-        adminColor(declared("color")),
-        parseColor(declared("background-color")),
+        colorOf(declared("color")),
+        colorOf(declared("background-color")),
       ),
     ).toBeGreaterThanOrEqual(4.5);
   });
@@ -412,8 +462,8 @@ describe("the admin icon buttons", () => {
   it("draw a ring that reads as a shape on their own fill", () => {
     expect(
       contrastRatio(
-        adminColor(declared("border")),
-        parseColor(declared("background-color")),
+        colorOf(declared("border")),
+        colorOf(declared("background-color")),
       ),
     ).toBeGreaterThanOrEqual(3);
   });
@@ -434,15 +484,15 @@ describe("the admin icon buttons", () => {
     const OUTLINED = ".admin-button.danger-secondary";
     const outlined = (property: string) =>
       declaration(adminButtonCss, OUTLINED, property);
-    const fill = parseColor(outlined("background-color"));
+    const fill = colorOf(outlined("background-color"));
 
     expect(
-      contrastRatio(adminColor(outlined("color")), fill),
+      contrastRatio(colorOf(outlined("color")), fill),
     ).toBeGreaterThanOrEqual(4.5);
     // And its outline has to read as a shape (WCAG 1.4.11 non-text
     // contrast) — an invisible border is not a button.
     expect(
-      contrastRatio(adminColor(outlined("border")), fill),
+      contrastRatio(colorOf(outlined("border")), fill),
     ).toBeGreaterThanOrEqual(3);
   });
 
@@ -461,10 +511,10 @@ describe("the admin icon buttons", () => {
     );
     expect(del).toContain("--admin-danger");
     expect(edit).not.toContain("--admin-danger");
-    expect(adminColor(edit)).not.toEqual(adminColor(del));
+    expect(colorOf(edit)).not.toEqual(colorOf(del));
     // Edit's outline is the same brown the icon circles beside it wear, so
     // the row reads as one family with one exception.
-    expect(adminColor(edit)).toEqual(adminColor(declared("border")));
+    expect(colorOf(edit)).toEqual(colorOf(declared("border")));
   });
 });
 
@@ -477,7 +527,7 @@ describe("the admin icon buttons", () => {
 describe("the admin's filled primary button", () => {
   const filled = (selector: string, property: string) =>
     declaration(adminButtonCss, selector, property);
-  const label = adminColor(filled(".admin-button", "color"));
+  const label = colorOf(filled(".admin-button", "color"));
 
   // Both states, not just the resting one: hover darkens the fill, so if a
   // future hover brown went the other way the label would be checked
@@ -487,15 +537,15 @@ describe("the admin's filled primary button", () => {
     ["hovered", ".admin-button:hover"],
   ])("keeps its label legible while %s", (_state, selector) => {
     expect(
-      contrastRatio(label, adminColor(filled(selector, "background-color"))),
+      contrastRatio(label, colorOf(filled(selector, "background-color"))),
     ).toBeGreaterThanOrEqual(4.5);
   });
 
   // Hover has to be VISIBLE as well as legible — a state change nobody can
   // see is not feedback. Not a WCAG threshold; just "these are two colours".
   it("darkens visibly under the pointer", () => {
-    const resting = adminColor(filled(".admin-button", "background-color"));
-    const hovered = adminColor(filled(".admin-button:hover", "background-color"));
+    const resting = colorOf(filled(".admin-button", "background-color"));
+    const hovered = colorOf(filled(".admin-button:hover", "background-color"));
     expect(hovered).not.toEqual(resting);
     expect(relativeLuminance(hovered)).toBeLessThan(relativeLuminance(resting));
   });
@@ -547,8 +597,8 @@ describe("the header bar over the background photo", () => {
     // Compared as defaults: the link colour is settable and the bar's own
     // `color` is not, so what has to match is what each paints when
     // nothing is set.
-    expect(parseColor(headerDefault(".pages a", "color"))).toEqual(
-      parseColor(declaration(headerCss, ".header", "color")),
+    expect(colorOf(headerDefault(".pages a", "color"))).toEqual(
+      colorOf(declaration(headerCss, ".header", "color")),
     );
   });
 
@@ -590,18 +640,16 @@ describe("the header bar over the background photo", () => {
     // the config project puts a second, function-less coverage record on
     // it. Alpha compares to within a 0-255 step, which is as precisely as
     // the picker's #rrggbbaa can state the stylesheet's 0.86.
-    const tint = headerDefault(".header", "background-color");
-    expect(parseColor(tint)).toEqual(
-      parseColor(headerColorDefault("background")),
-    );
-    expect(parseAlpha(tint)).toBeCloseTo(
+    const tint = resolveSurface(headerDefault(".header", "background-color"));
+    expect(tint.rgb).toEqual(parseColor(headerColorDefault("background")));
+    expect(tint.alpha).toBeCloseTo(
       Number(headerColorDefault("backgroundAlpha")),
       2,
     );
-    expect(parseColor(headerDefault(".header-title", "color"))).toEqual(
+    expect(colorOf(headerDefault(".header-title", "color"))).toEqual(
       parseColor(headerColorDefault("title")),
     );
-    expect(parseColor(headerDefault(".pages a", "color"))).toEqual(
+    expect(colorOf(headerDefault(".pages a", "color"))).toEqual(
       parseColor(headerColorDefault("nav")),
     );
   });
@@ -618,7 +666,7 @@ describe("the header bar over the background photo", () => {
   it("keeps the admin user name at WCAG AA over the lightest possible photo", () => {
     expect(
       contrastRatio(
-        resolveColor(declaration(headerCss, ".header-user-name", "color")),
+        colorOf(declaration(headerCss, ".header-user-name", "color")),
         headerOver(WHITE, ".admin-header"),
       ),
     ).toBeGreaterThanOrEqual(4.5);
@@ -651,15 +699,11 @@ describe("the keyboard focus ring", () => {
   const lengths = (value: string): number[] =>
     (value.match(/-?[\d.]+px/g) ?? []).map(Number.parseFloat);
 
-  /** The one colour in a shorthand value. */
-  const colorIn = (value: string): Rgb =>
-    parseColor(
-      value.match(/#[0-9a-f]{3,8}|rgba?\([^)]*\)|\b(?:white|black)\b/i)?.[0] ??
-        value,
-    );
-
-  const lightLayer = () => colorIn(outline());
-  const darkLayer = () => colorIn(boxShadow());
+  const lightLayer = () => colorOf(outline());
+  // The halo is `var(--header-surface)` — deliberately the header bar's own
+  // green rather than a near-miss, since the bar is one of the surfaces the
+  // ring has to read on (#480).
+  const darkLayer = () => colorOf(boxShadow());
 
   const outlineWidth = () => lengths(outline())[0];
   const outlineOffset = () =>
