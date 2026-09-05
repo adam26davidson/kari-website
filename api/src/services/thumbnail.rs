@@ -87,7 +87,10 @@ pub const MAX_SOURCE_EDGE: u32 = 12_000;
 /// And only ever one at a time: `RENDITION_GATE` in
 /// [`crate::routes::images`] serializes decoding to one per process, so the
 /// figures above are the whole process's peak rather than a per-request
-/// cost. The body is buffered exactly once (`Bytes`, cloned by refcount),
+/// cost. That holds even when a request is cancelled mid-decode: the gate
+/// permit is held by the blocking decode itself, not by the request future,
+/// so a decode the client abandoned still keeps the next one waiting until
+/// it has actually released its buffers. The body is buffered exactly once (`Bytes`, cloned by refcount),
 /// and EXIF orientation is applied to the SCALED image so a portrait photo
 /// never holds two full-size buffers at once.
 pub const MAX_DECODE_BYTES: u64 = 192 * 1024 * 1024;

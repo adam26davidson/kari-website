@@ -40,8 +40,42 @@ const GC_SAFETY_MARGIN: Duration = Duration::from_secs(60 * 60);
 /// its original is already stored by then either way.
 ///
 /// The permit covers the decode ONLY — never the body read or the S3 puts,
-/// which are I/O-bound and hold no pixel buffers.
+/// which are I/O-bound and hold no pixel buffers. It is held by the decode
+/// itself rather than by the request that started it, so a cancelled request
+/// cannot release it early; see [`under_rendition_gate`].
 static RENDITION_GATE: Semaphore = Semaphore::const_new(1);
+
+/// Run one image decode on a blocking thread, holding [`RENDITION_GATE`] for
+/// as long as it allocates.
+///
+/// The permit is moved INTO the blocking closure rather than held by the
+/// caller's future, and that placement is the whole point. A blocking task
+/// cannot be cancelled: if the request future is dropped mid-decode — the
+/// admin's client or a proxy timing out on a multi-second decode, or her
+/// navigating away and retrying — the `JoinHandle` is dropped but the decode
+/// runs on to completion, detached, still holding its buffers. A permit held
+/// by that dropped future would be released while its decode was still
+/// allocating, so the retry would start a second decode alongside the first
+/// and the process would pay the peak twice — exactly the doubling this gate
+/// exists to prevent, under exactly the conditions it targets. Inside the
+/// closure the permit lives precisely as long as the memory does.
+pub async fn under_rendition_gate<F, T>(decode: F) -> Result<T, tokio::task::JoinError>
+where
+    F: FnOnce() -> T + Send + 'static,
+    T: Send + 'static,
+{
+    // `acquire()` on a static borrows for `'static`, so the permit can be
+    // moved across the `spawn_blocking` boundary.
+    let permit = RENDITION_GATE
+        .acquire()
+        .await
+        .expect("the rendition gate is a static and is never closed");
+    tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        decode()
+    })
+    .await
+}
 
 /// Server-generated object name for an upload: a fresh UUID plus the
 /// sanitized extension of the client's filename. The UUID makes distinct
@@ -178,17 +212,10 @@ pub async fn upload_image_handler(
 async fn store_renditions(state: &AppState, id: &str, data: Bytes, is_published: bool) {
     // Decoding a camera original allocates hundreds of megabytes and takes
     // real CPU: never on the async runtime's thread. One blocking task for
-    // all variants, so the decode is paid for once.
-    //
-    // Scoped so the permit is released before the S3 puts below: holding it
-    // across network I/O would serialize uploads for no memory benefit.
-    let generated = {
-        let _permit = RENDITION_GATE
-            .acquire()
-            .await
-            .expect("the rendition gate is a static and is never closed");
-        tokio::task::spawn_blocking(move || make_renditions(&data)).await
-    };
+    // all variants, so the decode is paid for once. The gate is released
+    // before the S3 puts below: holding it across network I/O would
+    // serialize uploads for no memory benefit.
+    let generated = under_rendition_gate(move || make_renditions(&data)).await;
     let renditions = match generated {
         Ok(Ok(renditions)) => renditions,
         Ok(Err(e)) => {

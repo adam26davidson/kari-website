@@ -18,6 +18,7 @@ use common::store::{state_with_store, InMemoryStore};
 use common::{build_jwks, signed_token, TokenOptions};
 use http_body_util::BodyExt;
 use kari_website_api::routes::create_router;
+use kari_website_api::routes::images::under_rendition_gate;
 use kari_website_api::services::image_keys::{original_key, variant_key, ImageVariant};
 use kari_website_api::services::object_store::ObjectStore;
 use kari_website_api::services::thumbnail::MAX_SOURCE_EDGE;
@@ -1065,6 +1066,47 @@ async fn two_uploads_at_once_both_succeed() {
             assert!(store.contains(&variant_key(&file_name, variant)));
         }
     }
+}
+
+#[tokio::test]
+async fn a_cancelled_upload_holds_the_rendition_gate_until_its_decode_finishes() {
+    // A blocking task cannot be cancelled. When the request future is dropped
+    // mid-decode — the admin's client or a proxy times out on a multi-second
+    // decode, or she navigates away and retries — the decode runs on to
+    // completion, detached, still holding its hundreds of megabytes. Its gate
+    // permit has to run on with it: released early, the retry would start a
+    // second decode alongside the first and the process would pay the peak
+    // twice, which is the exact doubling the gate exists to prevent.
+    use std::time::Duration;
+
+    let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+    let (finish_tx, finish_rx) = std::sync::mpsc::channel::<()>();
+    let mut decode = Box::pin(under_rendition_gate(move || {
+        started_tx
+            .send(())
+            .expect("the test awaits the start signal");
+        finish_rx.recv().expect("the test releases the decode");
+    }));
+    tokio::select! {
+        _ = &mut decode => panic!("the decode cannot finish before it is released"),
+        started = started_rx => started.expect("the decode signals that it started"),
+    }
+
+    // The request goes away while the decode is still running.
+    drop(decode);
+
+    let retry = tokio::time::timeout(Duration::from_millis(250), under_rendition_gate(|| ())).await;
+    assert!(
+        retry.is_err(),
+        "a cancelled upload must not hand its permit on while its own decode is still allocating"
+    );
+
+    // And once the detached decode really finishes, the gate opens again.
+    finish_tx.send(()).expect("the decode is still waiting");
+    tokio::time::timeout(Duration::from_secs(10), under_rendition_gate(|| ()))
+        .await
+        .expect("the gate reopens when the decode finishes")
+        .expect("the gated task does not panic");
 }
 
 #[tokio::test]
