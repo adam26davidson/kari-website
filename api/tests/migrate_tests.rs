@@ -65,12 +65,16 @@ async fn dry_run_changes_nothing_but_reports_the_work() {
         .expect("migration should succeed");
 
     assert_eq!(report.copied, vec!["images/pub.png/original.png"]);
-    assert_eq!(report.thumbnailed, vec!["images/pub.png/thumb.jpg"]);
+    assert_eq!(
+        report.variants_written,
+        vec!["images/pub.png/thumb.jpg", "images/pub.png/background.jpg"]
+    );
     assert_eq!(report.rewritten, vec!["blog/post-pub.html"]);
-    assert!(report.failed_thumbnails.is_empty());
+    assert!(report.failed_variants.is_empty());
     // Nothing was written.
     assert!(!store.contains("images/pub.png/original.png"));
     assert!(!store.contains("images/pub.png/thumb.jpg"));
+    assert!(!store.contains("images/pub.png/background.jpg"));
     assert_eq!(
         String::from_utf8(store.get("blog/post-pub.html").unwrap().data).unwrap(),
         r#"<img src="https://s3.example.com/images/pub.png">"#
@@ -92,9 +96,10 @@ async fn apply_copies_the_original_preserving_visibility() {
     let public = store.get("images/pub.png/original.png").expect("copied");
     assert_eq!(public.data, png_bytes(1200, 800));
     assert!(public.public);
-    // A private image's copy — and its thumbnail — stay private.
+    // A private image's copy — and its renditions — stay private.
     assert!(!store.get("images/priv.png/original.png").unwrap().public);
     assert!(!store.get("images/priv.png/thumb.jpg").unwrap().public);
+    assert!(!store.get("images/priv.png/background.jpg").unwrap().public);
     // Copy-only: the legacy object stays so the pre-deploy code keeps working.
     assert!(store.contains("images/pub.png"));
 }
@@ -112,9 +117,30 @@ async fn apply_generates_a_thumbnail_for_every_image() {
 }
 
 #[tokio::test]
+async fn apply_generates_a_background_rendition_for_every_image() {
+    let store = Arc::new(legacy_store());
+    migrate_images(store.as_ref(), false)
+        .await
+        .expect("migration should succeed");
+
+    let background = store
+        .get("images/pub.png/background.jpg")
+        .expect("background");
+    assert!(background.public, "a public image's background is public");
+    let decoded = image::load_from_memory(&background.data).expect("background decodes");
+    // 1200x800 is already inside BACKGROUND_MAX_EDGE, so it keeps its size —
+    // the background is a re-encode, not an enlargement.
+    assert_eq!((decoded.width(), decoded.height()), (1200, 800));
+    assert_eq!(
+        image::guess_format(&background.data).expect("format"),
+        image::ImageFormat::Jpeg
+    );
+}
+
+#[tokio::test]
 async fn apply_backfills_a_thumbnail_for_an_already_copied_image() {
     // A bucket half-migrated by an interrupted run: the original is in place
-    // but the thumbnail never got written.
+    // but the renditions never got written.
     let store = Arc::new(InMemoryStore::default().with_object_tagged(
         "images/only.png/original.png",
         png_bytes(300, 300),
@@ -126,8 +152,48 @@ async fn apply_backfills_a_thumbnail_for_an_already_copied_image() {
         .expect("migration should succeed");
 
     assert!(report.copied.is_empty(), "nothing to copy");
-    assert_eq!(report.thumbnailed, vec!["images/only.png/thumb.jpg"]);
+    assert_eq!(
+        report.variants_written,
+        vec![
+            "images/only.png/thumb.jpg",
+            "images/only.png/background.jpg"
+        ]
+    );
     assert!(store.contains("images/only.png/thumb.jpg"));
+    assert!(store.contains("images/only.png/background.jpg"));
+}
+
+#[tokio::test]
+async fn apply_backfills_only_the_variant_a_migrated_image_is_missing() {
+    // The state every already-migrated bucket is in when a NEW variant
+    // ships: original and thumbnail in place, background not yet.
+    let store = Arc::new(
+        InMemoryStore::default()
+            .with_object_tagged(
+                "images/done.png/original.png",
+                png_bytes(300, 300),
+                false,
+                old(),
+            )
+            .with_object_tagged("images/done.png/thumb.jpg", png_bytes(48, 48), false, old()),
+    );
+    let thumb_before = store.get("images/done.png/thumb.jpg").unwrap().data;
+
+    let report = migrate_images(store.as_ref(), false)
+        .await
+        .expect("migration should succeed");
+
+    assert_eq!(
+        report.variants_written,
+        vec!["images/done.png/background.jpg"]
+    );
+    // The existing thumbnail is left exactly as it was.
+    assert_eq!(
+        store.get("images/done.png/thumb.jpg").unwrap().data,
+        thumb_before
+    );
+    // Visibility is inherited from the original, not assumed public.
+    assert!(!store.get("images/done.png/background.jpg").unwrap().public);
 }
 
 #[tokio::test]
@@ -175,7 +241,10 @@ async fn running_twice_is_the_same_as_running_once() {
     let report = migrate_images(store.as_ref(), false).await.expect("second");
 
     assert!(report.copied.is_empty(), "nothing left to copy");
-    assert!(report.thumbnailed.is_empty(), "nothing left to thumbnail");
+    assert!(
+        report.variants_written.is_empty(),
+        "nothing left to generate"
+    );
     assert!(report.rewritten.is_empty(), "nothing left to rewrite");
     assert_eq!(
         store.get("images/pub.png/thumb.jpg").unwrap().data,
@@ -200,16 +269,21 @@ async fn an_undecodable_original_is_reported_and_does_not_abort() {
         .await
         .expect("migration should still succeed");
 
-    assert_eq!(report.failed_thumbnails.len(), 1);
+    // One line per rendition that could not be produced.
+    assert_eq!(report.failed_variants.len(), 2);
     assert!(
-        report.failed_thumbnails[0].contains("broken.png"),
+        report
+            .failed_variants
+            .iter()
+            .all(|line| line.contains("broken.png")),
         "got: {:?}",
-        report.failed_thumbnails
+        report.failed_variants
     );
     // Its original was still copied, and the healthy image is untouched by
     // the failure.
     assert!(store.contains("images/broken.png/original.png"));
     assert!(store.contains("images/pub.png/thumb.jpg"));
+    assert!(store.contains("images/pub.png/background.jpg"));
 }
 
 #[tokio::test]
@@ -275,7 +349,7 @@ async fn the_bare_images_folder_marker_is_ignored() {
         .expect("migration should succeed");
 
     assert!(report.copied.is_empty());
-    assert!(report.thumbnailed.is_empty());
+    assert!(report.variants_written.is_empty());
     assert_eq!(
         store.list_objects("images/").await.unwrap().len(),
         1,

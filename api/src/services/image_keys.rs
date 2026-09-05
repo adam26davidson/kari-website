@@ -6,6 +6,7 @@
 //! ```text
 //! images/<id>/original.<ext>   the untouched upload
 //! images/<id>/thumb.jpg        the small rendition admin grids render
+//! images/<id>/background.jpg   the page-sized rendition the site paints
 //! ```
 //!
 //! The id is exactly the name `POST /images` has always returned
@@ -28,6 +29,13 @@ use serde::Deserialize;
 /// photographs).
 pub const THUMB_FILE: &str = "thumb.jpg";
 
+/// File name of the page-sized rendition inside an image's prefix. The site
+/// background is fetched by every visitor on every page, so it is served as
+/// a rendition rather than as a camera original (#453). JPEG for the same
+/// reason as [`THUMB_FILE`], and hence a fixed name rather than one carrying
+/// the id's own extension.
+pub const BACKGROUND_FILE: &str = "background.jpg";
+
 /// Longest client-supplied extension preserved on a generated object name.
 /// Real image extensions are short (".jpeg", ".webp"); anything longer is
 /// junk and is dropped rather than stored.
@@ -39,13 +47,21 @@ const MAX_EXTENSION_LEN: usize = 16;
 #[serde(rename_all = "lowercase")]
 pub enum ImageVariant {
     Thumb,
+    Background,
 }
 
 impl ImageVariant {
+    /// Every variant an upload generates, in the order they are written.
+    /// Iterating this rather than listing variants at each call site is what
+    /// keeps the upload handler and the migration backfill in step as
+    /// variants are added.
+    pub const ALL: [ImageVariant; 2] = [ImageVariant::Thumb, ImageVariant::Background];
+
     /// File name of this variant inside an image's prefix.
     pub fn file_name(self) -> &'static str {
         match self {
             ImageVariant::Thumb => THUMB_FILE,
+            ImageVariant::Background => BACKGROUND_FILE,
         }
     }
 }

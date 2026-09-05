@@ -37,6 +37,8 @@ pub struct InMemoryStore {
     fail: AtomicBool,
     fail_puts: AtomicBool,
     fail_gets_for: Mutex<HashSet<String>>,
+    /// Key suffixes whose puts fail, leaving every other write working.
+    fail_puts_for_suffix: Mutex<HashSet<String>>,
     /// `Some(n)`: the next `n` puts succeed, every later one fails.
     fail_puts_after: Mutex<Option<usize>>,
     /// `Some(n)`: the next `n` deletes succeed, every later one fails.
@@ -139,6 +141,16 @@ impl InMemoryStore {
         self
     }
 
+    /// Make `put_object` fail for keys ending in `suffix`, leaving every
+    /// other write working — lets a test fail ONE rendition of an upload
+    /// whose key carries a server-generated UUID it cannot know in advance.
+    pub fn set_failing_puts_for_suffix(&self, suffix: &str) {
+        self.fail_puts_for_suffix
+            .lock()
+            .unwrap()
+            .insert(suffix.to_string());
+    }
+
     /// Make `get_object` fail with `OperationFailed` for one specific key,
     /// leaving everything else working — simulates a single unreadable
     /// manifest, which must abort a GC sweep.
@@ -201,6 +213,17 @@ impl ObjectStore for InMemoryStore {
             return Err(S3Error::OperationFailed(
                 "injected write failure".to_string(),
             ));
+        }
+        if self
+            .fail_puts_for_suffix
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|suffix| key.ends_with(suffix.as_str()))
+        {
+            return Err(S3Error::OperationFailed(format!(
+                "injected write failure for {key}"
+            )));
         }
         Self::check_budget(&self.fail_puts_after, "write")?;
         self.objects.lock().unwrap().insert(

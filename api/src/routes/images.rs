@@ -14,7 +14,7 @@ use crate::services::image_keys::{
 };
 use crate::services::object_store::ObjectMeta;
 use crate::services::s3::S3Error;
-use crate::services::thumbnail::make_thumbnail;
+use crate::services::thumbnail::make_renditions;
 use crate::{
     models::{GcQuery, ImageQuery, IsPublishedQuery},
     AppState,
@@ -41,7 +41,7 @@ fn unique_image_name(original: Option<&str>) -> String {
 ///
 /// A requested variant that does not exist falls back to the original, and
 /// the original falls back to the pre-#273 single-object key — so an image
-/// whose thumbnail failed to generate, and a bucket that has not been
+/// whose renditions failed to generate, and a bucket that has not been
 /// migrated yet, both still render (just at full size).
 fn serving_candidates(id: &str, size: Option<ImageVariant>) -> Vec<String> {
     let mut keys = Vec::with_capacity(3);
@@ -128,7 +128,7 @@ pub async fn upload_image_handler(
         .await
         .map_err(|e| AppError::internal("Failed to upload image", e))?;
 
-    store_thumbnail(&state, &file_name, data, is_published).await;
+    store_renditions(&state, &file_name, data, is_published).await;
 
     tracing::info!(
         "File uploaded successfully: {} (client name: {:?})",
@@ -141,38 +141,35 @@ pub async fn upload_image_handler(
     })))
 }
 
-/// Generate and store the small rendition of a freshly uploaded image.
+/// Generate and store every derived rendition of a freshly uploaded image.
 ///
 /// Deliberately infallible from the caller's point of view: an image the
 /// decoder cannot read (an unsupported format, a corrupt file) or a failed
 /// write must not fail an upload whose original is already stored, because
-/// `GET /images/:id?size=thumb` falls back to the original. Failures are
-/// logged, not returned.
-async fn store_thumbnail(state: &AppState, id: &str, data: Vec<u8>, is_published: bool) {
+/// `GET /images/:id?size=…` falls back to the original. Failures are
+/// logged, not returned — and one variant failing to store does not stop
+/// the others being written.
+async fn store_renditions(state: &AppState, id: &str, data: Vec<u8>, is_published: bool) {
     // Decoding a camera original allocates tens of megabytes and takes real
-    // CPU: never on the async runtime's thread.
-    let generated = tokio::task::spawn_blocking(move || make_thumbnail(&data)).await;
-    let thumbnail = match generated {
-        Ok(Ok(bytes)) => bytes,
+    // CPU: never on the async runtime's thread. One blocking task for all
+    // variants, so the decode is paid for once.
+    let generated = tokio::task::spawn_blocking(move || make_renditions(&data)).await;
+    let renditions = match generated {
+        Ok(Ok(renditions)) => renditions,
         Ok(Err(e)) => {
-            tracing::warn!("No thumbnail stored for {}: {}", id, e);
+            tracing::warn!("No renditions stored for {}: {}", id, e);
             return;
         }
         Err(e) => {
-            tracing::warn!("Thumbnail generation panicked for {}: {}", id, e);
+            tracing::warn!("Rendition generation panicked for {}: {}", id, e);
             return;
         }
     };
-    if let Err(e) = state
-        .s3_service
-        .put_object(
-            &variant_key(id, ImageVariant::Thumb),
-            thumbnail,
-            is_published,
-        )
-        .await
-    {
-        tracing::warn!("Failed to store thumbnail for {}: {}", id, e);
+    for (variant, bytes) in renditions {
+        let key = variant_key(id, variant);
+        if let Err(e) = state.s3_service.put_object(&key, bytes, is_published).await {
+            tracing::warn!("Failed to store {}: {}", key, e);
+        }
     }
 }
 

@@ -4,8 +4,9 @@
 //! What it does, in order:
 //! 1. copy every legacy `images/<id>` object to `images/<id>/original.<ext>`
 //!    (server-side, so the bytes never travel), preserving its `public=` tag;
-//! 2. generate the missing `images/<id>/thumb.jpg` for every image, in either
-//!    layout, with the same visibility as its original;
+//! 2. generate every missing derived rendition (`images/<id>/thumb.jpg`,
+//!    `images/<id>/background.jpg`) for every image, in either layout, with
+//!    the same visibility as its original;
 //! 3. rewrite the S3 URLs embedded in PUBLISHED blog HTML from
 //!    `/images/<id>` to `/images/<id>/original.<ext>` — the only stored
 //!    references that name an object rather than an id.
@@ -15,9 +16,11 @@
 //! not load-bearing. Deleting them is a separate, later cleanup.
 //!
 //! It is **idempotent**: an original that already exists is not re-copied, a
-//! thumbnail that already exists is not regenerated, and HTML already
+//! rendition that already exists is not regenerated, and HTML already
 //! pointing at `/images/<id>/…` is left alone — so it is safe (and expected)
 //! to run again after the deploy, to catch anything uploaded in between.
+//! That also makes it the way a NEW variant reaches images uploaded before
+//! it existed: re-running the migration backfills only what is missing.
 //!
 //! MinIO caveat: the local dev/e2e stack is MinIO, which is filesystem-backed
 //! and will not LIST `images/<id>/…` while an object exists at the exact key
@@ -30,10 +33,10 @@
 //!
 //! Failure model, deliberately asymmetric: a failed list, copy, put, or an
 //! unreadable/corrupt blog manifest ABORTS, because carrying on would write
-//! into a bucket whose state we no longer know. A thumbnail that cannot be
+//! into a bucket whose state we no longer know. A rendition that cannot be
 //! produced for one image (an unsupported format, a corrupt upload) is only
 //! REPORTED — the serving path falls back to the original, so a missing
-//! thumbnail is a slow image, not a broken one.
+//! rendition is a slow image, not a broken one.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
@@ -45,7 +48,7 @@ use crate::services::image_keys::{
 };
 use crate::services::object_store::ObjectStore;
 use crate::services::s3::S3Error;
-use crate::services::thumbnail::make_thumbnail;
+use crate::services::thumbnail::make_rendition;
 
 /// A failure that aborts the migration before any further write.
 #[derive(Debug)]
@@ -64,21 +67,21 @@ impl Error for MigrationError {}
 pub struct MigrationReport {
     /// Keys of originals copied out of the legacy layout.
     pub copied: Vec<String>,
-    /// Keys of thumbnails generated.
-    pub thumbnailed: Vec<String>,
+    /// Keys of derived renditions generated.
+    pub variants_written: Vec<String>,
     /// Keys of blog HTML documents whose image URLs were rewritten.
     pub rewritten: Vec<String>,
-    /// One line per image whose thumbnail could not be produced. Not fatal.
-    pub failed_thumbnails: Vec<String>,
+    /// One line per rendition that could not be produced. Not fatal.
+    pub failed_variants: Vec<String>,
 }
 
 impl fmt::Display for MigrationReport {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "originals copied:    {}", self.copied.len())?;
-        writeln!(f, "thumbnails written:  {}", self.thumbnailed.len())?;
+        writeln!(f, "renditions written:  {}", self.variants_written.len())?;
         writeln!(f, "blog posts rewritten: {}", self.rewritten.len())?;
-        for line in &self.failed_thumbnails {
-            writeln!(f, "  ! no thumbnail: {line}")?;
+        for line in &self.failed_variants {
+            writeln!(f, "  ! no rendition: {line}")?;
         }
         Ok(())
     }
@@ -89,7 +92,9 @@ impl fmt::Display for MigrationReport {
 struct ImageState {
     has_legacy: bool,
     has_original: bool,
-    has_thumb: bool,
+    /// File names of the derived renditions already stored, so a variant
+    /// added after an image was uploaded is simply one this set lacks.
+    variants: BTreeSet<&'static str>,
 }
 
 /// Index every object under `images/` by the image id it belongs to.
@@ -110,8 +115,11 @@ async fn survey(store: &dyn ObjectStore) -> Result<BTreeMap<String, ImageState>,
             state.has_legacy = true;
         } else if object.key == original_key(id) {
             state.has_original = true;
-        } else if object.key == variant_key(id, ImageVariant::Thumb) {
-            state.has_thumb = true;
+        } else if let Some(variant) = ImageVariant::ALL
+            .into_iter()
+            .find(|&variant| object.key == variant_key(id, variant))
+        {
+            state.variants.insert(variant.file_name());
         }
     }
     Ok(images)
@@ -174,14 +182,21 @@ async fn published_post_ids(store: &dyn ObjectStore) -> Result<Vec<String>, Migr
         .collect())
 }
 
-/// Generate and store the thumbnail for one image, returning its key.
+/// Generate and store one derived rendition of an image, returning its key.
 ///
 /// `Err` carries a human-readable reason: survivable, recorded in the
 /// report, and the image keeps serving its original.
-async fn backfill_thumbnail(
+///
+/// The source is fetched and decoded per variant rather than once for all of
+/// them. This is a one-shot command over a bucket that is mostly already
+/// migrated — after the first run only genuinely new variants are missing —
+/// so the simpler "generate exactly what is absent" shape is worth more than
+/// saving a decode the upload path (which does share one) never pays.
+async fn backfill_variant(
     store: &dyn ObjectStore,
     id: &str,
     source_key: &str,
+    variant: ImageVariant,
 ) -> Result<String, String> {
     let public = store
         .get_object_public(source_key)
@@ -191,14 +206,14 @@ async fn backfill_thumbnail(
         .get_object(source_key)
         .await
         .map_err(|e| format!("{id}: could not fetch {source_key}: {e}"))?;
-    let thumbnail = tokio::task::spawn_blocking(move || make_thumbnail(&data))
+    let rendition = tokio::task::spawn_blocking(move || make_rendition(&data, variant))
         .await
-        .map_err(|e| format!("{id}: thumbnail generation panicked: {e}"))?
+        .map_err(|e| format!("{id}: rendition generation panicked: {e}"))?
         .map_err(|e| format!("{id}: {e}"))?;
 
-    let key = variant_key(id, ImageVariant::Thumb);
+    let key = variant_key(id, variant);
     store
-        .put_object(&key, thumbnail, public)
+        .put_object(&key, rendition, public)
         .await
         .map_err(|e| format!("{id}: could not store {key}: {e}"))?;
     Ok(key)
@@ -208,7 +223,7 @@ async fn backfill_thumbnail(
 ///
 /// With `dry_run` nothing is written: the report lists what a real run would
 /// copy, generate and rewrite. A dry run does not decode any image, so it
-/// cannot predict which thumbnails would fail — only a real run reports
+/// cannot predict which renditions would fail — only a real run reports
 /// those.
 pub async fn migrate_images(
     store: &dyn ObjectStore,
@@ -234,33 +249,34 @@ pub async fn migrate_images(
         tracing::info!("copied {} -> {}", legacy_key(id), to);
     }
 
-    // 2. Backfill missing thumbnails, from whichever copy of the original
+    // 2. Backfill missing renditions, from whichever copy of the original
     //    the bucket now holds.
     for (id, state) in &images {
-        if state.has_thumb {
-            continue;
-        }
-        if dry_run {
-            report
-                .thumbnailed
-                .push(variant_key(id, ImageVariant::Thumb));
-            continue;
-        }
-        // After step 1 the new-layout original exists for every image that
-        // had a legacy object; anything else is already in the new layout.
-        let source = if state.has_original || state.has_legacy {
-            original_key(id)
-        } else {
-            continue;
-        };
-        match backfill_thumbnail(store, id, &source).await {
-            Ok(key) => {
-                tracing::info!("generated {}", key);
-                report.thumbnailed.push(key);
+        for variant in ImageVariant::ALL {
+            if state.variants.contains(variant.file_name()) {
+                continue;
             }
-            Err(reason) => {
-                tracing::warn!("{}", reason);
-                report.failed_thumbnails.push(reason);
+            if dry_run {
+                report.variants_written.push(variant_key(id, variant));
+                continue;
+            }
+            // After step 1 the new-layout original exists for every image
+            // that had a legacy object; anything else is already in the new
+            // layout.
+            let source = if state.has_original || state.has_legacy {
+                original_key(id)
+            } else {
+                continue;
+            };
+            match backfill_variant(store, id, &source, variant).await {
+                Ok(key) => {
+                    tracing::info!("generated {}", key);
+                    report.variants_written.push(key);
+                }
+                Err(reason) => {
+                    tracing::warn!("{}", reason);
+                    report.failed_variants.push(reason);
+                }
             }
         }
     }

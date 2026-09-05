@@ -801,6 +801,37 @@ async fn get_image_falls_back_to_the_legacy_single_object_layout() {
 }
 
 #[tokio::test]
+async fn get_image_size_background_serves_the_background_rendition() {
+    let (_, app) = setup_with(
+        InMemoryStore::default()
+            .with_object("images/photo.png/original.png", "ORIGINAL")
+            .with_object("images/photo.png/thumb.jpg", "THUMB")
+            .with_object("images/photo.png/background.jpg", "BACKGROUND"),
+    );
+
+    let (status, content_type, bytes) = get_bytes(app, "/images/photo.png?size=background").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(content_type, "image/jpeg");
+    assert_eq!(bytes, b"BACKGROUND");
+}
+
+#[tokio::test]
+async fn get_image_size_background_falls_back_to_the_original() {
+    // An image uploaded before the background variant existed, in a bucket
+    // the migration has not been re-run against.
+    let (_, app) = setup_with(
+        InMemoryStore::default().with_object("images/photo.png/original.png", "ORIGINAL"),
+    );
+
+    let (status, content_type, bytes) = get_bytes(app, "/images/photo.png?size=background").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(content_type, "image/png");
+    assert_eq!(bytes, b"ORIGINAL");
+}
+
+#[tokio::test]
 async fn get_image_with_an_unknown_size_is_400() {
     let (_, app) = setup_with(
         InMemoryStore::default().with_object("images/photo.png/original.png", "ORIGINAL"),
@@ -1054,6 +1085,37 @@ async fn upload_image_also_stores_a_thumbnail_next_to_the_original() {
 }
 
 #[tokio::test]
+async fn upload_image_also_stores_a_background_rendition() {
+    // The admin no longer downscales in the browser (#453), so the original
+    // arrives full-size and the page-sized rendition is derived here.
+    let (store, app) = setup();
+    let req = multipart_upload(
+        "/images?isPublished=true",
+        Some("photo.png"),
+        &png_bytes(3200, 2400),
+    );
+    let (status, body) = send(app, req).await;
+    assert_eq!(status, StatusCode::OK);
+    let file_name = uploaded_file_name(&body, ".png");
+
+    // The original is stored untouched, at its full size.
+    assert_eq!(
+        store.get(&original_key(&file_name)).expect("stored").data,
+        png_bytes(3200, 2400)
+    );
+    let background = store
+        .get(&variant_key(&file_name, ImageVariant::Background))
+        .expect("background stored");
+    assert!(background.public);
+    let decoded = image::load_from_memory(&background.data).expect("background decodes");
+    assert_eq!((decoded.width(), decoded.height()), (2560, 1920));
+    assert_eq!(
+        image::guess_format(&background.data).expect("format"),
+        image::ImageFormat::Jpeg
+    );
+}
+
+#[tokio::test]
 async fn upload_of_a_private_image_stores_a_private_thumbnail() {
     let (store, app) = setup();
     let req = multipart_upload(
@@ -1063,18 +1125,21 @@ async fn upload_of_a_private_image_stores_a_private_thumbnail() {
     );
     let (_, body) = send(app, req).await;
     let file_name = uploaded_file_name(&body, ".png");
-    assert!(
-        !store
-            .get(&variant_key(&file_name, ImageVariant::Thumb))
-            .expect("thumbnail stored")
-            .public
-    );
+    for variant in ImageVariant::ALL {
+        assert!(
+            !store
+                .get(&variant_key(&file_name, variant))
+                .unwrap_or_else(|| panic!("{variant:?} stored"))
+                .public,
+            "{variant:?} should be private"
+        );
+    }
 }
 
 #[tokio::test]
-async fn upload_of_undecodable_bytes_still_succeeds_without_a_thumbnail() {
+async fn upload_of_undecodable_bytes_still_succeeds_without_renditions() {
     // A file the decoder cannot read (or a format we do not support) must
-    // not fail the upload — `?size=thumb` falls back to the original.
+    // not fail the upload — `?size=…` falls back to the original.
     let _tracing = common::capture_tracing();
     let (store, app) = setup();
     let req = multipart_upload("/images?isPublished=true", Some("photo.png"), b"PNGDATA");
@@ -1086,12 +1151,14 @@ async fn upload_of_undecodable_bytes_still_succeeds_without_a_thumbnail() {
         store.get(&original_key(&file_name)).expect("stored").data,
         b"PNGDATA"
     );
-    assert!(!store.contains(&variant_key(&file_name, ImageVariant::Thumb)));
+    for variant in ImageVariant::ALL {
+        assert!(!store.contains(&variant_key(&file_name, variant)));
+    }
 }
 
 #[tokio::test]
-async fn upload_survives_a_failed_thumbnail_write() {
-    // The original is stored by the first put; the thumbnail's put fails.
+async fn upload_survives_a_failed_rendition_write() {
+    // The original is stored by the first put; every rendition's put fails.
     // The upload still succeeds and the original is kept.
     let _tracing = common::capture_tracing();
     let (store, app) = setup();
@@ -1106,7 +1173,29 @@ async fn upload_survives_a_failed_thumbnail_write() {
     assert_eq!(status, StatusCode::OK);
     let file_name = uploaded_file_name(&body, ".png");
     assert!(store.contains(&original_key(&file_name)));
+    for variant in ImageVariant::ALL {
+        assert!(!store.contains(&variant_key(&file_name, variant)));
+    }
+}
+
+#[tokio::test]
+async fn a_failed_thumbnail_write_does_not_stop_the_background_being_written() {
+    // The variants are written in sequence, so one store failure must not
+    // cost the others: they are independent renditions.
+    let _tracing = common::capture_tracing();
+    let (store, app) = setup();
+    store.set_failing_puts_for_suffix("thumb.jpg");
+    let req = multipart_upload(
+        "/images?isPublished=true",
+        Some("photo.png"),
+        &png_bytes(600, 400),
+    );
+    let (status, body) = send(app, req).await;
+
+    assert_eq!(status, StatusCode::OK);
+    let file_name = uploaded_file_name(&body, ".png");
     assert!(!store.contains(&variant_key(&file_name, ImageVariant::Thumb)));
+    assert!(store.contains(&variant_key(&file_name, ImageVariant::Background)));
 }
 
 #[tokio::test]
