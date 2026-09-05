@@ -19,7 +19,9 @@ use std::error::Error;
 use std::fmt;
 use std::io::Cursor;
 
-use image::{codecs::jpeg::JpegEncoder, DynamicImage, ImageDecoder, ImageReader, Rgb, RgbImage};
+use image::{
+    codecs::jpeg::JpegEncoder, DynamicImage, ImageDecoder, ImageReader, Limits, Rgb, RgbImage,
+};
 
 use crate::services::image_keys::ImageVariant;
 
@@ -33,6 +35,23 @@ pub const THUMB_MAX_EDGE: u32 = 480;
 /// before loses resolution now — while a 6000 px camera original still
 /// stops being what every visitor downloads.
 pub const BACKGROUND_MAX_EDGE: u32 = 2560;
+
+/// Longest edge, in pixels, of a source this will attempt to decode.
+///
+/// Decoding is where an upload's memory cost explodes: the file arrives
+/// compressed but is decoded whole, so a 96 MP original is ~288 MB of RGB
+/// regardless of how few megabytes it took on the wire. Since #706 raised
+/// the request-body cap to 25 MiB, a JPEG small enough to accept can still
+/// be enormous once decoded, and this API shares one host with the site it
+/// serves.
+///
+/// 12 000 covers every camera in circulation with room to spare — a 61 MP
+/// full-frame sensor is 9504 px on its long edge — while capping a
+/// realistic 3:2 decode at ~12000x8000 = 96 MP. Anything past it is a
+/// synthetic or malicious image, and refusing to decode one costs only its
+/// renditions: [`store_renditions`](crate::routes::images) logs the failure
+/// and the serving path falls back to the stored original.
+pub const MAX_SOURCE_EDGE: u32 = 12_000;
 
 /// JPEG quality of generated thumbnails: visually clean at these sizes,
 /// and small enough that a whole grid costs less than one original.
@@ -73,10 +92,26 @@ fn encoding_for(variant: ImageVariant) -> (u32, u8) {
 /// `image`'s resize filters work on straight (non-premultiplied) alpha, so
 /// scaling first would smear the RGB hiding under transparent pixels into
 /// the visible edges.
+///
+/// The reader is given a [`MAX_SOURCE_EDGE`] dimension limit before any
+/// pixels are read. It must be set on the READER rather than the decoder:
+/// PNG takes its limits at decoder construction, every other format through
+/// `set_limits`, and `into_decoder` is the one call that feeds both. The
+/// rest of [`Limits::default`] is kept as-is, which retains the crate's
+/// 512 MiB `max_alloc`; the dimension limit is the part that actually
+/// refuses an over-large source here, since it is checked strictly against
+/// the header dimensions before allocation.
 fn decode_source(bytes: &[u8]) -> Result<DynamicImage, ThumbnailError> {
-    let mut decoder = ImageReader::new(Cursor::new(bytes))
+    let mut reader = ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
-        .map_err(|e| ThumbnailError(format!("unreadable image data: {e}")))?
+        .map_err(|e| ThumbnailError(format!("unreadable image data: {e}")))?;
+    // `Limits` is #[non_exhaustive], so start from the crate's defaults
+    // (notably its 512 MiB `max_alloc`) and narrow the dimensions.
+    let mut limits = Limits::default();
+    limits.max_image_width = Some(MAX_SOURCE_EDGE);
+    limits.max_image_height = Some(MAX_SOURCE_EDGE);
+    reader.limits(limits);
+    let mut decoder = reader
         .into_decoder()
         .map_err(|e| ThumbnailError(format!("undecodable image: {e}")))?;
     // Read the orientation before the pixels: `from_decoder` consumes it.

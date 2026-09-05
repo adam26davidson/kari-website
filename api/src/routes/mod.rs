@@ -44,7 +44,20 @@ pub fn create_router(state: AppState) -> Router {
         .route("/blog-content/{id}", get(blog::get_blog_post_content))
         .route("/blog-content/{id}", delete(blog::delete_blog_post_content))
         .layer(DefaultBodyLimit::disable())
-        .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024 /* 10mb */))
+        // 25 MiB covers a DSLR JPEG, which the admin now uploads untouched:
+        // the browser-side downscale was removed in #453, so the original is
+        // the source of truth and every rendition is derived here (#706).
+        //
+        // Two things outside this file are pinned to this number:
+        //   - `MAX_UPLOAD_BYTES` in
+        //     `ui/packages/shared/src/utils/background-image.ts` sits just
+        //     BELOW it, so the admin gets a friendly "too big" message
+        //     instead of a bare 413;
+        //   - the deployed nginx vhosts' `client_max_body_size` must be at
+        //     least this, or nginx rejects the upload before it arrives.
+        //     Those vhosts are hand-maintained on the host, not in this
+        //     repo — raise them alongside any change here.
+        .layer(RequestBodyLimitLayer::new(25 * 1024 * 1024 /* 25 MiB */))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             crate::middleware::auth::auth_middleware,
