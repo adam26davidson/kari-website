@@ -10,9 +10,16 @@ use image::{
 };
 use kari_website_api::services::image_keys::{
     id_from_key, legacy_key, original_key, prefix, sanitized_extension, variant_key, ImageVariant,
-    THUMB_FILE,
+    BACKGROUND_FILE, THUMB_FILE,
 };
-use kari_website_api::services::thumbnail::{make_thumbnail, THUMB_MAX_EDGE};
+use kari_website_api::services::thumbnail::{
+    make_rendition, make_renditions, BACKGROUND_MAX_EDGE, THUMB_MAX_EDGE,
+};
+
+/// The thumbnail of `bytes` — the rendition most of these tests exercise.
+fn make_thumbnail(bytes: &[u8]) -> Result<Vec<u8>, impl std::error::Error> {
+    make_rendition(bytes, ImageVariant::Thumb)
+}
 
 // ------------------------------------------------------------- image_keys
 
@@ -42,6 +49,28 @@ fn variant_key_names_the_thumbnail_file() {
         variant_key("abc.jpg", ImageVariant::Thumb),
         format!("images/abc.jpg/{THUMB_FILE}")
     );
+}
+
+#[test]
+fn variant_key_names_the_background_file() {
+    // Fixed name, not the id's own extension: the encoder is JPEG-only, so
+    // a background derived from a PNG is still a .jpg.
+    assert_eq!(
+        variant_key("abc.png", ImageVariant::Background),
+        format!("images/abc.png/{BACKGROUND_FILE}")
+    );
+    assert_eq!(BACKGROUND_FILE, "background.jpg");
+}
+
+#[test]
+fn every_variant_has_a_distinct_file_name() {
+    // The public site builds these paths itself, so two variants sharing a
+    // name would silently serve the wrong rendition.
+    let mut names: Vec<&str> = ImageVariant::ALL.iter().map(|v| v.file_name()).collect();
+    let count = names.len();
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(names.len(), count, "duplicate variant file names");
 }
 
 #[test]
@@ -104,6 +133,53 @@ fn thumbnail_scales_a_large_image_down_to_the_max_edge_preserving_aspect() {
     let jpeg = make_thumbnail(&png_bytes(1200, 800)).expect("thumbnail");
     let decoded = image::load_from_memory(&jpeg).expect("thumbnail decodes");
     assert_eq!((decoded.width(), decoded.height()), (THUMB_MAX_EDGE, 320));
+}
+
+#[test]
+fn background_scales_a_huge_image_down_to_its_own_max_edge() {
+    // Far larger than the thumbnail's 480, so a background must never be
+    // capped at the thumbnail size (#453).
+    let jpeg = make_rendition(&png_bytes(4000, 3000), ImageVariant::Background).expect("rendition");
+    let decoded = image::load_from_memory(&jpeg).expect("background decodes");
+    assert_eq!(
+        (decoded.width(), decoded.height()),
+        (BACKGROUND_MAX_EDGE, BACKGROUND_MAX_EDGE * 3 / 4)
+    );
+}
+
+#[test]
+fn background_never_enlarges_an_image_smaller_than_the_max_edge() {
+    // The bytes uploaded before #453 were already downscaled in the browser;
+    // re-deriving must not blow them up into a blurry larger file.
+    let jpeg = make_rendition(&png_bytes(1600, 900), ImageVariant::Background).expect("rendition");
+    let decoded = image::load_from_memory(&jpeg).expect("background decodes");
+    assert_eq!((decoded.width(), decoded.height()), (1600, 900));
+}
+
+#[test]
+fn make_renditions_produces_every_variant_in_order_from_one_decode() {
+    let renditions = make_renditions(&png_bytes(3000, 3000)).expect("renditions");
+    let variants: Vec<ImageVariant> = renditions.iter().map(|(v, _)| *v).collect();
+    assert_eq!(variants, ImageVariant::ALL.to_vec());
+
+    for (variant, bytes) in &renditions {
+        let decoded = image::load_from_memory(bytes).expect("rendition decodes");
+        let expected = match variant {
+            ImageVariant::Thumb => THUMB_MAX_EDGE,
+            ImageVariant::Background => BACKGROUND_MAX_EDGE,
+        };
+        assert_eq!(
+            (decoded.width(), decoded.height()),
+            (expected, expected),
+            "for {variant:?}"
+        );
+    }
+}
+
+#[test]
+fn make_renditions_of_undecodable_bytes_is_an_error() {
+    // The whole set fails together: there is nothing to derive from.
+    make_renditions(b"PNGDATA").expect_err("should not decode");
 }
 
 #[test]

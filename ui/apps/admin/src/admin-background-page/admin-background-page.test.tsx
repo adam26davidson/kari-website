@@ -6,7 +6,7 @@ import { ImageService } from "@kari/shared/services/images";
 import { SiteSettingsService } from "@kari/shared/services/site-settings";
 import {
   BackgroundImageError,
-  prepareBackgroundImage,
+  validateBackgroundImage,
 } from "@kari/shared/utils/background-image";
 import {
   answerNo,
@@ -36,14 +36,14 @@ vi.mock("@kari/shared/services/site-settings", () => ({
   },
 }));
 
-// The real preparation needs canvas APIs jsdom lacks; its own unit tests
-// cover it. Keep the real BackgroundImageError so the page's instanceof
-// check runs against the class it uses in production.
+// The real validation needs createImageBitmap, which jsdom lacks; its own
+// unit tests cover it. Keep the real BackgroundImageError so the page's
+// instanceof check runs against the class it uses in production.
 vi.mock("@kari/shared/utils/background-image", async (importOriginal) => ({
   ...(await importOriginal<
     typeof import("@kari/shared/utils/background-image")
   >()),
-  prepareBackgroundImage: vi.fn(),
+  validateBackgroundImage: vi.fn(),
 }));
 
 vi.mock("../hooks/use-admin-token", () => ({
@@ -93,8 +93,8 @@ beforeEach(() => {
   ]);
   vi.mocked(ImageService.upload).mockResolvedValue("uploaded.webp");
   vi.mocked(ImageService.setPublished).mockResolvedValue(undefined);
-  // The preparation step passes files through untouched in these tests.
-  vi.mocked(prepareBackgroundImage).mockImplementation(async (file) => file);
+  // Validation passes in these tests; its rejections are exercised below.
+  vi.mocked(validateBackgroundImage).mockResolvedValue(undefined);
   vi.spyOn(window.URL, "createObjectURL").mockReturnValue("blob:preview");
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -194,17 +194,21 @@ describe("AdminBackgroundPage saving", () => {
     expect(publishOrder).toBeLessThan(updateOrder);
   });
 
-  it("prepares and uploads a new file before saving the settings", async () => {
-    const { notify } = await renderAndPickFile();
+  it("validates and uploads the untouched file before saving the settings", async () => {
+    const { notify, container } = await renderAndPickFile();
+    const picked = (container.querySelector('input[type="file"]') as
+      HTMLInputElement).files![0];
 
     fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Site background saved"),
     );
-    expect(prepareBackgroundImage).toHaveBeenCalledOnce();
+    expect(validateBackgroundImage).toHaveBeenCalledOnce();
+    // The exact File the admin picked, not a browser-downscaled re-encode:
+    // the API keeps the original and derives the background from it (#453).
     expect(ImageService.upload).toHaveBeenCalledWith(
-      expect.any(File),
+      picked,
       true,
       expect.any(Function),
     );
@@ -260,7 +264,7 @@ describe("AdminBackgroundPage saving", () => {
   });
 
   it("shows the validation message when the file is not a usable image", async () => {
-    vi.mocked(prepareBackgroundImage).mockRejectedValue(
+    vi.mocked(validateBackgroundImage).mockRejectedValue(
       new BackgroundImageError(
         "That file is not an image. Please choose an image file.",
       ),

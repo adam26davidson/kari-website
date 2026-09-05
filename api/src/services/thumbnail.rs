@@ -1,11 +1,15 @@
-//! Server-side generation of the small rendition stored as
-//! `images/<id>/thumb.jpg` (#273).
+//! Server-side generation of the derived renditions stored alongside an
+//! upload's original — `images/<id>/thumb.jpg` (#273) and
+//! `images/<id>/background.jpg` (#453).
 //!
 //! Admin pages render dozens of previews at once; before this, each preview
 //! downloaded and decoded a multi-megabyte camera original, which stalled
-//! the main thread. Generation happens in the API at upload time so every
-//! upload path is covered by one implementation, and the migration backfill
-//! reuses this exact function.
+//! the main thread. The site background had the mirror-image problem: the
+//! admin app downscaled it in the BROWSER before uploading, so the stored
+//! background was permanently low-resolution and the original was lost.
+//! Generation happens in the API at upload time so every upload path is
+//! covered by one implementation, the original stays the source of truth,
+//! and the migration backfill reuses these exact functions.
 //!
 //! Decoding a camera original allocates tens of megabytes and takes real
 //! CPU time, so this is deliberately synchronous and blocking: callers on an
@@ -17,17 +21,30 @@ use std::io::Cursor;
 
 use image::{codecs::jpeg::JpegEncoder, DynamicImage, ImageDecoder, ImageReader, Rgb, RgbImage};
 
+use crate::services::image_keys::ImageVariant;
+
 /// Longest edge of a generated thumbnail, in pixels. 480 covers the 96 px
 /// background-picker grid at 2-3x device pixel ratios and the 200 px
 /// photo-picker preview, while being ~1% of a camera original's pixels.
 pub const THUMB_MAX_EDGE: u32 = 480;
 
+/// Longest edge of the generated site background, in pixels. 2560 is what
+/// the deleted browser-side downscale used, so no display that looked right
+/// before loses resolution now — while a 6000 px camera original still
+/// stops being what every visitor downloads.
+pub const BACKGROUND_MAX_EDGE: u32 = 2560;
+
 /// JPEG quality of generated thumbnails: visually clean at these sizes,
 /// and small enough that a whole grid costs less than one original.
 const THUMB_QUALITY: u8 = 80;
 
-/// A thumbnail that could not be produced. Never fatal to the caller — the
-/// serving path falls back to the original when no thumbnail exists.
+/// JPEG quality of the generated background — the same 0.82 the browser-side
+/// encode used, a step above the thumbnail's because this one is painted
+/// full-screen rather than at 96 px.
+const BACKGROUND_QUALITY: u8 = 82;
+
+/// A rendition that could not be produced. Never fatal to the caller — the
+/// serving path falls back to the original when no rendition exists.
 #[derive(Debug)]
 pub struct ThumbnailError(pub String);
 
@@ -39,16 +56,24 @@ impl fmt::Display for ThumbnailError {
 
 impl Error for ThumbnailError {}
 
-/// Decode `bytes`, scale the image down so neither edge exceeds
-/// [`THUMB_MAX_EDGE`], and encode the result as JPEG.
+/// The longest edge and JPEG quality a variant is encoded at.
+fn encoding_for(variant: ImageVariant) -> (u32, u8) {
+    match variant {
+        ImageVariant::Thumb => (THUMB_MAX_EDGE, THUMB_QUALITY),
+        ImageVariant::Background => (BACKGROUND_MAX_EDGE, BACKGROUND_QUALITY),
+    }
+}
+
+/// Decode `bytes` into the image every rendition is scaled from.
 ///
 /// The EXIF orientation of the source is applied first, so a camera photo
-/// that displays upright thanks to its orientation tag produces an upright
-/// thumbnail rather than a sideways one. Any alpha channel is then
-/// composited onto white (JPEG has none), and only after that is the image
-/// scaled. Images already within the limit are re-encoded at their own size
-/// — never enlarged, which would only waste bytes.
-pub fn make_thumbnail(bytes: &[u8]) -> Result<Vec<u8>, ThumbnailError> {
+/// that displays upright thanks to its orientation tag produces upright
+/// renditions rather than sideways ones. Any alpha channel is then
+/// composited onto white (JPEG has none) — before any scaling, because
+/// `image`'s resize filters work on straight (non-premultiplied) alpha, so
+/// scaling first would smear the RGB hiding under transparent pixels into
+/// the visible edges.
+fn decode_source(bytes: &[u8]) -> Result<DynamicImage, ThumbnailError> {
     let mut decoder = ImageReader::new(Cursor::new(bytes))
         .with_guessed_format()
         .map_err(|e| ThumbnailError(format!("unreadable image data: {e}")))?
@@ -61,25 +86,50 @@ pub fn make_thumbnail(bytes: &[u8]) -> Result<Vec<u8>, ThumbnailError> {
     let mut image = image::DynamicImage::from_decoder(decoder)
         .map_err(|e| ThumbnailError(format!("undecodable image: {e}")))?;
     image.apply_orientation(orientation);
+    Ok(flatten_onto_white(image))
+}
 
-    // Flatten transparency BEFORE scaling: `image`'s resize filters work on
-    // straight (non-premultiplied) alpha, so scaling first would smear the
-    // RGB hiding under transparent pixels into the visible edges.
-    let image = flatten_onto_white(image);
-
+/// Scale `image` down so neither edge exceeds `max_edge` and encode the
+/// result as JPEG. Images already within the limit are re-encoded at their
+/// own size — never enlarged, which would only waste bytes.
+fn encode_scaled(
+    image: &DynamicImage,
+    max_edge: u32,
+    quality: u8,
+) -> Result<Vec<u8>, ThumbnailError> {
     // `DynamicImage::thumbnail` scales UP as readily as down, so clamp the
     // target to the source's own size first.
-    let scaled = image.thumbnail(
-        image.width().min(THUMB_MAX_EDGE),
-        image.height().min(THUMB_MAX_EDGE),
-    );
+    let scaled = image.thumbnail(image.width().min(max_edge), image.height().min(max_edge));
 
     let rgb = scaled.to_rgb8();
     let mut out = Vec::new();
-    JpegEncoder::new_with_quality(&mut out, THUMB_QUALITY)
+    JpegEncoder::new_with_quality(&mut out, quality)
         .encode_image(&rgb)
         .map_err(|e| ThumbnailError(format!("could not encode JPEG: {e}")))?;
     Ok(out)
+}
+
+/// Generate one rendition of `bytes`. Used by the migration backfill, which
+/// writes only the variants a given image is missing.
+pub fn make_rendition(bytes: &[u8], variant: ImageVariant) -> Result<Vec<u8>, ThumbnailError> {
+    let (max_edge, quality) = encoding_for(variant);
+    encode_scaled(&decode_source(bytes)?, max_edge, quality)
+}
+
+/// Generate EVERY rendition of a freshly uploaded image, in
+/// [`ImageVariant::ALL`] order.
+///
+/// One decode for all of them: decoding a camera original is the expensive
+/// half of this work, so an upload must never pay for it twice.
+pub fn make_renditions(bytes: &[u8]) -> Result<Vec<(ImageVariant, Vec<u8>)>, ThumbnailError> {
+    let source = decode_source(bytes)?;
+    ImageVariant::ALL
+        .into_iter()
+        .map(|variant| {
+            let (max_edge, quality) = encoding_for(variant);
+            Ok((variant, encode_scaled(&source, max_edge, quality)?))
+        })
+        .collect()
 }
 
 /// Composite `image` over an opaque white canvas, returning an image with no

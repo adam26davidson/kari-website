@@ -13,7 +13,7 @@ import { useUnsavedChanges } from "../use-unsaved-changes";
 import { apiImageUrl } from "@kari/shared/utils/image-management-helpers";
 import {
   BackgroundImageError,
-  prepareBackgroundImage,
+  validateBackgroundImage,
 } from "@kari/shared/utils/background-image";
 import defaultBackground from "@kari/shared/assets/petals_on_ground.webp";
 import { HeaderColorsSection } from "./header-colors-section";
@@ -114,12 +114,13 @@ export function AdminBackgroundPage() {
     try {
       const newSettings = { ...settings };
       if (imageFile) {
-        // Validate/downscale, then upload first — the settings are only
-        // written after the upload succeeds, so a failure at any step
-        // leaves the published background intact.
-        const prepared = await prepareBackgroundImage(imageFile);
+        // Validate, then upload the file UNTOUCHED — the API keeps the
+        // original and derives the page-sized background from it (#453).
+        // Upload first: the settings are only written after it succeeds, so
+        // a failure at any step leaves the published background intact.
+        await validateBackgroundImage(imageFile);
         const newFileName = await ImageService.upload(
-          prepared,
+          imageFile,
           true,
           getAccessTokenSilently,
         );

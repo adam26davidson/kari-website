@@ -6,11 +6,53 @@ import { ensureFontStylesheet, getFontPairing } from "../utils/fonts";
 import {
   legacyS3ImageUrl,
   s3ImageUrl,
+  s3VariantImageUrl,
 } from "../utils/image-management-helpers";
 
 const applyBackground = (url: string) => {
   document.body.style.setProperty("--site-background", `url("${url}")`);
   document.body.dataset.customBackground = "true";
+};
+
+/**
+ * Where the background photo might live, best first.
+ *
+ * 1. the server-derived, page-sized rendition every upload generates (#453);
+ * 2. the untouched original, for an image uploaded before that variant
+ *    existed in a bucket the migration has not been re-run against;
+ * 3. the pre-#273 single object, for a bucket never migrated at all (#452).
+ *
+ * The public site reads S3 directly, so it gets a bare 404 rather than the
+ * API's own fallback — the chain has to live here.
+ */
+const backgroundCandidates = (photo: string) => [
+  s3VariantImageUrl(photo, "background"),
+  s3ImageUrl(photo),
+  legacyS3ImageUrl(photo),
+];
+
+/**
+ * Paint the first candidate URL that actually loads.
+ *
+ * CSS has no onError, so each candidate is applied optimistically and probed
+ * separately; the probe requests exactly the URL the background rule does,
+ * so the expected case (the first candidate exists) costs one cached request
+ * rather than two. The last candidate is applied without a probe: there is
+ * nothing left to fall back to, and a failed load there simply leaves the
+ * bundled default showing through.
+ */
+const applyFirstLoadable = (urls: string[], isCancelled: () => boolean) => {
+  const attempt = (index: number) => {
+    applyBackground(urls[index]);
+    if (index === urls.length - 1) return;
+    const probe = new Image();
+    // Assigned before `src`, so a synchronously-failing load is still caught.
+    probe.onerror = () => {
+      if (!isCancelled()) attempt(index + 1);
+    };
+    probe.src = urls[index];
+  };
+  attempt(0);
 };
 
 /**
@@ -103,17 +145,10 @@ export function useSiteBackground(
         applyHeaderColors(settings);
         if (applyFonts) applyFontPairing(settings);
         if (!settings.backgroundPhoto) return;
-        const photo = settings.backgroundPhoto;
-        applyBackground(s3ImageUrl(photo));
-        // CSS has no onError, so probe the directory-layout key separately
-        // and swap to the pre-migration one if this bucket has not been
-        // migrated yet. The probe hits the same URL the background rule
-        // does, so a migrated bucket costs one cached request, not two.
-        const probe = new Image();
-        probe.onerror = () => {
-          if (!cancelled) applyBackground(legacyS3ImageUrl(photo));
-        };
-        probe.src = s3ImageUrl(photo);
+        applyFirstLoadable(
+          backgroundCandidates(settings.backgroundPhoto),
+          () => cancelled,
+        );
       } catch (error) {
         // The default background is a perfectly good page; never let a
         // missing/unreadable settings object break the site.
