@@ -86,7 +86,7 @@
   font-weight: var(--display-weight);
 }
 
-/* Below 768px the title div swaps to this class ALONE — neither
+/* Below 768px the title heading swaps to this class ALONE — neither
    .header-title nor .admin-header-title applies — so its weight is decided
    here or not at all, and the two bars want different answers. Each declares
    the size it would otherwise inherit from its bar, so the weight is stated
@@ -159,9 +159,9 @@
      starts 20px from the edge while the button's own box is bigger than it.
      At `padding: 0` the site-wide :focus-visible ring (index.css) traced the
      bars glyph itself, reading as a cramped accident rather than a deliberate
-     focus state (#545); the roomier box also gives the one control on a phone
-     header a tap target well clear of the 24px WCAG 2.5.8 minimum, which the
-     16px admin glyph was under. */
+     focus state (#545); the roomier box also takes the only control on a
+     phone header over the 24px WCAG 2.5.8 target minimum, which the admin
+     bar's 16px glyph was under. */
   padding: 6px;
   margin-left: 14px;
   font: inherit;
