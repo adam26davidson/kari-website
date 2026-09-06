@@ -155,15 +155,24 @@
 .header-menu-button {
   background: none;
   border: none;
-  /* Padding, then the same amount off the left margin, so the glyph still
-     starts 20px from the edge while the button's own box is bigger than it.
+  /* Padding, then the same amount taken off BOTH horizontal margins, so the
+     button's own box grows around the glyph while the glyph — and every
+     element after it in the bar — stays exactly where it was. The negative
+     right margin is the half that is easy to forget: without it the title
+     after this button shifts 6px right and loses 6px of the gap the admin
+     bar's 390px rebalance (above) had just freed, on a bar the design brief
+     already calls tight. Measured: with it, `.header-title-mobile` sits at
+     x=61.88 on both bars, the same as at `padding: 0`.
+
      At `padding: 0` the site-wide :focus-visible ring (index.css) traced the
      bars glyph itself, reading as a cramped accident rather than a deliberate
      focus state (#545); the roomier box also takes the only control on a
      phone header over the 24px WCAG 2.5.8 target minimum, which the admin
-     bar's 16px glyph was under. */
+     bar's 16px glyph was under. The ring reaches 6px past the border box
+     (2px outline + its 4px halo), which still clears the title by 8px. */
   padding: 6px;
   margin-left: 14px;
+  margin-right: -6px;
   font: inherit;
   /* The nav colour, not the bar's: below 768px this button IS the nav, so
      it belongs to the setting the admin picks for the page links — and to
