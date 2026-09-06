@@ -50,7 +50,7 @@
   margin: 8px;
   padding: 24px;
   border-radius: 3px;
-  background-color: rgba(226, 226, 226, 0.8);
+  background-color: var(--panel-tint);
   /* Blur what shows through, like every other admin surface — see the note
      on .admin-data-list-item below. */
   backdrop-filter: blur(10px);
@@ -90,7 +90,7 @@
   margin: 4px 8px;
   padding: 12px 14px;
   border-radius: 3px;
-  background-color: rgba(226, 226, 226, 0.8);
+  background-color: var(--panel-tint);
   /* Blur what shows through, like every other admin surface — see the note
      on .admin-data-list-item below. */
   backdrop-filter: blur(10px);
@@ -112,7 +112,7 @@
 }
 
 .admin-data-list-item {
-  background-color: rgba(226, 226, 226, 0.8);
+  background-color: var(--panel-tint);
   /* The tint alone lets the background photograph read through, and the
      row's secondary line (a haiku's publisher, a post's date) is small
      grey text landing straight on blurred petals. Every other admin

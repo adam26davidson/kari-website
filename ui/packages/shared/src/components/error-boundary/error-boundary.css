@@ -1,3 +1,8 @@
+/* The surface, foreground, lift and interface face come from the shared
+   `.loading, .load-error, .error-boundary` card in styles/index.css — this
+   file holds only what makes THIS notice its own shape. The two sets are
+   deliberately disjoint, so nothing here overrides anything there and load
+   order cannot change what renders. */
 .error-boundary {
   display: flex;
   flex-direction: column;
@@ -5,22 +10,17 @@
   justify-content: center;
   gap: 12px;
   max-width: 400px;
-  margin: 80px auto 0;
   padding: 32px 40px;
-  border-radius: 8px;
-  background-color: #f2efe9;
-  color: #181818;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  font-family: var(--font-ui);
-  font-size: 16px;
-  text-align: center;
 }
 
 .error-boundary-reload {
   padding: 8px 20px;
   border: none;
   border-radius: 4px;
-  background-color: #6d3513ee;
+  /* 93.3% of the site brown, which is the alpha the literal `#6d3513ee`
+     spelled — the card behind it is opaque, so the sliver of translucency
+     only softens the fill rather than letting anything through. */
+  background-color: color-mix(in srgb, var(--primary) 93.3%, transparent);
   color: white;
   font-family: var(--font-ui);
   font-size: 16px;

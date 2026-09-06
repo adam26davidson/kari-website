@@ -22,6 +22,6 @@
   align-items: flex-start;
   justify-content: center;
   width: fit-content;
-  color: #181818;
+  color: var(--dark-text);
   font-family: var(--font-ui);
 }

@@ -1,9 +1,14 @@
+/* The public site's one filled control (share, download). Brown from the
+   shared --primary token, spent at two alphas via color-mix rather than as
+   two hexes with a suffix, so the button stays one colour in two states
+   (#480). 71% and 93.3% are the alphas the literals `#6d3513b5` and
+   `#6d3513ee` spelled. */
 .site-button {
   display: flex;
   flex-direction: row;
   gap: 8px;
   color: #f9f5f2;
-  background-color: #6d3513b5;
+  background-color: color-mix(in srgb, var(--primary) 71%, transparent);
   border-width: 0px;
   font-size: 16px;
   width: fit-content;
@@ -14,10 +19,10 @@
 }
 
 .site-button:hover {
-  background-color: #6d3513ee;
+  background-color: color-mix(in srgb, var(--primary) 93.3%, transparent);
   cursor: pointer;
 }
 
 .site-button:active {
-  background-color: #6d3513ee;
+  background-color: color-mix(in srgb, var(--primary) 93.3%, transparent);
 }

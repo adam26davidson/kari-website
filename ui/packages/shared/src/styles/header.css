@@ -15,11 +15,14 @@
 
    Since #482 the bar tint, the site title and the nav links are each
    admin-settable, published by useSiteBackground as the custom properties
-   below. The literals here are therefore the DEFAULT appearance, which is
+   below. The fallbacks here are therefore the DEFAULT appearance, which is
    what paints whenever a setting is unset, empty or unparseable — and what
-   the contrast test still pins. An admin-chosen tint has to carry the same
-   contrast on its own; that is the admin page's job, which warns before a
-   save when a pairing would be hard to read.
+   the contrast test still pins. They are tokens rather than literals
+   because the tint's green is also the focus ring's outer halo, which has
+   to read against this bar (#480); both now come from --header-surface in
+   styles/index.css. An admin-chosen tint has to carry the same contrast on
+   its own; that is the admin page's job, which warns before a save when a
+   pairing would be hard to read.
 
    The blur is deliberately NOT settable: it is what turns whatever photo
    is behind the bar into an even surface, so it applies to every tint. */
@@ -30,7 +33,7 @@
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  background-color: var(--header-background, rgba(28, 49, 0, 0.86));
+  background-color: var(--header-background, var(--header-tint));
   backdrop-filter: blur(10px);
   color: white;
 }
@@ -56,10 +59,10 @@
 
 .header-user-name {
   margin: 0px 20px 0px 10px;
-  color: #c9c9c9;
-}
-
-.header-user-name {
+  /* A step down from the bar's white, so the signed-in name reads as
+     context rather than as another nav item — and still clears WCAG AA on
+     the bar over the lightest possible photo. */
+  color: var(--muted-light-text);
   font-size: 18px;
   font-family: var(--font-ui);
   font-weight: 400;

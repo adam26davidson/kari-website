@@ -12,10 +12,10 @@
   margin: 12px auto;
   padding: 24px;
   border-radius: 3px;
-  background-color: rgba(226, 226, 226, 0.8);
+  background-color: var(--panel-tint);
   backdrop-filter: blur(10px);
   font-family: var(--font-ui);
-  color: #181818;
+  color: var(--dark-text);
 }
 
 /* Same size and same measure as the explanation line above them, so the

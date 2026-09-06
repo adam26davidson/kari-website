@@ -2,7 +2,7 @@
    text on the page whose airiness is the point, and at 20px the stems hold
    up (#356). */
 .haiku-list-line {
-  color: #181818;
+  color: var(--dark-text);
   font-size: 20px;
   font-weight: var(--display-weight);
   text-align: center;
@@ -25,7 +25,7 @@
    empty and made the haiku list the one page whose items did not line up
    with the heading above them (#457, design brief §1). */
 .haiku-list-line-compact {
-  color: #181818;
+  color: var(--dark-text);
   font-size: 15px;
   text-align: left;
   margin: 2px 0;

@@ -16,7 +16,7 @@
   font-family: var(--font-ui);
   font-size: 17px;
   font-weight: 400;
-  color: #181818;
+  color: var(--dark-text);
 }
 
 .font-pairing-options {
@@ -75,7 +75,7 @@
 .font-pairing-name {
   font-family: var(--font-ui);
   font-size: 15px;
-  color: #181818;
+  color: var(--dark-text);
 }
 
 .font-pairing-description {
@@ -94,7 +94,7 @@
   margin-top: 6px;
   /* Reading size, not caption size: the point is how the poems will look. */
   font-size: 20px;
-  color: #181818;
+  color: var(--dark-text);
 }
 
 /* Long enough to break awkwardly at 390px if left to wrap mid-phrase. */
