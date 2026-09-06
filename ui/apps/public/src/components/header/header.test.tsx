@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { Header } from "./header";
-import { PAGES } from "@kari/shared/constants";
+import { MOBILE_MENU_ID, PAGES } from "@kari/shared/constants";
 import { useIsMobile } from "@kari/shared/hooks/use-is-mobile";
 
 vi.mock("@kari/shared/hooks/use-is-mobile", () => ({
@@ -115,6 +115,24 @@ describe("Header on mobile", () => {
     });
     await userEvent.click(screen.getByRole("button", { name: "Menu" }));
     expect(setShowingMobileMenu).toHaveBeenCalledWith(false);
+  });
+
+  // Without this a screen reader announces the hamburger as a plain button:
+  // nothing says whether the menu it opens is currently showing (#502).
+  it("reports the menu's collapsed state on the hamburger", () => {
+    renderHeader("/", { showingMobileMenu: false });
+    const button = screen.getByRole("button", { name: "Menu" });
+    expect(button).toHaveAttribute("aria-expanded", "false");
+    // The menu is not mounted while collapsed, and aria-controls may only
+    // name an element that exists.
+    expect(button).not.toHaveAttribute("aria-controls");
+  });
+
+  it("reports the menu's expanded state and points at it", () => {
+    renderHeader("/", { showingMobileMenu: true });
+    const button = screen.getByRole("button", { name: "Menu" });
+    expect(button).toHaveAttribute("aria-expanded", "true");
+    expect(button).toHaveAttribute("aria-controls", MOBILE_MENU_ID);
   });
 
   it("toggles the mobile menu with the keyboard", async () => {

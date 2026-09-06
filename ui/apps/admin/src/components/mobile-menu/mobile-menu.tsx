@@ -1,5 +1,5 @@
 import "@kari/shared/styles/mobile-menu.css";
-import { PAGES } from "@kari/shared/constants";
+import { MOBILE_MENU_ID, PAGES } from "@kari/shared/constants";
 
 /**
  * The phone-width nav behind the admin bar's hamburger. It lists the public
@@ -15,7 +15,8 @@ export function MobileMenu({
   setShowingMobileMenu: (showing: boolean) => void;
 }) {
   return (
-    <div className="mobile-menu">
+    // The id is what the admin bar's hamburger names in aria-controls (#502).
+    <div id={MOBILE_MENU_ID} className="mobile-menu">
       {PAGES.map((page) => (
         <a
           key={page.path}

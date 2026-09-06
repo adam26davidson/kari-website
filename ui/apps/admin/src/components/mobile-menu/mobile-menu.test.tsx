@@ -2,10 +2,10 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MobileMenu } from "./mobile-menu";
-import { PAGES } from "@kari/shared/constants";
+import { MOBILE_MENU_ID, PAGES } from "@kari/shared/constants";
 
 function renderMenu(setShowingMobileMenu = vi.fn()) {
-  render(
+  const view = render(
     // These are real anchors to another application, and jsdom answers a
     // real navigation with a "Not implemented" error on stderr. Swallowing
     // the default here keeps the run's output clean without pretending the
@@ -14,10 +14,18 @@ function renderMenu(setShowingMobileMenu = vi.fn()) {
       <MobileMenu setShowingMobileMenu={setShowingMobileMenu} />
     </div>,
   );
-  return setShowingMobileMenu;
+  return { setShowingMobileMenu, container: view.container };
 }
 
 describe("the admin phone menu", () => {
+  // The hamburger's aria-controls names this id, so a screen reader can
+  // follow the button to the menu it opens (#502).
+  it("carries the id the hamburger's aria-controls names", () => {
+    const { container } = renderMenu();
+    const menu = container.querySelector(".mobile-menu");
+    expect(menu).toHaveAttribute("id", MOBILE_MENU_ID);
+  });
+
   it("renders one link per public page", () => {
     renderMenu();
     const links = screen.getAllByRole("link");
@@ -41,7 +49,7 @@ describe("the admin phone menu", () => {
   });
 
   it("closes the menu when a link is clicked", async () => {
-    const setShowingMobileMenu = renderMenu();
+    const { setShowingMobileMenu } = renderMenu();
     await userEvent.click(screen.getByRole("link", { name: "Haiku" }));
     expect(setShowingMobileMenu).toHaveBeenCalledWith(false);
   });
