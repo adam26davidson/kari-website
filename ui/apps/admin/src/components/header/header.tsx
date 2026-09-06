@@ -39,9 +39,14 @@ export function Header({
           <FontAwesomeIcon icon={faBars} className="header-menu-icon" />
         </button>
       )}
-      <div className={isMobile ? "header-title-mobile" : "admin-header-title"}>
+      {/* The admin bar's title is the page's <h1> (#504). Every admin page
+          opens with an <h2 class="admin-section-heading">, so without this
+          the outline started at level 2 under nothing. header.css states the
+          size, weight and margin an <h1> would otherwise take from the
+          browser, so only the outline changes. */}
+      <h1 className={isMobile ? "header-title-mobile" : "admin-header-title"}>
         Kari Davidson - Admin
-      </div>
+      </h1>
       <HeaderUserSection />
     </div>
   );
