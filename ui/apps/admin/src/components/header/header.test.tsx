@@ -38,6 +38,16 @@ describe("the admin header on desktop", () => {
     expect(screen.getByText("Kari Davidson - Admin")).toBeInTheDocument();
   });
 
+  // Every admin page opens with an <h2 class="admin-section-heading">, and
+  // nothing above them was a heading at all: the outline started at level 2
+  // with no level 1 over it. The bar's title is that level 1 (#504).
+  it("marks the admin title as the page's level-1 heading", () => {
+    renderHeader();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Kari Davidson - Admin" }),
+    ).toBeInTheDocument();
+  });
+
   it("shows the signed-in user", () => {
     renderHeader();
     expect(screen.getByText("User section stub")).toBeInTheDocument();
@@ -70,6 +80,14 @@ describe("the admin header on mobile", () => {
       ".admin-header > .header-title-mobile",
     );
     expect(title).toHaveTextContent("Kari Davidson - Admin");
+  });
+
+  // The class swaps below 768px; the element must not (#504).
+  it("keeps the admin title a level-1 heading on mobile", () => {
+    renderHeader();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Kari Davidson - Admin" }),
+    ).toHaveClass("header-title-mobile");
   });
 
   it("toggles the phone menu open when the hamburger is clicked", async () => {

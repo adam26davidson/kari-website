@@ -94,7 +94,11 @@
    pair). */
 .header-title-mobile {
   flex: 1;
-  margin-left: 20px;
+  /* The shorthand, not `margin-left`: the title is an <h1> since #504, and
+     the browser's own `margin: 0.67em 0` would otherwise stand — growing
+     the mobile bar by roughly a line on every page. Pinned by
+     ui/test/design/heading-chrome.test.ts. */
+  margin: 0px 0px 0px 20px;
   /* Stated rather than inherited from the bar for the same reason the
      weight is: below 768px this class applies ALONE, so an admin-chosen
      title colour would apply on every desktop and silently miss every
@@ -151,8 +155,15 @@
 .header-menu-button {
   background: none;
   border: none;
-  padding: 0;
-  margin-left: 20px;
+  /* Padding, then the same amount off the left margin, so the glyph still
+     starts 20px from the edge while the button's own box is bigger than it.
+     At `padding: 0` the site-wide :focus-visible ring (index.css) traced the
+     bars glyph itself, reading as a cramped accident rather than a deliberate
+     focus state (#545); the roomier box also gives the one control on a phone
+     header a tap target well clear of the 24px WCAG 2.5.8 minimum, which the
+     16px admin glyph was under. */
+  padding: 6px;
+  margin-left: 14px;
   font: inherit;
   /* The nav colour, not the bar's: below 768px this button IS the nav, so
      it belongs to the setting the admin picks for the page links — and to

@@ -42,6 +42,17 @@ describe("Header on desktop", () => {
     expect(screen.queryByText(/- Admin/)).not.toBeInTheDocument();
   });
 
+  // The bar renders on every public route, so the site title is the only
+  // heading the home, haiku, haiga, photography and other-works pages have
+  // to offer: as a <div> those pages carried no level-1 heading at all and
+  // a screen-reader user jumping by headings landed on nothing (#504).
+  it("marks the site title as the page's level-1 heading", () => {
+    renderHeader("/");
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Kari Davidson" }),
+    ).toBeInTheDocument();
+  });
+
   it("renders a nav link per page and marks the current one active", () => {
     renderHeader("/haiku");
     for (const page of PAGES) {
@@ -99,6 +110,15 @@ describe("Header on mobile", () => {
     const { container } = renderHeader("/");
     const title = container.querySelector(".header > .header-title-mobile");
     expect(title).toHaveTextContent("Kari Davidson");
+  });
+
+  // The class swaps below 768px; the element must not. A phone visitor gets
+  // the same one heading a desktop visitor does (#504).
+  it("keeps the site title a level-1 heading on mobile", () => {
+    renderHeader("/");
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Kari Davidson" }),
+    ).toHaveClass("header-title-mobile");
   });
 
   it("toggles the mobile menu open when the hamburger is clicked", async () => {

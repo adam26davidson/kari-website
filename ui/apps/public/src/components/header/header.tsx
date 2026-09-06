@@ -32,9 +32,14 @@ export function Header({
           <FontAwesomeIcon icon={faBars} className="header-menu-icon" />
         </button>
       )}
-      <div className={isMobile ? "header-title-mobile" : "header-title"}>
+      {/* The site title is the page's <h1> (#504). None of the public pages
+          declares a heading of its own, so as a <div> this left home, haiku,
+          haiga, photography and other-works with no level-1 heading at all.
+          header.css states the size, weight and margin an <h1> would
+          otherwise take from the browser, so only the outline changes. */}
+      <h1 className={isMobile ? "header-title-mobile" : "header-title"}>
         Kari Davidson
-      </div>
+      </h1>
       {!isMobile && (
         <div className="pages">
           {PAGES.map((page) => (
