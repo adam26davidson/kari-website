@@ -71,6 +71,12 @@
      menu look. */
   background: none;
   border: none;
+  /* The rail the selected section fills in (#500). Declared transparent on
+     every item so the marker is a shape appearing rather than a label
+     jumping sideways, and paid for out of the left padding below —
+     content-box means the border is added to `width`, so an unreserved 3px
+     is 3px past the sidebar's edge. */
+  border-left: 3px solid transparent;
   font: inherit;
   text-align: left;
   text-decoration: none;
@@ -83,17 +89,25 @@
   justify-content: flex-start;
   align-items: center;
   width: calc(100% - 30px);
-  padding: 12px 0px 12px 30px;
+  padding: 12px 0px 12px 27px;
   margin: 0px;
-  transition: color 0.2s;
+  transition:
+    color 0.2s,
+    border-left-color 0.2s;
   font-size: 18px;
   font-family: var(--font-ui);
   font-weight: var(--display-weight);
   font-style: normal;
 }
 
+/* Which section she is in, told twice: the darker text, and the brown rail
+   the base rule reserved. Colour alone was the whole signal until #500, and
+   the two greys either side of it are a step most eyes can make and some
+   cannot (WCAG 1.4.1, Use of Color). The link's aria-current — NavLink sets
+   it — says the same thing to a screen reader. */
 .admin-menu-item.selected {
   color: var(--dark-text);
+  border-left-color: var(--admin-primary);
 }
 
 .admin-menu-item:hover {

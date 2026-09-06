@@ -187,23 +187,63 @@ describe("Admin what's-on-test section (staging-only)", () => {
   });
 });
 
-// jsdom applies no stylesheet, so the phone menu's sizing is read out of the
-// CSS rather than measured.
+// jsdom applies no stylesheet, so what the menu looks like is read out of
+// the CSS rather than measured. Comments are stripped so an explanatory
+// `/* ... */` between declarations can't hide the one that follows it.
+const adminCss = readFileSync("apps/admin/src/admin.css", "utf-8").replace(
+  /\/\*[\s\S]*?\*\//g,
+  "",
+);
+
+/** The first block declared for `selector`, comments already gone. */
+const ruleFor = (css: string, selector: string) =>
+  css.match(
+    new RegExp(
+      `(?:^|\\})\\s*${selector.replace(/[.]/g, "\\.")}\\s*\\{([^}]*)\\}`,
+    ),
+  )?.[1] ?? "";
+
+// The selected section used to differ from its neighbours by colour alone
+// (--dark-text against --muted-text), which WCAG 1.4.1 (Use of Color) asks
+// us not to rely on: someone who cannot separate two dark greys had no way
+// to tell which section she was in. The link also carries aria-current from
+// NavLink, so this is the sighted half of the same answer (#500).
+describe("the selected admin menu item", () => {
+  const base = ruleFor(adminCss, ".admin-menu-item");
+  const selected = ruleFor(adminCss, ".admin-menu-item.selected");
+
+  it("is marked by a shape appearing, not only by a darker colour", () => {
+    expect(base).toMatch(/border-left\s*:\s*[1-9]\d*px\s+solid\s+transparent/);
+    expect(selected).toMatch(/border-left-color\s*:\s*var\(--admin-primary\)/);
+  });
+
+  it("reserves the marker's width on every item so the label never jumps", () => {
+    // The items are content-box inside a fixed 200px sidebar, so an extra
+    // 3px of border is 3px of overflow — and the label would shift right
+    // the moment she navigated. The border therefore comes out of the left
+    // padding, leaving the text where it has always been.
+    const borderPx = Number(/border-left\s*:\s*(\d+)px/.exec(base)?.[1]);
+    const paddingLeftPx = Number(
+      /padding\s*:\s*[^;]*?(\d+)px\s*;/.exec(base)?.[1],
+    );
+    expect(borderPx).toBeGreaterThan(0);
+    expect(borderPx + paddingLeftPx).toBe(30);
+  });
+
+  it("changes nothing but colour when it becomes selected", () => {
+    // Anything that resizes the item on selection (a wider border, its own
+    // padding) reintroduces the jump the reservation above prevents.
+    expect(selected).not.toMatch(/padding|width|font-size|border-left\s*:/);
+  });
+});
+
 describe("the admin menu at phone width", () => {
-  const strip = (path: string) =>
-    readFileSync(path, "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
-  const adminCss = strip("apps/admin/src/admin.css");
   const atPhoneWidth = (() => {
     const media = adminCss.indexOf("@media (max-width: 767.98px)");
     expect(media).toBeGreaterThanOrEqual(0);
     return adminCss.slice(adminCss.indexOf("{", media) + 1);
   })();
-  const block = (selector: string) =>
-    atPhoneWidth.match(
-      new RegExp(
-        `(?:^|\\})\\s*${selector.replace(".", "\\.")}\\s*\\{([^}]*)\\}`,
-      ),
-    )?.[1] ?? "";
+  const block = (selector: string) => ruleFor(atPhoneWidth, selector);
 
   // Eight links at a ~35px pitch with no row gap read as a dense index
   // rather than a menu (design brief §1), and 35px is under the size a
