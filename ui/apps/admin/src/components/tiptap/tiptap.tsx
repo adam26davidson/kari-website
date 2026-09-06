@@ -120,9 +120,8 @@ const TOOLBAR_GROUPS: ToolbarGroup[] = [
       name: `align-${align}`,
       label,
       icon,
-      command: (editor: Editor) =>
-        editor.chain().focus().setTextAlign(align).run(),
-      isActive: (editor: Editor) => editor.isActive({ textAlign: align }),
+      command: (editor) => editor.chain().focus().setTextAlign(align).run(),
+      isActive: (editor) => editor.isActive({ textAlign: align }),
     })),
   },
   {
