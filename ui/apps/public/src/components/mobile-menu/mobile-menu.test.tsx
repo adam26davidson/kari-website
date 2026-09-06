@@ -3,18 +3,26 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { MobileMenu } from "./mobile-menu";
-import { PAGES } from "@kari/shared/constants";
+import { MOBILE_MENU_ID, PAGES } from "@kari/shared/constants";
 
 function renderMenu(path: string, setShowingMobileMenu = vi.fn()) {
-  render(
+  const view = render(
     <MemoryRouter initialEntries={[path]}>
       <MobileMenu setShowingMobileMenu={setShowingMobileMenu} />
     </MemoryRouter>,
   );
-  return setShowingMobileMenu;
+  return { setShowingMobileMenu, container: view.container };
 }
 
 describe("MobileMenu", () => {
+  // The hamburger's aria-controls names this id, so a screen reader can
+  // follow the button to the menu it opens (#502).
+  it("carries the id the hamburger's aria-controls names", () => {
+    const { container } = renderMenu("/");
+    const menu = container.querySelector(".mobile-menu");
+    expect(menu).toHaveAttribute("id", MOBILE_MENU_ID);
+  });
+
   it("renders one mobile-menu-item link per page, plus Admin", () => {
     renderMenu("/");
     const links = screen.getAllByRole("link");
@@ -49,7 +57,7 @@ describe("MobileMenu", () => {
   });
 
   it("closes the menu when a link is clicked", async () => {
-    const setShowingMobileMenu = renderMenu("/");
+    const { setShowingMobileMenu } = renderMenu("/");
     await userEvent.click(screen.getByRole("link", { name: "Haiku" }));
     expect(setShowingMobileMenu).toHaveBeenCalledWith(false);
   });

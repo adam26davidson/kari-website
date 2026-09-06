@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router";
 import "@kari/shared/styles/mobile-menu.css";
-import { PAGES } from "@kari/shared/constants";
+import { MOBILE_MENU_ID, PAGES } from "@kari/shared/constants";
 
 export function MobileMenu({
   setShowingMobileMenu,
@@ -9,7 +9,8 @@ export function MobileMenu({
 }) {
   const location = useLocation();
   return (
-    <div className="mobile-menu">
+    // The id is what the header's hamburger names in aria-controls (#502).
+    <div id={MOBILE_MENU_ID} className="mobile-menu">
       {PAGES.map((page) => (
         <Link
           key={page.path}

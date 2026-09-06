@@ -2,6 +2,7 @@ import "@kari/shared/styles/header.css";
 import { faBars } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useIsMobile } from "@kari/shared/hooks/use-is-mobile";
+import { MOBILE_MENU_ID } from "@kari/shared/constants";
 import { HeaderUserSection } from "../../auth/admin-auth";
 
 /**
@@ -24,9 +25,14 @@ export function Header({
   return (
     <div className="admin-header">
       {isMobile && (
+        // aria-controls only while the menu is open: app.tsx mounts it on
+        // demand, and the attribute may only name an element that is in the
+        // document. aria-expanded carries the state either way.
         <button
           type="button"
           aria-label="Menu"
+          aria-expanded={showingMobileMenu}
+          aria-controls={showingMobileMenu ? MOBILE_MENU_ID : undefined}
           className="header-menu-button"
           onClick={() => setShowingMobileMenu(!showingMobileMenu)}
         >
