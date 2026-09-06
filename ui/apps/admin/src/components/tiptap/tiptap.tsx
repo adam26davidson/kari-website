@@ -53,10 +53,17 @@ const blockAcceptsLinks = (editor: Editor) =>
 // these callbacks alongside the editor.
 interface MenuActions {
   toggleLinkPanel: () => void;
+  addImage: () => void;
 }
 
 interface ToolbarItem {
+  // The internal slug: a stable React key and the handle the toolbar uses
+  // to single an item out. Never shown to anyone.
   name: string;
+  // What the button is called out loud. Every button here is an icon with
+  // no text beside it, so this is the whole of what a screen reader
+  // announces and what the hover tooltip says.
+  label: string;
   icon: IconDefinition;
   command: (editor: Editor, menu: MenuActions) => void;
   isActive?: (editor: Editor) => boolean;
@@ -78,18 +85,21 @@ const TOOLBAR_GROUPS: ToolbarGroup[] = [
     items: [
       {
         name: "bold",
+        label: "Bold",
         icon: faBold,
         command: (editor) => editor.chain().focus().toggleBold().run(),
         isActive: (editor) => editor.isActive("bold"),
       },
       {
         name: "italic",
+        label: "Italic",
         icon: faItalic,
         command: (editor) => editor.chain().focus().toggleItalic().run(),
         isActive: (editor) => editor.isActive("italic"),
       },
       {
         name: "strike",
+        label: "Strikethrough",
         icon: faStrikethrough,
         command: (editor) => editor.chain().focus().toggleStrike().run(),
         isActive: (editor) => editor.isActive("strike"),
@@ -99,16 +109,20 @@ const TOOLBAR_GROUPS: ToolbarGroup[] = [
   {
     name: "alignment",
     grouped: true,
-    items: (["left", "center", "right", "justify"] as const).map((align) => ({
+    items: (
+      [
+        { align: "left", label: "Align left", icon: faAlignLeft },
+        { align: "center", label: "Align center", icon: faAlignCenter },
+        { align: "right", label: "Align right", icon: faAlignRight },
+        { align: "justify", label: "Justify", icon: faAlignJustify },
+      ] as const
+    ).map(({ align, label, icon }) => ({
       name: `align-${align}`,
-      icon: {
-        left: faAlignLeft,
-        center: faAlignCenter,
-        right: faAlignRight,
-        justify: faAlignJustify,
-      }[align],
-      command: (editor) => editor.chain().focus().setTextAlign(align).run(),
-      isActive: (editor) => editor.isActive({ textAlign: align }),
+      label,
+      icon,
+      command: (editor: Editor) =>
+        editor.chain().focus().setTextAlign(align).run(),
+      isActive: (editor: Editor) => editor.isActive({ textAlign: align }),
     })),
   },
   {
@@ -117,12 +131,14 @@ const TOOLBAR_GROUPS: ToolbarGroup[] = [
     items: [
       {
         name: "bullet-list",
+        label: "Bulleted list",
         icon: faListUl,
         command: (editor) => editor.chain().focus().toggleBulletList().run(),
         isActive: (editor) => editor.isActive("bulletList"),
       },
       {
         name: "ordered-list",
+        label: "Numbered list",
         icon: faListOl,
         command: (editor) => editor.chain().focus().toggleOrderedList().run(),
         isActive: (editor) => editor.isActive("orderedList"),
@@ -135,15 +151,29 @@ const TOOLBAR_GROUPS: ToolbarGroup[] = [
     items: [
       {
         name: "link",
+        label: "Add or edit a link",
         icon: faLink,
         command: (_editor, menu) => menu.toggleLinkPanel(),
         isActive: (editor) => editor.isActive("link"),
       },
       {
         name: "unlink",
+        label: "Remove the link",
         icon: faUnlink,
         command: (editor) => editor.chain().focus().unsetLink().run(),
         isDisabled: (editor) => !editor.isActive("link"),
+      },
+    ],
+  },
+  {
+    name: "images",
+    grouped: false,
+    items: [
+      {
+        name: "image",
+        label: "Add an image",
+        icon: faImage,
+        command: (_editor, menu) => menu.addImage(),
       },
     ],
   },
@@ -159,21 +189,29 @@ const ToolbarButton = ({
   item: ToolbarItem;
   menu: MenuActions;
   expanded?: boolean;
-}) => (
-  <button
-    type="button"
-    onClick={() => item.command(editor, menu)}
-    aria-expanded={expanded}
-    className={
-      item.isActive ? (item.isActive(editor) ? "is-active" : "") : undefined
-    }
-    disabled={item.isDisabled?.(editor)}
-    aria-label={item.name}
-    title={item.name}
-  >
-    <FontAwesomeIcon icon={item.icon} />
-  </button>
-);
+}) => {
+  const active = item.isActive?.(editor);
+
+  return (
+    <button
+      type="button"
+      onClick={() => item.command(editor, menu)}
+      aria-expanded={expanded}
+      // The highlight says "this is on" to anyone who can see it;
+      // aria-pressed says the same thing to anyone who cannot. A button
+      // that discloses a panel reports aria-expanded instead — carrying
+      // both would tell assistive tech two stories about one press — and a
+      // button that just acts once reports neither.
+      aria-pressed={expanded === undefined ? active : undefined}
+      className={active ? "is-active" : undefined}
+      disabled={item.isDisabled?.(editor)}
+      aria-label={item.label}
+      title={item.label}
+    >
+      <FontAwesomeIcon icon={item.icon} />
+    </button>
+  );
+};
 
 const MenuBar = ({
   editor,
@@ -281,7 +319,7 @@ const MenuBar = ({
       ? "p"
       : "";
 
-  const menu: MenuActions = { toggleLinkPanel };
+  const menu: MenuActions = { toggleLinkPanel, addImage };
 
   return (
     <div className="control-group">
@@ -333,14 +371,6 @@ const MenuBar = ({
             ))
           ),
         )}
-        <button
-          type="button"
-          onClick={addImage}
-          aria-label="image"
-          title="image"
-        >
-          <FontAwesomeIcon icon={faImage} />
-        </button>
       </div>
       {/* One link surface at a time: while the panel is open it holds the
           address being edited, and a bubble still showing the old one over
