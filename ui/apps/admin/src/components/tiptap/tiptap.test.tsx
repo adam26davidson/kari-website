@@ -42,8 +42,8 @@ afterEach(() => {
   editorState.editor = null;
 });
 
-// Toolbar buttons carry aria-labels from their config names, so they can
-// be looked up through their accessible name.
+// Toolbar buttons carry a human-facing aria-label, so they can be looked
+// up through their accessible name.
 const getButton = (name: string) =>
   screen.getByRole("button", { name });
 
@@ -116,6 +116,32 @@ describe("Tiptap toolbar", () => {
     ).toBeInTheDocument();
   });
 
+  it("names the toolbar buttons in words rather than config slugs", () => {
+    // The icons say nothing on their own: the accessible name is what a
+    // screen reader announces and what the hover tooltip shows, so it has
+    // to read as English rather than as the item's internal slug.
+    const { container } = renderTiptap();
+
+    const names = [...container.querySelectorAll(".button-group button")].map(
+      (button) => button.getAttribute("aria-label")
+    );
+
+    expect(names).toEqual([
+      "Bold",
+      "Italic",
+      "Strikethrough",
+      "Align left",
+      "Align center",
+      "Align right",
+      "Justify",
+      "Bulleted list",
+      "Numbered list",
+      "Add or edit a link",
+      "Remove the link",
+      "Add an image",
+    ]);
+  });
+
   it("mounts without Tiptap's duplicate-extension warning", () => {
     const warn = vi.spyOn(console, "warn");
     renderTiptap();
@@ -125,30 +151,54 @@ describe("Tiptap toolbar", () => {
     ).toEqual([]);
   });
 
-  it.each(["bold", "italic", "strike"])(
+  it.each(["Bold", "Italic", "Strikethrough"])(
     "marks the %s button active once toggled",
     async (mark) => {
       const user = userEvent.setup();
       renderTiptap();
       const button = getButton(mark);
 
+      // The class is what a sighted author sees; aria-pressed is the same
+      // fact for anyone who cannot see the highlight, so they move together.
       expect(button.className).not.toContain("is-active");
+      expect(button).toHaveAttribute("aria-pressed", "false");
       await user.click(button);
       expect(button.className).toContain("is-active");
+      expect(button).toHaveAttribute("aria-pressed", "true");
       await user.click(button);
       expect(button.className).not.toContain("is-active");
+      expect(button).toHaveAttribute("aria-pressed", "false");
     }
   );
+
+  it("leaves aria-pressed off the buttons that are not toggles", async () => {
+    const user = userEvent.setup();
+    renderTiptap('<p><a href="https://x.test/">hello</a></p>');
+
+    // Unlink and the image picker act once and stay put, and the link
+    // button is a disclosure for the link panel — it reports aria-expanded,
+    // and carrying aria-pressed as well would tell assistive tech two
+    // stories about one press.
+    for (const name of ["Add or edit a link", "Remove the link", "Add an image"]) {
+      expect(getButton(name)).not.toHaveAttribute("aria-pressed");
+    }
+
+    await user.click(getButton("Add or edit a link"));
+    expect(getButton("Add or edit a link")).not.toHaveAttribute("aria-pressed");
+  });
 
   it("tracks the active text alignment across the alignment buttons", async () => {
     const user = userEvent.setup();
     const { setContent } = renderTiptap();
-    const center = getButton("align-center");
-    const left = getButton("align-left");
+    const center = getButton("Align center");
+    const left = getButton("Align left");
 
+    expect(center).toHaveAttribute("aria-pressed", "false");
     await user.click(center);
     expect(center.className).toContain("is-active");
+    expect(center).toHaveAttribute("aria-pressed", "true");
     expect(left.className).not.toContain("is-active");
+    expect(left).toHaveAttribute("aria-pressed", "false");
     // Tiptap 3's TextAlign extension terminates the inline style with a
     // semicolon; Tiptap 2 did not. Cosmetic in the stored HTML, and the
     // public site's renderer is indifferent to it.
@@ -158,22 +208,26 @@ describe("Tiptap toolbar", () => {
 
     await user.click(left);
     expect(left.className).toContain("is-active");
+    expect(left).toHaveAttribute("aria-pressed", "true");
     expect(center.className).not.toContain("is-active");
+    expect(center).toHaveAttribute("aria-pressed", "false");
   });
 
   it("toggles list types from the list buttons", async () => {
     const user = userEvent.setup();
     const { setContent } = renderTiptap();
 
-    await user.click(getButton("bullet-list"));
-    expect(getButton("bullet-list").className).toContain("is-active");
+    await user.click(getButton("Bulleted list"));
+    expect(getButton("Bulleted list").className).toContain("is-active");
+    expect(getButton("Bulleted list")).toHaveAttribute("aria-pressed", "true");
     expect(setContent).toHaveBeenLastCalledWith(
       "<ul><li><p>hello</p></li></ul>"
     );
 
-    await user.click(getButton("ordered-list"));
-    expect(getButton("ordered-list").className).toContain("is-active");
-    expect(getButton("bullet-list").className).not.toContain("is-active");
+    await user.click(getButton("Numbered list"));
+    expect(getButton("Numbered list").className).toContain("is-active");
+    expect(getButton("Bulleted list").className).not.toContain("is-active");
+    expect(getButton("Bulleted list")).toHaveAttribute("aria-pressed", "false");
     expect(setContent).toHaveBeenLastCalledWith(
       "<ol><li><p>hello</p></li></ol>"
     );
@@ -196,7 +250,7 @@ describe("Tiptap toolbar", () => {
 
   it("disables unlink when the cursor is not on a link", () => {
     renderTiptap();
-    expect(getButton("unlink")).toBeDisabled();
+    expect(getButton("Remove the link")).toBeDisabled();
   });
 
   it("enables unlink on a link and strips it on click", async () => {
@@ -204,15 +258,15 @@ describe("Tiptap toolbar", () => {
     const { setContent } = renderTiptap(
       '<p><a href="https://x.test/">hello</a></p>'
     );
-    const unlink = getButton("unlink");
-    const link = getButton("link");
+    const unlink = getButton("Remove the link");
+    const link = getButton("Add or edit a link");
 
     // the initial cursor sits at the start of the link text
     expect(link.className).toContain("is-active");
     expect(unlink).toBeEnabled();
     await user.click(unlink);
     expect(setContent).toHaveBeenLastCalledWith("<p>hello</p>");
-    expect(getButton("unlink")).toBeDisabled();
+    expect(getButton("Remove the link")).toBeDisabled();
   });
 
   it("does not open the link target when a link is clicked", () => {
@@ -256,21 +310,21 @@ describe("Tiptap toolbar", () => {
     const user = userEvent.setup();
     renderTiptap();
 
-    expect(getButton("link")).toHaveAttribute("aria-expanded", "false");
-    await user.click(getButton("link"));
+    expect(getButton("Add or edit a link")).toHaveAttribute("aria-expanded", "false");
+    await user.click(getButton("Add or edit a link"));
     expect(getLinkInput()).toBeInTheDocument();
-    expect(getButton("link")).toHaveAttribute("aria-expanded", "true");
+    expect(getButton("Add or edit a link")).toHaveAttribute("aria-expanded", "true");
 
-    await user.click(getButton("link"));
+    await user.click(getButton("Add or edit a link"));
     expect(queryLinkInput()).toBeNull();
-    expect(getButton("link")).toHaveAttribute("aria-expanded", "false");
+    expect(getButton("Add or edit a link")).toHaveAttribute("aria-expanded", "false");
   });
 
   it("prefills the panel with the current link's href", async () => {
     const user = userEvent.setup();
     renderTiptap('<p><a href="https://x.test/">hello</a></p>');
 
-    await user.click(getButton("link"));
+    await user.click(getButton("Add or edit a link"));
     expect(getLinkInput()).toHaveValue("https://x.test/");
   });
 
@@ -278,7 +332,7 @@ describe("Tiptap toolbar", () => {
     const user = userEvent.setup();
     renderTiptap();
 
-    await user.click(getButton("link"));
+    await user.click(getButton("Add or edit a link"));
     expect(getLinkInput()).toHaveValue("");
   });
 
@@ -288,7 +342,7 @@ describe("Tiptap toolbar", () => {
       '<p><a href="https://old.test/">hello</a></p>'
     );
 
-    await user.click(getButton("link"));
+    await user.click(getButton("Add or edit a link"));
     await user.clear(getLinkInput());
     await user.type(getLinkInput(), "https://example.com");
     await user.click(getButton("apply"));
@@ -305,7 +359,7 @@ describe("Tiptap toolbar", () => {
       '<p><a href="https://old.test/">hello</a></p>'
     );
 
-    await user.click(getButton("link"));
+    await user.click(getButton("Add or edit a link"));
     await user.clear(getLinkInput());
     await user.type(getLinkInput(), "https://enter.test/{Enter}");
 
@@ -321,12 +375,12 @@ describe("Tiptap toolbar", () => {
       '<p><a href="https://x.test/">hello</a></p>'
     );
 
-    await user.click(getButton("link"));
+    await user.click(getButton("Add or edit a link"));
     await user.clear(getLinkInput());
     await user.click(getButton("apply"));
 
     expect(setContent).toHaveBeenLastCalledWith("<p>hello</p>");
-    expect(getButton("unlink")).toBeDisabled();
+    expect(getButton("Remove the link")).toBeDisabled();
     expect(queryLinkInput()).toBeNull();
   });
 
@@ -336,7 +390,7 @@ describe("Tiptap toolbar", () => {
     // reporting it by returning false rather than by throwing.
     const { setContent } = renderTiptap();
 
-    await user.click(getButton("link"));
+    await user.click(getButton("Add or edit a link"));
     await user.type(getLinkInput(), "javascript:alert(1)");
     await user.click(getButton("apply"));
 
@@ -352,7 +406,7 @@ describe("Tiptap toolbar", () => {
 
     expect(getLinkInput()).toHaveValue("javascript:alert(1)");
     expect(setContent).not.toHaveBeenCalled();
-    expect(getButton("link").className).not.toContain("is-active");
+    expect(getButton("Add or edit a link").className).not.toContain("is-active");
   });
 
   it("keeps the panel open when the block cannot hold a link", async () => {
@@ -364,7 +418,7 @@ describe("Tiptap toolbar", () => {
     // rule makes one.
     const { setContent } = renderTiptap("<pre><code>hello</code></pre>");
 
-    await user.click(getButton("link"));
+    await user.click(getButton("Add or edit a link"));
     await user.type(getLinkInput(), "https://example.com");
     await user.click(getButton("apply"));
 
@@ -379,7 +433,7 @@ describe("Tiptap toolbar", () => {
     const user = userEvent.setup();
     renderTiptap();
 
-    await user.click(getButton("link"));
+    await user.click(getButton("Add or edit a link"));
     await user.type(getLinkInput(), "javascript:alert(1)");
     await user.click(getButton("apply"));
     expect(screen.getByRole("alert")).toBeInTheDocument();
@@ -392,7 +446,7 @@ describe("Tiptap toolbar", () => {
     const user = userEvent.setup();
     const { setContent } = renderTiptap();
 
-    await user.click(getButton("link"));
+    await user.click(getButton("Add or edit a link"));
     await user.type(getLinkInput(), "https://example.com{Escape}");
 
     expect(queryLinkInput()).toBeNull();
@@ -403,7 +457,7 @@ describe("Tiptap toolbar", () => {
     const user = userEvent.setup();
     const { setContent } = renderTiptap();
 
-    await user.click(getButton("link"));
+    await user.click(getButton("Add or edit a link"));
     await user.type(getLinkInput(), "https://example.com");
     await user.click(getButton("cancel"));
 
@@ -420,7 +474,7 @@ describe("Tiptap toolbar", () => {
       .mockImplementation(() => {});
     const { setContent, onAddImage } = renderTiptap();
 
-    await user.click(getButton("image"));
+    await user.click(getButton("Add an image"));
     const fileInput = clickSpy.mock.contexts[0] as HTMLInputElement;
     if (!fileInput) throw new Error("file input was not opened");
     expect(fileInput.getAttribute("accept")).toBe("image/*");
@@ -451,7 +505,7 @@ describe("Tiptap toolbar", () => {
     const user = userEvent.setup();
     const { setContent } = renderTiptap("<ul><li><p>only item</p></li></ul>");
 
-    await user.click(getButton("ordered-list"));
+    await user.click(getButton("Numbered list"));
 
     expect(setContent).toHaveBeenLastCalledWith(
       "<ol><li><p>only item</p></li></ol>"
@@ -465,7 +519,7 @@ describe("Tiptap toolbar", () => {
       .mockImplementation(() => {});
     const { onAddImage } = renderTiptap();
 
-    await user.click(getButton("image"));
+    await user.click(getButton("Add an image"));
     const fileInput = clickSpy.mock.contexts[0] as HTMLInputElement;
     Object.defineProperty(fileInput, "files", { value: [] });
     fileInput.onchange?.(new Event("change"));
@@ -575,7 +629,7 @@ describe("Tiptap link bubble menu", () => {
     // The panel is the one place a url is typed, so edit reuses it rather
     // than offering a second input inside the bubble.
     expect(getLinkInput()).toHaveValue("https://x.test/");
-    expect(getButton("link")).toHaveAttribute("aria-expanded", "true");
+    expect(getButton("Add or edit a link")).toHaveAttribute("aria-expanded", "true");
     // ...and the bubble stands down while the panel is open, so only one
     // link surface is ever on screen at a time.
     await waitFor(() => expect(queryBubble()).toBeNull());
@@ -590,7 +644,7 @@ describe("Tiptap link bubble menu", () => {
     await user.click(getButton("remove"));
 
     expect(setContent).toHaveBeenLastCalledWith("<p>hello</p>");
-    expect(getButton("unlink")).toBeDisabled();
+    expect(getButton("Remove the link")).toBeDisabled();
     await waitFor(() => expect(queryBubble()).toBeNull());
   });
 });
