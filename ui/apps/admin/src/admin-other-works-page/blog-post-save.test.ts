@@ -276,6 +276,76 @@ describe("saveBlogPost transaction outcomes", () => {
       );
     });
 
+    it("uploads a duplicated pending image once and patches every copy", async () => {
+      // Copy/pasting an inserted-but-unsaved image inside the editor
+      // clones its title id and its pending file, so both copies point at
+      // one file. Uploading per copy would store the same bytes twice and
+      // leave an immediate orphan for the cleanup sweep (#505).
+      const deps = makeDeps();
+      const file = new File(["img"], "fresh.png", { type: "image/png" });
+      const pasted = "data:image/png;base64,AAAA";
+      const result = await saveBlogPost(
+        makeArgs(deps, {
+          originalContent: "",
+          newContent: img(pasted, "pending-1") + img(pasted, "pending-1"),
+          pendingImageFiles: new Map([["pending-1", file]]),
+        }),
+      );
+
+      expect(result.outcome).toBe("saved");
+      expect(deps.uploadImage).toHaveBeenCalledTimes(1);
+      expect(deps.updateContent).toHaveBeenCalledWith(
+        "b1",
+        img(apiImg("uploaded.png"), "pending-1") +
+          img(apiImg("uploaded.png"), "pending-1"),
+        false,
+        deps.getToken,
+      );
+    });
+
+    it("uploads each distinct pending image separately", async () => {
+      const deps = makeDeps();
+      vi.mocked(deps.uploadImage)
+        .mockResolvedValueOnce("first.png")
+        .mockResolvedValueOnce("second.png");
+      const first = new File(["one"], "one.png", { type: "image/png" });
+      const second = new File(["two"], "two.png", { type: "image/png" });
+      const result = await saveBlogPost(
+        makeArgs(deps, {
+          originalContent: "",
+          newContent:
+            img("data:image/png;base64,AAAA", "pending-1") +
+            img("data:image/png;base64,BBBB", "pending-2"),
+          pendingImageFiles: new Map([
+            ["pending-1", first],
+            ["pending-2", second],
+          ]),
+        }),
+      );
+
+      expect(result.outcome).toBe("saved");
+      expect(deps.uploadImage).toHaveBeenCalledTimes(2);
+      expect(deps.uploadImage).toHaveBeenNthCalledWith(
+        1,
+        first,
+        false,
+        deps.getToken,
+      );
+      expect(deps.uploadImage).toHaveBeenNthCalledWith(
+        2,
+        second,
+        false,
+        deps.getToken,
+      );
+      expect(deps.updateContent).toHaveBeenCalledWith(
+        "b1",
+        img(apiImg("first.png"), "pending-1") +
+          img(apiImg("second.png"), "pending-2"),
+        false,
+        deps.getToken,
+      );
+    });
+
     it("aborts before the transaction when an upload resolves empty", async () => {
       const deps = makeDeps();
       vi.mocked(deps.uploadImage).mockResolvedValue(null);
