@@ -41,9 +41,10 @@ const realRunReport: GcReport = {
 };
 
 function renderPage() {
-  const { adminUi } = renderWithAdminUi(<AdminImageGcPage />);
+  const { adminUi, container } = renderWithAdminUi(<AdminImageGcPage />);
   return {
     adminUi,
+    container,
     notify: adminUi.notify,
     showLoading: adminUi.showLoading,
     hideLoading: adminUi.hideLoading,
@@ -61,6 +62,19 @@ beforeEach(() => {
 });
 
 describe("AdminImageGcPage dry run", () => {
+  // The card is the shared .admin-page-card, not a block of its own: this
+  // page and what's-on-test had each written the same translucent card out
+  // in full, so one tweak was two edits (#547). Its own class stays for the
+  // one thing that differs, the width.
+  it("renders on the shared admin page card", () => {
+    const { container } = renderPage();
+
+    expect(container.firstElementChild).toHaveClass(
+      "admin-page-card",
+      "admin-image-gc-page",
+    );
+  });
+
   it("calls the endpoint in dry-run mode and renders the report", async () => {
     vi.mocked(ImageService.gc).mockResolvedValue(dryRunReport);
     renderPage();
@@ -290,9 +304,13 @@ describe("AdminImageGcPage failures", () => {
     await clickPreview();
 
     expect(notify).toHaveBeenCalledWith("Image cleanup failed", "error");
-    expect(screen.getByRole("alert").textContent).toContain(
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toContain(
       "Image cleanup failed (HTTP 500): Image GC aborted before any delete",
     );
+    // Red, in the admin's one danger treatment — the same rule what's-on-
+    // test's truncation warning wears (#547).
+    expect(alert).toHaveClass("admin-danger-banner");
     // The stale successful report must not remain visible as if current.
     expect(screen.queryByText(/^Preview: /)).toBeNull();
   });

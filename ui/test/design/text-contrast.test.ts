@@ -315,6 +315,11 @@ const ADMIN_PANELS: ReadonlyArray<[string, string, string]> = [
   ["search match count", adminItemListCss, ".admin-data-list-count"],
   ["list row", adminItemListCss, ".admin-data-list-item"],
   ["list header panel", adminItemListCss, ".admin-data-list-header"],
+  // The one-card sections (image cleanup, what's on test). Each page used
+  // to spell this backing out in its own stylesheet, so neither was under
+  // any shared contract and the two copies could drift apart; since #547
+  // they wear one class and this checks it (#210, #307).
+  ["standalone page card", adminCss, ".admin-page-card"],
 ];
 
 describe("secondary text in the admin panels", () => {
@@ -515,6 +520,30 @@ describe("the admin icon buttons", () => {
     // Edit's outline is the same brown the icon circles beside it wear, so
     // the row reads as one family with one exception.
     expect(colorOf(edit)).toEqual(colorOf(declared("border")));
+  });
+});
+
+// The danger red in its third shape, after the filled button and the
+// outlined one: the block of white text a page puts above its content when
+// something failed or is missing (image cleanup's error, what's on test's
+// truncation warning). Each page had spelled the pair out in its own
+// stylesheet, which is exactly how a colour and the text on it drift apart;
+// since #547 it is one rule, and it gets the filled button's numbers.
+describe("the admin's danger banner", () => {
+  const banner = (property: string) =>
+    declaration(adminCss, ".admin-danger-banner", property);
+
+  it("spends the one danger token rather than a red of its own", () => {
+    expect(banner("background-color")).toContain("--admin-danger");
+  });
+
+  it("keeps its text legible on that fill", () => {
+    expect(
+      contrastRatio(
+        colorOf(banner("color")),
+        colorOf(banner("background-color")),
+      ),
+    ).toBeGreaterThanOrEqual(4.5);
   });
 });
 

@@ -91,7 +91,7 @@ export function AdminWhatsOnTestPage() {
   const truncated = data.totalCommits > data.commits.length;
 
   return (
-    <div className="admin-whats-on-test-page">
+    <div className="admin-page-card admin-whats-on-test-page">
       <h2 className="admin-section-heading">What&apos;s on test</h2>
       {headSha && (
         <p className="admin-section-explanation">
@@ -151,7 +151,7 @@ export function AdminWhatsOnTestPage() {
             </p>
           )}
           {truncated && (
-            <p className="whats-on-test-warning">
+            <p className="admin-danger-banner">
               {data.totalCommits} changes are waiting to go live, but only the
               oldest {data.commits.length} could be listed — the most recent
               ones are missing from the list below.

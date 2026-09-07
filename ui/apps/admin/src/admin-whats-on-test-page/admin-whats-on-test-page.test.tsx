@@ -54,11 +54,19 @@ describe("AdminWhatsOnTestPage", () => {
   });
 
   it("renders as an admin section with its heading", async () => {
-    render(<AdminWhatsOnTestPage />);
+    const { container } = render(<AdminWhatsOnTestPage />);
 
     expect(
       screen.getByRole("heading", { level: 2, name: "What's on test" }),
     ).toBeInTheDocument();
+    // The card is the shared .admin-page-card, not a block of its own: this
+    // page and image cleanup had each written the same translucent card out
+    // in full, so one tweak was two edits (#547). Its own class stays for
+    // the one thing that differs, the width.
+    expect(container.firstElementChild).toHaveClass(
+      "admin-page-card",
+      "admin-whats-on-test-page",
+    );
   });
 
   // The standing explanation used to render unconditionally above this
@@ -206,6 +214,9 @@ describe("AdminWhatsOnTestPage", () => {
       /715 changes are waiting to go live, but only the oldest 2 could be listed/i,
     );
     expect(warning).toHaveTextContent(/most recent ones are missing/i);
+    // Red, in the admin's one danger treatment — the same rule image
+    // cleanup's error wears (#547).
+    expect(warning).toHaveClass("admin-danger-banner");
     // The (incomplete) list still renders below the warning.
     expect(screen.getByText("Change background photo")).toBeInTheDocument();
   });
