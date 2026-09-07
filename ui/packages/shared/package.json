@@ -16,7 +16,7 @@
     "./assets/*": "./src/assets/*"
   },
   "dependencies": {
-    "dompurify": "^3.4.14",
+    "dompurify": "^3.4.15",
     "uuid": "^11.1.1"
   },
   "peerDependencies": {
