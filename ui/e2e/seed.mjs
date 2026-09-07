@@ -39,11 +39,34 @@ const PHOTO_PNG = makeSolidPng(1600, 1200);
 
 const SEED_BLOG_ID = "seed-blog-1";
 
+/**
+ * A `yyyy-mm-dd` day as a stored post date. The seed writes straight to S3,
+ * bypassing the API's normalization, so the UTC-midnight invariant that
+ * `formatPostDate` reads back (#523) is asserted here rather than trusted:
+ * a fixture date that drifted off midnight would render a different day than
+ * the fixture names, and the specs would be asserting against a lie.
+ *
+ * @param {string} day - a calendar day as `yyyy-mm-dd`
+ * @returns {string} the day as `yyyy-mm-ddT00:00:00.000Z`
+ */
+function postDate(day) {
+  const iso = `${day}T00:00:00.000Z`;
+  const parsed = new Date(iso);
+  // The parse is checked before the round trip: an unparseable day makes
+  // toISOString throw a bare RangeError, which says nothing about the seed.
+  // A well-shaped but impossible day parses and then rolls over instead
+  // (2026-02-30 becomes March 2nd), which only the round trip catches.
+  if (isNaN(parsed.getTime()) || parsed.toISOString() !== iso) {
+    throw new Error(`Seed post date is not a valid UTC-midnight day: ${day}`);
+  }
+  return iso;
+}
+
 const SEED_BLOG_LIST = JSON.stringify([
   {
     id: SEED_BLOG_ID,
     title: "Seeded published post",
-    date: "2026-01-01T00:00:00.000Z",
+    date: postDate("2026-01-01"),
     isPublished: true,
   },
 ]);

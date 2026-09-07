@@ -528,13 +528,13 @@ async fn list_images_store_outage_is_500() {
 // ---------------------------------------------------------------- blog
 
 fn sample_blog_posts() -> Value {
-    json!([{"id": "b1", "title": "Hello", "date": "2026-08-04", "isPublished": true}])
+    json!([{"id": "b1", "title": "Hello", "date": "2026-08-04T00:00:00.000Z", "isPublished": true}])
 }
 
 fn mixed_blog_posts() -> Value {
     json!([
-        {"id": "b1", "title": "Hello", "date": "2026-08-04", "isPublished": true},
-        {"id": "b2", "title": "Secret draft", "date": "2026-08-05", "isPublished": false}
+        {"id": "b1", "title": "Hello", "date": "2026-08-04T00:00:00.000Z", "isPublished": true},
+        {"id": "b2", "title": "Secret draft", "date": "2026-08-05T00:00:00.000Z", "isPublished": false}
     ])
 }
 
@@ -559,7 +559,7 @@ async fn update_blog_posts_splits_private_full_and_public_published_lists() {
     assert!(public.public);
     assert_eq!(
         serde_json::from_slice::<Value>(&public.data).unwrap(),
-        json!([{"id": "b1", "title": "Hello", "date": "2026-08-04", "isPublished": true}])
+        json!([{"id": "b1", "title": "Hello", "date": "2026-08-04T00:00:00.000Z", "isPublished": true}])
     );
 }
 
@@ -622,7 +622,7 @@ async fn list_blog_posts_ignores_public_object_when_private_missing() {
     // list (the pre-#33 migration bridge): serving it would show the admin a
     // draft-less list, and the next save would persist it, wiping drafts.
     let public_only = json!([
-        {"id": "b1", "title": "Hello", "date": "2026-08-04", "isPublished": true}
+        {"id": "b1", "title": "Hello", "date": "2026-08-04T00:00:00.000Z", "isPublished": true}
     ]);
     let (_, app) = setup_with(
         InMemoryStore::default().with_object("blog-posts.json", public_only.to_string()),
@@ -644,6 +644,52 @@ async fn update_blog_posts_public_write_failure_is_500_after_private_write() {
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
     assert_eq!(body, json!({"error": "Failed to update public blog posts"}));
     assert!(store.contains("blog-posts-all.json"));
+    assert!(!store.contains("blog-posts.json"));
+}
+
+#[tokio::test]
+async fn update_blog_posts_pins_dates_to_utc_midnight() {
+    // The invariant the UI has upheld since #379, now enforced for every
+    // writer (#523): a bare day and an offset timestamp both land as the
+    // canonical UTC-midnight form of the day the author picked.
+    let (store, app) = setup();
+    let posts = json!([
+        {"id": "b1", "title": "Hello", "date": "2026-08-04", "isPublished": true},
+        {"id": "b2", "title": "Evening", "date": "2026-01-01T17:00:00-08:00", "isPublished": true}
+    ]);
+    let (status, _) = send(app, put_json("/blog", posts)).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let canonical = json!([
+        {"id": "b1", "title": "Hello", "date": "2026-08-04T00:00:00.000Z", "isPublished": true},
+        {"id": "b2", "title": "Evening", "date": "2026-01-01T00:00:00.000Z", "isPublished": true}
+    ]);
+    for key in ["blog-posts-all.json", "blog-posts.json"] {
+        let stored = store.get(key).expect("list stored");
+        assert_eq!(
+            serde_json::from_slice::<Value>(&stored.data).unwrap(),
+            canonical,
+            "{key} kept a non-canonical date"
+        );
+    }
+}
+
+#[tokio::test]
+async fn update_blog_posts_rejects_invalid_date_before_writing() {
+    // Validation runs ahead of the private-first write, so a bad date in any
+    // post leaves the stored lists untouched rather than half-updated.
+    let (store, app) = setup();
+    let posts = json!([
+        {"id": "b1", "title": "Hello", "date": "2026-08-04", "isPublished": true},
+        {"id": "b2", "title": "Impossible", "date": "2026-02-30", "isPublished": true}
+    ]);
+    let (status, body) = send(app, put_json("/blog", posts)).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body,
+        json!({"error": "Blog post date must be an ISO date naming a valid calendar day"})
+    );
+    assert!(!store.contains("blog-posts-all.json"));
     assert!(!store.contains("blog-posts.json"));
 }
 

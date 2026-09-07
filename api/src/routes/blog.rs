@@ -3,7 +3,7 @@ use axum::{extract::State, response::Json};
 use serde_json::{json, Value};
 
 use crate::error::AppError;
-use crate::models::{BlogPost, BlogPostUpdate};
+use crate::models::{normalize_post_date, BlogPost, BlogPostUpdate};
 use crate::services::s3::S3Error;
 use crate::AppState;
 
@@ -35,8 +35,17 @@ pub async fn list_blog_posts_handler(
 
 pub async fn update_blog_posts_handler(
     State(state): State<AppState>,
-    Json(blog_posts): Json<Vec<BlogPost>>,
+    Json(mut blog_posts): Json<Vec<BlogPost>>,
 ) -> Result<Json<Value>, AppError> {
+    // Pin every date to UTC midnight BEFORE the first write, so the store can
+    // never hold a date whose UTC day differs from the day the author picked
+    // (#523). Read paths stay lenient — legacy objects predate this rule.
+    for post in &mut blog_posts {
+        post.date = normalize_post_date(&post.date).ok_or(AppError::BadRequest(
+            "Blog post date must be an ISO date naming a valid calendar day",
+        ))?;
+    }
+
     let all_posts_str = serde_json::to_string(&blog_posts)
         .map_err(|e| AppError::internal("Failed to serialize blog posts", e))?;
 
