@@ -84,8 +84,9 @@ deliberately short, and the doc holds the part that bites.
 above still runs from `ui/`.
 
 - `ui/apps/public` — the public site, served from `/`, built into
-  `ui/dist`. It contains NO Auth0, tiptap or admin code; the header's
-  "Admin" entry is a plain `<a href="/admin">` that leaves the SPA.
+  `ui/dist`. It contains NO Auth0, tiptap or admin code, and NO link to
+  `/admin`: the admin app is for two people and is reached by typing its
+  URL, never advertised from the public site.
 - `ui/apps/admin` — the admin app, served under `/admin`, built into
   `ui/dist/admin` (vite `base: "/admin/"`, router `basename: "/admin"`).
   Routes inside it are written as if it owned the site root — `/haiku`,

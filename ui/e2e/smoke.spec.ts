@@ -50,11 +50,16 @@ test("a deep admin link serves the admin app, not the public one", async ({
   await expect(page.locator(".header")).toHaveCount(0);
 });
 
-test("the public header links out to the admin app", async ({ page }) => {
+// The admin app is for its two users and is reached by typing its URL: the
+// public site must not advertise it. Checked on the desktop bar and the
+// phone menu, since each is its own component.
+test("the public site never links to the admin app", async ({ page }) => {
   await page.goto("/");
-  const admin = page.getByRole("link", { name: "Admin" });
-  await expect(admin).toHaveAttribute("href", "/admin");
-  await admin.click();
-  await expect(page).toHaveURL(/\/admin$/);
-  await expect(page.getByText("Kari Davidson - Admin")).toBeVisible();
+  await expect(page.locator(".header")).toBeVisible();
+  await expect(page.locator('a[href^="/admin"]')).toHaveCount(0);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Menu" }).click();
+  await expect(page.locator(".mobile-menu")).toBeVisible();
+  await expect(page.locator('a[href^="/admin"]')).toHaveCount(0);
 });

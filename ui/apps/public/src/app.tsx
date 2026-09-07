@@ -53,8 +53,8 @@ export function App() {
   // the same hook without this option, so its chrome stays put (#483).
   useSiteBackground({ applyFonts: true });
   // No /admin route and no Auth0 boundary: the admin section is a separate
-  // app served under /admin (issue #591), reached from the header by a plain
-  // link that leaves this SPA.
+  // app served under /admin (issue #591). Nothing on the public site links
+  // to it; its two users reach it by URL.
   return (
     <div className="whole-page">
       <Header
