@@ -263,6 +263,17 @@ describe("the size axis of the type scale", () => {
     },
   );
 
+  it("keeps the frozen admin set shrinking, never stale", () => {
+    // "Frozen" has to mean shrink-only to be worth anything: an entry left
+    // behind after the rule using it is deleted quietly re-opens that size
+    // for the next admin rule that wants it. So the set may only list sizes
+    // the admin app still declares, and the shadcn migration prunes it as
+    // it goes.
+    const declared = new Set(sizesDeclared(true).map(([, value]) => value));
+    const stale = [...FROZEN_ADMIN_SIZES].filter((size) => !declared.has(size));
+    expect(stale).toEqual([]);
+  });
+
   it("spends every step on something", () => {
     // A step nothing uses is a step nobody chose; it would drift out of the
     // set the rest of the site is actually built from.
