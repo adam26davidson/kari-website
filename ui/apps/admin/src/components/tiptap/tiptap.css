@@ -169,8 +169,10 @@
 }
 
 .link-popover-error {
-  /* full-width row under the input, matching .gc-error's red/white so it
-     stays legible on the grey panel */
+  /* Full-width row under the input, in the same red/white as
+     .admin-danger-banner (admin.css) so it stays legible on the grey
+     panel. Not that class itself: this one sits inside a popover, so it is
+     tighter and smaller than a banner spanning a whole card. */
   flex-basis: 100%;
   margin: 0;
   padding: 6px 8px;
