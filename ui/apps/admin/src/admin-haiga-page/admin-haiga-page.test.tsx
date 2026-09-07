@@ -174,6 +174,33 @@ describe("AdminHaigaPage deletion", () => {
     return { notify };
   }
 
+  // A haiga's words live inside its artwork, so this one has no lines to
+  // borrow and the dialog says so rather than quoting an empty string.
+  it("uses the untitled wording for a haiga with no lines", async () => {
+    const { adminUi } = renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      "Delete this untitled haiga?",
+      expect.any(Function),
+    );
+  });
+
+  it("names the haiga by its first line when it has one", async () => {
+    vi.mocked(HaigaService.getListFromApi).mockResolvedValue([
+      { ...savedHaiga, lines: ["winter moon", "over the pines"] },
+    ]);
+    const { adminUi } = renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      'Delete the haiga "winter moon"?',
+      expect.any(Function),
+    );
+  });
+
   it("keeps the list intact when saving the shortened list fails", async () => {
     vi.mocked(HaigaService.updateList).mockRejectedValue(
       new Error("PUT failed"),

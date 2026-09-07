@@ -12,6 +12,7 @@ import {
 import { HaigaContent } from "@kari/shared/components/haiga-content/haiga-content";
 import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { AdminItemList } from "../components/admin-item-list/admin-item-list";
+import { deleteConfirmationMessage } from "../delete-confirmation";
 import { useAdminToken } from "../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
@@ -101,8 +102,12 @@ export function AdminHaigaPage() {
   };
 
   const onDelete = (id: string) => {
-    confirm("Are you sure you want to delete this haiga?", () =>
-      deleteHaiga(id),
+    // The haiku lines of a haiga live inside its artwork, so many carry
+    // none here; those fall back to the untitled wording.
+    const haiga = haigaList.find((item) => item.id === id);
+    confirm(
+      deleteConfirmationMessage("haiga", ...(haiga?.lines ?? [])),
+      () => deleteHaiga(id),
     );
   };
 
