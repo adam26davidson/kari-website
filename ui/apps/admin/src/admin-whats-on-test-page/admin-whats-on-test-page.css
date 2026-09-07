@@ -1,7 +1,8 @@
 /* Staging-only deployment-status admin section. The card itself is
-   .admin-page-card (admin.css), worn alongside this class; only the width
-   is the page's own — a commit row carries a subject on the left and its
-   author and date on the right, and at 640px the two halves collide. */
+   .admin-page-card (admin.css), worn alongside this class; the width is
+   the one thing this page and image cleanup ever disagreed on, so it is
+   all that is left here. A commit row puts its subject on the left and its
+   author and date on the right, and this is the width it shipped at. */
 .admin-whats-on-test-page {
   max-width: 700px;
 }

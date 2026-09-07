@@ -257,9 +257,8 @@ input[type="checkbox"] {
    image cleanup and what's on test today. Both pages had written this same
    block out in full, so the two declarations #356 changed had to be changed
    twice, and the next tweak would have been two edits again (#547). The
-   card's own width stays with each page (the commit list wants a little
-   more room than the cleanup report), because that is the only part the two
-   ever disagreed on.
+   width stays with each page, because it is the only part the two ever
+   disagreed on — 640px for the cleanup report, 700px for the commit list.
 
    The translucent, blurred backing is the same one every other admin
    surface wears, so the text never sits directly on the photo background

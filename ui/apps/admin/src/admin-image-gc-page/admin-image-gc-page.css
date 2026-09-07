@@ -1,6 +1,6 @@
 /* The card itself is .admin-page-card (admin.css), worn alongside this
-   class; only the width is the page's own — a cleanup report is a summary
-   line and a few rows of thumbnails, so it reads better narrow. */
+   class; the width is the one thing this page and what's-on-test ever
+   disagreed on, so it is all that is left here. */
 .admin-image-gc-page {
   max-width: 640px;
 }
