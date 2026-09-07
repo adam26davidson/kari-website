@@ -67,6 +67,75 @@ pub struct BlogPost {
     pub is_published: bool,
 }
 
+/// A post `date` pinned to `YYYY-MM-DDT00:00:00.000Z`, or `None` when the
+/// input has no leading ISO calendar day or names an impossible one.
+///
+/// The Rust counterpart of the UI's `toPostDate`
+/// (`ui/packages/shared/src/utils/date-helpers.ts`). `formatPostDate` renders
+/// a stored date's UTC calendar day, so a non-midnight or offset timestamp
+/// would show a different day than the author picked (#365). The UI has
+/// normalized on write since #379, but nothing outside it did (#523) — this
+/// closes the write path for every caller.
+///
+/// It PINS rather than rejects because the admin PUTs the whole post list on
+/// every save while rewriting only the edited post's date: posts stored before
+/// #379 may still carry creation instants, and rejecting those would 400 every
+/// save until each legacy date was hand-edited. Pinning self-heals them.
+///
+/// The day is taken textually, like `toPostDate`'s string branch: the leading
+/// day is the one the string names in its OWN offset ("2026-01-01T17:00-08:00"
+/// says Jan 1), which is the day the author picked. `toPostDate`'s fallback for
+/// other shapes is deliberately NOT mirrored — it resolves an instant in the
+/// local timezone, which is meaningless on a server, so those inputs are
+/// rejected instead.
+pub fn normalize_post_date(date: &str) -> Option<String> {
+    let bytes = date.as_bytes();
+    if bytes.len() < 10 {
+        return None;
+    }
+    // Anything after the day must be an ISO time, so that a leading day is
+    // only trusted when the rest of the string agrees it is a timestamp.
+    if bytes.len() > 10 && bytes[10] != b'T' {
+        return None;
+    }
+    if bytes[4] != b'-' || bytes[7] != b'-' {
+        return None;
+    }
+
+    let digits = |range: std::ops::Range<usize>| -> Option<u32> {
+        let mut value = 0u32;
+        for &byte in &bytes[range] {
+            if !byte.is_ascii_digit() {
+                return None;
+            }
+            value = value * 10 + u32::from(byte - b'0');
+        }
+        Some(value)
+    };
+
+    let year = digits(0..4)?;
+    let month = digits(5..7)?;
+    let day = digits(8..10)?;
+
+    if !(1..=12).contains(&month) || day == 0 || day > days_in_month(year, month) {
+        return None;
+    }
+    // Every byte of the first 10 is ASCII, so this slice is on a char boundary.
+    Some(format!("{}T00:00:00.000Z", &date[..10]))
+}
+
+/// Days in `month` (1-12) of `year`, applying the full Gregorian leap rule.
+fn days_in_month(year: u32, month: u32) -> u32 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400)) => {
+            29
+        }
+        _ => 28,
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PhotographyImage {
     pub image: String,
