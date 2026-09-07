@@ -426,15 +426,28 @@ hands over the kept branch and/or patch.
    drops issues carrying `in progress`, `has-dependencies`,
    `needs-clarification`, `idea`, `blocked`, `needs-human` (an ask
    waiting on the maintainer is not work) or `duplicate`, and emits
-   four slices, each sorted oldest-first by `created_at` (the issue
-   number is a proxy, never the ordering key — #484):
+   five slices:
+   - `priority` — everything labelled `priority`: the maintainer
+     saying "this one next", and the only label here a human owns
+     outright;
    - `bugs` — everything labelled `bug`, whatever else it carries;
    - `maintainer` — product work with no `automation` label: filed by
      a human, not the fleet;
-   - `product` — agent-filed product work, oldest ~20;
-   - `tooling` — machinery work, oldest ~10.
-   The `*_omitted` counts say what the caps dropped — quote them in
-   the run summary so a capped view is visible instead of silent.
+   - `product` — agent-filed product work, top ~20;
+   - `tooling` — machinery work, top ~10.
+   Within every slice, issues come ranked by `unblocks` descending and
+   then `created_at` ascending (the issue number is a proxy, never the
+   ordering key — #484). `unblocks` is how many OPEN issues name that
+   issue as a blocker, derived from the bodies and comments of the
+   `has-dependencies` issues themselves — so a foundation that gates
+   ten other issues is offered ahead of polish that gates none, which
+   age alone could never express (#774). Take the order as given: it
+   is computed from what the backlog says, and re-deriving it by eye
+   is how a tick talks itself into the oldest item again.
+   The `*_omitted` counts say what the caps dropped, and
+   `dependents_omitted` says how much of the dependency graph went
+   unread — quote them in the run summary so a capped view is visible
+   instead of silent.
    Discard, additionally, issues whose claim was released this tick
    (above). If the script fails, skip Phase B this tick and report it:
    never fall back to a bare `gh issue list`, whose defaults (30
@@ -461,9 +474,17 @@ hands over the kept branch and/or patch.
    posting the same comment again; a human removes it when they refresh
    the issue. Never comment without labelling.
 3. From the ready issues, select up to (MAX_IN_FLIGHT − in-flight)
-   workers, walking the slices in this order (within a slice, oldest
-   first — always by `created_at`, never by issue number, #484):
+   workers, walking the slices in this order (within a slice, in the
+   order the shortlist printed them — most-unblocking first, oldest as
+   the tiebreak, always by `created_at` and never by issue number,
+   #484):
 
+   0. **The `priority` slice** — the maintainer has said this comes
+      first, so it does, ahead of bugs and everything else. No
+      judgement to apply: you never add or remove `priority`, and you
+      never second-guess one that is set. It is rare by construction;
+      if the slice is ever large, say so in the run summary rather
+      than quietly re-ranking it.
    1. **Blocking bugs** — the `bugs` slice, but only where the body
       shows something actually broken or blocked for a visitor or the
       admin: a broken flow, an unusable control, content that cannot
@@ -580,7 +601,12 @@ hands over the kept branch and/or patch.
    record the ask, label, send via `telegram.sh send --issue`. The
    worker already wrote the what/where/what-to-check; your job is the
    dedupe, the labels and the one send.
-   Three labels, three questions:
+   Three labels, three questions — and one you never touch:
+   `priority` is the maintainer's alone. Never add it to an issue you
+   file, never add or remove it on an existing one, however
+   important the work looks to you. Its whole value is that a human
+   set it, so a fleet that can apply it turns the one channel the
+   maintainer has into more of the fleet talking to itself.
    - **Is something broken → `bug`.** Add it ONLY when the issue
      describes something a visitor or the admin cannot do, or can
      barely do: a broken flow, an unusable control, content that
