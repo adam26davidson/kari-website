@@ -39,12 +39,12 @@
 }
 
 .header {
-  font-size: 25px;
+  font-size: var(--text-2xl);
   padding: 15px 0px 15px 0px;
 }
 
 .admin-header {
-  font-size: 16px;
+  font-size: var(--text-base);
   padding: 10px 0px 10px 0px;
 }
 
@@ -63,7 +63,7 @@
      context rather than as another nav item — and still clears WCAG AA on
      the bar over the lightest possible photo. */
   color: var(--muted-light-text);
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-family: var(--font-ui);
   font-weight: 400;
   font-style: normal;
@@ -80,7 +80,7 @@
 }
 
 .admin-header-title {
-  font-size: 20px;
+  font-size: var(--text-xl);
   margin: 0px 20px 0px 40px;
   color: var(--header-title-color, white);
   font-weight: var(--display-weight);
@@ -109,7 +109,7 @@
 /* Public bar: 25px carries the light display weight just as the desktop
    title's 30-40px does, so the site title reads the same at every width. */
 .header .header-title-mobile {
-  font-size: 25px;
+  font-size: var(--text-2xl);
   font-weight: var(--display-weight);
 }
 
@@ -117,7 +117,7 @@
    keeps the 400 default — it is the only title that changes weight in this
    PR, and it changes because a 16px hairline is the #356 defect itself. */
 .admin-header .header-title-mobile {
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 400;
 }
 
@@ -245,7 +245,13 @@
    separate affordance rather than a stray nav item. */
 .pages .header-admin-link {
   margin-left: auto;
-  font-size: 15px;
+  /* One step below the nav's fluid size rather than the 15px this used to
+     spell: 15px is not a step of the scale (#546), and of the two steps
+     either side of it the smaller is the one this link wants — it is
+     deliberately quieter than the nav, which the 0.7 opacity below says
+     too. A step down at the nav's narrowest also gives the wrapped row
+     slightly more slack, never less. */
+  font-size: var(--text-sm);
   opacity: 0.7;
 }
 

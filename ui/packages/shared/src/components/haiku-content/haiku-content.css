@@ -3,14 +3,14 @@
    up (#356). */
 .haiku-list-line {
   color: var(--dark-text);
-  font-size: 20px;
+  font-size: var(--text-xl);
   font-weight: var(--display-weight);
   text-align: center;
   margin: 10px 0;
 }
 
 .haiku-list-publisher {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--muted-text);
   margin-top: 20px;
   text-align: center;
@@ -26,13 +26,18 @@
    with the heading above them (#457, design brief §1). */
 .haiku-list-line-compact {
   color: var(--dark-text);
-  font-size: 15px;
+  /* Body size, not the 15px this used to spell: 15px is not a step of the
+     scale (#546), and these lines are the row's primary content — the one
+     thing the admin reads to tell one haiku from another — so of the two
+     steps either side they take the larger. It keeps its distance from the
+     --text-xs attribution below it either way. */
+  font-size: var(--text-base);
   text-align: left;
   margin: 2px 0;
 }
 
 .haiku-list-publisher-compact {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--muted-text);
   margin-top: 6px;
   text-align: left;

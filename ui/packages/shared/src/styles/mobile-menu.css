@@ -14,7 +14,7 @@
   color: black;
   transition: opacity 0.5s;
   text-align: center;
-  font-size: 20px;
+  font-size: var(--text-xl);
   font-weight: var(--display-weight);
 }
 

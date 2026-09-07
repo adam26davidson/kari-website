@@ -6,7 +6,7 @@
   padding: 0;
   font: inherit;
   text-align: inherit;
-  font-size: 18px;
+  font-size: var(--text-lg);
   font-weight: bold;
   color: #333;
 }

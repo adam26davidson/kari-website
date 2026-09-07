@@ -99,8 +99,36 @@
      18px or more, where the light stems read as airy rather than faint.
      `--muted-text` above remains the colour half of "this line is
      secondary"; this is the weight half. Both enforced by
-     src/test/type-scale.test.ts. */
+     test/design/type-scale.test.ts. */
   --display-weight: 300;
+
+  /* The type scale's size axis, in one place (#546).
+
+     Six steps and no others. Before these, every rule picked its own px
+     number — the site had reached 12/13/14/15/16/17/18/20/22/25px plus two
+     rem values, with nothing recording which of those were meant to BE the
+     same size as each other, so "make the secondary lines match" was a
+     grep rather than a decision. A size is now chosen by picking a step:
+
+       font-size: var(--text-sm);
+
+     The names are Tailwind's, deliberately: the admin's shadcn migration
+     (#592) speaks that vocabulary, so the steps outlive the stylesheets
+     that first used them. `--text-base` is the body default, `--text-lg`
+     the smallest size `--display-weight` above may be spent on, and
+     `--text-2xl` the site title in the header bar.
+
+     The set is closed, and test/design/type-scale.test.ts closes it: every
+     font-size in the public site and in packages/shared names a step. Two
+     documented exceptions live in that test — the header's two tuned
+     `clamp()`s (#221), and the admin app's existing literals, frozen
+     shrink-only until the shadcn migration replaces those stylesheets. */
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 25px;
 
   /* The type scale's family axis, in one place (#483).
 
@@ -268,7 +296,7 @@ body[data-custom-background]::before {
   color: var(--dark-text);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   font-family: var(--font-ui);
-  font-size: 16px;
+  font-size: var(--text-base);
   text-align: center;
 }
 
