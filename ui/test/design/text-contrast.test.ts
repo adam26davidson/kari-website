@@ -480,25 +480,69 @@ describe("the admin icon buttons", () => {
   });
 
   // The quiet destructive button inverts the arrangement: red on the pale
-  // fill rather than white on red. It is the one place the danger colour
+  // surface rather than white on red. It is the one place the danger colour
   // has to carry TEXT contrast rather than just be a background, so its
   // legibility cannot be assumed from the filled variant's numbers. Since
   // #457 it is also every list row's Delete, not only the photography
   // editor's "Remove this image".
-  it("keep the outlined destructive button legible on its own fill", () => {
-    const OUTLINED = ".admin-button.danger-secondary";
-    const outlined = (property: string) =>
-      declaration(adminButtonCss, OUTLINED, property);
-    const fill = colorOf(outlined("background-color"));
+  //
+  // Since #550 it spends no fill of its own, so "its own fill" is no longer
+  // a colour this file can read off the button: what the red actually sits
+  // on is the LIST ROW, translucent over the admin-chosen photo. The floor
+  // is therefore checked at both photo extremes, exactly as the muted text
+  // on the same row is — and the darkest photo is the binding case (the
+  // nested "Remove this image" in the photography editor composites
+  // lighter, so the row covers it too).
+  const outlinedDanger = (property: string) =>
+    declaration(adminButtonCss, ".admin-button.danger-secondary", property);
 
+  /** The list row the destructive button stands on, over a given photo. */
+  const dangerBackingOver = (photo: Rgb): Rgb =>
+    surfaceOver(
+      photo,
+      declaration(adminItemListCss, ".admin-data-list-item", "background-color"),
+    );
+
+  it.each([
+    ["darkest", BLACK],
+    ["lightest", WHITE],
+  ] as ReadonlyArray<[string, Rgb]>)(
+    "keep the outlined destructive button legible over the %s photo",
+    (_name, photo) => {
+      const backing = dangerBackingOver(photo);
+      expect(
+        contrastRatio(colorOf(outlinedDanger("color")), backing),
+      ).toBeGreaterThanOrEqual(4.5);
+      // And its outline has to read as a shape (WCAG 1.4.11 non-text
+      // contrast) — an invisible border is not a button.
+      expect(
+        contrastRatio(colorOf(outlinedDanger("border")), backing),
+      ).toBeGreaterThanOrEqual(3);
+    },
+  );
+
+  // The point of #599: Delete carried exactly Edit's weight, so the row's
+  // destructive control competed with the page's one primary action ("Add a
+  // haiku") for the eye. Three steps, spending progressively less ink —
+  // solid primary, cream chip, ghost outline — and the ghost is what keeps
+  // Delete last. Asserted as the declaration rather than a composited
+  // colour: `transparent` has no colour to composite.
+  it("spends no fill on the destructive button while edit keeps its chip", () => {
+    expect(outlinedDanger("background-color")).toBe("transparent");
     expect(
-      contrastRatio(colorOf(outlined("color")), fill),
-    ).toBeGreaterThanOrEqual(4.5);
-    // And its outline has to read as a shape (WCAG 1.4.11 non-text
-    // contrast) — an invisible border is not a button.
+      declaration(adminButtonCss, ".admin-button.secondary", "background-color"),
+    ).not.toBe("transparent");
+    // And the chip really is opaque — a translucent one would drift with
+    // the photo behind it, which is what #278/#321 fixed.
     expect(
-      contrastRatio(colorOf(outlined("border")), fill),
-    ).toBeGreaterThanOrEqual(3);
+      resolveSurface(
+        declaration(
+          adminButtonCss,
+          ".admin-button.secondary",
+          "background-color",
+        ),
+      ).alpha,
+    ).toBe(1);
   });
 
   // Not a WCAG rule — just "these must not read as the same button". Edit
