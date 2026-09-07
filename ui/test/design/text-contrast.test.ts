@@ -123,15 +123,21 @@ function contrastRatio(a: Rgb, b: Rgb): number {
 const indexCss = read("packages/shared/src/styles/index.css");
 const dataListCss = read("apps/public/src/components/data-list/data-list.css");
 const headerCss = read("packages/shared/src/styles/header.css");
-const haikuCss = read("packages/shared/src/components/haiku-content/haiku-content.css");
-const haigaCss = read("packages/shared/src/components/haiga-content/haiga-content.css");
+const haikuCss = read(
+  "packages/shared/src/components/haiku-content/haiku-content.css",
+);
+const haigaCss = read(
+  "packages/shared/src/components/haiga-content/haiga-content.css",
+);
 const photographyCss = read(
   "apps/public/src/pages/photography-page/components/" +
     "photography-post-content/photography-post-content.css",
 );
 const adminCss = read("apps/admin/src/admin.css");
 const adminCardCss = read("apps/admin/src/components/card/card.css");
-const adminHaikuCss = read("apps/admin/src/admin-haiku-page/admin-haiku-page.css");
+const adminHaikuCss = read(
+  "apps/admin/src/admin-haiku-page/admin-haiku-page.css",
+);
 const adminItemListCss = read(
   "apps/admin/src/components/admin-item-list/admin-item-list.css",
 );
@@ -508,7 +514,11 @@ describe("the admin icon buttons", () => {
   // red, never a different colour — the maintainer's call on this is
   // explicit, red is the right colour for delete.
   it("colours edit and delete apart as well as naming them", () => {
-    const edit = declaration(adminButtonCss, ".admin-button.secondary", "border");
+    const edit = declaration(
+      adminButtonCss,
+      ".admin-button.secondary",
+      "border",
+    );
     const del = declaration(
       adminButtonCss,
       ".admin-button.danger-secondary",
@@ -521,18 +531,28 @@ describe("the admin icon buttons", () => {
     // the row reads as one family with one exception.
     expect(colorOf(edit)).toEqual(colorOf(declared("border")));
   });
+});
 
-  // The same red in its other shape: the block of white text a page puts
-  // above its content when something failed or is missing (image cleanup's
-  // error, what's on test's truncation warning). It was written out once
-  // per page until #547, which is exactly how a colour pair drifts; now it
-  // is one rule, and it gets the filled button's numbers.
-  it("keep the danger banner's text legible on its fill", () => {
-    const banner = (property: string) =>
-      declaration(adminCss, ".admin-danger-banner", property);
+// The danger red in its third shape, after the filled button and the
+// outlined one: the block of white text a page puts above its content when
+// something failed or is missing (image cleanup's error, what's on test's
+// truncation warning). Each page had spelled the pair out in its own
+// stylesheet, which is exactly how a colour and the text on it drift apart;
+// since #547 it is one rule, and it gets the filled button's numbers.
+describe("the admin's danger banner", () => {
+  const banner = (property: string) =>
+    declaration(adminCss, ".admin-danger-banner", property);
+
+  it("spends the one danger token rather than a red of its own", () => {
     expect(banner("background-color")).toContain("--admin-danger");
+  });
+
+  it("keeps its text legible on that fill", () => {
     expect(
-      contrastRatio(colorOf(banner("color")), colorOf(banner("background-color"))),
+      contrastRatio(
+        colorOf(banner("color")),
+        colorOf(banner("background-color")),
+      ),
     ).toBeGreaterThanOrEqual(4.5);
   });
 });
@@ -597,11 +617,9 @@ const headerDefault = (selector: string, property: string): string =>
   varFallback(declaration(headerCss, selector, property));
 
 /** One field of the shared HEADER_COLOR_DEFAULTS, as source text. */
-const HEADER_COLOR_DEFAULTS_SOURCE = (
-  read("packages/shared/src/utils/color.ts").match(
-    /HEADER_COLOR_DEFAULTS\s*=\s*\{([^}]*)\}/,
-  ) ?? []
-)[1];
+const HEADER_COLOR_DEFAULTS_SOURCE = (read(
+  "packages/shared/src/utils/color.ts",
+).match(/HEADER_COLOR_DEFAULTS\s*=\s*\{([^}]*)\}/) ?? [])[1];
 
 function headerColorDefault(field: string): string {
   const match = HEADER_COLOR_DEFAULTS_SOURCE?.match(
@@ -628,20 +646,23 @@ describe("the header bar over the background photo", () => {
   it.each([
     ["the bar tint", ".header", "background-color", "--header-background"],
     ["the site title", ".header-title", "color", "--header-title-color"],
-    ["the mobile title", ".header-title-mobile", "color", "--header-title-color"],
+    [
+      "the mobile title",
+      ".header-title-mobile",
+      "color",
+      "--header-title-color",
+    ],
     ["the admin title", ".admin-header-title", "color", "--header-title-color"],
     ["the nav links", ".pages a", "color", "--header-nav-color"],
     ["the menu button", ".header-menu-button", "color", "--header-nav-color"],
-  ])("makes %s settable, with a default to fall back to", (
-    _name,
-    selector,
-    property,
-    token,
-  ) => {
-    const value = declaration(headerCss, selector, property);
-    expect(value).toContain(`var(${token},`);
-    expect(varFallback(value)).not.toBe(value);
-  });
+  ])(
+    "makes %s settable, with a default to fall back to",
+    (_name, selector, property, token) => {
+      const value = declaration(headerCss, selector, property);
+      expect(value).toContain(`var(${token},`);
+      expect(varFallback(value)).not.toBe(value);
+    },
+  );
 
   it("draws the hover underline in the nav link's own colour", () => {
     // The underline is the same mark as the word above it; a settable link
