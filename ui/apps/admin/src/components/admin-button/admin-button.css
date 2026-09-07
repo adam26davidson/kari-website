@@ -51,11 +51,21 @@
   background-color: var(--admin-danger-hover);
 }
 
-/* Destructive, but not the screen's purpose — the same outlined shape as
-   .secondary in the danger colour, so it reads as "this removes something"
-   without competing with the Save it sits below (design brief §2). */
+/* Destructive, and the LIGHTEST thing in the row it sits in. Given
+   .secondary's cream fill it carried exactly Edit's weight, so Delete
+   pulled the eye as hard as the page's one primary action — two visual
+   reviews said the red competed with the maroon "Add a haiku" (#599), and
+   the photography editor's image block came out as three identical chips
+   told apart only by hue (#602). Spending no fill at all — red word, red
+   ring, the row showing through — gives a three-step scale: solid primary,
+   cream chip, ghost destructive. Still unmistakably destructive, just last
+   (design brief §2).
+
+   The red is the settled colour (see text-contrast.test.ts), so the weight
+   is what changes. The text has to be the HOVER red: --admin-danger as a
+   foreground is only ~3.9:1 on the row and would miss AA. */
 .admin-button.danger-secondary {
-  background-color: var(--card-surface);
+  background-color: transparent;
   color: var(--admin-danger-hover);
   border: 1px solid var(--admin-danger);
   padding: 9px;
