@@ -165,6 +165,13 @@ export function planContentSave(
  * touched: a failed upload (thrown here) aborts the save with the
  * previous state fully intact (at worst it leaves orphaned uploads for
  * the GC sweep).
+ *
+ * Each pending file is uploaded ONCE, however many imgs carry its id:
+ * duplicating an inserted-but-unsaved image inside the editor
+ * (copy/paste) clones the img's id along with everything else, and
+ * uploading per copy would store the same bytes twice, the extra being
+ * an immediate orphan that shows up in the image-cleanup report until
+ * swept (#505). Every copy is patched with the one stored url.
  */
 async function uploadAddedImages(
   addedImages: Array<HTMLImageElement>,
@@ -172,26 +179,39 @@ async function uploadAddedImages(
   isPublished: boolean,
   deps: BlogPostSaveDeps,
 ): Promise<void> {
+  // The img's title carries the stable id its pending file is keyed by,
+  // so the file stays attached however the image has been moved around
+  // inside the content (#134). Group the added imgs by that id — first
+  // occurrence first, so uploads still run in content order. The map is
+  // not read destructively and never written here: on a later failure
+  // the whole save retries with every pending file still present (a
+  // re-upload just leaves an orphan for the GC sweep).
+  const uploads = new Map<
+    string,
+    { file: File; images: Array<HTMLImageElement> }
+  >();
   for (const newImage of addedImages) {
-    // The img's title carries the stable id its pending file is keyed
-    // by, so the file stays attached however the image has been moved
-    // around inside the content (#134). The map is not touched here — on
-    // a later failure the whole save retries with every pending file
-    // still present (a re-upload just leaves an orphan for the GC
-    // sweep).
     const pendingFile = pendingImageFiles.get(newImage.title);
     if (!pendingFile) continue;
-    const fileName = await deps.uploadImage(
-      pendingFile,
-      isPublished,
-      deps.getToken,
-    );
+    const pending = uploads.get(newImage.title);
+    if (pending) {
+      pending.images.push(newImage);
+    } else {
+      uploads.set(newImage.title, { file: pendingFile, images: [newImage] });
+    }
+  }
+
+  for (const { file, images } of uploads.values()) {
+    const fileName = await deps.uploadImage(file, isPublished, deps.getToken);
     if (!fileName) {
       throw new Error("Failed to upload image");
     }
     // Published content is read straight from S3 (which cannot resolve a
     // variant from a query parameter), drafts through the API.
-    newImage.src = isPublished ? s3ImageUrl(fileName) : apiImageUrl(fileName);
+    const src = isPublished ? s3ImageUrl(fileName) : apiImageUrl(fileName);
+    for (const image of images) {
+      image.src = src;
+    }
   }
 }
 
