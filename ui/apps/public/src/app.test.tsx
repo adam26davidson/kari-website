@@ -83,8 +83,8 @@ describe("App", () => {
 
   // The admin section is its own application now (#591). This app has no
   // /admin route, so the URL matches nothing and the outlet stays empty —
-  // the header's plain <a href="/admin"> is the only way there, and it
-  // leaves this SPA entirely.
+  // the admin app is a separate document that only a full page load of
+  // its URL reaches.
   it("registers no admin route: /admin matches nothing here", async () => {
     const { container } = renderApp("/admin/haiku/some-id");
     expect(screen.getByText("Kari Davidson")).toBeInTheDocument();

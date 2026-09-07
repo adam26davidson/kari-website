@@ -51,17 +51,9 @@ export function Header({
               {page.name}
             </Link>
           ))}
-          {/* A plain anchor, not a router Link: /admin is a different
-              application (its own build, its own bundle), so following it
-              has to be a full page load rather than a client-side
-              navigation this router could never resolve.
-
-              It is not one of the site's pages either, so it carries its
-              own class rather than the nav's look — see header.css for what
-              that costs the bar at tablet widths. */}
-          <a href="/admin" className="header-admin-link">
-            Admin
-          </a>
+          {/* Deliberately no link to /admin: the admin app is reached by
+              typing its URL. It exists for two people, and a visible entry
+              on the public site advertises it to every visitor. */}
         </div>
       )}
     </div>
