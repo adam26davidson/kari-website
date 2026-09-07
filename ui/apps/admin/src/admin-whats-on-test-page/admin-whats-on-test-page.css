@@ -1,21 +1,9 @@
-/* Staging-only deployment-status admin section. Same translucent card
-   treatment as the other admin pages (see admin-image-gc-page.css) so the
-   text doesn't sit directly on the photo background. */
+/* Staging-only deployment-status admin section. The card itself is
+   .admin-page-card (admin.css), worn alongside this class; only the width
+   is the page's own — a commit row carries a subject on the left and its
+   author and date on the right, and at 640px the two halves collide. */
 .admin-whats-on-test-page {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 16px;
-  width: calc(100% - 24px);
   max-width: 700px;
-  box-sizing: border-box;
-  margin: 12px auto;
-  padding: 24px;
-  border-radius: 3px;
-  background-color: var(--panel-tint);
-  backdrop-filter: blur(10px);
-  font-family: var(--font-ui);
-  color: var(--dark-text);
 }
 
 /* Same size and same measure as the explanation line above them, so the
@@ -25,16 +13,6 @@
   margin: 0;
   font-size: var(--admin-prose-size);
   max-width: var(--admin-prose-measure);
-}
-
-.whats-on-test-warning {
-  width: calc(100% - 32px);
-  margin: 0;
-  padding: 12px 16px;
-  border-radius: 6px;
-  background-color: var(--admin-danger);
-  color: white;
-  overflow-wrap: anywhere;
 }
 
 .whats-on-test-list {

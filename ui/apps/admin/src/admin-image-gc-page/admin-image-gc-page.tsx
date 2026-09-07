@@ -145,7 +145,7 @@ export function AdminImageGcPage() {
   };
 
   return (
-    <div className="admin-image-gc-page">
+    <div className="admin-page-card admin-image-gc-page">
       <h2 className="admin-section-heading">Image cleanup</h2>
       <p className="admin-section-explanation">
         Finds uploaded images that no page on the site uses any more and
@@ -154,7 +154,7 @@ export function AdminImageGcPage() {
       </p>
       <AdminButton onClick={() => runGc(true)}>Preview cleanup</AdminButton>
       {error && (
-        <div className="gc-error" role="alert">
+        <div className="admin-danger-banner" role="alert">
           {error}
           <div className="gc-error-note">
             Nothing further was deleted. Fix the problem and preview again.

@@ -253,6 +253,49 @@ input[type="checkbox"] {
   color: var(--muted-text);
 }
 
+/* A whole admin section that is ONE card rather than a list or an editor —
+   image cleanup and what's on test today. Both pages had written this same
+   block out in full, so the two declarations #356 changed had to be changed
+   twice, and the next tweak would have been two edits again (#547). The
+   card's own width stays with each page (the commit list wants a little
+   more room than the cleanup report), because that is the only part the two
+   ever disagreed on.
+
+   The translucent, blurred backing is the same one every other admin
+   surface wears, so the text never sits directly on the photo background
+   (#210, #307); text-contrast.test.ts pins that it stays that way. */
+.admin-page-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  width: calc(100% - 24px);
+  box-sizing: border-box;
+  margin: 12px auto;
+  padding: 24px;
+  border-radius: 3px;
+  background-color: var(--panel-tint);
+  backdrop-filter: blur(10px);
+  font-family: var(--font-ui);
+  color: var(--dark-text);
+}
+
+/* Something went wrong, or something is missing, said at the width of the
+   card it sits on: the red block above the content it is about. Spends the
+   one danger token, like the destructive buttons and the error toast, so
+   the admin's "this is not fine" is one colour wherever it appears.
+   `overflow-wrap` because the text can be a server message with an
+   unbreakable id or URL in it. */
+.admin-danger-banner {
+  width: calc(100% - 32px);
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 6px;
+  background-color: var(--admin-danger);
+  color: white;
+  overflow-wrap: anywhere;
+}
+
 /* Narrow viewports: the fixed-width sidebar would leave too little room
    for the content (~230px on a 390px phone), so it collapses into a
    wrapping top bar and the content takes the full width. The breakpoint
