@@ -13,6 +13,7 @@ import {
 import { HaikuEditor } from "./components/haiku-editor/haiku-editor";
 import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { AdminItemList } from "../components/admin-item-list/admin-item-list";
+import { deleteConfirmationMessage } from "../delete-confirmation";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
 import { useListUrls } from "../use-list-urls";
@@ -86,8 +87,12 @@ export function AdminHaikuPage() {
   };
 
   const onDelete = (id: string) => {
-    confirm("Are you sure you want to delete this haiku?", () =>
-      deleteHaiku(id),
+    // A haiku has no title, so its first written line names it in the
+    // confirmation — the same words the row shows.
+    const haiku = haikuList.find((item) => item.id === id);
+    confirm(
+      deleteConfirmationMessage("haiku", ...(haiku?.lines ?? [])),
+      () => deleteHaiku(id),
     );
   };
 

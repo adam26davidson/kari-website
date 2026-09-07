@@ -15,6 +15,7 @@ import { ImageService } from "@kari/shared/services/images";
 import { lazyWithRetry } from "@kari/shared/components/error-boundary/lazy-with-retry";
 import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { AdminItemList } from "../components/admin-item-list/admin-item-list";
+import { deleteConfirmationMessage } from "../delete-confirmation";
 import { useAdminToken } from "../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
@@ -194,7 +195,8 @@ export function AdminOtherWorksPage() {
   };
 
   const onDelete = (id: string) => {
-    confirm("Are you sure you want to delete this other works item?", () =>
+    const post = postList.find((item) => item.id === id);
+    confirm(deleteConfirmationMessage("other works item", post?.title), () =>
       deletePost(id),
     );
   };

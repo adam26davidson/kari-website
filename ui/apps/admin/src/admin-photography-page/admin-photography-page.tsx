@@ -17,6 +17,7 @@ import {
 import { PhotographyPostSummary } from "./components/photography-post-summary/photography-post-summary";
 import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { AdminItemList } from "../components/admin-item-list/admin-item-list";
+import { deleteConfirmationMessage } from "../delete-confirmation";
 import { useAdminToken } from "../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
@@ -131,8 +132,14 @@ export function AdminPhotographyPage() {
   };
 
   const onDelete = (id: string) => {
-    confirm("Are you sure you want to delete this photography post?", () =>
-      deletePost(id),
+    const post = postList.find((item) => item.id === id);
+    confirm(
+      deleteConfirmationMessage(
+        "photography post",
+        post?.title,
+        post?.subtitle,
+      ),
+      () => deletePost(id),
     );
   };
 

@@ -249,6 +249,33 @@ describe("AdminPhotographyPage deletion", () => {
     return { notify };
   }
 
+  it("names the post being deleted in the confirmation", async () => {
+    const { container, adminUi } = await renderPage();
+
+    fireEvent.click(iconButton(container, "trash"));
+
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      'Delete the photography post "A Post"?',
+      expect.any(Function),
+    );
+  });
+
+  // A post created but not yet titled still has to be deletable, and
+  // quoting its empty title would name nothing.
+  it("falls back to the untitled wording for a post with no title", async () => {
+    vi.mocked(PhotographyService.getListFromApi).mockResolvedValue([
+      { ...savedPost, title: "", subtitle: "" },
+    ]);
+    const { container, adminUi } = await renderPage();
+
+    fireEvent.click(iconButton(container, "trash"));
+
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      "Delete this untitled photography post?",
+      expect.any(Function),
+    );
+  });
+
   it("keeps the list intact when saving the shortened list fails", async () => {
     vi.mocked(PhotographyService.updateList).mockRejectedValue(
       new Error("PUT failed"),
