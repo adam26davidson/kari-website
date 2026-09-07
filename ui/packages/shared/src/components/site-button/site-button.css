@@ -10,7 +10,7 @@
   color: #f9f5f2;
   background-color: color-mix(in srgb, var(--primary) 71%, transparent);
   border-width: 0px;
-  font-size: 16px;
+  font-size: var(--text-base);
   width: fit-content;
   font-family: var(--font-ui);
   padding: 10px;

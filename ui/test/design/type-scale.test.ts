@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   RULES,
   declaration,
+  declarations,
   declaring,
   indexRule,
   label,
 } from "./css-rules";
 
+// The type scale has two axes, one describe block each below: the weight
+// axis (#356) and the size axis (#546).
+
+// ---------------------------------------------------------------------------
 // The weight half of the type scale (#356).
 //
 // `body` used to declare `font-weight: 300`. In Noto Serif JP at 14-16px
@@ -41,14 +46,39 @@ function isRegularOrHeavier(value: string): boolean {
 }
 
 /**
+ * The size axis's steps, as `token: value`. Named after Tailwind's scale so
+ * the vocabulary survives the admin's shadcn migration (#592). Asserted
+ * against `:root` below, and used here to read a `var(--text-*)` size back
+ * as px — without which the weight floor stops seeing the sizes it guards
+ * the moment a rule spending `--display-weight` is put on a step.
+ */
+const STEPS: Record<string, string> = {
+  "--text-xs": "12px",
+  "--text-sm": "14px",
+  "--text-base": "16px",
+  "--text-lg": "18px",
+  "--text-xl": "20px",
+  "--text-2xl": "25px",
+};
+
+/** A `font-size` with every step token replaced by the px it stands for. */
+const resolveSteps = (size: string): string =>
+  size.replace(
+    /var\((--text-[\w-]+)\)/g,
+    (whole, token: string) => STEPS[token] ?? whole,
+  );
+
+/**
  * The smallest px value a `font-size` names, or undefined if it names none.
  * A fluid size (clamp/min/max) is judged on its smallest px value — that is
  * the width at which its stems are thinnest.
  */
 function smallestPx(size: string | undefined): number | undefined {
   const pxValues = size
-    ?.match(/([\d.]+)px/g)
-    ?.map((px) => Number.parseFloat(px));
+    ? resolveSteps(size)
+        .match(/([\d.]+)px/g)
+        ?.map((px) => Number.parseFloat(px))
+    : undefined;
   return pxValues?.length ? Math.min(...pxValues) : undefined;
 }
 
@@ -131,5 +161,119 @@ describe("the weight axis of the type scale", () => {
     const value = Number(declaration(indexRule(":root").block, DISPLAY_TOKEN));
     expect(value).toBeGreaterThanOrEqual(200);
     expect(value).toBeLessThan(400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The size half of the type scale (#546).
+//
+// #356 documented the weight axis and left the size axis ad hoc: every rule
+// picked its own px number, so the site accumulated 12/13/14/15/16/17/18/20/
+// 22/25px plus two rem values with nothing recording which of those were
+// meant to be the same size as each other. A scale is only a scale if the
+// set of steps is closed, so these tests close it: the steps live in `:root`
+// as `--text-*` tokens (mirroring `--display-weight`), and every rule
+// reaches a size through one of them.
+//
+// Two documented exceptions, both narrow and both pinned by an exact-match
+// allowlist rather than a loophole:
+//
+//  - The header's two fluid sizes stay literal `clamp()`s. Their endpoints
+//    were tuned against the 768-948px overflow band (#221); snapping them to
+//    steps would move that tuning for no gain, since a clamp is not a step
+//    in any case.
+//  - The admin app's literals are FROZEN, not migrated. The shadcn migration
+//    (#592, per-page #233-238, legacy-CSS removal #240) replaces admin CSS
+//    wholesale, so tokenizing ~40 declarations now is churn destined for
+//    deletion. Pinning the existing set shrink-only still stops NEW ad-hoc
+//    sizes landing there meanwhile: a new admin rule must use a step, and
+//    every value dropped from admin CSS should be dropped from this set too.
+
+/** Stylesheets under this directory are the admin app's. */
+const ADMIN_DIR = "apps/admin/";
+
+/**
+ * The two header sizes allowed to stay fluid literals, spelled exactly as
+ * the stylesheet spells them — an exact match, so re-tuning either one is a
+ * deliberate edit here rather than something a regex waves through.
+ */
+const FLUID_SIZES = new Set([
+  "clamp(30px, 3.6vw, 40px)",
+  "clamp(17px, 2.2vw, 20px)",
+]);
+
+/**
+ * The literal sizes the admin app declared when the scale was introduced.
+ * Frozen: nothing may be added, and entries should go as the shadcn
+ * migration deletes the rules that use them.
+ */
+const FROZEN_ADMIN_SIZES = new Set([
+  "12px",
+  "13px",
+  "14px",
+  "15px",
+  "16px",
+  "17px",
+  "18px",
+  "20px",
+  "22px",
+  "0.85rem",
+  "0.9rem",
+]);
+
+/** Whether a value is exactly one step token, spelled as a `var()`. */
+const isStep = (value: string): boolean =>
+  Object.keys(STEPS).some((token) => value === `var(${token})`);
+
+/** Every `font-size` declared inside (or outside) the admin app. */
+const sizesDeclared = (inAdmin: boolean): Array<[string, string]> =>
+  RULES.flatMap((rule) => {
+    if (rule.file.startsWith(ADMIN_DIR) !== inAdmin) return [];
+    const value = declaration(rule.block, "font-size");
+    return value ? [[label(rule), value] satisfies [string, string]] : [];
+  });
+
+describe("the size axis of the type scale", () => {
+  it("declares exactly the documented steps, and no others", () => {
+    const declared = Object.fromEntries(
+      declarations(indexRule(":root").block)
+        .filter(({ property }) => property.startsWith("--text-"))
+        .map(({ property, value }) => [property, value]),
+    );
+    // A full-set compare in both directions: an undocumented seventh step
+    // fails here just as a missing one does.
+    expect(declared).toEqual(STEPS);
+  });
+
+  it.each(sizesDeclared(false))(
+    "%s sizes public text with a step of the scale",
+    (_label, value) => {
+      expect(isStep(value) || FLUID_SIZES.has(value)).toBe(true);
+    },
+  );
+
+  it.each(sizesDeclared(true))(
+    "%s sizes admin text with a step, the prose token, or a frozen literal",
+    (_label, value) => {
+      const allowed =
+        isStep(value) ||
+        value === "var(--admin-prose-size)" ||
+        FROZEN_ADMIN_SIZES.has(value);
+      expect(allowed).toBe(true);
+    },
+  );
+
+  it("spends every step on something", () => {
+    // A step nothing uses is a step nobody chose; it would drift out of the
+    // set the rest of the site is actually built from.
+    const used = new Set(
+      sizesDeclared(false)
+        .concat(sizesDeclared(true))
+        .map(([, value]) => value),
+    );
+    const unused = Object.keys(STEPS).filter(
+      (token) => !used.has(`var(${token})`),
+    );
+    expect(unused).toEqual([]);
   });
 });

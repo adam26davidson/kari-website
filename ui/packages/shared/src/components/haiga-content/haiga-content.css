@@ -23,7 +23,7 @@
 }
 
 .haiga-list-publisher {
-  font-size: 16px;
+  font-size: var(--text-base);
   color: var(--muted-text);
   margin-top: 15px;
 }
@@ -56,7 +56,7 @@
 }
 
 .haiga-list-publisher-compact {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--muted-text);
   margin-top: 6px;
 }

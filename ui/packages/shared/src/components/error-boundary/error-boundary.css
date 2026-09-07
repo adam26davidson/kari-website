@@ -23,6 +23,6 @@
   background-color: color-mix(in srgb, var(--primary) 93.3%, transparent);
   color: white;
   font-family: var(--font-ui);
-  font-size: 16px;
+  font-size: var(--text-base);
   cursor: pointer;
 }
