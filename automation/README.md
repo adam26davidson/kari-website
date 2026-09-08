@@ -43,11 +43,15 @@ Design and decisions:
 - `backlog-shortlist.sh` — the pipeline's Phase B candidate feed:
   paginates the whole open backlog through the REST API (no `--limit`
   truncation, no lagging search index), filters out claimed/blocked
-  issues, and prints bounded oldest-first JSON slices — `bugs`,
-  `maintainer` (no `automation` label — human-filed), `product`
-  (agent-filed), `tooling` — with `*_omitted` counts so a capped view
-  is visible. Read-only; the header documents the env knobs. Tests:
-  `backlog-shortlist-test.sh`.
+  issues, and prints bounded JSON slices — `priority` (the
+  maintainer's own, ahead of everything), `bugs`, `maintainer` (no
+  `automation` label — human-filed), `product` (agent-filed),
+  `tooling` — with `*_omitted` counts so a capped view is visible.
+  Every slice is ranked by `unblocks` (how many open issues name that
+  issue as their blocker, read out of the `has-dependencies` issues'
+  bodies and comments) and then oldest-first, so a foundation issue
+  outranks polish that only happens to be older (#774). Read-only; the
+  header documents the env knobs. Tests: `backlog-shortlist-test.sh`.
 - `claim-liveness.sh <slug> [issue ...]` — read-only probe behind the
   playbook's stale-claim step: prints one `key=value` line per liveness
   signal for `agent/<slug>` (open PR, worktree and git-dir mtimes,

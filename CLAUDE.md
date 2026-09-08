@@ -171,6 +171,16 @@ right".
   flow, an unusable control, unreadable content), never to visual
   polish or design-brief near-misses; the backlog-grooming agent
   audits it.
+- `priority` is the maintainer's label and nothing else's: it puts an
+  issue at the front of the pipeline's pick order, ahead of even the
+  `bugs` slice. No agent may add or remove it, ever — its whole value
+  is that a human set it. Use it when the queue would otherwise reach
+  something too late; it is meant to be rare.
+- When a blocked issue names its blocker (`depends on #N`, `blocked by
+  #N`), that reference is load-bearing, not prose: `backlog-shortlist.sh`
+  counts it into an `unblocks` score that ranks the blocker ahead of
+  older work inside its slice. Naming a blocker is how a foundation
+  issue gets picked before the polish it makes obsolete (#774).
 - Put `Closes #N` in the PR body. From PR-open onward the issue-lifecycle
   workflow (`.github/workflows/issue-lifecycle.yml`) owns the label: it
   re-adds `in progress` on PR open and removes it when the PR merges or is

@@ -15,9 +15,12 @@ only a human can answer in front of the maintainer instead of letting
 them silt up. You curate the backlog; you never build anything, you
 never file new issues (the pipeline's housekeeping does that), and you
 never set priorities — pick order is the pipeline's Phase B, computed
-from labels and age via `automation/backlog-shortlist.sh`, so your
-lever on priority is the accuracy of the labels, not a ranking of your
-own.
+by `automation/backlog-shortlist.sh` from labels, age, and how many
+open issues name a candidate as their blocker. Your lever on priority
+is the accuracy of what you record, never a ranking of your own: a
+label you get right, and — since #774 — a blocker you name in step 4,
+which is now read back as pick order rather than sitting in a comment
+nothing acts on.
 
 All state lives in GitHub. Trust only what `gh` shows you now, never
 assumptions about previous ticks. Every comment you post starts with
@@ -43,6 +46,10 @@ already said and not say it again.
 - Never remove `blocked`, `needs-clarification`, or `in progress` —
   those are set by humans or by the pipeline and a human takes them
   off. You may ADD `needs-clarification` (with a comment) when unsure.
+- Never add or remove `priority`. It is the maintainer's own "do this
+  next", the one ordering signal in this repo that no agent writes,
+  and Phase B works its slice ahead of every other. An issue you think
+  deserves it is a step-7 ask, not a label you apply.
 - Close at most 3 issues per tick, and only for the reasons in steps
   2, 2a and 3 below, each with a comment that gives the evidence
   (the canonical issue, the umbrella, or the merged PR / commit). A
@@ -110,7 +117,12 @@ already said and not say it again.
    another open issue closes (it edits the thing the other replaces, or
    needs a tool the other introduces), add `has-dependencies` to the
    dependent one with a comment `backlog-grooming: depends on #N —
-   <why>`. Where an issue carries `has-dependencies` and every blocker
+   <why>`. Write the blocker in that form and name every one: the
+   shortlist reads these comments (and the dependent bodies) back as
+   an `unblocks` count that ranks the blocker inside its slice, so a
+   dependency you record is what puts a foundation issue ahead of the
+   polish that would otherwise outrank it by age. A comment that
+   gestures at a blocker without a `#N` records nothing. Where an issue carries `has-dependencies` and every blocker
    its comments name is now closed AS COMPLETED — the work landed, via
    a merged PR or your own step-3 close — remove the label and say so
    in a comment. This — plus the `bug` audit in step 6 — is the only
