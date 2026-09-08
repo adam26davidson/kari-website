@@ -772,6 +772,31 @@ describe("AdminOtherWorksPage deletion", () => {
     return { notify };
   }
 
+  it("names the item being deleted in the confirmation", async () => {
+    const { container, adminUi } = await renderPage();
+
+    fireEvent.click(iconButton(container, "trash"));
+
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      'Delete the other works item "A Post"?',
+      expect.any(Function),
+    );
+  });
+
+  it("falls back to the untitled wording for an item with no title", async () => {
+    vi.mocked(BlogService.getListFromApi).mockResolvedValue([
+      { ...savedPost, title: "" },
+    ]);
+    const { container, adminUi } = await renderPage();
+
+    fireEvent.click(iconButton(container, "trash"));
+
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      "Delete this untitled other works item?",
+      expect.any(Function),
+    );
+  });
+
   it("keeps the content when saving the shortened list fails", async () => {
     vi.mocked(BlogService.updateList).mockRejectedValue(
       new Error("PUT failed"),

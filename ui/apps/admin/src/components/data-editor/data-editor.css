@@ -1,10 +1,25 @@
+/* The card grows with its content and .admin-content (height: 100%,
+   overflow-y: auto) scrolls the whole editor, like the admin list pages.
+   min-height rather than height so a short editor still fills the column
+   and stays vertically centred by the justify-content below.
+
+   This used to be `height: 100%`, the top of a percentage max-height chain
+   (.data-editor 100% -> card calc(100% - 40px) -> inputs 100%) that bound
+   the card to the viewport and was meant to scroll the image list inside
+   it. Nothing in that chain ever declared overflow-y, so the second half
+   never existed: content resolved PAST the card's bottom rim instead of
+   scrolling within it, eating the 24px of padding below the last field and
+   leaving the panel looking cut off rather than deliberately closed
+   (clearest in the photography editor, whose rows grow when the caption
+   wraps under the picker). Mobile had already dropped the bound for
+   exactly this reason; #578 extends that to every width. */
 .data-editor {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 100%;
+  min-height: 100%;
 }
 
 .data-editor-content {
@@ -21,7 +36,6 @@
   box-sizing: border-box;
   max-width: min(1000px, 100%);
   min-width: min(550px, 100%);
-  max-height: calc(100% - (24px + 16px));
   /* 24px, the padding every other admin panel spends (the list page's
      titled header, image cleanup, what's on test). At 20px this card was
      the tightest surface in the admin, and it showed at the bottom edge,
@@ -47,7 +61,6 @@
   /* See .data-editor-content: one right edge for the whole panel. */
   align-items: stretch;
   justify-content: flex-start;
-  max-height: 100%;
   /* This wrapper and everything it lays out are otherwise shrink-to-fit,
      so a wide child (the 800px rich-text editor, a 400px input) inflates
      them past the card. Clamp the whole chain to the card at every
@@ -100,28 +113,17 @@
    overrides them at equal specificity, so it must come later in the
    cascade. */
 @media (max-width: 767.98px) {
-  /* The desktop design bounds the card to the viewport and scrolls the
-     image list inside it, but the percentage max-height chain
-     (.data-editor height 100% -> card calc(100% - 40px) -> inputs 100%)
-     misresolves at mobile and content pours out of the card's bottom
-     edge once it is taller than the viewport (clearest in the
-     photography editor, whose image rows grow when the caption wraps
-     under the picker). Drop the viewport bound instead: the card grows
-     with its content and .admin-content (overflow-y: auto) scrolls the
-     whole editor, like the admin list pages. min-height keeps short
-     editors vertically centered. */
-  .data-editor {
-    height: auto;
-    min-height: 100%;
-  }
-
+  /* Width only. This block used to also drop the base rules' percentage
+     max-height chain, which was the fix for the card overflowing at
+     mobile; since #578 the base rules carry no such chain at any width, so
+     all that is left here is the full-width card — a real difference from
+     desktop, where the card shrinks to fit between 550px and 1000px
+     (#259, #457). */
   .data-editor-content {
     width: 100%;
-    max-height: none;
   }
 
   .data-list-item-inputs {
     width: 100%;
-    max-height: none;
   }
 }

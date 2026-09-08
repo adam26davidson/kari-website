@@ -450,6 +450,11 @@ input[type="checkbox"] {
   background-color: var(--card-surface);
   color: var(--dark-text);
   max-width: 440px;
+  /* Delete confirmations quote the item's own title, so the dialog now
+     carries text nobody vetted for length. Without this, one long
+     unbroken word (a pasted filename, a run-on title) sets the box's
+     min-content width and pushes it past a 390px screen. */
+  overflow-wrap: anywhere;
   padding: 28px 36px;
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);

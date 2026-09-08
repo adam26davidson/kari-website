@@ -23,10 +23,10 @@ describe("MobileMenu", () => {
     expect(menu).toHaveAttribute("id", MOBILE_MENU_ID);
   });
 
-  it("renders one mobile-menu-item link per page, plus Admin", () => {
+  it("renders one mobile-menu-item link per page", () => {
     renderMenu("/");
     const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(PAGES.length + 1);
+    expect(links).toHaveLength(PAGES.length);
     for (const page of PAGES) {
       const link = screen.getByRole("link", { name: page.name });
       expect(link).toHaveAttribute("href", page.path);
@@ -34,17 +34,12 @@ describe("MobileMenu", () => {
     }
   });
 
-  // The admin section is a separate application served under /admin, so
-  // this has to be a plain anchor: a router Link would try to resolve
-  // /admin inside this app's route tree and render nothing. On a phone the
-  // nav bar collapses into this menu, so without the entry there is no way
-  // in at all.
-  it("links to the admin app with a plain anchor, not a router link", () => {
+  // Same rule as the desktop bar: the admin app is reached by URL, never
+  // from the public site's navigation.
+  it("does not link to the admin app", () => {
     renderMenu("/");
-    const admin = screen.getByRole("link", { name: "Admin" });
-    expect(admin).toHaveAttribute("href", "/admin");
-    expect(admin).toHaveClass("mobile-menu-item");
-    expect(admin).not.toHaveAttribute("data-discover");
+    expect(screen.queryByRole("link", { name: "Admin" })).toBeNull();
+    expect(document.querySelector('a[href^="/admin"]')).toBeNull();
   });
 
   it("marks only the link for the current route as active", () => {

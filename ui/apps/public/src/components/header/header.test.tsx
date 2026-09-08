@@ -65,17 +65,13 @@ describe("Header on desktop", () => {
     );
   });
 
-  // The admin section is a separate application (#591): its own build, its
-  // own bundle, mounted under /admin. A router <Link> would try to resolve
-  // that inside this app's route tree, which has no /admin route and never
-  // will; only a full page load gets there. react-router marks the anchors
-  // it renders with data-discover, so its absence is what distinguishes the
-  // two here.
-  it("links to the admin app with a plain anchor, not a router link", () => {
+  // The admin app is for its two users only and is reached by typing its
+  // URL. It briefly had a link here (#591), which put "Admin" in front of
+  // every visitor; the public bar must never advertise it.
+  it("does not link to the admin app", () => {
     renderHeader("/");
-    const admin = screen.getByRole("link", { name: "Admin" });
-    expect(admin).toHaveAttribute("href", "/admin");
-    expect(admin).not.toHaveAttribute("data-discover");
+    expect(screen.queryByRole("link", { name: "Admin" })).toBeNull();
+    expect(document.querySelector('a[href^="/admin"]')).toBeNull();
   });
 
   it("never renders the admin chrome or a signed-in user", () => {

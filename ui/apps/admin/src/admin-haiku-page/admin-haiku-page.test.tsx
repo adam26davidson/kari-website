@@ -154,6 +154,34 @@ describe("AdminHaikuPage new haiku", () => {
 });
 
 describe("AdminHaikuPage deletion", () => {
+  // A haiku has no title, so the confirmation borrows its first line —
+  // the row she is looking at names itself in the dialog (design brief §6).
+  it("names the haiku by its first line in the confirmation", async () => {
+    const { adminUi } = renderPage();
+    const deletes = await screen.findAllByRole("button", { name: "Delete" });
+
+    fireEvent.click(deletes[1]);
+
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      'Delete the haiku "summer grass"?',
+      expect.any(Function),
+    );
+  });
+
+  it("falls back to the untitled wording for a haiku with no lines", async () => {
+    vi.mocked(HaikuService.getListFromApi).mockResolvedValue([
+      { id: "h3", lines: ["", "  "], publisher: "" },
+    ]);
+    const { adminUi } = renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+
+    expect(adminUi.confirm).toHaveBeenCalledWith(
+      "Delete this untitled haiku?",
+      expect.any(Function),
+    );
+  });
+
   it("removes the confirmed haiku and saves the shortened list", async () => {
     const { adminUi } = renderPage();
     const deletes = await screen.findAllByRole("button", { name: "Delete" });
