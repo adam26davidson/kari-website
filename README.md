@@ -1,5 +1,17 @@
 # Kari Website
 
+## Coding agents
+
+Codex and Claude Code share the standing rules in [AGENTS.md](AGENTS.md).
+Rust API guidance lives in [api/AGENTS.md](api/AGENTS.md). Update those
+files when changing shared instructions; the matching `CLAUDE.md` files
+import them for Claude Code. Claude-specific setup stays in `CLAUDE.md`
+and `.claude/settings.json`.
+
+Use a separate worktree for each concurrent session, following AGENTS.md.
+The scheduled automation fleet and CI visual reviewer still use Claude;
+this shared guidance does not change their runners or model settings.
+
 ## Running the app locally
 
 One command brings up the whole stack (MinIO, seeded fixture data, API on
