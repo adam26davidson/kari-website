@@ -1,4 +1,5 @@
 import { vi, beforeEach, afterEach } from "vitest";
+import type { Mock } from "vitest";
 
 /**
  * Shared boilerplate for the service test files, which all exercise a
@@ -15,7 +16,7 @@ export function mockFetchOnce(
     json?: () => Promise<unknown>;
     text?: () => Promise<string>;
   },
-) {
+): Mock {
   const fetchMock = vi.fn().mockResolvedValue(response);
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
@@ -26,7 +27,9 @@ export function mockFetchOnce(
  * Re-primed before each test by `setupServiceTestHooks`, so a test that
  * overrides it (e.g. with `mockRejectedValue`) doesn't leak into the next.
  */
-export const getToken = vi.fn().mockResolvedValue("test-token");
+export const getToken: Mock<() => Promise<string>> = vi
+  .fn<() => Promise<string>>()
+  .mockResolvedValue("test-token");
 
 /**
  * Registers the beforeEach/afterEach hooks every service test file needs:
