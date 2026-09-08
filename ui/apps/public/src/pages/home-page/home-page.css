@@ -1,14 +1,22 @@
 /* Full-height wrapper for the home page's loading / error / card states.
    The .mobile modifier mirrors the useIsMobile hook so the layout matches
-   what the inline styles previously computed per-render. */
+   what the inline styles previously computed per-render.
+
+   `min-height` + `align-self` + `min-width` + no `overflow-y` is the
+   grow-inside-one-scroller pattern; content-page.css carries the full
+   explanation of why each of the four is needed (#581). The centring below
+   is what makes it matter here: `justify-content: center` overflows BOTH
+   ends when free space goes negative, so a home page too tall for a short
+   desktop window would put its own top out of reach. */
 .home-page {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100%;
+  align-self: flex-start;
+  min-height: 100%;
   width: 100%;
-  overflow-y: auto;
+  min-width: 0;
 }
 
 .home-page.mobile {
@@ -57,10 +65,26 @@
   max-width: 100%;
 }
 
+/* The hairline between the photo and the blurb. Its height is `align-self`,
+   not a percentage: `height: 90%` resolved against `.home-page-card`, whose
+   own height was only definite because `.home-page` above it was pinned to
+   `height: 100%`. Removing that pin (#581) broke the chain and the rule
+   fell back to `auto` — a zero-height divider, i.e. no divider at all, on
+   desktop and tablet. Stretch asks the card directly and cannot be
+   unhooked by an ancestor. It spans the card's content box rather than 90%
+   of it, which is a hair taller at each end and lines the rule up with the
+   photo column beside it.
+
+   Untouched on mobile: `.home-page.mobile .home-page-card` lays out in a
+   COLUMN, so stretch there is horizontal and the declared `width: 0` opts
+   out of it. (The percentage was already dead in that direction — an
+   item's height in a column flex feeds the container's height, so the
+   percentage was circular and resolved to `auto` — which is why the mobile
+   card has never shown this line.) */
 .home-page-divider {
   width: 0px;
   border-left: 1px solid #bbb;
-  height: 90%;
+  align-self: stretch;
   margin: 0 30px;
 }
 

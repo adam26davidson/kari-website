@@ -1,9 +1,43 @@
+/* The frame every public page except home renders inside. It fills the
+   shell and grows past it; `.content` (packages/shared/src/styles/app.css)
+   is the one box that scrolls (#581). Four of these declarations are load-
+   bearing for that and none of them is obvious:
+
+   * NO `overflow-y`. This used to be `auto` and never scrolled a pixel:
+     the `.data-list-container` inside it declared the same thing, which
+     zeroed that container's flex automatic minimum size, so IT shrank to
+     fit and took the scrolling. Three inert scroll containers stacked
+     above one live one is what made the shell's scroll behaviour
+     unreadable (#558, #581).
+   * `min-height`, not `height`. `100%` fills the shell so
+     `justify-content` below has a full column to distribute in; `min-`
+     lets a tall page grow past it and hand its height to the shell to
+     scroll. With `height: 100%` there is nowhere for the extra to go.
+   * `align-self: flex-start`. `.content` is a row flex container with the
+     default `align-items: stretch`, which sets a height-auto item's used
+     height back to the shell's — cancelling the `min-height` above. That
+     is worse than the old arrangement, not merely equal to it, because
+     the `space-evenly` below falls back to CENTRE alignment when free
+     space is negative: the overflow would split across both ends and the
+     top of the page would sit above the shell's scroll origin, where no
+     gesture can reach it. Opting this item out is the fix;
+     `.content`'s `align-items` cannot change instead, because
+     `.route-loading` and `.mobile-menu` are its other children and both
+     need the stretch.
+   * `min-width: 0`. `.content`'s MAIN axis is horizontal, so dropping the
+     `overflow-y` restored `min-width: auto` here — and a wrapper that
+     refuses to shrink below its widest child's min-content width pushes
+     the page sideways on a phone.
+
+   Pinned by test/design/scroll-containers.test.ts and by visitor.spec.ts's
+   "the shell is the only thing that scrolls". */
 .content-page {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: space-evenly;
+  align-self: flex-start;
   width: 100%;
-  height: 100%;
-  overflow-y: auto;
+  min-width: 0;
+  min-height: 100%;
 }

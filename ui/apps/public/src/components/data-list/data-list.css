@@ -1,10 +1,19 @@
+/* Used to be the public site's real scroller, by accident: every ancestor
+   between it and the shell declared `overflow-y: auto` too, and each one's
+   doing so zeroed its own flex automatic minimum size, so they all shrank
+   to fit and the innermost box — this one — inherited the job. It now has
+   no `overflow-y` at all and simply grows; `.content` scrolls (#581, and
+   see content-page.css for the traps that removal walks past).
+
+   No `min-width: 0` needed, unlike its parent: `.content-page` lays out in
+   a COLUMN, so this item's automatic minimum size is a min-height, and
+   growing is exactly what is wanted of it. */
 .data-list-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
   width: 100%;
-  overflow-y: auto;
 }
 
 .data-list {

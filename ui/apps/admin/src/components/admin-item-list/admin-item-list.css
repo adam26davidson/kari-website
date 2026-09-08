@@ -1,13 +1,15 @@
 /* Forked from the public data-list/data-list-item styles: same visual
    rules, admin-prefixed class names so the two sides stay independent. */
 
+/* Forked with an `overflow-y: auto` it could never use: it is an
+   auto-height box in an auto-height column, so it has no overflow of its
+   own to scroll — `.admin-content` scrolls the admin (#581, #794). */
 .admin-data-list-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
   width: 100%;
-  overflow-y: auto;
 }
 
 .admin-data-list {
