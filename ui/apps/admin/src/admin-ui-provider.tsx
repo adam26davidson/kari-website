@@ -80,49 +80,59 @@ export function AdminUiProvider({ children }: { children: React.ReactNode }) {
     [loading.isLoading, showLoading, hideLoading, confirm, notify],
   );
 
-  /** Answer the open dialog, running the callback the caller gave for it. */
-  const answer = (choice: "yes" | "no") => {
-    if (!confirmation) return;
-    if (choice === "yes") confirmation.onYes();
-    else confirmation.onNo?.();
+  /**
+   * Closes the dialog, running the callback the caller gave for the answer
+   * chosen. `onNo` is optional — a caller that only cares about Yes passes
+   * nothing and gets nothing run, which is the contract useAdminUi states.
+   */
+  const answerWith = (callback?: () => void) => () => {
+    callback?.();
     setConfirmation(null);
   };
 
   return (
     <AdminUiContext.Provider value={value}>
       {children}
-      <AlertDialog
-        open={confirmation !== null}
-        // Radix reports Escape here (a press outside is deliberately
-        // ignored — an alert dialog asks a question that has to be
-        // answered). Backing out is the same answer as saying No, so it
-        // runs the caller's onNo rather than silently closing: the
-        // unsaved-changes guard relies on being told (#457).
-        onOpenChange={(open) => {
-          if (!open) answer("no");
-        }}
-      >
-        {/* `.admin-confirmation` is the e2e hook the journeys answer the
-            dialog through; the look is Tailwind. */}
-        <AlertDialogContent className="admin-confirmation">
-          <AlertDialogTitle>{confirmation?.message}</AlertDialogTitle>
-          {/* Radix asks every alert dialog for a description, and it is
-              worth having: it names the two ways out for someone who is
-              hearing the dialog rather than seeing it. Visually it would
-              only repeat the buttons an inch below it. */}
-          <AlertDialogDescription className="sr-only">
-            Choose Yes to go ahead, or No to leave things as they are.
-          </AlertDialogDescription>
-          <div className="mt-4 flex flex-row justify-end gap-3">
-            {/* No first, so it is what Radix focuses when the dialog
-                opens: the safe answer should be the one a stray Enter
-                gives. */}
-            <AdminButton variant="secondary" onClick={() => answer("no")}>
-              No
-            </AdminButton>
-            <AdminButton onClick={() => answer("yes")}>Yes</AdminButton>
-          </div>
-        </AlertDialogContent>
+      <AlertDialog open={confirmation !== null}>
+        {confirmation && (
+          // `.admin-confirmation` is the e2e hook the journeys answer the
+          // dialog through; the look is Tailwind.
+          //
+          // Escape is handled here rather than through Radix's
+          // `onOpenChange` because backing out is the same answer as
+          // saying No and has to RUN the caller's onNo: the
+          // unsaved-changes guard leaves a navigation blocked until it is
+          // told which way the question went. A press OUTSIDE the dialog
+          // is ignored — Radix's alert dialog does that for us, and it is
+          // the right call: this is a question that has to be answered.
+          <AlertDialogContent
+            className="admin-confirmation"
+            onEscapeKeyDown={answerWith(confirmation.onNo)}
+          >
+            <AlertDialogTitle>{confirmation.message}</AlertDialogTitle>
+            {/* Radix asks every alert dialog for a description, and it is
+                worth having: it names the two ways out for someone who is
+                hearing the dialog rather than seeing it. Visually it would
+                only repeat the buttons an inch below. */}
+            <AlertDialogDescription className="sr-only">
+              Choose Yes to go ahead, or No to leave things as they are.
+            </AlertDialogDescription>
+            <div className="mt-4 flex flex-row justify-end gap-3">
+              {/* No first, so it is what Radix focuses when the dialog
+                  opens: the safe answer should be the one a stray Enter
+                  gives. */}
+              <AdminButton
+                variant="secondary"
+                onClick={answerWith(confirmation.onNo)}
+              >
+                No
+              </AdminButton>
+              <AdminButton onClick={answerWith(confirmation.onYes)}>
+                Yes
+              </AdminButton>
+            </div>
+          </AlertDialogContent>
+        )}
       </AlertDialog>
       {loading.isLoading && (
         // Fixed, so it covers the page whatever the content column has

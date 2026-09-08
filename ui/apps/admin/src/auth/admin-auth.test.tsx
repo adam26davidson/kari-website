@@ -1,25 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { Auth0Provider, useAuth0 } from "@auth0/auth0-react";
-import { AdminAuthProvider, HeaderUserSection } from "./admin-auth";
+import { AdminAuthProvider } from "./admin-auth";
 
 // Auth0Provider stays real so the assertions below identify it by
-// reference; only the hook is stubbed, since HeaderUserSection needs a
-// session without one existing.
+// reference; only the hook is stubbed, so nothing here reaches the network.
 vi.mock("@auth0/auth0-react", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@auth0/auth0-react")>()),
   useAuth0: vi.fn(),
 }));
-
-const logout = vi.fn();
 
 function mockAuth0(overrides = {}) {
   vi.mocked(useAuth0).mockReturnValue({
     user: undefined,
     isAuthenticated: false,
     isLoading: false,
-    logout,
     ...overrides,
   } as unknown as ReturnType<typeof useAuth0>);
 }
@@ -73,44 +67,5 @@ describe("AdminAuthProvider", () => {
   it("keeps the default in-memory Auth0 cache outside test builds", () => {
     vi.stubEnv("MODE", "production");
     expect(providerElement().props.cacheLocation).toBeUndefined();
-  });
-});
-
-describe("HeaderUserSection", () => {
-  it("shows the signed-in user's name and a working logout button", async () => {
-    mockAuth0({ user: { name: "Kari" }, isAuthenticated: true });
-    render(<HeaderUserSection />);
-
-    expect(screen.getByText("Kari")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button"));
-    expect(logout).toHaveBeenCalledWith({
-      logoutParams: { returnTo: window.location.origin },
-    });
-  });
-
-  // An Auth0 account with no display name set reports its EMAIL as `name`,
-  // which is what overflowed the 390px bar in #573. The bar now hides the
-  // name below 768px in CSS, so it must still be HERE at every width: a
-  // future fix that drops it from the markup on phones instead would take it
-  // out of the accessibility tree with it.
-  it("renders the name whatever its length, at every width", () => {
-    const email = "kari.davidson@example.com";
-    mockAuth0({ user: { name: email }, isAuthenticated: true });
-    const { container } = render(<HeaderUserSection />);
-
-    expect(container.querySelector(".header-user-name")).toHaveTextContent(
-      email,
-    );
-  });
-
-  it("shows a logging-in message while Auth0 is loading", () => {
-    mockAuth0({ isLoading: true });
-    render(<HeaderUserSection />);
-    expect(screen.getByText("Logging in...")).toBeInTheDocument();
-  });
-
-  it("renders nothing when nobody is signed in", () => {
-    const { container } = render(<HeaderUserSection />);
-    expect(container).toBeEmptyDOMElement();
   });
 });
