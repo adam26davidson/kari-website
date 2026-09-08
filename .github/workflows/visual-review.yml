@@ -182,7 +182,7 @@ jobs:
 
       - name: Comment review on PR
         if: steps.check.outputs.enabled == 'true'
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3.0.5
         with:
           header: visual-review
           path: visual-review.md
