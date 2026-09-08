@@ -172,15 +172,15 @@
     padding: 14px 0px 14px 0px;
   }
 
+  /* The usual visually-hidden recipe, minus the parts the rule above
+     already declares (`overflow: hidden`, `white-space: nowrap`). The margin
+     has to be reset because that rule sets one. */
   .admin-header .header-user-name {
     position: absolute;
     width: 1px;
     height: 1px;
     margin: 0px;
-    padding: 0px;
-    overflow: hidden;
     clip-path: inset(50%);
-    white-space: nowrap;
   }
 
   .admin-header .header-user-section {
