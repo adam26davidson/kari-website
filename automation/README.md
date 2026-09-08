@@ -38,8 +38,8 @@ Design and decisions:
     before each mutation, since the pipeline can claim one mid-tick),
     never files issues, signs every comment `backlog-grooming:`.
 - `templates/*.md` — subagent prompt templates the issue-pipeline fills
-  in (`{{PLACEHOLDER}}` slots): `plan-brief.md`, `worker-brief.md`,
-  `fix-brief.md`, `review-brief.md`.
+  in (`{{PLACEHOLDER}}` slots): `validation-brief.md`, `plan-brief.md`,
+  `worker-brief.md`, `fix-brief.md`, `review-brief.md`.
 - `backlog-shortlist.sh` — the pipeline's Phase B candidate feed:
   paginates the whole open backlog through the REST API (no `--limit`
   truncation, no lagging search index), filters out claimed/blocked
@@ -89,6 +89,19 @@ The agent's full prompt.
 No dispatcher or cron changes needed. New agents that create work for
 the pipeline (e.g. idea-generating scouts) should label their issues
 `idea` — the pipeline skips that label until a human triages it off.
+
+## Independent issue validation
+
+Agent findings may be filed immediately, but Phase B requires a fresh
+validation session before claiming or planning their implementation.
+`docs/issue-validation.md` defines the evidence, verdicts, and freshness
+rules; `templates/validation-brief.md` is the research assignment. The
+model is the existing Claude judgment tier configured in the playbook.
+Existing agent backlog items pass the same gate when considered.
+
+This is a process rule enforced by agent instructions. The shortlist
+still reports label-eligible candidates, and no workflow or script checks
+validation comments. No Codex runner is added.
 
 ## PR ownership: the `agent-pr` label
 

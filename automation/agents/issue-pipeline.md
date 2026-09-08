@@ -473,6 +473,24 @@ hands over the kept branch and/or patch.
    The label is what stops the next tick from re-reading the issue and
    posting the same comment again; a human removes it when they refresh
    the issue. Never comment without labelling.
+   **Independent validation before selection or claiming:** read
+   `docs/issue-validation.md`. The shortlist is a candidate feed, NOT
+   proof of validation; its `ready` count only means label-eligible.
+   For every agent-originated candidate (including old backlog items,
+   `priority`, `bug`, tooling, and direct work), require a current
+   `## Issue validation` comment with verdict `VALIDATED`. Otherwise
+   dispatch a fresh validation agent using
+   `automation/templates/validation-brief.md`, ISSUE_LIST = the issue's
+   full text and relevant comments. Use the validation model under
+   "Dispatching subagents"; the filing session cannot validate itself.
+   Run at most three new validations per tick, in pick order, and stop
+   once enough valid candidates fill the available worker slots. On
+   exhaustion or failure, defer unvalidated items; human-requested work
+   and previously validated candidates can still proceed.
+   Apply the verdict handling and freshness checks in the doc before
+   continuing. A plan, groomer comment, or worker premise check is not
+   validation. Do not add `in progress` or create an implementation
+   branch while waiting for validation.
 3. From the ready issues, select up to (MAX_IN_FLIGHT − in-flight)
    workers, walking the slices in this order (within a slice, in the
    order the shortlist printed them — most-unblocking first, oldest as
@@ -545,7 +563,11 @@ hands over the kept branch and/or patch.
    (step 4). Combining couples their fates — a review finding on one
    holds the whole PR — which is fine for small mechanical work and why
    behavioral changes never qualify.
-4. For each selection: add the `in progress` label and comment
+4. Immediately before each claim, re-read every included issue and its
+   validation: skip closed, newly claimed/blocked, or no-longer-validated
+   items. Every agent-originated member of a combined selection must
+   pass independently; reclaimed claims must pass too.
+   For each remaining selection: add the `in progress` label and comment
    `Working on this in branch agent/<slug>` on EVERY issue it covers,
    so other sessions see them all taken. Slug: kebab-case, short, from
    the title or theme — EXCEPT when an issue in the selection carries a
@@ -568,7 +590,8 @@ hands over the kept branch and/or patch.
    since then changed the requirements.
 6. Dispatch all selected workers in parallel with
    `automation/templates/worker-brief.md`: ISSUE_LIST = full issue
-   number(s), title(s), body/bodies, and relevant comments; SLUG = the
+   number(s), title(s), body/bodies, relevant comments, and the current
+   validation comment URL for EACH agent-originated issue; SLUG = the
    slug; MODEL_NOTE = one line saying which classification it got and
    why; PLAN = the plan verbatim for plan-first work, or `None — direct
    work, plan it yourself.` for direct work.
@@ -596,6 +619,10 @@ hands over the kept branch and/or patch.
    (`gh issue create`) — check `gh issue list --search` first so you
    don't file duplicates. Anything the pipeline itself hit (broken
    scripts, confusing docs) gets an issue too, per CLAUDE.md.
+   Record the originating agent/model (or `unknown`) and source report
+   or PR in the body, even when relaying another agent's finding. State
+   that independent issue validation is pending; do not validate your
+   own filings. The next Phase B validates them before pickup.
    A `problems` line carrying the `needs-human:` marker is not an
    ordinary issue: it goes through "Asking the maintainer" above —
    record the ask, label, send via `telegram.sh send --issue`. The
@@ -687,6 +714,8 @@ hands over the kept branch and/or patch.
    ownership-signal mismatches left for a human (Phase A), orphaned
    kept branches (step 2), anything skipped and why. This lands in the
    dispatcher's log for the human.
+   Include validation results: issue numbers validated, held, or deferred
+   (and why), plus how many new validations ran.
    Include an "Asked the maintainer:" line naming every ask issue sent
    this tick (and any send the transport swallowed — no message id),
    and an "Unblocked by maintainer:" line naming the asks whose replies
@@ -709,8 +738,11 @@ hands over the kept branch and/or patch.
   pass the result as the subagent's full prompt via the Agent tool
   (subagents inherit CLAUDE.md automatically).
 - Model policy (stated here and nowhere else): **judgment gets fable,
-  implementation gets opus.** Plan agents and review agents run on
-  fable. Worker and fix agents always run on opus — including fixes for
+  implementation gets opus.** Validation, plan, and review agents run
+  on fable. Validation always uses a fresh session, including when a
+  finding originated from fable; independence is from the filing session.
+  Never substitute an Opus self-check for validation. Worker and fix
+  agents always run on opus — including fixes for
   structural review findings; the plan and the review gate are where the
   stronger model earns its cost, not the typing in between.
 - Escalation valve: if the SAME feedback substantially survives two
@@ -720,11 +752,13 @@ hands over the kept branch and/or patch.
   the PR's diff + the surviving findings, then hand its plan to the next
   fix agent as part of FEEDBACK. If that cycle also fails, leave the PR
   for a human and say so in the run summary.
-- **Usage limits:** if spawning a fable-tier subagent (plan or review)
-  fails with a usage-limit error, POSTPONE that item to a later tick
+- **Usage limits:** if spawning a fable-tier subagent (validation, plan,
+  or review) fails with a usage-limit error, POSTPONE that item to a
+  later tick
   (note it in the run summary) — never downgrade planning or the review
-  gate to a smaller model to squeeze it in. Opus implementation of
-  already-planned or direct work continues normally. If you are yourself
+  gate or issue validation to a smaller model to squeeze it in.
+  Opus implementation of validated or human-requested work continues
+  normally, whether already-planned or direct. If you are yourself
   running on the fallback model, still request the configured tiers for
   subagents — the limit may have reset since your tick started.
 - Run independent subagents in parallel; anything touching the same PR
