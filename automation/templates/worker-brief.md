@@ -21,6 +21,17 @@ Deviate only where the code contradicts the plan — then note the
 deviation and why in the PR body. If the plan says `None`, the issue is
 scoped enough to plan yourself.
 
+## Validation prerequisite (before creating a worktree or claiming)
+
+Read `docs/issue-validation.md`. For EACH agent-originated issue, read
+its linked `## Issue validation` comment and check that `VALIDATED`
+still covers the current scope and relevant code. A missing/stale
+validation, implementation plan alone, or your own premise check does
+not pass. Stop and report the need for independent validation to the
+orchestrator; do not implement or self-approve it. This applies to direct,
+combined, and reclaimed work too. Explicit maintainer requests follow
+the exception in the doc.
+
 ## Workspace rules (non-negotiable)
 
 - Create a sibling worktree and do ALL work there:

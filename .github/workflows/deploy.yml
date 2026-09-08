@@ -90,13 +90,13 @@ jobs:
           cp appspec.yml bundle-prod/appspec.yml
           cp -r ui/dist bundle-prod/dist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bundle-test
           path: bundle-test
           retention-days: 30
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bundle-prod
           path: bundle-prod
@@ -115,7 +115,7 @@ jobs:
       name: test
       url: https://test.karidavidson.com
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: bundle-test
           path: bundle
@@ -163,7 +163,7 @@ jobs:
       name: production
       url: https://karidavidson.com
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: bundle-prod
           path: bundle
