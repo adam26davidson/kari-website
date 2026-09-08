@@ -55,10 +55,26 @@
   align-items: center;
   margin-right: 20px;
   align-self: center;
+  /* The user block is the only part of either bar whose width is decided by
+     data rather than by this stylesheet: it is `user.name` from Auth0, which
+     for an account with no display name set IS the email address. Without
+     this the block's automatic minimum size is its min-content size, and an
+     email is one unbreakable word — so the block simply refused to shrink
+     and the bar grew past the viewport (#573). `min-width: 0` lets it give;
+     the name below is what actually gives. */
+  min-width: 0;
 }
 
 .header-user-name {
   margin: 0px 20px 0px 10px;
+  /* One line, clipped with an ellipsis rather than pushing the bar wider.
+     `min-width: 0` is the flex-item half of the same claim the section makes
+     above: without it this item's own automatic minimum size is the whole
+     email and nothing shrinks (#573). */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   /* A step down from the bar's white, so the signed-in name reads as
      context rather than as another nav item — and still clears WCAG AA on
      the bar over the lightest possible photo. */
@@ -84,6 +100,12 @@
   margin: 0px 20px 0px 40px;
   color: var(--header-title-color, white);
   font-weight: var(--display-weight);
+  /* The title is fixed text and the name beside it is not, so the name is
+     what gives. Flex shrinking is proportional to base size, so without this
+     a long enough name drags the title down with it and "Kari Davidson -
+     Admin" wraps onto two lines at 768px while the name still shows in
+     full — the wrong one of the two gave (#573). */
+  flex-shrink: 0;
 }
 
 /* Below 768px the title heading swaps to this class ALONE — neither
@@ -121,19 +143,28 @@
   font-weight: 400;
 }
 
-/* Narrow viewports, admin bar only. At 390px the bar has literally no slack
-   — the title's flex box ends exactly where the user block begins — and its
-   spacing is lopsided: 11px between the title and the person icon and 10px
-   between the icon and the name, against 20px around the name and 20px to
-   the right edge. The result reads as four things shoved together rather
-   than a title and a user block (design brief §1).
+/* Narrow viewports, admin bar only. Rebalancing this row was never going to
+   be enough: at 390px there is room for the title, the person icon and the
+   logout button and nothing else, so any name long enough to matter either
+   squeezed the title into a three-line stack or pushed the logout button off
+   the side of the phone (#573 — measured with `kari.davidson@example.com`:
+   a 422px row in a 390px viewport, with the button past the right edge).
 
-   Rebalanced rather than widened: the slack is taken from the loose end
-   (the name's own margins and the right gutter) and, because the title is
-   `flex: 1` and its text is left-aligned, everything freed reappears as gap
-   between the title and the person icon. Net width goes DOWN, so this
-   cannot overflow the phone the way an added margin would. The breakpoint
-   matches useIsMobile()'s 768px, which is what swaps in
+   So the name is not shown here at all. It is context, not a control, and
+   the one thing on this bar she can act on is the button it was covering;
+   at phone width the person icon says "this is you" and the button logs her
+   out, which is the whole job of the block. Hidden the accessible way
+   rather than with `display: none`: it stays in the accessibility tree, so
+   a screen reader still announces who is signed in, and `position: absolute`
+   takes it out of the flex row so it contributes no width. Above 768px the
+   name comes back in full (and truncates before it can overflow — see
+   .header-user-name).
+
+   With the name gone the row has slack again, and the same amount of it
+   whatever the name is: the user block is 62px wide (icon, gap, button), so
+   the title keeps a 258px box for ~150px of text at 390px. The bar used to
+   hand the title 196px with `e2e-ci` signed in and 61px with an email. The
+   breakpoint matches useIsMobile()'s 768px, which is what swaps in
    .header-title-mobile. */
 @media (max-width: 767.98px) {
   .admin-header {
@@ -142,11 +173,22 @@
   }
 
   .admin-header .header-user-name {
-    margin: 0px 14px 0px 14px;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0px;
+    padding: 0px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .admin-header .header-user-section {
     margin-right: 16px;
+    /* The gap the name's own 14px margins used to provide between the person
+       icon and the logout button. Out-of-flow items take no part in `gap`,
+       so this is the icon-to-button spacing and nothing else. */
+    gap: 14px;
   }
 }
 
