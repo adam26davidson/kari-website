@@ -5,9 +5,15 @@
   --admin-field-bg: rgb(240, 240, 240);
   --admin-field-border: rgba(0, 0, 0, 0.15);
   /* The one red in the admin. Destructive controls have to LOOK
-     destructive and must never be mistaken for the brown primary (#457),
-     and an error toast is the same statement in a different shape — so
-     both spend this token rather than repeating the hex. */
+     destructive and must never be mistaken for the primary (#457), and a
+     failure banner is the same statement in a different shape — so both
+     spend this token rather than repeating the hex.
+
+     Since #592 the value here is the FALLBACK: src/styles/theme.css
+     re-points it to the design boards' maroon for this build, the same
+     way it re-points --primary, so that the legacy pages' banners and
+     the shadcn recipe's outlined Delete are one colour rather than two
+     reds a shade apart. */
   --admin-danger: #a33327;
   /* The one brown, and the darker one every primary control answers the
      pointer with. Same argument as the red above, arrived at the long way
@@ -278,8 +284,8 @@ input[type="checkbox"] {
   cursor: not-allowed;
 }
 
-/* The same darkening .admin-button.secondary uses, so the two outlined
-   shapes answer the pointer identically. */
+/* The move arrows answer the pointer by darkening, like every other
+   outlined control on the page. */
 .admin-icon-button:hover {
   background-color: #e4ded3;
   cursor: pointer;
@@ -309,4 +315,28 @@ input[type="checkbox"] {
    at body size. --text-2xl (25px) is the nearest step to the 24px it was. */
 .admin-section-heading {
   font-size: var(--text-2xl);
+}
+
+/* The other half of the preflight story, and the one that is actually
+   visible: `box-sizing`.
+
+   The reset sets every element to `border-box`. These rules were written
+   against the browser default, `content-box`, and each of them pre-pays
+   for its own padding and margins in a `calc()` so the box lands exactly
+   flush — `.card` is `calc(100% - 52px)` wide with 18px of padding and
+   8px of margin on each side, which is 100% only if the padding is added
+   OUTSIDE the declared width. Under border-box the same card comes out
+   36px narrow and sits visibly off-centre in its column.
+
+   Restored rather than re-derived: every one of these rules is deleted by
+   a per-page migration (#233-#238, #240), and re-doing the arithmetic in
+   files that are on their way out would be work thrown away twice — once
+   now and once when the rule goes. This block goes with the last of
+   them. */
+.card,
+.admin-data-list-item,
+.admin-danger-banner,
+.header-colors-swatch,
+.button-group select {
+  box-sizing: content-box;
 }

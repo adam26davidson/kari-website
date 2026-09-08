@@ -101,15 +101,18 @@
      the admin is its own build — no effect on the public site, which
      keeps its brown. `--primary-hover` follows it for the same reason.
 
-     `--admin-danger` deliberately does NOT move. Which red a page
-     spends is a per-page decision the migrations make, and turning it
-     maroon here would put the new palette's Delete on rows still drawn
-     in the old one.
+     `--admin-danger` follows for the same reason and one more: the
+     shadcn recipe's outlined Delete is already maroon on every list row,
+     so leaving the legacy token at its old red would give the admin TWO
+     destructive colours — a maroon Delete above a red "couldn't do that"
+     banner about the very action it started. One red, as it has always
+     been (#457); it just moved.
 
      `--primary` itself needs no line of its own down here: the shadcn
      alias above IS the re-declaration, which is the point — one token,
      two worlds. */
   --primary-hover: #24462f;
+  --admin-danger: var(--maroon);
 
   /* The face axis, likewise (#483). Every rule in every workspace
      reaches a typeface through one of these two tokens, so re-pointing
@@ -182,4 +185,21 @@ body {
 
 body::before {
   content: none;
+}
+
+/* The shared SiteButton, which in the admin is only ever an error card's
+   Retry or Reload. It is deliberately translucent on the public site,
+   where it sits over a photograph and a solid slab would read as a
+   sticker; on the admin's opaque paper that same 71% fill lands at 3.7:1
+   under its own near-white label — the one place re-pointing `--primary`
+   above makes a shared rule worse rather than better. Opaque here, like
+   every other filled control in this palette (7.9:1), and answering the
+   pointer with the same darker green the shadcn recipe uses. */
+.site-button {
+  background-color: var(--primary);
+}
+
+.site-button:hover,
+.site-button:active {
+  background-color: var(--primary-hover);
 }
