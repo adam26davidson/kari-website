@@ -1,5 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import "./admin.css";
+import { useCallback, useMemo, useState } from "react";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogTitle,
+} from "./components/ui/alert-dialog";
+import { Toaster } from "./components/ui/toaster";
 import { AdminButton } from "./components/admin-button/admin-button";
 import { AdminUi, AdminUiContext, Notify } from "./admin-ui-context";
 
@@ -14,15 +21,25 @@ interface Confirmation {
   onNo?: () => void;
 }
 
-interface Notification {
-  message: string;
-  type: "success" | "error";
-}
+/**
+ * One toast at a time, always. Sonner stacks by default, and the e2e
+ * journeys read a save's acknowledgement off `.admin-toast` as a single
+ * element — a second toast arriving while the first is still up would make
+ * that locator match two elements and fail Playwright's strict mode. Reusing
+ * one id makes sonner UPDATE the toast that is showing instead of adding to
+ * it, which is also the behaviour this provider had before #592: the timer
+ * that cleared the old single toast was restarted by each new message.
+ */
+const TOAST_ID = "admin-toast";
 
 /**
  * Owns the loading/confirmation/toast state for the admin area and renders
- * the corresponding overlays next to its children (inside .admin-content,
- * whose positioning the overlay CSS relies on).
+ * the corresponding chrome next to its children.
+ *
+ * The three surfaces are shadcn/ui since #592 — a Radix `AlertDialog` for
+ * the confirmation, sonner for the toast, and a plain fixed overlay for the
+ * blocking "Saving..." state — but the context this publishes has not
+ * changed, so its twelve consumers ask for them exactly as before.
  */
 export function AdminUiProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState<Loading>({
@@ -30,13 +47,6 @@ export function AdminUiProvider({ children }: { children: React.ReactNode }) {
     message: "",
   });
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
-  const [notification, setNotification] = useState<Notification | null>(null);
-
-  useEffect(() => {
-    if (!notification) return;
-    const timer = setTimeout(() => setNotification(null), 3000);
-    return () => clearTimeout(timer);
-  }, [notification]);
 
   const showLoading = useCallback(
     (message: string) => setLoading({ isLoading: true, message }),
@@ -51,10 +61,13 @@ export function AdminUiProvider({ children }: { children: React.ReactNode }) {
       setConfirmation({ message, onYes, onNo }),
     [],
   );
-  const notify = useCallback<Notify>(
-    (message, type = "success") => setNotification({ message, type }),
-    [],
-  );
+  const notify = useCallback<Notify>((message, type = "success") => {
+    if (type === "error") {
+      toast.error(message, { id: TOAST_ID });
+    } else {
+      toast.success(message, { id: TOAST_ID });
+    }
+  }, []);
 
   const value = useMemo<AdminUi>(
     () => ({
@@ -67,44 +80,61 @@ export function AdminUiProvider({ children }: { children: React.ReactNode }) {
     [loading.isLoading, showLoading, hideLoading, confirm, notify],
   );
 
+  /** Answer the open dialog, running the callback the caller gave for it. */
+  const answer = (choice: "yes" | "no") => {
+    if (!confirmation) return;
+    if (choice === "yes") confirmation.onYes();
+    else confirmation.onNo?.();
+    setConfirmation(null);
+  };
+
   return (
     <AdminUiContext.Provider value={value}>
-      {confirmation && (
-        <div className="admin-confirmation">
-          <div className="admin-confirmation-dialog">
-            {confirmation.message}
-            <div className="admin-confirmation-options">
-              <AdminButton
-                onClick={() => {
-                  confirmation.onYes();
-                  setConfirmation(null);
-                }}
-              >
-                Yes
-              </AdminButton>
-              <AdminButton
-                onClick={() => {
-                  confirmation.onNo?.();
-                  setConfirmation(null);
-                }}
-              >
-                No
-              </AdminButton>
-            </div>
+      {children}
+      <AlertDialog
+        open={confirmation !== null}
+        // Radix reports Escape here (a press outside is deliberately
+        // ignored — an alert dialog asks a question that has to be
+        // answered). Backing out is the same answer as saying No, so it
+        // runs the caller's onNo rather than silently closing: the
+        // unsaved-changes guard relies on being told (#457).
+        onOpenChange={(open) => {
+          if (!open) answer("no");
+        }}
+      >
+        {/* `.admin-confirmation` is the e2e hook the journeys answer the
+            dialog through; the look is Tailwind. */}
+        <AlertDialogContent className="admin-confirmation">
+          <AlertDialogTitle>{confirmation?.message}</AlertDialogTitle>
+          {/* Radix asks every alert dialog for a description, and it is
+              worth having: it names the two ways out for someone who is
+              hearing the dialog rather than seeing it. Visually it would
+              only repeat the buttons an inch below it. */}
+          <AlertDialogDescription className="sr-only">
+            Choose Yes to go ahead, or No to leave things as they are.
+          </AlertDialogDescription>
+          <div className="mt-4 flex flex-row justify-end gap-3">
+            {/* No first, so it is what Radix focuses when the dialog
+                opens: the safe answer should be the one a stray Enter
+                gives. */}
+            <AdminButton variant="secondary" onClick={() => answer("no")}>
+              No
+            </AdminButton>
+            <AdminButton onClick={() => answer("yes")}>Yes</AdminButton>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+      {loading.isLoading && (
+        // Fixed, so it covers the page whatever the content column has
+        // been scrolled to. `.admin-loading` is what e2e/helpers.ts waits
+        // to disappear before asserting on a list.
+        <div className="admin-loading fixed inset-0 z-[1001] flex items-center justify-center bg-foreground/40">
+          <div className="rounded-xl border border-border bg-card px-8 py-4 font-sans text-base text-foreground shadow-[0_18px_48px_rgba(74,62,40,0.22)]">
+            {loading.message}
           </div>
         </div>
       )}
-      {loading.isLoading && (
-        <div className="admin-loading">
-          <div className="admin-loading-message">{loading.message}</div>
-        </div>
-      )}
-      {notification && (
-        <div className={`admin-toast admin-toast-${notification.type}`}>
-          {notification.message}
-        </div>
-      )}
-      {children}
+      <Toaster />
     </AdminUiContext.Provider>
   );
 }

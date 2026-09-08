@@ -7,6 +7,10 @@ import { createBrowserRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { AdminAuthProvider } from "./auth/admin-auth";
 import "@kari/shared/styles/index.css";
+// After the shared stylesheet, always: theme.css re-points three of its
+// tokens for this app (see the file's own note), and two equally specific
+// `:root` rules are decided by source order.
+import "./styles/theme.css";
 
 // The admin app is served under /admin (vite.config.ts sets the matching
 // asset `base`), so the router is mounted with that basename: every route

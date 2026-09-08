@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
+import tailwindcss from "@tailwindcss/vite";
 import { bundleBudget } from "../../vite-bundle-budget";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -56,5 +57,11 @@ export default defineConfig({
     // Only dist/admin is emptied; the public build owns the rest of dist/.
     emptyOutDir: true,
   },
-  plugins: [react(), bundleBudget({ index: 675, "blog-post-editor": 525 })],
+  // tailwindcss() is the CSS-first v4 plugin: it compiles
+  // src/styles/theme.css, which is the app's only Tailwind entry point.
+  plugins: [
+    react(),
+    tailwindcss(),
+    bundleBudget({ index: 760, "blog-post-editor": 525 }),
+  ],
 });

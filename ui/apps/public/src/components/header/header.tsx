@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router";
-import "@kari/shared/styles/header.css";
+import "./header.css";
 import { faBars } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useIsMobile } from "@kari/shared/hooks/use-is-mobile";

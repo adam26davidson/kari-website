@@ -1,16 +1,17 @@
-import { useState } from "react";
-import "@kari/shared/styles/app.css";
-import { useIsMobile } from "@kari/shared/hooks/use-is-mobile";
-import { useSiteBackground } from "@kari/shared/hooks/use-site-background";
 import { RouteErrorBoundary } from "@kari/shared/components/error-boundary/error-boundary";
-import { Header } from "./components/header/header";
-import { MobileMenu } from "./components/mobile-menu/mobile-menu";
 import { Admin } from "./admin";
 
 /**
- * The admin app's shell: the same `.whole-page` / `.content` frame and the
- * same site background as the public site, with the admin header bar. The
- * section itself (login, menu, routes) is `Admin`.
+ * The admin app's outermost frame: the shared `.whole-page` box, which is
+ * exactly as tall as the visible viewport (`100dvh`, with a `100vh`
+ * fallback — #558) and is what makes the shell's one scroll container work.
+ *
+ * Everything else that used to be here went in #592. The header bar, the
+ * public site's phone menu and the background photo were all inherited from
+ * the public site, back when the admin lived inside that app; the admin now
+ * has a shell of its own (sidebar / icon rail / phone menu) and its own
+ * fixed look, so it neither reads the site's appearance settings nor
+ * borrows its chrome. `Admin` owns the whole area below this.
  *
  * Its pages are imported statically rather than lazily: this whole app is
  * already the chunk that only a maintainer downloads, so splitting inside
@@ -23,26 +24,11 @@ import { Admin } from "./admin";
  * page's own list — no longer downloading it.
  */
 export function App() {
-  const [showingMobileMenu, setShowingMobileMenu] = useState(false);
-  const isMobile = useIsMobile();
-  useSiteBackground();
-
   return (
     <div className="whole-page">
-      <Header
-        showingMobileMenu={showingMobileMenu}
-        setShowingMobileMenu={setShowingMobileMenu}
-      />
-      <div className="content">
-        {isMobile && showingMobileMenu && (
-          <MobileMenu setShowingMobileMenu={setShowingMobileMenu} />
-        )}
-        {!showingMobileMenu && (
-          <RouteErrorBoundary>
-            <Admin />
-          </RouteErrorBoundary>
-        )}
-      </div>
+      <RouteErrorBoundary>
+        <Admin />
+      </RouteErrorBoundary>
     </div>
   );
 }

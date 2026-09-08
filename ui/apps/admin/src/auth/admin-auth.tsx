@@ -1,8 +1,5 @@
-import { Auth0Provider, useAuth0 } from "@auth0/auth0-react";
+import { Auth0Provider } from "@auth0/auth0-react";
 import { ReactNode } from "react";
-import { faUser, faRightFromBracket } from "@fortawesome/free-solid-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { SiteButton } from "@kari/shared/components/site-button/site-button";
 
 /**
  * Everything in this app that talks to Auth0. It used to be reached through
@@ -14,8 +11,8 @@ import { SiteButton } from "@kari/shared/components/site-button/site-button";
 
 /**
  * Auth0 session boundary, mounted around the whole admin app in main.tsx —
- * the header included, since it renders the signed-in user outside the
- * route outlet.
+ * the shell included, since its sidebar shows the signed-in user and its
+ * sign-out control outside the route outlet.
  */
 export function AdminAuthProvider({ children }: { children?: ReactNode }) {
   return (
@@ -35,27 +32,5 @@ export function AdminAuthProvider({ children }: { children?: ReactNode }) {
     >
       {children}
     </Auth0Provider>
-  );
-}
-
-/** The signed-in user and logout control shown in the admin header. */
-export function HeaderUserSection() {
-  const { user, isAuthenticated, isLoading, logout } = useAuth0();
-
-  if (isLoading) return <>Logging in...</>;
-  if (!isAuthenticated) return null;
-
-  return (
-    <div className="header-user-section">
-      <FontAwesomeIcon icon={faUser} />
-      <div className="header-user-name">{user?.name}</div>
-      <SiteButton
-        onClick={() =>
-          logout({ logoutParams: { returnTo: window.location.origin } })
-        }
-      >
-        <FontAwesomeIcon icon={faRightFromBracket} />
-      </SiteButton>
-    </div>
   );
 }

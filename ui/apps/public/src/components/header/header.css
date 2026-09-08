@@ -1,0 +1,152 @@
+/* The public site's header bar. It floats over the background photo, so how
+   much of the photo shows through it decides how the site title and the nav
+   links read -- and because the bar spans the full width, that used to vary
+   along its own length: at 834px a bright patch of the photo sat under the
+   right-hand end and the last nav links ("Other works", "Photography") read
+   white-on-pale while the rest of the nav read fine (#392).
+
+   The tint is therefore opaque enough to carry the contrast on its own
+   rather than borrowing it from the dark part of whichever photo is set:
+   even over a pure-white photo the white text clears WCAG AAA, and the bar
+   renders as near enough the same shade over a light photo as a dark one.
+   The blur still lets a hint of the photo through. Enforced by
+   ui/test/design/text-contrast.test.ts.
+
+   Since #482 the bar tint, the site title and the nav links are each
+   admin-settable, published by useSiteBackground as the custom properties
+   below. The fallbacks here are therefore the DEFAULT appearance, which is
+   what paints whenever a setting is unset, empty or unparseable — and what
+   the contrast test still pins. They are tokens rather than literals
+   because the tint's green is also the focus ring's outer halo, which has
+   to read against this bar (#480); both come from --header-surface in
+   @kari/shared's styles/index.css. An admin-chosen tint has to carry the
+   same contrast on its own; that is the Appearance page's job, which warns
+   before a save when a pairing would be hard to read.
+
+   The blur is deliberately NOT settable: it is what turns whatever photo
+   is behind the bar into an even surface, so it applies to every tint.
+
+   This stylesheet lived in packages/shared while the admin still wore a
+   bar of its own — a compromise #591 recorded and #592 resolved. The admin
+   has its own shell now, so the bar, the user block that used to sit at its
+   right-hand end and the phone-width rules that made room for that block
+   all belong to this app alone. */
+.header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  background-color: var(--header-background, var(--header-tint));
+  backdrop-filter: blur(10px);
+  color: white;
+  font-size: var(--text-2xl);
+  padding: 15px 0px 15px 0px;
+}
+
+.header-title {
+  /* Fluid: shrinks through tablet widths (768-1100px) so the desktop
+     header fits without horizontal overflow; 40px from ~1100px up. */
+  font-size: clamp(30px, 3.6vw, 40px);
+  margin: 0px 20px 0px clamp(16px, 2.5vw, 40px);
+  color: var(--header-title-color, white);
+  font-weight: var(--display-weight);
+  white-space: nowrap;
+}
+
+/* Below 768px the title heading swaps to this class ALONE — .header-title
+   does not apply — so its size and weight are decided here or not at all.
+   Both are stated together so the type-scale guard can see the pair. */
+.header-title-mobile {
+  flex: 1;
+  /* The shorthand, not `margin-left`: the title is an <h1> since #504, and
+     the browser's own `margin: 0.67em 0` would otherwise stand — growing
+     the mobile bar by roughly a line on every page. Pinned by
+     ui/test/design/heading-chrome.test.ts. */
+  margin: 0px 0px 0px 20px;
+  /* Stated rather than inherited from the bar for the same reason the
+     weight is: below 768px this class applies ALONE, so an admin-chosen
+     title colour would apply on every desktop and silently miss every
+     phone if this were left to inheritance (#482). */
+  color: var(--header-title-color, white);
+}
+
+/* 25px carries the light display weight just as the desktop title's
+   30-40px does, so the site title reads the same at every width. */
+.header .header-title-mobile {
+  font-size: var(--text-2xl);
+  font-weight: var(--display-weight);
+}
+
+/* Real <button> for keyboard access; neutralize default button chrome
+   so the hamburger icon looks exactly as it did as a bare icon. */
+.header-menu-button {
+  background: none;
+  border: none;
+  /* Padding, then the same amount taken off BOTH horizontal margins, so the
+     button's own box grows around the glyph while the glyph — and every
+     element after it in the bar — stays exactly where it was. The negative
+     right margin is the half that is easy to forget: without it the title
+     after this button shifts 6px right and loses 6px of the gap the bar
+     already has little of. Measured: with it, `.header-title-mobile` sits
+     at x=61.88, the same as at `padding: 0`.
+
+     At `padding: 0` the site-wide :focus-visible ring (index.css) traced the
+     bars glyph itself, reading as a cramped accident rather than a deliberate
+     focus state (#545); the roomier box also takes the only control on a
+     phone header over the 24px WCAG 2.5.8 target minimum. The ring reaches
+     6px past the border box
+     (2px outline + its 4px halo), which still clears the title by 8px. */
+  padding: 6px;
+  margin-left: 14px;
+  margin-right: -6px;
+  font: inherit;
+  /* The nav colour, not the bar's: below 768px this button IS the nav, so
+     it belongs to the setting the admin picks for the page links — and to
+     the contrast warning that guards that pairing. Inheriting the bar's
+     fixed white would leave it invisible on a light custom tint (#482). */
+  color: var(--header-nav-color, white);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.pages {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  flex-wrap: wrap;
+  flex: 1;
+  /* Fluid spacing and type: fixed 60px inter-link margins made the nav
+     ~666px wide, overflowing viewports between the 768px desktop
+     breakpoint and ~948px. gap/margins/font-size now scale with the
+     viewport and reach the old spacing on wide screens. */
+  gap: clamp(14px, 3.5vw, 60px);
+  margin: 0px clamp(16px, 2.5vw, 40px);
+  font-size: clamp(17px, 2.2vw, 20px);
+}
+
+.pages a {
+  text-decoration: none;
+  margin: 0px 0px 2px 0px;
+  color: var(--header-nav-color, white);
+  transition: opacity 0.5s;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.pages .active {
+  font-weight: bold;
+  opacity: 1;
+}
+
+/* The underline follows the link colour: it is the same mark, drawn under
+   the word rather than through it, so it can never be a colour the link
+   itself is not. */
+.pages a:hover {
+  margin-bottom: 0px;
+  border-bottom: 2px solid var(--header-nav-color, white);
+  opacity: 1;
+  cursor: pointer;
+}
