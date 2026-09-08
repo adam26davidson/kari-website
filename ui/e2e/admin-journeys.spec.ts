@@ -57,6 +57,18 @@ async function createNewItem(page: Page) {
   await expect(page.locator(".data-editor")).toBeVisible({ timeout: 60_000 });
 }
 
+/**
+ * The bottom edge of a selector's border box, in viewport coordinates.
+ * Read straight from the DOM rather than via boundingBox() so it is
+ * measured in the same layout pass as its sibling reads.
+ */
+async function boundingBottom(page: Page, selector: string): Promise<number> {
+  return page.evaluate(
+    (sel) => document.querySelector(sel)!.getBoundingClientRect().bottom,
+    selector,
+  );
+}
+
 async function expectToast(page: Page, text: string | RegExp) {
   await expect(page.locator(".admin-toast")).toHaveText(text, {
     timeout: 120_000,
@@ -485,6 +497,78 @@ test.describe("photography", () => {
       json: "photography",
       marker,
     });
+  });
+
+  // Layout, not behaviour, and the only level that can see it: jsdom lays
+  // nothing out and the screenshot harness cannot detect this class of
+  // overflow (#741). The editor card used to be clamped to the viewport
+  // (`.data-editor-content { max-height: calc(100% - 40px) }`) with no
+  // overflow-y anywhere in the clamped chain, so on a post with several
+  // images the fields resolved PAST the card's bottom rim — the 24px of
+  // padding below the last field was eaten and the panel read as cut off
+  // rather than deliberately closed (#578, design brief §1). The card now
+  // grows with its content and .admin-content is the single scroller.
+  test("the editor card contains its content when a post has several images", async ({
+    page,
+  }) => {
+    await openAdminSection(page, "Photography");
+
+    // Create and save an empty post so afterEach can find it by marker;
+    // the layout work then happens on the reopened editor.
+    await createNewItem(page);
+    await page.getByLabel("Title", { exact: true }).fill(marker);
+    await saveEditor(page);
+    await expect(page.locator(".data-editor")).toBeHidden({
+      timeout: 180_000,
+    });
+    await editButton(adminListItem(page, marker)).click();
+
+    // Four image rows takes the editor past the 720px-tall desktop
+    // viewport. No files are attached: the row's height is what makes the
+    // editor tall, and an unsaved row costs no upload.
+    const imagesSection = page.locator(".photography-post-editor-images");
+    const addImage = imagesSection.getByRole("button", {
+      name: "Add an image",
+    });
+    for (let i = 0; i < 4; i++) {
+      await addImage.click();
+    }
+    const removeButtons = imagesSection.getByRole("button", {
+      name: "Remove this image",
+    });
+    await expect(removeButtons).toHaveCount(4);
+
+    const viewportHeight = page.viewportSize()!.height;
+    const lastRemove = removeButtons.last();
+    // Precondition: the editor really is taller than the window, so the
+    // assertions below are about the overflowing case and not a short card
+    // that would pass either way.
+    const lastRemoveBox = (await lastRemove.boundingBox())!;
+    expect(lastRemoveBox.y).toBeGreaterThan(viewportHeight);
+
+    // Containment: the fields end inside the card, with the card's own
+    // 24px of bottom padding intact below them. Before #578 they ran past
+    // the rim instead.
+    const contentBottom = await boundingBottom(page, ".data-editor-content");
+    const inputsBottom = await boundingBottom(page, ".data-list-item-inputs");
+    expect(inputsBottom).toBeLessThanOrEqual(contentBottom);
+    expect(contentBottom - inputsBottom).toBeGreaterThanOrEqual(23);
+    expect(contentBottom - inputsBottom).toBeLessThanOrEqual(25);
+
+    // Reachability: scrolling the page brings the last row's control into
+    // view (nothing is stranded below the fold).
+    await lastRemove.scrollIntoViewIfNeeded();
+    await expect(lastRemove).toBeInViewport();
+
+    // Discard the unsaved rows.
+    await editorControls(page).getByRole("button", { name: "Close" }).click();
+    await confirmDialog(page, "Yes");
+    await expect(page.locator(".data-editor")).toBeHidden();
+
+    await deleteButton(adminListItem(page, marker)).click();
+    await confirmDialog(page, "Yes");
+    await waitForIdle(page, 180_000);
+    await expect(adminListItem(page, marker)).toHaveCount(0);
   });
 });
 
