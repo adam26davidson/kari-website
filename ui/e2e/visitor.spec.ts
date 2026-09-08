@@ -66,6 +66,27 @@ test("home page photo stays inside its card (mobile)", async ({ page }) => {
   await expectHomePhotoContained(page);
 });
 
+// The hairline between the photo and the blurb, which is a 1px border on a
+// zero-WIDTH box: no width assertion can see it, the horizontal-overflow
+// check cannot see it, and it contributes nothing to any layout it sits in.
+// Its height is the only evidence it exists. It used to be `height: 90%`,
+// and that percentage quietly resolved to `auto` — i.e. to no divider at
+// all — the moment #581 stopped pinning `.home-page` to a definite height,
+// which is the sort of thing only a rendered check catches.
+test("home page draws the divider between the photo and the blurb", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const card = page.locator(".home-page-card");
+  await expect(card).toBeVisible();
+  const cardBox = await card.boundingBox();
+  const dividerBox = await page.locator(".home-page-divider").boundingBox();
+  if (!cardBox || !dividerBox) throw new Error("home page card not rendered");
+  // Most of the card's height, not a hairline's worth: the failure this
+  // guards against collapses it to zero.
+  expect(dividerBox.height).toBeGreaterThan(cardBox.height * 0.5);
+});
+
 test("haiku page renders at least one seeded haiku", async ({ page }) => {
   await page.goto("/haiku");
   const lines = page.locator(".haiku-list-line");
