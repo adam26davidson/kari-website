@@ -88,6 +88,21 @@ describe("HeaderUserSection", () => {
     });
   });
 
+  // An Auth0 account with no display name set reports its EMAIL as `name`,
+  // which is what overflowed the 390px bar in #573. The bar now hides the
+  // name below 768px in CSS, so it must still be HERE at every width: a
+  // future fix that drops it from the markup on phones instead would take it
+  // out of the accessibility tree with it.
+  it("renders the name whatever its length, at every width", () => {
+    const email = "kari.davidson@example.com";
+    mockAuth0({ user: { name: email }, isAuthenticated: true });
+    const { container } = render(<HeaderUserSection />);
+
+    expect(container.querySelector(".header-user-name")).toHaveTextContent(
+      email,
+    );
+  });
+
   it("shows a logging-in message while Auth0 is loading", () => {
     mockAuth0({ isLoading: true });
     render(<HeaderUserSection />);
