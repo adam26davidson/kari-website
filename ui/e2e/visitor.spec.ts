@@ -196,6 +196,111 @@ test("mobile: content scrolls under the header, never the document", async ({
   expect(headerAfter.y).toBeLessThanOrEqual(1);
 });
 
+// One scroll container below the header (#581). The shell used to stack
+// four boxes that all declared `overflow-y: auto` and let the INNERMOST one
+// do the scrolling; `.content` is now the only one on the public site and
+// the page wrappers grow inside it.
+//
+// Consolidating those layers has a trap that only a real browser can see,
+// and it is the reason this is tested here as well as in
+// test/design/scroll-containers.test.ts. `.content` is a row flex container
+// with the default `align-items: stretch`, so a wrapper whose height is
+// auto gets clamped back to the shell's height. Its content then overflows
+// a box that is centring it — `.content-page` is `justify-content:
+// space-evenly` and `.home-page` is `center`, and BOTH fall back to centre
+// alignment under negative free space — so the overflow splits across the
+// top and bottom, and the top half sits above the scroller's origin where
+// scrolling cannot reach it. The page looks fine on a tall screen and eats
+// its own first line on a short one.
+//
+// So each of these checks the same four things on a viewport short enough
+// to force overflow: the shell really is overflowing (or the rest proves
+// nothing), the shell is what scrolls, the wrappers inside it are not
+// scroll containers at all, and — the trap — the top of the content is
+// already visible at `scrollTop` 0 and the bottom is reachable from there.
+async function expectShellIsTheOnlyScroller(page: Page, inner: string[]) {
+  const shell = page.locator(".content");
+  const box = await shell.boundingBox();
+  if (!box) throw new Error(".content not rendered");
+
+  // Precondition. The seeded lists are one item long, so without this a
+  // viewport that happens to fit the whole page would pass every assertion
+  // below while testing nothing.
+  const scrollable = await shell.evaluate(
+    (el) => el.scrollHeight - el.clientHeight,
+  );
+  expect(
+    scrollable,
+    "viewport is too tall to force the shell to overflow",
+  ).toBeGreaterThan(0);
+
+  for (const selector of inner) {
+    const layer = page.locator(selector).first();
+    await expect(layer).toBeVisible();
+    expect(
+      await layer.evaluate((el) => getComputedStyle(el).overflowY),
+      `${selector} is a scroll container`,
+    ).toBe("visible");
+  }
+
+  // The trap: at rest, nothing has been centred off the top edge.
+  const first = page.locator(".content > *").first();
+  const firstBox = await first.boundingBox();
+  if (!firstBox) throw new Error("no content rendered inside the shell");
+  expect(
+    firstBox.y,
+    "the top of the page is above the shell's scroll origin",
+  ).toBeGreaterThanOrEqual(box.y - 1);
+
+  // ...and the far end is reachable by scrolling the shell, not stranded
+  // below a box that has already been scrolled to its own end.
+  await shell.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  const afterBox = await first.boundingBox();
+  if (!afterBox) throw new Error("content left the layout after scrolling");
+  expect(afterBox.y + afterBox.height).toBeLessThanOrEqual(box.y + box.height + 1);
+}
+
+test("list pages: the shell is the only thing that scrolls (mobile)", async ({
+  page,
+}) => {
+  // Short enough that the single seeded haiga — portrait artwork at nearly
+  // the full card width — cannot fit under the header.
+  await page.setViewportSize({ width: 390, height: 500 });
+  await page.goto("/haiga");
+  const image = page.locator(".haiga-list-item-image").first();
+  await expect(image).toBeVisible();
+  await expect
+    .poll(() => image.evaluate((img: HTMLImageElement) => img.naturalWidth), {
+      timeout: 30_000,
+    })
+    .toBeGreaterThan(0);
+  await expectShellIsTheOnlyScroller(page, [
+    ".content-page",
+    ".data-list-container",
+  ]);
+});
+
+test("home page: the shell is the only thing that scrolls (desktop)", async ({
+  page,
+}) => {
+  // Desktop width on purpose: `.home-page.mobile` switches to
+  // `justify-content: flex-start`, so the centring fallback this guards
+  // against is only reachable at >= 768px. Short enough that the card,
+  // whose photo is capped at 400px tall, cannot fit.
+  await page.setViewportSize({ width: 1000, height: 420 });
+  await page.goto("/");
+  const photo = page.locator(".home-page-photo");
+  await expect(photo).toBeVisible();
+  await expect
+    .poll(() => photo.evaluate((img: HTMLImageElement) => img.naturalWidth), {
+      timeout: 15_000,
+    })
+    .toBeGreaterThan(0);
+  await expectShellIsTheOnlyScroller(page, [".home-page"]);
+});
+
 // The site-wide keyboard focus ring (#501). jsdom cannot decide
 // :focus-visible, so the unit tests can only pin the declared colours and
 // widths; whether a real browser actually applies the rule to whatever the
