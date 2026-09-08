@@ -1,8 +1,9 @@
 import { ArrowUpRight } from "lucide-react";
 import type { AdminPage } from "./admin-page";
-import { SectionLink } from "./section-link";
+import { RAIL_PILL, SectionLink } from "./section-link";
 import { Wordmark } from "./wordmark";
 import { useAdminAccount } from "../../auth/use-admin-account";
+import { cn } from "../ui/cn";
 
 /**
  * The tablet shell (768-1023px): the sidebar collapsed to a narrow rail,
@@ -12,9 +13,11 @@ import { useAdminAccount } from "../../auth/use-admin-account";
  * rail as bare icons with the name in a `title`, but a tablet is a touch
  * device and never shows a tooltip, so on the real thing that is seven
  * unidentifiable pictures plus a bare arrow. See section-link.tsx for why
- * the boards' README permits the departure. The rail is 88px rather than
- * 72px to hold the labels; the content column loses 16px and nothing else
- * about the layout changes.
+ * the boards' README permits the departure, and for the pill width every
+ * entry here shares. The rail is 96px rather than the boards' 72px: that is
+ * what it takes for all ten names to sit on one line each, so the column
+ * reads as one list rather than five short entries and two tall ones. The
+ * content column loses 24px and nothing else about the layout changes.
  *
  * There is no room for the wordmark, so it is rendered for screen readers
  * only — the page still needs its <h1> (#504) at every width, and the green
@@ -27,7 +30,7 @@ export function IconRail({ pages }: { pages: readonly AdminPage[] }) {
   const { name, initial, signOut } = useAdminAccount();
 
   return (
-    <div className="flex w-22 shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar py-5">
+    <div className="flex w-24 shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar py-5">
       <Wordmark className="sr-only" />
       <span
         aria-hidden="true"
@@ -42,7 +45,7 @@ export function IconRail({ pages }: { pages: readonly AdminPage[] }) {
       </nav>
       <a
         href="/"
-        className="mt-auto flex w-20 flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-center font-sans text-[10px] leading-[1.2] text-accent hover:bg-sidebar-accent/60"
+        className={cn(RAIL_PILL, "mt-auto text-accent hover:bg-sidebar-accent/60")}
       >
         <ArrowUpRight className="size-[18px] shrink-0" strokeWidth={1.75} />
         <span>See your site</span>
@@ -51,7 +54,10 @@ export function IconRail({ pages }: { pages: readonly AdminPage[] }) {
         type="button"
         onClick={signOut}
         title={name ? `Sign out (${name})` : "Sign out"}
-        className="mt-2 flex w-20 cursor-pointer flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-center font-sans text-[10px] leading-[1.2] text-muted-foreground hover:bg-sidebar-accent/60"
+        className={cn(
+          RAIL_PILL,
+          "mt-2 cursor-pointer text-muted-foreground hover:bg-sidebar-accent/60",
+        )}
       >
         <span
           aria-hidden="true"

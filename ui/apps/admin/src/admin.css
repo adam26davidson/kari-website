@@ -307,7 +307,13 @@ input[type="checkbox"] {
    took from the browser's default instead — the reset does state those, so
    they change. Each one that mattered is stated here, in the scale's own
    tokens, and each goes as the page that needs it is migrated (#233-#238,
-   #240). */
+   #240).
+
+   With one exception, which is in tiptap.css instead: the blog editor's
+   CONTENT (headings, list markers, the space between blocks) is preflighted
+   flat too, and restoring it is not transitional — the editor previews a
+   post the public page renders with the browser's default sheet, so it has
+   to keep saying what a post looks like long after #237. */
 
 /* The <h2> every admin section opens with. Its rule above declares the
    weight and the colour, and took 1.5em from the UA sheet; preflight sets

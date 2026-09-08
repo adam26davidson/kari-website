@@ -40,8 +40,8 @@ const AdminWhatsOnTestPage = lazyWithRetry(() =>
 // Single source of truth for the admin menu: ids (also the URL segment
 // under /admin), order, labels, and — since #592 — the stroke icon each
 // section wears. The icon is not decoration: at tablet width the shell
-// collapses to a 72px rail where the glyph is all there is to tell one
-// section from another.
+// collapses to a narrow rail where the glyph is what tells one section
+// from another at a glance, above the name in small type.
 const ADMIN_PAGES: readonly AdminPage[] = [
   { id: "home", label: "Home", icon: House },
   { id: "haiku", label: "Haiku", icon: PenLine },

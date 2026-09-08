@@ -165,6 +165,26 @@ describe("the tablet icon rail", () => {
     expect(signOut).toHaveBeenCalledOnce();
   });
 
+  // The rail is a single column of stacked icon-over-label pills, and its
+  // width has been tuned twice for how the longest label wraps in it. Both
+  // times the two entries at the FOOT of the rail — which are written out
+  // in icon-rail.tsx rather than coming from SectionLink — were a separate
+  // place to remember. They now share one `RAIL_PILL`, and this is what
+  // says so: every entry the same width, or the column is ragged.
+  it("gives every entry in the rail the same pill", () => {
+    renderShellAt(900);
+    const widthClass = (element: Element) =>
+      [...element.classList].find((name) => /^w-\d/.test(name));
+    const entries = [
+      ...sectionLinks(),
+      screen.getByRole("link", { name: "See your site" }),
+      screen.getByRole("button", { name: "Sign out" }),
+    ];
+    const widths = new Set(entries.map(widthClass));
+    expect(widths.size, `rail pill widths: ${[...widths].join(", ")}`).toBe(1);
+    expect([...widths][0]).toBeDefined();
+  });
+
   // The rail has no room for the name, so the tooltip is where it goes —
   // and the rail renders before Auth0 has a profile, so the tooltip has to
   // read as a sentence either way.
