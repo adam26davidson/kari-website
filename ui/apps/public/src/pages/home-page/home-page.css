@@ -1,14 +1,22 @@
 /* Full-height wrapper for the home page's loading / error / card states.
    The .mobile modifier mirrors the useIsMobile hook so the layout matches
-   what the inline styles previously computed per-render. */
+   what the inline styles previously computed per-render.
+
+   `min-height` + `align-self` + `min-width` + no `overflow-y` is the
+   grow-inside-one-scroller pattern; content-page.css carries the full
+   explanation of why each of the four is needed (#581). The centring below
+   is what makes it matter here: `justify-content: center` overflows BOTH
+   ends when free space goes negative, so a home page too tall for a short
+   desktop window would put its own top out of reach. */
 .home-page {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100%;
+  align-self: flex-start;
+  min-height: 100%;
   width: 100%;
-  overflow-y: auto;
+  min-width: 0;
 }
 
 .home-page.mobile {

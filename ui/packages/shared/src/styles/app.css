@@ -6,6 +6,23 @@
   padding: 2rem;
 }
 
+/* Everything below the header, and — on the public site — the ONE box that
+   scrolls (#581). `.whole-page` is exactly as tall as the visible viewport
+   and the document itself never scrolls (#558), so this is where a page
+   taller than the screen turns into a scrollbar. Every wrapper inside it
+   grows instead of scrolling; content-page.css spells out the pattern and
+   the two flex traps that come with it.
+
+   Inert on the ADMIN side, by construction rather than by coincidence:
+   `.admin-container` is pinned to `height: 100%`, so nothing in the admin
+   can make this box overflow. `.admin-content` is the admin's scroller
+   (#794). The declaration stays here because this is one shared shell and
+   the public site needs it.
+
+   `align-items` is deliberately left at its default `stretch`:
+   `.route-loading` centres its "Loading..." in the full column height and
+   `.mobile-menu` covers the screen, both because of it. The page wrappers
+   that must NOT stretch opt out individually with `align-self`. */
 .content {
   display: flex;
   width: 100%;

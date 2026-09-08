@@ -213,28 +213,40 @@ test("mobile: content scrolls under the header, never the document", async ({
 // scrolling cannot reach it. The page looks fine on a tall screen and eats
 // its own first line on a short one.
 //
-// So each of these checks the same four things on a viewport short enough
-// to force overflow: the shell really is overflowing (or the rest proves
-// nothing), the shell is what scrolls, the wrappers inside it are not
-// scroll containers at all, and — the trap — the top of the content is
-// already visible at `scrollTop` 0 and the bottom is reachable from there.
-async function expectShellIsTheOnlyScroller(page: Page, inner: string[]) {
+// So each of these runs on a viewport short enough that the page's own card
+// cannot fit under the header, and then checks four things: the shell is
+// what scrolls, the wrappers between it and the card are not scroll
+// containers at all, and — the trap — the card's top is already visible at
+// `scrollTop` 0 while its bottom is reachable from there.
+async function expectShellIsTheOnlyScroller(
+  page: Page,
+  /** The page's content card, and the inert layers wrapping it. */
+  { card, layers }: { card: string; layers: string[] },
+) {
   const shell = page.locator(".content");
-  const box = await shell.boundingBox();
-  if (!box) throw new Error(".content not rendered");
+  const shellBox = await shell.boundingBox();
+  const cardBox = await page.locator(card).first().boundingBox();
+  if (!shellBox || !cardBox) throw new Error("the page did not render");
 
-  // Precondition. The seeded lists are one item long, so without this a
-  // viewport that happens to fit the whole page would pass every assertion
-  // below while testing nothing.
-  const scrollable = await shell.evaluate(
-    (el) => el.scrollHeight - el.clientHeight,
-  );
+  // Precondition, phrased so it stays true whichever box is doing the
+  // scrolling: there is more card than there is room for it. The seeded
+  // lists are one item long, so without this a viewport that happens to fit
+  // the whole page would pass everything below while proving nothing — and
+  // measuring the SHELL's overflow here instead would make this fail with
+  // "viewport too tall" on exactly the regression the test exists to catch.
+  const room = await shell.evaluate((el) => el.clientHeight);
   expect(
-    scrollable,
-    "viewport is too tall to force the shell to overflow",
+    cardBox.height,
+    "viewport is too tall to push the card past the shell",
+  ).toBeGreaterThan(room);
+
+  // So the shell is the box that turns that into a scrollbar.
+  expect(
+    await shell.evaluate((el) => el.scrollHeight - el.clientHeight),
+    "the shell has no scrollable overflow — something inside it is scrolling",
   ).toBeGreaterThan(0);
 
-  for (const selector of inner) {
+  for (const selector of layers) {
     const layer = page.locator(selector).first();
     await expect(layer).toBeVisible();
     expect(
@@ -243,23 +255,22 @@ async function expectShellIsTheOnlyScroller(page: Page, inner: string[]) {
     ).toBe("visible");
   }
 
-  // The trap: at rest, nothing has been centred off the top edge.
-  const first = page.locator(".content > *").first();
-  const firstBox = await first.boundingBox();
-  if (!firstBox) throw new Error("no content rendered inside the shell");
+  // The trap: at rest, the card has not been centred off the top edge.
   expect(
-    firstBox.y,
-    "the top of the page is above the shell's scroll origin",
-  ).toBeGreaterThanOrEqual(box.y - 1);
+    cardBox.y,
+    "the top of the card is above the shell's scroll origin",
+  ).toBeGreaterThanOrEqual(shellBox.y - 1);
 
-  // ...and the far end is reachable by scrolling the shell, not stranded
-  // below a box that has already been scrolled to its own end.
+  // ...and its far end is reachable from there.
   await shell.evaluate((el) => {
     el.scrollTop = el.scrollHeight;
   });
-  const afterBox = await first.boundingBox();
-  if (!afterBox) throw new Error("content left the layout after scrolling");
-  expect(afterBox.y + afterBox.height).toBeLessThanOrEqual(box.y + box.height + 1);
+  const scrolled = await page.locator(card).first().boundingBox();
+  if (!scrolled) throw new Error("the card left the layout after scrolling");
+  expect(
+    scrolled.y + scrolled.height,
+    "the bottom of the card is unreachable by scrolling the shell",
+  ).toBeLessThanOrEqual(shellBox.y + shellBox.height + 1);
 }
 
 test("list pages: the shell is the only thing that scrolls (mobile)", async ({
@@ -276,10 +287,10 @@ test("list pages: the shell is the only thing that scrolls (mobile)", async ({
       timeout: 30_000,
     })
     .toBeGreaterThan(0);
-  await expectShellIsTheOnlyScroller(page, [
-    ".content-page",
-    ".data-list-container",
-  ]);
+  await expectShellIsTheOnlyScroller(page, {
+    card: ".data-list",
+    layers: [".content-page", ".data-list-container"],
+  });
 });
 
 test("home page: the shell is the only thing that scrolls (desktop)", async ({
@@ -298,7 +309,10 @@ test("home page: the shell is the only thing that scrolls (desktop)", async ({
       timeout: 15_000,
     })
     .toBeGreaterThan(0);
-  await expectShellIsTheOnlyScroller(page, [".home-page"]);
+  await expectShellIsTheOnlyScroller(page, {
+    card: ".home-page-card",
+    layers: [".home-page"],
+  });
 });
 
 // The site-wide keyboard focus ring (#501). jsdom cannot decide

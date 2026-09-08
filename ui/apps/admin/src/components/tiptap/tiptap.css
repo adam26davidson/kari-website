@@ -1,9 +1,21 @@
+/* The writing surface, which grows with the post. It used to declare
+   `overflow-y: scroll` to scroll itself inside a container that a
+   percentage `max-height` chain bound to the viewport; #794 removed that
+   chain, so the container is auto-height, this box never had overflow to
+   scroll, and all the declaration still did was reserve a permanent
+   scrollbar gutter down the right of the editor — narrowing the writing
+   measure for a bar that never moved (#581). `.admin-content` scrolls the
+   admin. */
 .editor {
   width: 100%;
   flex: 1;
-  overflow-y: scroll;
 }
 
+/* `min-height` with no max: a short post still gets a surface worth
+   writing in, a long one grows the card and the page scrolls. The
+   `max-height: calc(100% - 24px)` that used to sit here resolved against
+   an auto-height parent — i.e. to `none` — from #794 onward, so it read as
+   a viewport clamp that was not one. */
 .tiptap-container {
   display: flex;
   flex-direction: column;
@@ -13,7 +25,6 @@
   max-width: 100%;
   box-sizing: border-box;
   min-height: 350px;
-  max-height: calc(100% - 24px);
   margin: 10px 0;
   border-radius: 3px;
   border: 1px solid var(--admin-field-border);

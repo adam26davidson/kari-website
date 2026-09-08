@@ -12,11 +12,15 @@
   box-sizing: border-box;
 }
 
+/* No `overflow-y`. It used to scroll the image rows inside a card that a
+   percentage `max-height` chain bound to the viewport; #794 removed that
+   chain so the card grows and `.admin-content` scrolls the page, which
+   left this box auto-height with nothing to scroll. Kept dead it would
+   read as "the image list is its own scroller", which is now false (#581). */
 .photography-post-editor-images {
   border-radius: 3px;
   border: 1px solid rgba(0, 0, 0, 0.1);
   background-color: rgba(0, 0, 0, 0.1);
-  overflow-y: auto;
   padding: 10px;
   width: 100%;
   min-width: 0;
