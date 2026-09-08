@@ -42,7 +42,7 @@ export function IconRail({ pages }: { pages: readonly AdminPage[] }) {
       </nav>
       <a
         href="/"
-        className="mt-auto flex w-20 flex-col items-center gap-1 rounded-lg px-1 py-2 text-center font-sans text-[10px] leading-[1.2] text-accent hover:bg-sidebar-accent/60"
+        className="mt-auto flex w-20 flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-center font-sans text-[10px] leading-[1.2] text-accent hover:bg-sidebar-accent/60"
       >
         <ArrowUpRight className="size-[18px] shrink-0" strokeWidth={1.75} />
         <span>See your site</span>
@@ -51,7 +51,7 @@ export function IconRail({ pages }: { pages: readonly AdminPage[] }) {
         type="button"
         onClick={signOut}
         title={name ? `Sign out (${name})` : "Sign out"}
-        className="mt-2 flex w-20 cursor-pointer flex-col items-center gap-1 rounded-lg px-1 py-2 text-center font-sans text-[10px] leading-[1.2] text-muted-foreground hover:bg-sidebar-accent/60"
+        className="mt-2 flex w-20 cursor-pointer flex-col items-center gap-1.5 rounded-lg px-2 py-2 text-center font-sans text-[10px] leading-[1.2] text-muted-foreground hover:bg-sidebar-accent/60"
       >
         <span
           aria-hidden="true"

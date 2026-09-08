@@ -45,11 +45,17 @@ export function SectionLink({
         cn(
           "admin-menu-item flex rounded-lg font-sans transition-colors",
           compact
-            ? // 80px of column for an 11-character word ("Photography") set
-              // at 10px, so the longest single-word label still fits on one
-              // line; the two-word ones wrap to two and the pill grows with
-              // them rather than clipping.
-              "w-20 flex-col items-center justify-center gap-1 px-1 py-2 text-center text-[10px] leading-[1.2]"
+            ? // An 80px pill with 8px of side padding leaves a 64px line box.
+              // Measured in Geist at 10px, that is the width that sorts the
+              // labels the way the rail wants them: the longest unbreakable
+              // word, "Photography" (61px), still sits on one line with ~10px
+              // of pill either side of it, while "Image cleanup" (70px) and
+              // "What's on test" (67px) wrap at their space onto two short
+              // centred lines instead of running the full width of the rail.
+              // Padding, not a max-width, so a fallback face that renders
+              // "Photography" wider than 64px spills into the padding rather
+              // than out of the pill.
+              "w-20 flex-col items-center justify-center gap-1.5 px-2 py-2 text-center text-[10px] leading-[1.2]"
             : "min-h-11 items-center justify-start gap-3 px-3 py-2 text-[15px]",
           isActive
             ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
