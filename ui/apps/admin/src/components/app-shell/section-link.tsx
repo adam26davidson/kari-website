@@ -4,13 +4,17 @@ import { cn } from "../ui/cn";
 
 /**
  * One section in the admin's nav, in either of the two shapes the shell
- * asks for: the full row (sidebar and phone menu) or the icon-only square
- * the 72px tablet rail leaves room for.
+ * asks for: the full row (sidebar and phone menu) or the narrow stacked
+ * icon-over-label the tablet rail leaves room for.
  *
- * The label is real text in BOTH shapes — visually hidden in the rail
- * rather than replaced by an `aria-label` — so the accessible name, the
- * `title` tooltip and the e2e locator (`.admin-menu-item` filtered by text)
- * all read the same string at every width.
+ * The label is real, VISIBLE text in both shapes. `*Tablet.png` draws the
+ * rail as bare glyphs with the name in a `title` tooltip, and that is the
+ * one place this shell departs from the boards: tablet width is a touch
+ * device, where there is no hover and so no tooltip, leaving seven unnamed
+ * icons for the one non-technical person this admin exists for. The boards'
+ * README allows exactly this — follow the boards "unless the design brief's
+ * behavioral principles say otherwise" — and the rail is still a rail: a
+ * narrow left column that keeps the content the full sidebar would eat.
  *
  * `.admin-menu-item` is that e2e hook and nothing else now: the look is
  * Tailwind. It survives because `e2e/helpers.ts`, `auth.setup.ts` and two
@@ -28,7 +32,7 @@ export function SectionLink({
   onNavigate,
 }: {
   page: AdminPage;
-  /** The icon-only rail shape (tablet). */
+  /** The stacked, narrow rail shape (tablet). */
   compact?: boolean;
   onNavigate?: () => void;
 }) {
@@ -36,15 +40,17 @@ export function SectionLink({
   return (
     <NavLink
       to={`/${page.id}`}
-      title={compact ? page.label : undefined}
       onClick={onNavigate}
       className={({ isActive }) =>
         cn(
-          "admin-menu-item flex items-center rounded-lg font-sans text-[15px]",
-          "transition-colors",
+          "admin-menu-item flex rounded-lg font-sans transition-colors",
           compact
-            ? "size-11 justify-center"
-            : "min-h-11 justify-start gap-3 px-3 py-2",
+            ? // 80px of column for an 11-character word ("Photography") set
+              // at 10px, so the longest single-word label still fits on one
+              // line; the two-word ones wrap to two and the pill grows with
+              // them rather than clipping.
+              "w-20 flex-col items-center justify-center gap-1 px-1 py-2 text-center text-[10px] leading-[1.2]"
+            : "min-h-11 items-center justify-start gap-3 px-3 py-2 text-[15px]",
           isActive
             ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
             : "text-foreground hover:bg-sidebar-accent/60",
@@ -52,7 +58,7 @@ export function SectionLink({
       }
     >
       <Icon className="size-[18px] shrink-0" strokeWidth={1.75} />
-      <span className={compact ? "sr-only" : undefined}>{page.label}</span>
+      <span>{page.label}</span>
     </NavLink>
   );
 }

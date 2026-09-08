@@ -187,7 +187,13 @@ test.describe("admin: what's on test", () => {
     const menuItem = page.locator(".admin-menu-item", {
       hasText: "What's on test",
     });
-    await expect(menuItem).toHaveClass(/selected/);
+    // "You are here", asserted on the semantic marker rather than on a
+    // class name. The legacy nav said it with `.selected`; the shadcn shell
+    // (#592) says it with the `aria-current="page"` NavLink sets natively,
+    // and paints the pill from Tailwind utilities that carry no stable
+    // name to assert on. This is also the direction #809 wants the admin
+    // e2e locators to go: roles and ARIA, not CSS hooks.
+    await expect(menuItem).toHaveAttribute("aria-current", "page");
     await expect(menuItem).toHaveAttribute("href", "/admin/whats-on-test");
 
     // The compare ran between exactly the two shas in play.

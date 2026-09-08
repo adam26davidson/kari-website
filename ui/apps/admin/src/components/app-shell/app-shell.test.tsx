@@ -92,8 +92,31 @@ describe("the admin shell at each width", () => {
     ]);
   });
 
+  // Which section she is in, said in the one way that is not a colour: the
+  // pill is Tailwind's, but `aria-current="page"` is what a screen reader
+  // reads and what admin-whats-on-test.spec.ts asserts. The legacy nav said
+  // it with a `.selected` class; nothing carries that now, and the e2e spec
+  // asserting the old marker is exactly what this test would have caught.
+  it.each([
+    ["desktop", 1440],
+    ["tablet", 900],
+  ])("marks the section she is in at %s", (_at, width) => {
+    renderShellAt(width);
+    expect(
+      sectionLinks().map((link) => link.getAttribute("aria-current")),
+    ).toEqual([null, "page"]);
+  });
+
+  it("marks the section she is in in the phone menu", async () => {
+    const user = renderShellAt(390);
+    await user.click(screen.getByRole("button", { name: "Menu" }));
+    expect(
+      sectionLinks().map((link) => link.getAttribute("aria-current")),
+    ).toEqual([null, "page"]);
+  });
+
   // #504's outline: the admin pages open at level 2, so the shell owes the
-  // document its <h1> — including at tablet width, where the 72px rail has
+  // document its <h1> — including at tablet width, where the icon rail has
   // no room to draw it.
   it.each([
     ["desktop", 1440],
