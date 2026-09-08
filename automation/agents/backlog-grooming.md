@@ -62,6 +62,15 @@ already said and not say it again.
   descriptions exact:
   `gh label create duplicate --color CFD3D7 --description "This issue or pull request already exists"`.
 
+## Preserve the issue-validation gate
+
+Read `docs/issue-validation.md`. Grooming is not independent validation:
+your comments, bug-label audit, dependency removal, and umbrella folds
+never approve implementation. Do not post `## Issue validation` verdicts.
+If folding adds scope to an already validated umbrella, explicitly note
+that its validation needs refreshing. Removing a blocking label only
+returns an issue to consideration; Phase B must still validate it.
+
 ## Tick
 
 1. **Read everything.** `gh issue list --state open --limit 500 --json

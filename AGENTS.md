@@ -158,7 +158,12 @@ right".
 
 ## Working on GitHub Issues
 - If a github issue doesn't exist yet for what you are working on, create one.
-- Before starting work on an issue, add the `in progress` label and leave a
+- Before claiming or implementing an agent-originated issue, read
+  `docs/issue-validation.md` and require its independent codebase
+  validation. This includes old backlog items and direct/small work.
+  Record agent findings with `automation` and their originating model
+  (or `unknown`); filing captures a hypothesis, not permission to build.
+- After that gate passes, add the `in progress` label and leave a
   comment naming your branch, so parallel sessions don't pick up the same
   issue. Skip issues already labeled `in progress`.
 - Readiness labels: `has-dependencies` marks an issue that needs another
