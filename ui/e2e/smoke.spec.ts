@@ -37,7 +37,9 @@ test("navigating to the haiku route keeps the app mounted", async ({ page }) => 
 // than failing.
 test("/admin serves the admin app", async ({ page }) => {
   await page.goto("/admin");
-  await expect(page.getByText("Kari Davidson - Admin")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Kari Davidson - Admin" }),
+  ).toBeVisible();
   await expect(page.locator("#root")).not.toBeEmpty();
 });
 
@@ -45,7 +47,9 @@ test("a deep admin link serves the admin app, not the public one", async ({
   page,
 }) => {
   await page.goto("/admin/haiku");
-  await expect(page.getByText("Kari Davidson - Admin")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Kari Davidson - Admin" }),
+  ).toBeVisible();
   // The public header would be here instead if the fallback were wrong.
   await expect(page.locator(".header")).toHaveCount(0);
 });

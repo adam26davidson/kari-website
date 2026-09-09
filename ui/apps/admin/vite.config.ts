@@ -18,14 +18,17 @@ const uiRoot = fileURLToPath(new URL("../..", import.meta.url));
 // ever showed an editor. #419 moved that stack behind a lazy import in
 // admin-other-works-page.tsx; these two budgets keep it there.
 //
-// - "index" is the chunk loaded on every admin page (762 kB). It was 649 kB
-//   after the split; #592 added ~113 kB of shadcn/ui stack to it — Radix's
-//   AlertDialog and its dismissable-layer/focus-scope machinery, sonner,
-//   the dozen-odd lucide icons the shell's nav names, and
-//   cva/clsx/tailwind-merge. That weight is a maintainer's, downloaded
-//   once behind a login, and it replaces hand-written overlays that had no
-//   focus management at all. Tailwind's own output is CSS and does not
-//   count here.
+// - "index" is the chunk loaded on every admin page (793.3 kB). It was
+//   649 kB after the split, down from 1,095 kB. Two things have grown it
+//   since: Font Awesome 7's rewritten React renderer (#793) took it to
+//   680.5 kB — the admin uses icons throughout, so that cost belongs here
+//   rather than being pushed into the public app — and #592 added ~113 kB
+//   of shadcn/ui stack on top: Radix's AlertDialog and its
+//   dismissable-layer/focus-scope machinery, sonner, the dozen-odd lucide
+//   icons the shell's nav names, and cva/clsx/tailwind-merge. That weight
+//   is a maintainer's, downloaded once behind a login, and it replaces
+//   hand-written overlays that had no focus management at all. Tailwind's
+//   own output is CSS and does not count here.
 // - "blog-post-editor" is the lazy chunk holding the editor, tiptap,
 //   prosemirror and their CSS (499 kB), fetched only when a post is
 //   opened. It was 445 kB until #427 added the link bubble menu, which
@@ -68,6 +71,6 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    bundleBudget({ index: 790, "blog-post-editor": 525 }),
+    bundleBudget({ index: 820, "blog-post-editor": 525 }),
   ],
 });
