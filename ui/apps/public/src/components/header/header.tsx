@@ -1,9 +1,13 @@
 import { Link, useLocation } from "react-router";
 import "@kari/shared/styles/header.css";
-import { faBars } from "@fortawesome/free-solid-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useIsMobile } from "@kari/shared/hooks/use-is-mobile";
 import { MOBILE_MENU_ID, PAGES } from "@kari/shared/constants";
+
+// This is Font Awesome's faBars path, rendered directly because it is the
+// public app's only icon. Pulling the FontAwesomeIcon renderer into every
+// visitor's entry chunk costs far more than the path it draws.
+const MENU_ICON_PATH =
+  "M0 96C0 78.3 14.3 64 32 64l384 0c17.7 0 32 14.3 32 32s-14.3 32-32 32L32 128C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32l384 0c17.7 0 32 14.3 32 32s-14.3 32-32 32L32 288c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32L32 448c-17.7 0-32-14.3-32-32s14.3-32 32-32l384 0c17.7 0 32 14.3 32 32z";
 
 export function Header({
   showingMobileMenu,
@@ -29,7 +33,15 @@ export function Header({
           className="header-menu-button"
           onClick={() => setShowingMobileMenu(!showingMobileMenu)}
         >
-          <FontAwesomeIcon icon={faBars} className="header-menu-icon" />
+          <svg
+            aria-hidden="true"
+            className="header-menu-icon"
+            height="1em"
+            viewBox="0 0 448 512"
+            width="1.25em"
+          >
+            <path fill="currentColor" d={MENU_ICON_PATH} />
+          </svg>
         </button>
       )}
       {/* The site title is the page's <h1> (#504). None of the public pages
