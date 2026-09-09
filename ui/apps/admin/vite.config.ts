@@ -18,7 +18,9 @@ const uiRoot = fileURLToPath(new URL("../..", import.meta.url));
 // admin-other-works-page.tsx; these two budgets keep it there.
 //
 // - "index" is the chunk loaded on every admin page (649 kB after the
-//   split, down from 1,095 kB).
+//   split, down from 1,095 kB). Font Awesome 7's rewritten React renderer
+//   moved it to 680.5 kB; the admin uses icons throughout, so that cost
+//   belongs here rather than being pushed into the public app.
 // - "blog-post-editor" is the lazy chunk holding the editor, tiptap,
 //   prosemirror and their CSS (499 kB), fetched only when a post is
 //   opened. It was 445 kB until #427 added the link bubble menu, which
@@ -56,5 +58,5 @@ export default defineConfig({
     // Only dist/admin is emptied; the public build owns the rest of dist/.
     emptyOutDir: true,
   },
-  plugins: [react(), bundleBudget({ index: 675, "blog-post-editor": 525 })],
+  plugins: [react(), bundleBudget({ index: 705, "blog-post-editor": 525 })],
 });
