@@ -31,27 +31,37 @@ import { cn } from "../ui/cn";
  * Declared once and worn by all three kinds of entry — the section links
  * here, and "See your site" and the sign-out in icon-rail.tsx — because a
  * rail whose pills are not all the same width is a ragged left column, and
- * the width has now been tuned twice; two of the three places are easy to
- * change and forget.
+ * two of the three places are easy to change and forget.
  *
- * An 88px pill with 8px of side padding leaves a 72px line box. Measured in
- * Geist at 10px against the built stylesheet, that fits every label the rail
- * carries on ONE line: the longest, "Image cleanup" (71px), with 8.5px of
- * pill either side of it, and the shortest sections with far more. Two
- * earlier tries missed in opposite directions — an 80px pill with 4px
- * padding put "Image cleanup" 4.5px from the edges (edge-to-edge), and 8px
- * padding on the same pill wrapped it and "What's on test" onto two lines,
- * making those entries 12px taller than the single-word ones above them.
- * Uniform single lines cost 8px of the tablet content column, which at
- * 768px is a little over one percent of it.
+ * The label is `text-xs`, and the width follows from that rather than the
+ * other way round. Three earlier rounds fitted these labels at 10px and
+ * kept being told the rail was hard to read, which it was: 10px was the
+ * SMALLEST type anywhere in the admin — under the sidebar's own 12px
+ * "Sign out", under the 11px letterspaced "YOUR WORKSHOP" eyebrow (which
+ * is uppercase and tracked, so it reads far larger than its number), and
+ * far under the 15px sidebar sections these are the tablet copy of. The
+ * one person this admin is for is not a developer and is reading it on a
+ * touch screen, and the brief asks for readable type (principle 1), so the
+ * app's primary navigation should not be its finest print. At `text-xs`
+ * the rail ties the smallest size the admin already uses instead of
+ * setting a new floor.
  *
- * Padding rather than a `max-width`, so a fallback face that renders a label
- * wider than 72px spills into the padding rather than out of the pill.
- * Colour and hover are the caller's: the shape is all that is shared.
+ * Measured in Geist against the built stylesheet, 12px makes the longest
+ * label the rail carries, "Image cleanup", 83px wide (it was 71px at
+ * 10px). A 104px pill with 8px of side padding leaves an 88px line box, so
+ * that label — and every shorter one — still sits on ONE line, with 10.5px
+ * of pill either side of it rather than the 8.5px the 88px pill left. The
+ * rail around it is 112px (icon-rail.tsx), which costs the tablet content
+ * column 16px against the old 96px rail: at 768px that is 592px of usable
+ * column instead of 608px, and the widest thing in it is a 400px input.
+ *
+ * Padding rather than a `max-width`, so a fallback face that renders a
+ * label wider than 88px spills into the padding rather than out of the
+ * pill. Colour and hover are the caller's: the shape is all that is shared.
  */
 export const RAIL_PILL =
-  "flex w-22 flex-col items-center gap-1.5 rounded-lg px-2 py-2 " +
-  "text-center font-sans text-[10px] leading-[1.2]";
+  "flex w-26 flex-col items-center gap-1.5 rounded-lg px-2 py-2 " +
+  "text-center font-sans text-xs leading-[1.2]";
 
 export function SectionLink({
   page,

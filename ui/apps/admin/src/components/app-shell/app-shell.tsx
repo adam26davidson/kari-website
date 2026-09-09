@@ -8,7 +8,7 @@ import { TopBar } from "./top-bar";
 
 /** Below this the shell is a top bar and a full-screen menu. */
 const PHONE_WIDTH = 768;
-/** Below this the sidebar is a 72px icon rail; at or above it, 280px. */
+/** Below this the sidebar is a 112px icon rail; at or above it, 280px. */
 const SIDEBAR_WIDTH = 1024;
 
 /**

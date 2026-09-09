@@ -9,15 +9,19 @@ import { cn } from "../ui/cn";
  * The tablet shell (768-1023px): the sidebar collapsed to a narrow rail,
  * per `*Tablet.png`.
  *
- * Every entry is NAMED, in small type under its glyph — the boards draw the
- * rail as bare icons with the name in a `title`, but a tablet is a touch
- * device and never shows a tooltip, so on the real thing that is seven
- * unidentifiable pictures plus a bare arrow. See section-link.tsx for why
- * the boards' README permits the departure, and for the pill width every
- * entry here shares. The rail is 96px rather than the boards' 72px: that is
- * what it takes for all ten names to sit on one line each, so the column
- * reads as one list rather than five short entries and two tall ones. The
- * content column loses 24px and nothing else about the layout changes.
+ * Every entry is NAMED, under its glyph — the boards draw the rail as bare
+ * icons with the name in a `title`, but a tablet is a touch device and
+ * never shows a tooltip, so on the real thing that is seven unidentifiable
+ * pictures plus a bare arrow. See section-link.tsx for why the boards'
+ * README permits the departure, for the type size those names are set in,
+ * and for the pill width every entry here shares.
+ *
+ * The rail is 112px rather than the boards' 72px, and the 40px is spent on
+ * the names: 104px of pill (the widest name on one line, in type no
+ * smaller than anything else in the admin) plus a 4px gutter either side.
+ * The tablet content column is 656px instead of 728px, 592px of it usable
+ * inside `.admin-content`'s 32px padding, and the widest thing that column
+ * has to hold is a 400px input — so nothing about the layout changes.
  *
  * There is no room for the wordmark, so it is rendered for screen readers
  * only — the page still needs its <h1> (#504) at every width, and the green
@@ -30,7 +34,7 @@ export function IconRail({ pages }: { pages: readonly AdminPage[] }) {
   const { name, initial, signOut } = useAdminAccount();
 
   return (
-    <div className="flex w-24 shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar py-5">
+    <div className="flex w-28 shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar py-5">
       <Wordmark className="sr-only" />
       <span
         aria-hidden="true"

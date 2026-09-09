@@ -165,24 +165,45 @@ describe("the tablet icon rail", () => {
     expect(signOut).toHaveBeenCalledOnce();
   });
 
-  // The rail is a single column of stacked icon-over-label pills, and its
-  // width has been tuned twice for how the longest label wraps in it. Both
-  // times the two entries at the FOOT of the rail — which are written out
-  // in icon-rail.tsx rather than coming from SectionLink — were a separate
-  // place to remember. They now share one `RAIL_PILL`, and this is what
-  // says so: every entry the same width, or the column is ragged.
+  // The rail is a single column of stacked icon-over-label pills, and both
+  // its width and its type size have been tuned more than once for how the
+  // longest label sits in it. Every time, the two entries at the FOOT of
+  // the rail — written out in icon-rail.tsx rather than coming from
+  // SectionLink — were a separate place to remember. They now share one
+  // `RAIL_PILL`, and this is what says so: same width or the column is
+  // ragged, same type size or one entry is quietly the app's finest print
+  // again.
   it("gives every entry in the rail the same pill", () => {
     renderShellAt(900);
-    const widthClass = (element: Element) =>
-      [...element.classList].find((name) => /^w-\d/.test(name));
+    const classMatching = (pattern: RegExp) => (element: Element) =>
+      [...element.classList].find((name) => pattern.test(name));
     const entries = [
       ...sectionLinks(),
       screen.getByRole("link", { name: "See your site" }),
       screen.getByRole("button", { name: "Sign out" }),
     ];
-    const widths = new Set(entries.map(widthClass));
-    expect(widths.size, `rail pill widths: ${[...widths].join(", ")}`).toBe(1);
-    expect([...widths][0]).toBeDefined();
+    for (const [what, pattern] of [
+      ["widths", /^w-\d/],
+      ["type sizes", /^text-(xs|sm|base|lg|\[)/],
+    ] as const) {
+      const values = new Set(entries.map(classMatching(pattern)));
+      expect(values.size, `rail pill ${what}: ${[...values].join(", ")}`).toBe(1);
+      expect([...values][0]).toBeDefined();
+    }
+  });
+
+  // The size itself, not just its sameness: the rail's labels are the
+  // admin's primary navigation for someone who is not a developer, on a
+  // touch screen, and three rounds of visual review called them harder to
+  // read than anything else in the app while they were 10px. `text-xs` is
+  // the smallest step the rest of the admin uses (the sidebar's own "Sign
+  // out"), so this pins the rail at no finer than that — a future width
+  // squeeze has to cost something other than legibility.
+  it("sets the rail's labels no smaller than the rest of the admin", () => {
+    renderShellAt(900);
+    for (const entry of sectionLinks()) {
+      expect([...entry.classList]).toContain("text-xs");
+    }
   });
 
   // The rail has no room for the name, so the tooltip is where it goes —
