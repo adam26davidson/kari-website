@@ -18,9 +18,9 @@ describe("PageTitle", () => {
     expect(swash).toHaveAttribute("aria-hidden", "true");
     // The heading is named by its words alone — nothing about a brush
     // stroke reaches the accessible name.
-    expect(
-      screen.getByRole("heading", { level: 2 }),
-    ).toHaveAccessibleName("Good morning, Kari");
+    expect(screen.getByRole("heading", { level: 2 })).toHaveAccessibleName(
+      "Good morning, Kari",
+    );
   });
 
   it("takes a caller's classes alongside its own", () => {

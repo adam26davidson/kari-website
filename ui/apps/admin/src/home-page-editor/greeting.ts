@@ -14,11 +14,8 @@
  * pinned in greeting.test.ts so a change to them is a decision, not a drift.
  */
 export function greetingFor(hour: number, name: string): string {
-  const timeOfDay =
-    hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
+  const timeOfDay = hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
   const firstName = name.trim().split(/\s+/)[0];
   const usable = firstName !== "" && !firstName.includes("@");
-  return usable
-    ? `Good ${timeOfDay}, ${firstName}`
-    : `Good ${timeOfDay}`;
+  return usable ? `Good ${timeOfDay}, ${firstName}` : `Good ${timeOfDay}`;
 }

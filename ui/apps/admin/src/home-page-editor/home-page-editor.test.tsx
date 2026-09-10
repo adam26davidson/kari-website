@@ -87,7 +87,9 @@ describe("HomePageEditor initial load", () => {
     ).toBeInTheDocument();
     // Never show an empty editor after a failed load — saving it would
     // overwrite the real data.
-    expect(screen.queryByLabelText("Your welcome text")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Your welcome text"),
+    ).not.toBeInTheDocument();
   });
 
   it("greets her by name and labels both of its fields", async () => {
