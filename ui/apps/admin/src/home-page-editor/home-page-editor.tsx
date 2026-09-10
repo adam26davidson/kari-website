@@ -110,7 +110,7 @@ export function HomePageEditor() {
     !isLoading && (
       // `home-page-editor` is not styling — it is how the e2e home journey
       // finds this page's textarea (e2e/admin-journeys.spec.ts).
-      <div className="home-page-editor mx-auto flex w-full max-w-[720px] flex-col gap-5">
+      <div className="home-page-editor mx-auto flex w-full max-w-[720px] flex-col gap-8">
         <PageTitle>{greetingFor(new Date().getHours(), name)}</PageTitle>
         <Card className="flex flex-col gap-6 p-5 sm:p-8">
           <div className="flex flex-col gap-2">

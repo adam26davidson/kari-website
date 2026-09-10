@@ -49,9 +49,9 @@ export function PageTitle({
         aria-hidden="true"
         viewBox="0 0 320 50"
         preserveAspectRatio="none"
-        className="fill-accent pointer-events-none absolute -bottom-3 -left-2 h-[1.55em] w-[calc(100%+1.25rem)] opacity-[0.125] md:-left-5 md:w-[calc(100%+2.25rem)]"
+        className="fill-accent pointer-events-none absolute -bottom-4 -left-1 h-[1.55em] w-[calc(100%+0.75rem)] opacity-[0.125] md:-left-5 md:w-[calc(100%+1.75rem)]"
       >
-        <path d="M0,32 C60,18 160,4 315,0 C200,8 90,26 20,50 Z" />
+        <path d="M0,32 C60,18 160,4 315,0 C200,9 110,26 44,50 Z" />
       </svg>
       {/* Positioned, so it paints over the positioned swash above it
           without either needing a z-index (and without this heading
