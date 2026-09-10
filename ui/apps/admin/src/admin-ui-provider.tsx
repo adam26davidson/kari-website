@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertDialog,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogTitle,
@@ -118,15 +119,29 @@ export function AdminUiProvider({ children }: { children: React.ReactNode }) {
               Choose Yes to go ahead, or No to leave things as they are.
             </AlertDialogDescription>
             <div className="mt-4 flex flex-row justify-end gap-3">
-              {/* No first, so it is what Radix focuses when the dialog
-                  opens: the safe answer should be the one a stray Enter
-                  gives. */}
-              <AdminButton
-                variant="secondary"
-                onClick={answerWith(confirmation.onNo)}
-              >
-                No
-              </AdminButton>
+              {/* No goes through Radix's Cancel primitive, which is what
+                  makes it the element the dialog focuses on open: Content
+                  cancels the default open-autofocus and focuses whatever
+                  Cancel registered. So the safe answer is where focus
+                  lands and what a stray Enter gives, and the keyboard user
+                  who opened this with Enter on a row's Delete is not left
+                  focused on that Delete, behind the overlay and inside the
+                  tree Radix has just marked aria-hidden.
+
+                  `asChild` keeps it an AdminButton, so it still carries
+                  the look and the `.admin-button` hook. Cancel also asks
+                  the dialog to close, which is inert here — this
+                  AlertDialog is controlled by `confirmation` with no
+                  `onOpenChange` — leaving the `onClick` below as the one
+                  thing that answers the question. */}
+              <AlertDialogCancel asChild>
+                <AdminButton
+                  variant="secondary"
+                  onClick={answerWith(confirmation.onNo)}
+                >
+                  No
+                </AdminButton>
+              </AlertDialogCancel>
               <AdminButton onClick={answerWith(confirmation.onYes)}>
                 Yes
               </AdminButton>

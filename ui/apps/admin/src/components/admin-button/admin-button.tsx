@@ -62,17 +62,26 @@ export function AdminButton({
    * no disabled state, and nothing in the admin needs a disabled picker.
    */
   disabled,
+  /**
+   * Button branch only, and here for one caller: Radix's `AlertDialog.Cancel`
+   * has to reach the underlying element to make it what the dialog focuses
+   * on open. Passed through `asChild`, so it arrives as a prop like any
+   * other (React 19).
+   */
+  ref,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   htmlFor?: string;
   variant?: AdminButtonVariant;
   disabled?: boolean;
+  ref?: React.Ref<HTMLButtonElement>;
 }) {
   const className = LEGACY_CLASS[variant];
   if (htmlFor === undefined) {
     return (
       <Button
+        ref={ref}
         variant={RECIPE_VARIANT[variant]}
         onClick={onClick}
         disabled={disabled}

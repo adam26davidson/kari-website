@@ -151,6 +151,37 @@ describe("AdminUiProvider confirmation dialog", () => {
     ).toBeInTheDocument();
   });
 
+  // Radix moves focus into an alert dialog by focusing whatever its Cancel
+  // primitive registered — so if No is not rendered THROUGH that primitive,
+  // focus stays on the control that opened the dialog: behind the overlay,
+  // inside the region Radix has just marked aria-hidden. A keyboard user who
+  // pressed Enter on a row's Delete would then re-fire Delete with their next
+  // Enter instead of answering the question in front of them.
+  it("moves focus to No when the dialog opens", async () => {
+    const { press } = renderProvider();
+    await press("ask");
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "No" })).toHaveFocus();
+    });
+  });
+
+  // The other half of the same contract: the answer a stray Enter gives has
+  // to be the safe one, and it has to RUN onNo like any other No.
+  it("answers No when Enter is pressed straight after opening", async () => {
+    const { user, press } = renderProvider();
+    await press("ask-with-no");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "No" })).toHaveFocus();
+    });
+
+    await user.keyboard("{Enter}");
+
+    expect(screen.queryByText("Discard changes?")).toBeNull();
+    expect(onNo).toHaveBeenCalledOnce();
+    expect(onYes).not.toHaveBeenCalled();
+  });
+
   // The e2e journeys answer every delete through `.admin-confirmation`, and
   // click Yes/No inside it by `.admin-button`.
   it("keeps the hooks the e2e journeys answer it through", async () => {

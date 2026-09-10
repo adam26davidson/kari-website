@@ -11,11 +11,18 @@ import { cn } from "./cn";
  * press outside deliberately IGNORED — an alert dialog asks a question that
  * has to be answered, so there is no "click away to make it go".
  *
- * `Action` and `Cancel` are deliberately not vendored. The buttons in the
- * dialog are `AdminButton`s, so they carry the same look and the same
- * `.admin-button` hook as every other button in the app, and the provider
- * that owns the dialog already owns the state the two primitives exist to
- * close.
+ * `Action` is deliberately not vendored: the dialog's Yes is an
+ * `AdminButton`, so it carries the same look and the same `.admin-button`
+ * hook as every other button in the app, and the provider that owns the
+ * dialog already owns the state `Action` exists to close.
+ *
+ * `Cancel` IS vendored, because it is not only a closer. Radix's Content
+ * cancels open-autofocus and focuses whatever `Cancel` registered, so the
+ * safe answer is the one focus lands on and the one a stray Enter gives.
+ * Rendered any other way, focus stays on the control that opened the
+ * dialog — behind the overlay, inside the tree Radix has just marked
+ * aria-hidden. It takes `asChild` so the No button is still an
+ * `AdminButton`.
  */
 export function AlertDialog(props: React.ComponentProps<typeof Primitive.Root>) {
   return <Primitive.Root data-slot="alert-dialog" {...props} />;
@@ -75,4 +82,15 @@ export function AlertDialogDescription({
       {...props}
     />
   );
+}
+
+/**
+ * The dialog's safe answer. Registers itself as the element Radix focuses
+ * when the dialog opens; no styling of its own, since it is always used
+ * with `asChild` around an `AdminButton`.
+ */
+export function AlertDialogCancel(
+  props: React.ComponentProps<typeof Primitive.Cancel>,
+) {
+  return <Primitive.Cancel data-slot="alert-dialog-cancel" {...props} />;
 }

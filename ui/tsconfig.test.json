@@ -30,13 +30,15 @@
     "noFallthroughCasesInSwitch": true
   },
   // vite-bundle-budget.ts and vitest.config.ts are build/test tooling,
-  // type-checked by tsconfig.node.json alongside vite.config.ts. They are
-  // listed here too so their tests in the config project may import them: a
-  // composite project has to list every file in its program.
+  // type-checked by tsconfig.node.json alongside vite.config.ts;
+  // playwright.config.ts likewise, by tsconfig.e2e.json alongside the specs.
+  // They are listed here too so their tests in the config project may import
+  // them: a composite project has to list every file in its program.
   "include": [
     "apps/*/src",
     "packages/*/src",
     "test",
+    "playwright.config.ts",
     "vite-bundle-budget.ts",
     "vitest.config.ts"
   ]

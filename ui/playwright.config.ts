@@ -51,6 +51,14 @@ export const E2E_COMMIT_SHA = "e2e11ead0000000000000000000000000000cafe";
  * ALL FOUR specs and `npm run test:e2e` exited with "No tests found"
  * rather than running anything, which is the worst possible failure for a
  * suite: a green-looking run that tested nothing.
+ *
+ * The anchoring is only half of it, and the half that is easy to get
+ * wrong: `[\\/]` in front and `$` behind pin the pattern to ONE segment
+ * only if the pattern itself cannot cross a separator. `.` matches `/`,
+ * so `[\\/]admin-.*\.spec\.ts$` still matches
+ * `…/admin-anything/ui/e2e/visitor.spec.ts` and reproduces the exact
+ * failure above in any checkout whose directory STARTS with `admin-`.
+ * So a wildcard here is `[^\\/]*`, never `.*`.
  */
 const SPEC = (pattern: RegExp) =>
   new RegExp(`[\\\\/]${pattern.source}$`);
@@ -121,7 +129,7 @@ export default defineConfig({
       // Every admin-*.spec.ts needs the login the setup project captures,
       // so none of them belong to this credential-free project.
       name: "visitor",
-      testIgnore: SPEC(/admin-.*\.spec\.ts/),
+      testIgnore: SPEC(/admin-[^\\/]*\.spec\.ts/),
     },
   ],
   webServer: {
