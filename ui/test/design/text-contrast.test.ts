@@ -405,18 +405,33 @@ const adminCardOver = (photo: Rgb): Rgb =>
 
 describe("the admin section headings", () => {
   it("finds the heading of every admin section", () => {
-    // Home page, site background, image cleanup, what's on test. A drop
-    // below that means the scan stopped seeing what it is meant to check.
+    // The shared PageTitle (the migrated pages' heading), site background,
+    // image cleanup, what's on test. A drop below that means the scan
+    // stopped seeing what it is meant to check.
     expect(ADMIN_HEADINGS.length).toBeGreaterThanOrEqual(4);
   });
 
   it.each(ADMIN_HEADINGS)(
-    "%s puts its heading in the shared class rather than inheriting a colour",
+    "%s states its heading colour rather than inheriting one",
     (_path, tag) => {
-      // Worn alongside a page's own class where one is needed (the editor
-      // titles add a size), so this is a token check, not equality.
-      const className = tag.match(/className="([^"]*)"/)?.[1] ?? "";
-      expect(className.split(/\s+/)).toContain("admin-section-heading");
+      // Two ways to satisfy the invariant, and it is the invariant — no
+      // heading left to inherit --light-text — that is pinned here, not
+      // either spelling of it.
+      //
+      // A legacy page wears the shared class, alongside a page's own class
+      // where one is needed (the editor titles add a size), so that half is
+      // a token check rather than equality. A page migrated to Tailwind
+      // (#233 onwards) has no stylesheet to put a shared class in: it
+      // states the colour in the markup as `text-foreground`, which is the
+      // same Ink the shared class spends. The class list is read from the
+      // whole tag because a migrated heading composes its classes through
+      // `cn(...)` rather than a plain string literal.
+      const className = tag.match(/className="([^"]*)"/)?.[1] ?? tag;
+      const statesItsOwnColour = /\btext-foreground\b/.test(className);
+      expect(
+        className.split(/[\s"]+/).includes("admin-section-heading") ||
+          statesItsOwnColour,
+      ).toBe(true);
     },
   );
 

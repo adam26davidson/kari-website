@@ -1,18 +1,22 @@
 import { useEffect, useId, useState } from "react";
-import { Card } from "../components/card/card";
-import "./home-page-editor.css";
+import { Card } from "../components/ui/card";
+import { Textarea } from "../components/ui/textarea";
+import { Button } from "../components/ui/button";
+import { PageTitle } from "../components/page-title/page-title";
+import { greetingFor } from "./greeting";
+import { useAdminAccount } from "../auth/use-admin-account";
 import { useAdminToken } from "../hooks/use-admin-token";
 import { HomePageData } from "@kari/shared/models";
 import { PhotoPicker } from "../components/photo-picker/photo-picker";
 import { ImageService } from "@kari/shared/services/images";
 import { HomePageService } from "@kari/shared/services/home-page";
-import { AdminButton } from "../components/admin-button/admin-button";
 import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { useAdminUi } from "../admin-ui-context";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 
 export function HomePageEditor() {
   const { isLoading, showLoading, hideLoading, notify } = useAdminUi();
+  const { name } = useAdminAccount();
   const [homePageData, setHomePageData] = useState<HomePageData>({
     photo: "",
     blurb: "",
@@ -104,44 +108,61 @@ export function HomePageEditor() {
 
   return (
     !isLoading && (
-      <div className="home-page-editor-container">
-        <div className="home-page-editor">
-          <Card>
-            <div className="home-page-editor-card-content">
-              <h2 className="admin-section-heading">Home page</h2>
-              <p className="admin-section-explanation">
-                The photo and welcome text at the top of the site&apos;s home
-                page.
-              </p>
-              <div className="admin-field">
-                {/* Group label: the picker is a composite, not one
-                    control, so there is nothing to point `for` at. */}
-                <span className="admin-field-label">Photo</span>
-                <PhotoPicker
-                  imageFile={imageFile}
-                  fileName={homePageData.photo}
-                  setImageFile={setImageFile}
-                />
-              </div>
-              <div className="admin-field">
-                <label className="admin-field-label" htmlFor={blurbId}>
-                  Welcome text
-                </label>
-                <textarea
-                  id={blurbId}
-                  value={homePageData.blurb}
-                  onChange={(e) => {
-                    setHomePageData({
-                      ...homePageData,
-                      blurb: e.target.value,
-                    });
-                  }}
-                />
-              </div>
-              <AdminButton onClick={saveData}>Save</AdminButton>
-            </div>
-          </Card>
-        </div>
+      // `home-page-editor` is not styling — it is how the e2e home journey
+      // finds this page's textarea (e2e/admin-journeys.spec.ts).
+      <div className="home-page-editor mx-auto flex w-full max-w-[720px] flex-col gap-5">
+        <PageTitle>{greetingFor(new Date().getHours(), name)}</PageTitle>
+        <Card className="flex flex-col gap-6 p-5 sm:p-8">
+          <div className="flex flex-col gap-2">
+            {/* Group label: the picker is a composite, not one control, so
+                there is nothing to point `for` at. */}
+            <span className="text-muted-foreground font-sans text-sm">
+              Your photo
+            </span>
+            <PhotoPicker
+              imageFile={imageFile}
+              fileName={homePageData.photo}
+              setImageFile={setImageFile}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label
+              className="text-muted-foreground font-sans text-sm"
+              htmlFor={blurbId}
+            >
+              Your welcome text
+            </label>
+            <Textarea
+              id={blurbId}
+              value={homePageData.blurb}
+              onChange={(e) => {
+                setHomePageData({
+                  ...homePageData,
+                  blurb: e.target.value,
+                });
+              }}
+            />
+          </div>
+          {/* Column-REVERSE on a phone: the boards put the full-width Save
+              above the line explaining it, so the button stays where her
+              thumb is and the caption reads as a footnote to it. */}
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-muted-foreground text-center font-sans text-sm sm:text-left">
+              Changes appear on your site once you save.
+            </p>
+            {/* `admin-button` is the e2e journeys' hook for Save, the same
+                convention AdminButton's LEGACY_CLASS documents. The vendored
+                Button directly (rather than AdminButton) because this one
+                needs the boards' full-width-on-a-phone Save, which
+                AdminButton's four-weights API deliberately does not take. */}
+            <Button
+              className="admin-button w-full sm:w-auto"
+              onClick={saveData}
+            >
+              Save
+            </Button>
+          </div>
+        </Card>
       </div>
     )
   );

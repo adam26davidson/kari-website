@@ -28,6 +28,16 @@ vi.mock("../hooks/use-admin-token", () => ({
   useAdminToken: () => async () => "token",
 }));
 
+// The page greets whoever is signed in; the real hook reads Auth0, which
+// these tests do not mount. greeting.test.ts covers what the greeting says.
+vi.mock("../auth/use-admin-account", () => ({
+  useAdminAccount: () => ({
+    name: "Kari Davidson",
+    initial: "K",
+    signOut: vi.fn(),
+  }),
+}));
+
 // The editor mounts at /admin/home; the hook behind the unsaved-changes
 // guard needs a data router, and the /admin/:section pattern also matches
 // /admin/haiku, giving the guard tests somewhere to navigate to.
@@ -77,21 +87,26 @@ describe("HomePageEditor initial load", () => {
     ).toBeInTheDocument();
     // Never show an empty editor after a failed load — saving it would
     // overwrite the real data.
-    expect(screen.queryByLabelText("Welcome text")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Your welcome text")).not.toBeInTheDocument();
   });
 
-  it("names the page and both of its fields", async () => {
+  it("greets her by name and labels both of its fields", async () => {
     renderPage();
 
+    // Which greeting depends on the hour the test runs at; that it greets
+    // HER is the part this page owns (greeting.test.ts pins the wording).
     expect(
-      await screen.findByRole("heading", { name: "Home page" }),
+      await screen.findByRole("heading", {
+        name: /^Good (morning|afternoon|evening), Kari$/,
+      }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/the photo and welcome text at the top/i),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Photo")).toBeInTheDocument();
+    expect(screen.getByText("Your photo")).toBeInTheDocument();
     // Wired to the textarea, not merely sitting above it.
-    expect(screen.getByLabelText("Welcome text")).toHaveValue("hello");
+    expect(screen.getByLabelText("Your welcome text")).toHaveValue("hello");
+    // Save says what it will do before she presses it.
+    expect(
+      screen.getByText("Changes appear on your site once you save."),
+    ).toBeInTheDocument();
   });
 
   it("retries the load and recovers when Retry is clicked", async () => {
