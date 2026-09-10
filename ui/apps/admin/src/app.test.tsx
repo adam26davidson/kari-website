@@ -1,35 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { App } from "./app";
-import { useIsMobile } from "@kari/shared/hooks/use-is-mobile";
-import { SiteSettingsService } from "@kari/shared/services/site-settings";
+import { Admin } from "./admin";
 
-// App is a shell: the admin bar, the site background, and the admin section
-// inside it. The section has its own tests (admin.test.tsx); stub it so this
-// file exercises only the shell.
-vi.mock("./admin", () => ({
-  Admin: () => <div>Admin section stub</div>,
-}));
-
-vi.mock("@kari/shared/hooks/use-is-mobile", () => ({
-  useIsMobile: vi.fn(),
-}));
-
-// The header's user section is the shell's only Auth0 consumer, and these
-// tests mount no provider.
-vi.mock("./auth/admin-auth", () => ({
-  AdminAuthProvider: () => null,
-  HeaderUserSection: () => <div className="header-user-section">User stub</div>,
-}));
-
-// App calls useSiteBackground, which reads site-settings.json straight from
-// S3; unstubbed it reaches for a hostname that does not resolve. The hook's
-// own behaviour is covered in the shared package.
-vi.mock("@kari/shared/services/site-settings", () => ({
-  SiteSettingsService: { getFromS3: vi.fn() },
-}));
+// App is the outermost frame and nothing else since #592: the shared
+// `.whole-page` box and the error boundary around the admin section. The
+// section has its own tests (admin.test.tsx) and the shell inside it has
+// its own (components/app-shell/); stub the section out here.
+vi.mock("./admin", () => ({ Admin: vi.fn() }));
 
 function renderApp() {
   return render(
@@ -40,47 +19,37 @@ function renderApp() {
 }
 
 beforeEach(() => {
-  vi.mocked(useIsMobile).mockReturnValue(false);
-  // Re-stubbed per test: setup.ts's vi.restoreAllMocks() drops any
-  // implementation set at mock-declaration time.
-  vi.mocked(SiteSettingsService.getFromS3).mockResolvedValue({
-    backgroundPhoto: "",
-  });
+  vi.mocked(Admin).mockImplementation(() => <div>Admin section stub</div>);
 });
 
-describe("the admin shell", () => {
-  it("renders the admin bar and the section inside it", () => {
-    const { container } = renderApp();
-    expect(screen.getByText("Kari Davidson - Admin")).toBeInTheDocument();
-    expect(screen.getByText("Admin section stub")).toBeInTheDocument();
-    expect(container.querySelector(".admin-header")).not.toBeNull();
-  });
-
-  // The same frame the public site uses, from the shared stylesheet: the
-  // fixed-height page with one inner scroller. e2e/screenshots.mjs grows the
-  // viewport by looking for exactly these, so an admin page whose shell lost
-  // them would be captured at one viewport-height and reviewed half-blind.
-  it("uses the shared page frame", () => {
-    const { container } = renderApp();
-    expect(container.querySelector(".whole-page > .content")).not.toBeNull();
-  });
-
-  it("shows the signed-in user in the bar", () => {
-    renderApp();
-    expect(screen.getByText("User stub")).toBeInTheDocument();
-  });
-
-  it("shows the phone menu instead of the section when opened", async () => {
-    vi.mocked(useIsMobile).mockReturnValue(true);
+describe("the admin app's frame", () => {
+  it("renders the admin section", () => {
     renderApp();
     expect(screen.getByText("Admin section stub")).toBeInTheDocument();
+  });
 
-    await userEvent.click(screen.getByRole("button", { name: "Menu" }));
+  // `.whole-page` is the shared fixed-height box (`100dvh`, with a `100vh`
+  // fallback — #558). It is what the shell's one scroll container measures
+  // itself against, and losing it would give the document a second scroller
+  // and strand the sidebar off the top of a phone.
+  it("uses the shared fixed-height page frame", () => {
+    const { container } = renderApp();
+    expect(container.querySelector(".whole-page")).not.toBeNull();
+  });
 
-    expect(screen.queryByText("Admin section stub")).toBeNull();
-    expect(screen.getByRole("link", { name: "Haiku" })).toHaveAttribute(
-      "href",
-      "/haiku",
-    );
+  // A page that throws must not leave a maintainer staring at a blank
+  // document with no way back. The boundary resets on navigation, which is
+  // why it wraps the section rather than the router.
+  it("catches a failure inside the section", () => {
+    // React logs the caught error; the test would otherwise fail on the
+    // noise rather than on the assertion.
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(Admin).mockImplementation(() => {
+      throw new Error("the admin section exploded");
+    });
+
+    renderApp();
+
+    expect(screen.getByText(/something went wrong/i)).toBeInTheDocument();
   });
 });

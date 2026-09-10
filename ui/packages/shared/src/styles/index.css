@@ -22,13 +22,6 @@
      secondary weight of this same foreground. */
   --dark-text: #181818;
 
-  /* Secondary text on the dark header bar — the admin user name. What
-     --muted-text is on the pale panels, this is on the bar: a step down
-     from --light-text that still clears WCAG AA over the bar tint at its
-     worst (a pure-white background photo). Pinned by
-     test/design/text-contrast.test.ts. */
-  --muted-light-text: #c9c9c9;
-
   /* The surface tints, in one place (#480).
      ------------------------------------------------------------------
      Every panel on this site floats over the admin-chosen background

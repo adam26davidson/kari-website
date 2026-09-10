@@ -1,0 +1,205 @@
+/* The admin app's Tailwind v4 entry stylesheet and design tokens (#592).
+   ---------------------------------------------------------------------
+   Imported LAST in src/main.tsx, after the shared index.css, and that
+   order is load-bearing: the `:root` below re-points three of the shared
+   site's tokens for this app only (see "The bridge"), and two equally
+   specific `:root` rules are settled by source order.
+
+   Tailwind's preflight is on, unscoped. That is the whole reason the
+   admin became its own build in #591 — nothing here reaches the public
+   site, so the reset needs no `important` selector, no prefix and no
+   scoping tricks. Everything Tailwind emits sits inside
+   `@layer theme, base, components, utilities`, and layered rules lose to
+   unlayered ones, so the admin's remaining hand-written CSS (admin.css
+   and the seven not-yet-migrated pages) still wins wherever it declares
+   something. Where it does not — a property those sheets never declared
+   and took from the browser's default — the compat rules at the end of
+   admin.css state it.
+
+   The palette is docs/design/admin-redesign/README.md's, exported from
+   the maintainer's design canvas: a warm paper/cream studio theme with a
+   dark-green lead and a maroon that supports it. Each of the seven is
+   spelled ONCE, as the palette name the boards call it by, and the
+   shadcn variables alias those names — which is the same rule the rest
+   of the site's colours follow (#480, #565) and what lets
+   test/design/color-tokens.test.ts pin them. The contrast floors those
+   pairs have to clear live in test/design/text-contrast.test.ts. */
+@import "tailwindcss";
+
+/* Explicit rather than relying on Tailwind's automatic source detection:
+   this stylesheet lives in src/styles/, and the class names it has to
+   see are one level up. Resolved relative to this file. */
+@source "../**/*.{ts,tsx}";
+
+:root {
+  /* --- The seven, by the name the design boards call them ---------- */
+
+  /* The page itself. */
+  --paper: #faf7f2;
+  /* The sidebar, the quiet chips, every muted surface. */
+  --cream: #f4efe6;
+  /* Every hairline. */
+  --sand: #e9e0cf;
+  /* Body text and headings on any of the pale surfaces. */
+  --ink: #2a2723;
+  /* Secondary text on those same surfaces. */
+  --stone: #6f6759;
+  /* Green leads: the one "do the obvious next thing" colour — the
+     filled Save, the active nav pill, the focus ring. */
+  --fir: #2e5a44;
+  /* Maroon supports: links out of the app, the brush swash behind a
+     page title, and everything destructive. */
+  --maroon: #7a3b3f;
+
+  /* --- The shadcn variables, as aliases of those ------------------- */
+
+  --background: var(--paper);
+  --foreground: var(--ink);
+  /* Cards are white on paper, ringed in a warm hairline rather than a
+     grey one (README, "Supporting values"). */
+  --card: #ffffff;
+  --card-foreground: var(--ink);
+  --popover: #fffefb;
+  --popover-foreground: var(--ink);
+  --primary: var(--fir);
+  --primary-foreground: var(--paper);
+  --secondary: var(--cream);
+  --secondary-foreground: var(--ink);
+  --muted: var(--cream);
+  --muted-foreground: var(--stone);
+  --accent: var(--maroon);
+  --accent-foreground: var(--paper);
+  --destructive: var(--maroon);
+  --destructive-foreground: var(--paper);
+  --border: var(--sand);
+  /* Form fields sit a shade darker than the card borders so a control
+     reads as something to type in rather than as another panel edge. */
+  --input: #dcd2be;
+  --ring: var(--fir);
+  --sidebar: var(--cream);
+  --sidebar-foreground: var(--ink);
+  --sidebar-border: var(--sand);
+  /* The active section's pill: the green at 11%, a tint of the very
+     colour its label is set in rather than a second colour, so the
+     marker can never drift away from what it marks. */
+  --sidebar-accent: color-mix(in srgb, var(--fir) 11%, transparent);
+  --sidebar-accent-foreground: var(--fir);
+
+  /* Buttons are 10px; cards take `rounded-xl` for the boards' 16px. */
+  --radius: 10px;
+
+  /* --- The bridge --------------------------------------------------
+     Seven admin pages still wear the pre-shadcn stylesheets, and will
+     until #233-#238 migrate them one at a time. Rather than leave them
+     brown-on-grey beside a green-on-paper shell, they are re-pointed at
+     this theme through the tokens they already spend.
+
+     admin.css's `--admin-primary: var(--primary)` alias was written for
+     exactly this (#565): re-declaring the shared `--primary` here moves
+     every filled control, ring, glyph and tick in the legacy CSS to Fir
+     in ONE edit, with no churn in the pinned token tests and — because
+     the admin is its own build — no effect on the public site, which
+     keeps its brown. `--primary-hover` follows it for the same reason.
+
+     `--admin-danger` follows for the same reason and one more: the
+     shadcn recipe's outlined Delete is already maroon on every list row,
+     so leaving the legacy token at its old red would give the admin TWO
+     destructive colours — a maroon Delete above a red "couldn't do that"
+     banner about the very action it started. One red, as it has always
+     been (#457); it just moved.
+
+     `--primary` itself needs no line of its own down here: the shadcn
+     alias above IS the re-declaration, which is the point — one token,
+     two worlds. */
+  --primary-hover: #24462f;
+  --admin-danger: var(--maroon);
+
+  /* The face axis, likewise (#483). Every rule in every workspace
+     reaches a typeface through one of these two tokens, so re-pointing
+     them is how the legacy admin pages become Geist without touching
+     twenty-six rules. Both point at the interface face: Newsreader is
+     for greetings, page titles and item titles, which are the shell's
+     and the migrated pages' business and are asked for with the
+     `font-serif` utility rather than taken by inheritance. */
+  --font-ui: var(--font-sans);
+  --font-body: var(--font-sans);
+}
+
+@theme {
+  /* Geist for the interface, Newsreader (italic) for the warm notes.
+     Loaded from Google Fonts in index.html, with the fallbacks named
+     here so a blocked font request degrades to a face of the same shape
+     rather than to Times. */
+  --font-sans: "Geist", system-ui, sans-serif;
+  --font-serif: "Newsreader", Georgia, serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  /* Not a shadcn name: the darker green a filled control answers the
+     pointer with. Exposed as a theme colour so a hover state reads as
+     `hover:bg-primary-hover` in the markup, and so the shared
+     `--primary-hover` this bridges keeps a consumer. */
+  --color-primary-hover: var(--primary-hover);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 6px);
+}
+
+/* The admin has its own fixed look and drops the public site's
+   background photo and header colours entirely — the settled direction
+   of #642, and why `useSiteBackground` is no longer called here. The
+   photo is drawn by `body::before` in the SHARED index.css, which this
+   app still imports for the tokens and the `.whole-page` frame, so it is
+   turned off rather than removed. `content: none` removes the
+   pseudo-element; `display: none` would leave it generated. */
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+body::before {
+  content: none;
+}
+
+/* The shared SiteButton, which in the admin is only ever an error card's
+   Retry or Reload. It is deliberately translucent on the public site,
+   where it sits over a photograph and a solid slab would read as a
+   sticker; on the admin's opaque paper that same 71% fill lands at 3.7:1
+   under its own near-white label — the one place re-pointing `--primary`
+   above makes a shared rule worse rather than better. Opaque here, like
+   every other filled control in this palette (7.9:1), and answering the
+   pointer with the same darker green the shadcn recipe uses. */
+.site-button {
+  background-color: var(--primary);
+}
+
+.site-button:hover,
+.site-button:active {
+  background-color: var(--primary-hover);
+}

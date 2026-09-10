@@ -1,6 +1,16 @@
 import "./admin.css";
 import { Suspense } from "react";
-import { Navigate, NavLink, Route, Routes } from "react-router";
+import { Navigate, Route, Routes } from "react-router";
+import {
+  BookOpen,
+  Camera,
+  FlaskConical,
+  House,
+  Image,
+  Palette,
+  PenLine,
+  Sparkles,
+} from "lucide-react";
 import { AdminHaikuPage } from "./admin-haiku-page/admin-haiku-page";
 import { useAuth0 } from "@auth0/auth0-react";
 import { AdminHaigaPage } from "./admin-haiga-page/admin-haiga-page";
@@ -11,6 +21,9 @@ import { AdminImageGcPage } from "./admin-image-gc-page/admin-image-gc-page";
 import { AdminBackgroundPage } from "./admin-background-page/admin-background-page";
 import { AdminButton } from "./components/admin-button/admin-button";
 import { AdminUiProvider } from "./admin-ui-provider";
+import { AppShell } from "./components/app-shell/app-shell";
+import type { AdminPage } from "./components/app-shell/admin-page";
+import { Wordmark } from "./components/app-shell/wordmark";
 import { lazyWithRetry } from "@kari/shared/components/error-boundary/lazy-with-retry";
 
 // Staging-only section (VITE_SHOW_TEST_STATUS is set in .env.staging and
@@ -25,88 +38,81 @@ const AdminWhatsOnTestPage = lazyWithRetry(() =>
 );
 
 // Single source of truth for the admin menu: ids (also the URL segment
-// under /admin), order, and labels.
-const ADMIN_PAGES = [
-  { id: "home", label: "Home" },
-  { id: "haiku", label: "Haiku" },
-  { id: "haiga", label: "Haiga" },
-  { id: "photography", label: "Photography" },
-  { id: "other-works", label: "Other works" },
+// under /admin), order, labels, and — since #592 — the stroke icon each
+// section wears. The icon is not decoration: at tablet width the shell
+// collapses to a narrow rail where the glyph is what tells one section
+// from another at a glance, above the name in small type.
+const ADMIN_PAGES: readonly AdminPage[] = [
+  { id: "home", label: "Home", icon: House },
+  { id: "haiku", label: "Haiku", icon: PenLine },
+  { id: "haiga", label: "Haiga", icon: Image },
+  { id: "photography", label: "Photography", icon: Camera },
+  { id: "other-works", label: "Other works", icon: BookOpen },
   // The route segment stays "background" — it is bookmarked, and
   // e2e/screenshots.mjs captures it by path — while the label says what
   // the page now covers: the photo, the header colours and the fonts.
-  { id: "background", label: "Appearance" },
-  { id: "image-cleanup", label: "Image cleanup" },
-] as const;
+  { id: "background", label: "Appearance", icon: Palette },
+  { id: "image-cleanup", label: "Image cleanup", icon: Sparkles },
+];
 
 export function Admin() {
   const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
   // Read at render time (not module scope) so tests can stub the env var;
   // Vite still inlines the value, so the condition folds away in prod.
   const showTestStatus = import.meta.env.VITE_SHOW_TEST_STATUS === "true";
-  const pages: ReadonlyArray<{ id: string; label: string }> = showTestStatus
-    ? [...ADMIN_PAGES, { id: "whats-on-test", label: "What's on test" }]
+  const pages: readonly AdminPage[] = showTestStatus
+    ? [
+        ...ADMIN_PAGES,
+        { id: "whats-on-test", label: "What's on test", icon: FlaskConical },
+      ]
     : ADMIN_PAGES;
 
+  // Signed out, or still asking Auth0 whether she is. One screen for both:
+  // the wordmark carries the page's <h1> in every state, so the document
+  // never has an outline that starts at level 2 (#504), and the line under
+  // it changes rather than the page.
+  if (!isAuthenticated) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-5 bg-background px-6 text-center">
+        <Wordmark className="text-[28px]" />
+        <p className="max-w-xs font-sans text-sm text-muted-foreground">
+          {isLoading
+            ? "Just a moment — checking whether you are already signed in."
+            : "Your workshop is behind a sign-in, so only you can change the site."}
+        </p>
+        {!isLoading && (
+          <AdminButton onClick={() => loginWithRedirect()}>Log In</AdminButton>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="admin-container">
-      {!isAuthenticated && !isLoading && (
-        <AdminButton onClick={() => loginWithRedirect()}>Log In</AdminButton>
-      )}
-      {isAuthenticated && !isLoading && (
-        <>
-          <div className="admin-menu">
-            {pages.map(({ id, label }) => (
-              <NavLink
-                key={id}
-                to={`/${id}`}
-                className={({ isActive }) =>
-                  `admin-menu-item ${isActive ? "selected" : ""}`
-                }
-              >
-                {label}
-              </NavLink>
-            ))}
-          </div>
-          <div className="admin-content">
-            <AdminUiProvider>
-              <Routes>
-                <Route path="home" element={<HomePageEditor />} />
-                <Route path="haiku/:id?" element={<AdminHaikuPage />} />
-                <Route path="haiga/:id?" element={<AdminHaigaPage />} />
-                <Route
-                  path="photography/:id?"
-                  element={<AdminPhotographyPage />}
-                />
-                <Route
-                  path="other-works/:id?"
-                  element={<AdminOtherWorksPage />}
-                />
-                <Route path="background" element={<AdminBackgroundPage />} />
-                <Route path="image-cleanup" element={<AdminImageGcPage />} />
-                {showTestStatus && (
-                  <Route
-                    path="whats-on-test"
-                    element={
-                      // Local boundary: keep the admin menu in place
-                      // while the page's lazy chunk loads.
-                      <Suspense
-                        fallback={<div className="loading">Loading...</div>}
-                      >
-                        <AdminWhatsOnTestPage />
-                      </Suspense>
-                    }
-                  />
-                )}
-                <Route
-                  path="*"
-                  element={<Navigate to="/home" replace />}
-                />
-              </Routes>
-            </AdminUiProvider>
-          </div>
-        </>
-      )}
-    </div>
+    <AppShell pages={pages}>
+      <AdminUiProvider>
+        <Routes>
+          <Route path="home" element={<HomePageEditor />} />
+          <Route path="haiku/:id?" element={<AdminHaikuPage />} />
+          <Route path="haiga/:id?" element={<AdminHaigaPage />} />
+          <Route path="photography/:id?" element={<AdminPhotographyPage />} />
+          <Route path="other-works/:id?" element={<AdminOtherWorksPage />} />
+          <Route path="background" element={<AdminBackgroundPage />} />
+          <Route path="image-cleanup" element={<AdminImageGcPage />} />
+          {showTestStatus && (
+            <Route
+              path="whats-on-test"
+              element={
+                // Local boundary: keep the shell in place while the page's
+                // lazy chunk loads.
+                <Suspense fallback={<div className="loading">Loading...</div>}>
+                  <AdminWhatsOnTestPage />
+                </Suspense>
+              }
+            />
+          )}
+          <Route path="*" element={<Navigate to="/home" replace />} />
+        </Routes>
+      </AdminUiProvider>
+    </AppShell>
   );
 }

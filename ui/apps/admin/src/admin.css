@@ -5,11 +5,16 @@
   --admin-field-bg: rgb(240, 240, 240);
   --admin-field-border: rgba(0, 0, 0, 0.15);
   /* The one red in the admin. Destructive controls have to LOOK
-     destructive and must never be mistaken for the brown primary (#457),
-     and an error toast is the same statement in a different shape — so
-     both spend this token rather than repeating the hex. */
+     destructive and must never be mistaken for the primary (#457), and a
+     failure banner is the same statement in a different shape — so both
+     spend this token rather than repeating the hex.
+
+     Since #592 the value here is the FALLBACK: src/styles/theme.css
+     re-points it to the design boards' maroon for this build, the same
+     way it re-points --primary, so that the legacy pages' banners and
+     the shadcn recipe's outlined Delete are one colour rather than two
+     reds a shade apart. */
   --admin-danger: #a33327;
-  --admin-danger-hover: #872a20;
   /* The one brown, and the darker one every primary control answers the
      pointer with. Same argument as the red above, arrived at the long way
      round: this hex was written out in six stylesheets, so changing the
@@ -25,9 +30,16 @@
      one. It is declared in packages/shared/src/styles/index.css, which
      both apps import; these names stay because "the admin's primary" is
      what the rules below mean, and because a future admin palette can
-     re-point them without touching the public site. */
+     re-point them without touching the public site — which is exactly
+     what src/styles/theme.css now does: since #592 the admin's `--primary`
+     is the design boards' Fir green, not the public site's brown, and this
+     alias is how that one edit reached every rule below.
+
+     `--admin-primary-hover` and `--admin-danger-hover` went with the
+     buttons that were the only things spending them: the shadcn recipe in
+     components/ui/button-variants.ts darkens a fill with an opacity step
+     or the `--primary-hover` token directly. */
   --admin-primary: var(--primary);
-  --admin-primary-hover: var(--primary-hover);
   /* One reading measure and one size for admin body prose. Both, because
      `ch` resolves against the element's own font-size: the what's-on-test
      panel had a 15px explanation capped at 60ch sitting above 16px notes
@@ -38,100 +50,34 @@
   --admin-prose-measure: 60ch;
 }
 
-.admin-container {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  max-height: 100%;
-  height: calc(100%);
-  width: 100%;
-}
+/* The admin's ONE scroll container (test/design/scroll-containers.test.ts).
+   Everything inside it grows; only this box turns a tall page into a
+   scrollbar.
 
-.admin-menu {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  width: 200px;
-  /* Never let the content column squeeze the sidebar (it shrank to ~160px
-     at tablet width when an editor overflowed, #259). */
-  flex-shrink: 0;
-  height: calc(100% - 15px);
-  padding-top: 15px;
-  background-color: var(--panel-tint);
-  /* Blur what shows through so the menu text always sits on a calm,
-     near-solid backing regardless of the photo behind it (#307). */
-  backdrop-filter: blur(10px);
-}
-
-.admin-menu-item {
-  /* Real <a> (NavLink) so the section is a browser-history entry;
-     neutralize default anchor/button chrome so it keeps the plain-text
-     menu look. */
-  background: none;
-  border: none;
-  /* The rail the selected section fills in (#500). Declared transparent on
-     every item so the marker is a shape appearing rather than a label
-     jumping sideways, and paid for out of the left padding below —
-     content-box means the border is added to `width`, so an unreserved 3px
-     is 3px past the sidebar's edge. */
-  border-left: 3px solid transparent;
-  font: inherit;
-  text-align: left;
-  text-decoration: none;
-  box-sizing: content-box;
-  /* Shared secondary-text token: dark enough to stay legible where the
-     photo behind the menu is light (#307, #354); the selected item is
-     darker still. */
-  color: var(--muted-text);
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
-  width: calc(100% - 30px);
-  padding: 12px 0px 12px 27px;
-  margin: 0px;
-  transition:
-    color 0.2s,
-    border-left-color 0.2s;
-  font-size: 18px;
-  font-family: var(--font-ui);
-  font-weight: var(--display-weight);
-  font-style: normal;
-}
-
-/* Which section she is in, told twice: the darker text, and the brown rail
-   the base rule reserved. Colour alone was the whole signal until #500, and
-   the two greys either side of it are a step most eyes can make and some
-   cannot (WCAG 1.4.1, Use of Color). The link's aria-current — NavLink sets
-   it — says the same thing to a screen reader. */
-.admin-menu-item.selected {
-  color: var(--dark-text);
-  border-left-color: var(--admin-primary);
-}
-
-.admin-menu-item:hover {
-  color: var(--dark-text);
-  cursor: pointer;
-}
-
-.admin-menu-item:active {
-  color: var(--dark-text);
-}
-
+   `flex: 1` + `min-height: 0` rather than the `height: 100%` it declared
+   before #592, because the shell now puts it in a ROW flex container beside
+   the sidebar at desktop and tablet widths and in a COLUMN one under the
+   top bar on a phone. Those two want different properties to size it and
+   the same one to let it shrink below its content — which is what makes the
+   overflow scrollable rather than pushing the shell open. */
 .admin-content {
-  flex-grow: 1;
-  /* The content column must be allowed to shrink below its content's
-     intrinsic width, or a wide editor pushes it (and the page) past the
-     viewport instead of being clamped by the rules below (#259). */
+  flex: 1;
+  /* Both axes: the row layout needs the width one (a wide editor otherwise
+     pushes the page past the viewport instead of being clamped, #259) and
+     the column layout needs the height one. */
   min-width: 0;
-  margin: 0px;
-  height: 100%;
+  min-height: 0;
   overflow-y: auto;
-  /* Symmetric gutter: at tablet width the sidebar eats the left side and
-     the cards otherwise run to within 8px of the right edge (#288). */
-  padding: 0 16px;
+  padding: 32px;
   box-sizing: border-box;
+}
+
+@media (max-width: 767.98px) {
+  .admin-content {
+    /* The list cards carry their own margin; a narrow phone can't spare
+       the full gutter on top of it. */
+    padding: 12px 8px;
+  }
 }
 
 /* Base input/textarea styling for the admin editors. Every raw <input> /
@@ -295,73 +241,6 @@ input[type="checkbox"] {
   overflow-wrap: anywhere;
 }
 
-/* Narrow viewports: the fixed-width sidebar would leave too little room
-   for the content (~230px on a 390px phone), so it collapses into a
-   wrapping top bar and the content takes the full width. The breakpoint
-   matches useIsMobile()'s 768px default used by the public header. */
-@media (max-width: 767.98px) {
-  .admin-container {
-    flex-direction: column;
-    align-items: stretch;
-    justify-content: flex-start;
-  }
-
-  /* A grid, not a wrapping row. Wrapped and centred, the eight links came
-     out as a ragged 4/3/1 block whose neighbours sat a few pixels apart —
-     usable, but the opposite of the calm the rest of the admin aims for
-     (design brief §1). Fixed columns give every link the same start, a
-     real gap from the one beside it, and a full-cell tap target. Row-major
-     (the default flow) rather than a column count pinned to today's eight
-     pages: adding a section keeps the two tidy columns instead of silently
-     spilling into a third, cramped one. */
-  .admin-menu {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    align-content: start;
-    width: 100%;
-    /* With the default content-box, the side padding below is ADDED to the
-       100% above and the menu overflows the viewport by exactly that much
-       (16px on a 390px phone). */
-    box-sizing: border-box;
-    height: auto;
-    /* The grid had no gap, so "a real gap from the one beside it" was only
-       ever the cells' own side padding — vertically the rows met exactly,
-       and eight links at a ~35px pitch read as a dense index rather than a
-       menu (design brief §1). Row gap first: touching rows are what makes
-       the block look like a table of contents. */
-    gap: 6px 8px;
-    padding: 10px 8px;
-  }
-
-  .admin-menu-item {
-    width: auto;
-    /* A phone-sized target, the same 44px floor the list rows' controls
-       take at this breakpoint — a menu is tapped at least as often as they
-       are. min-height rather than padding alone so the number in the CSS is
-       the number a fingertip gets; the base rule is content-box, which
-       would otherwise add the padding on top of it. */
-    box-sizing: border-box;
-    min-height: 44px;
-    padding: 8px 16px;
-    /* Smaller so five items fit the wrapping bar on a 390px phone — which
-       drops below the 18px the base rule's --display-weight is allowed at,
-       so the weight comes back to the 400 default here. A 16px hairline in
-       Noto Serif JP is precisely what #356 is about. */
-    font-size: 16px;
-    font-weight: 400;
-  }
-
-  .admin-content {
-    width: 100%;
-    flex-grow: 1;
-    height: auto;
-    min-height: 0;
-    /* The list cards carry their own 8px margin; a narrow phone can't
-       spare the full gutter on top of it. */
-    padding: 0 4px;
-  }
-}
-
 /* The move-up/move-down circles, and nothing else: edit and delete became
    labelled buttons in #457, so every remaining icon-only control in the
    admin is a low-consequence directional nudge.
@@ -405,114 +284,11 @@ input[type="checkbox"] {
   cursor: not-allowed;
 }
 
-/* The same darkening .admin-button.secondary uses, so the two outlined
-   shapes answer the pointer identically. */
+/* The move arrows answer the pointer by darkening, like every other
+   outlined control on the page. */
 .admin-icon-button:hover {
   background-color: #e4ded3;
   cursor: pointer;
-}
-
-/* Fixed overlays so they are visible regardless of list scroll position */
-.admin-loading {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: fixed;
-  inset: 0;
-  z-index: 1001;
-  background-color: rgba(0, 0, 0, 0.6);
-  font-size: 20px;
-  font-family: var(--font-ui);
-  font-weight: 400;
-  font-style: normal;
-}
-
-.admin-loading-message {
-  background-color: var(--card-surface);
-  color: var(--dark-text);
-  padding: 16px 32px;
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-}
-
-.admin-confirmation {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background-color: rgba(0, 0, 0, 0.6);
-}
-
-.admin-confirmation-dialog {
-  background-color: var(--card-surface);
-  color: var(--dark-text);
-  max-width: 440px;
-  /* Delete confirmations quote the item's own title, so the dialog now
-     carries text nobody vetted for length. Without this, one long
-     unbroken word (a pasted filename, a run-on title) sets the box's
-     min-content width and pushes it past a 390px screen. */
-  overflow-wrap: anywhere;
-  padding: 28px 36px;
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  text-align: center;
-  font-size: 17px;
-  font-family: var(--font-ui);
-  font-weight: 400;
-}
-
-.admin-toast {
-  position: fixed;
-  top: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1002;
-  padding: 12px 24px;
-  border-radius: 6px;
-  color: white;
-  font-size: 16px;
-  font-family: var(--font-ui);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  animation: admin-toast-in 0.2s ease-out;
-}
-
-.admin-toast-success {
-  background-color: #3e6b2f;
-}
-
-.admin-toast-error {
-  background-color: var(--admin-danger);
-}
-
-@keyframes admin-toast-in {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-}
-
-.admin-confirmation-options {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  margin-top: 20px;
-  gap: 40px;
-}
-
-.admin-confirmation-option {
-  margin: 10px;
-}
-
-.admin-login-button {
-  margin: auto;
 }
 
 ::-webkit-scrollbar-track {
@@ -522,4 +298,51 @@ input[type="checkbox"] {
 * {
   scrollbar-width: medium; /* "auto" | "thin" | "none" */
   scrollbar-color: #888 transparent; /* thumb color, track color */
+}
+
+/* --- Tailwind preflight compatibility --------------------------------
+   Tailwind's reset lives in `@layer base`, so it loses to every unlayered
+   rule in this file and in the seven pages still wearing their pre-shadcn
+   stylesheets. The exception is a property those sheets never declared and
+   took from the browser's default instead — the reset does state those, so
+   they change. Each one that mattered is stated here, in the scale's own
+   tokens, and each goes as the page that needs it is migrated (#233-#238,
+   #240).
+
+   With one exception, which is in tiptap.css instead: the blog editor's
+   CONTENT (headings, list markers, the space between blocks) is preflighted
+   flat too, and restoring it is not transitional — the editor previews a
+   post the public page renders with the browser's default sheet, so it has
+   to keep saying what a post looks like long after #237. */
+
+/* The <h2> every admin section opens with. Its rule above declares the
+   weight and the colour, and took 1.5em from the UA sheet; preflight sets
+   headings to `font-size: inherit`, which would render every section title
+   at body size. --text-2xl (25px) is the nearest step to the 24px it was. */
+.admin-section-heading {
+  font-size: var(--text-2xl);
+}
+
+/* The other half of the preflight story, and the one that is actually
+   visible: `box-sizing`.
+
+   The reset sets every element to `border-box`. These rules were written
+   against the browser default, `content-box`, and each of them pre-pays
+   for its own padding and margins in a `calc()` so the box lands exactly
+   flush — `.card` is `calc(100% - 52px)` wide with 18px of padding and
+   8px of margin on each side, which is 100% only if the padding is added
+   OUTSIDE the declared width. Under border-box the same card comes out
+   36px narrow and sits visibly off-centre in its column.
+
+   Restored rather than re-derived: every one of these rules is deleted by
+   a per-page migration (#233-#238, #240), and re-doing the arithmetic in
+   files that are on their way out would be work thrown away twice — once
+   now and once when the rule goes. This block goes with the last of
+   them. */
+.card,
+.admin-data-list-item,
+.admin-danger-banner,
+.header-colors-swatch,
+.button-group select {
+  box-sizing: content-box;
 }

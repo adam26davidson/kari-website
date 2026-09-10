@@ -1,7 +1,15 @@
-/* The card grows with its content and .admin-content (height: 100%,
+/* The card grows with its content and .admin-content (flex: 1,
    overflow-y: auto) scrolls the whole editor, like the admin list pages.
-   min-height rather than height so a short editor still fills the column
-   and stays vertically centred by the justify-content below.
+   min-height rather than height so a short editor still fills the column.
+
+   It is anchored to the TOP of that column, not centred in it. Centring is
+   what this rule did until #592's visual review: against the old photo
+   background the empty space read as backdrop, but on the shell's flat
+   paper an editor floats with a third of a phone screen blank above "Edit
+   haiku" and nearly half a tablet's — while every other admin screen (home
+   editor, the four lists, image cleanup) starts at the top, so the editors
+   read as misplaced rather than calm. `HaikuEditor.png` and the other
+   editor boards anchor the card to the top too.
 
    This used to be `height: 100%`, the top of a percentage max-height chain
    (.data-editor 100% -> card calc(100% - 40px) -> inputs 100%) that bound
@@ -17,7 +25,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   width: 100%;
   min-height: 100%;
 }

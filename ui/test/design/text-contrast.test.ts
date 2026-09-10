@@ -39,7 +39,13 @@ const read = (path: string) =>
  * merely mentions it (`.a .b`, `.a.compact`) does not.
  */
 function ruleBlock(css: string, selector: string): string {
-  for (const [, selectors, block] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+  for (const [, prelude, block] of css.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    // Everything up to the last `;` is a statement at-rule that ended
+    // there (`@import "tailwindcss";`, `@source "…";`) rather than part of
+    // the selector that follows it — without this, the first rule of the
+    // admin's Tailwind entry stylesheet is named
+    // `@import "tailwindcss"; @source "…"; :root` and no lookup finds it.
+    const selectors = prelude.slice(prelude.lastIndexOf(";") + 1);
     if (selectors.split(",").some((one) => one.trim() === selector)) {
       return block;
     }
@@ -122,7 +128,7 @@ function contrastRatio(a: Rgb, b: Rgb): number {
 
 const indexCss = read("packages/shared/src/styles/index.css");
 const dataListCss = read("apps/public/src/components/data-list/data-list.css");
-const headerCss = read("packages/shared/src/styles/header.css");
+const headerCss = read("apps/public/src/components/header/header.css");
 const haikuCss = read("packages/shared/src/components/haiku-content/haiku-content.css");
 const haigaCss = read("packages/shared/src/components/haiga-content/haiga-content.css");
 const photographyCss = read(
@@ -130,6 +136,7 @@ const photographyCss = read(
     "photography-post-content/photography-post-content.css",
 );
 const adminCss = read("apps/admin/src/admin.css");
+const themeCss = read("apps/admin/src/styles/theme.css");
 const adminCardCss = read("apps/admin/src/components/card/card.css");
 const adminHaikuCss = read("apps/admin/src/admin-haiku-page/admin-haiku-page.css");
 const adminItemListCss = read(
@@ -138,10 +145,6 @@ const adminItemListCss = read(
 const blogPostSummaryCss = read(
   "packages/shared/src/components/blog-post-summary/blog-post-summary.css",
 );
-const adminButtonCss = read(
-  "apps/admin/src/components/admin-button/admin-button.css",
-);
-
 // Since #480 almost nothing in these stylesheets is a literal any more: the
 // surfaces and the palette live as custom properties in the shared `:root`,
 // the admin's `:root` re-exports two of them under its own names, and an
@@ -150,8 +153,18 @@ const adminButtonCss = read(
 // composited, and the resolver below is what every assertion in this file
 // goes through.
 
-/** The `:root` blocks a custom property may be declared in. */
-const ROOT_SHEETS = [indexCss, adminCss];
+/**
+ * The `:root` blocks a custom property may be declared in, in cascade
+ * order: theme.css is imported LAST by the admin app and deliberately
+ * re-declares two of the shared tokens (`--primary`, `--primary-hover`) as
+ * the design boards' green, so it has to be consulted first or every admin
+ * assertion below would vouch for the public site's brown instead of the
+ * colour the admin actually paints (#592).
+ *
+ * The public assertions are unaffected: nothing on that side resolves
+ * either of those two tokens, and the public build never loads theme.css.
+ */
+const ROOT_SHEETS = [themeCss, indexCss, adminCss];
 
 /** The value declared for `token`, in whichever `:root` declares it. */
 function tokenValue(token: string): string {
@@ -293,7 +306,6 @@ describe("secondary text on the public cards", () => {
 // photo as the public cards, so the same token — and the contrast argument
 // above — applies to their secondary text (#354).
 const ADMIN_SECONDARY_TEXT_RULES: ReadonlyArray<[string, string, string]> = [
-  ["sidebar menu item", adminCss, ".admin-menu-item"],
   ["empty-result notice", adminItemListCss, ".admin-data-list-empty"],
   ["search match count", adminItemListCss, ".admin-data-list-count"],
   ["haiku list publisher", adminHaikuCss, ".admin-haiku-list-publisher"],
@@ -310,7 +322,6 @@ const ADMIN_SECONDARY_TEXT_RULES: ReadonlyArray<[string, string, string]> = [
 
 /** Every admin surface the rules above render their text on. */
 const ADMIN_PANELS: ReadonlyArray<[string, string, string]> = [
-  ["sidebar", adminCss, ".admin-menu"],
   ["empty-result notice", adminItemListCss, ".admin-data-list-empty"],
   ["search match count", adminItemListCss, ".admin-data-list-count"],
   ["list row", adminItemListCss, ".admin-data-list-item"],
@@ -478,93 +489,6 @@ describe("the admin icon buttons", () => {
   it("size the circles so a ring cannot grow them", () => {
     expect(declared("box-sizing")).toBe("border-box");
   });
-
-  // The quiet destructive button inverts the arrangement: red on the pale
-  // surface rather than white on red. It is the one place the danger colour
-  // has to carry TEXT contrast rather than just be a background, so its
-  // legibility cannot be assumed from the filled variant's numbers. Since
-  // #457 it is also every list row's Delete, not only the photography
-  // editor's "Remove this image".
-  //
-  // Since #550 it spends no fill of its own, so "its own fill" is no longer
-  // a colour this file can read off the button: what the red actually sits
-  // on is the LIST ROW, translucent over the admin-chosen photo. The floor
-  // is therefore checked at both photo extremes, exactly as the muted text
-  // on the same row is — and the darkest photo is the binding case (the
-  // nested "Remove this image" in the photography editor composites
-  // lighter, so the row covers it too).
-  const outlinedDanger = (property: string) =>
-    declaration(adminButtonCss, ".admin-button.danger-secondary", property);
-
-  /** The list row the destructive button stands on, over a given photo. */
-  const dangerBackingOver = (photo: Rgb): Rgb =>
-    surfaceOver(
-      photo,
-      declaration(adminItemListCss, ".admin-data-list-item", "background-color"),
-    );
-
-  it.each([
-    ["darkest", BLACK],
-    ["lightest", WHITE],
-  ] as ReadonlyArray<[string, Rgb]>)(
-    "keep the outlined destructive button legible over the %s photo",
-    (_name, photo) => {
-      const backing = dangerBackingOver(photo);
-      expect(
-        contrastRatio(colorOf(outlinedDanger("color")), backing),
-      ).toBeGreaterThanOrEqual(4.5);
-      // And its outline has to read as a shape (WCAG 1.4.11 non-text
-      // contrast) — an invisible border is not a button.
-      expect(
-        contrastRatio(colorOf(outlinedDanger("border")), backing),
-      ).toBeGreaterThanOrEqual(3);
-    },
-  );
-
-  // The point of #599: Delete carried exactly Edit's weight, so the row's
-  // destructive control competed with the page's one primary action ("Add a
-  // haiku") for the eye. Three steps, spending progressively less ink —
-  // solid primary, cream chip, ghost outline — and the ghost is what keeps
-  // Delete last. Asserted as the declaration rather than a composited
-  // colour: `transparent` has no colour to composite.
-  it("spends no fill on the destructive button while edit keeps its chip", () => {
-    expect(outlinedDanger("background-color")).toBe("transparent");
-    expect(
-      declaration(adminButtonCss, ".admin-button.secondary", "background-color"),
-    ).not.toBe("transparent");
-    // And the chip really is opaque — a translucent one would drift with
-    // the photo behind it, which is what #278/#321 fixed.
-    expect(
-      resolveSurface(
-        declaration(
-          adminButtonCss,
-          ".admin-button.secondary",
-          "background-color",
-        ),
-      ).alpha,
-    ).toBe(1);
-  });
-
-  // Not a WCAG rule — just "these must not read as the same button". Edit
-  // and delete sat side by side in identical brown circles (#457); now each
-  // carries its own word, and colour still separates them: edit is outlined
-  // in the primary brown family, delete in the danger red. Spending LESS
-  // red, never a different colour — the maintainer's call on this is
-  // explicit, red is the right colour for delete.
-  it("colours edit and delete apart as well as naming them", () => {
-    const edit = declaration(adminButtonCss, ".admin-button.secondary", "border");
-    const del = declaration(
-      adminButtonCss,
-      ".admin-button.danger-secondary",
-      "border",
-    );
-    expect(del).toContain("--admin-danger");
-    expect(edit).not.toContain("--admin-danger");
-    expect(colorOf(edit)).not.toEqual(colorOf(del));
-    // Edit's outline is the same brown the icon circles beside it wear, so
-    // the row reads as one family with one exception.
-    expect(colorOf(edit)).toEqual(colorOf(declared("border")));
-  });
 });
 
 // The danger red in its third shape, after the filled button and the
@@ -591,36 +515,74 @@ describe("the admin's danger banner", () => {
   });
 });
 
-// The one obvious next action on every admin screen — Save, Upload, Add —
-// and the only place the brown carries white TEXT rather than a border or a
-// glyph. The danger red has had this check since #457; the brown could not
-// have it, because the hex it was written in was repeated across six
-// stylesheets with nothing to resolve (#565). Now that both live in the
-// admin :root as tokens, the primary gets the same numbers as the red.
-describe("the admin's filled primary button", () => {
-  const filled = (selector: string, property: string) =>
-    declaration(adminButtonCss, selector, property);
-  const label = colorOf(filled(".admin-button", "color"));
+// The admin's own palette (#592), which is a different problem from every
+// other block in this file: the admin dropped the background photo, so its
+// surfaces are FLAT. There is no range of composited lightnesses to check
+// against — each pair is one foreground on one opaque fill, and either it
+// reads or it does not. What has to be pinned is that the seven colours the
+// design boards chose actually pair the way the boards use them, because
+// nothing else in the suite would notice a palette edit that left, say,
+// Stone on Cream at 3.9:1.
+describe("the admin's warm studio palette", () => {
+  const token = (name: string) => colorOf(declaration(themeCss, ":root", name));
 
-  // Both states, not just the resting one: hover darkens the fill, so if a
-  // future hover brown went the other way the label would be checked
-  // against a colour it never actually sits on.
+  /** A token over a surface, compositing if the token is translucent. */
+  const over = (name: string, surface: string): Rgb => {
+    const { rgb, alpha } = resolveSurface(
+      declaration(themeCss, ":root", name),
+    );
+    return composite(rgb, token(surface), alpha);
+  };
+
   it.each([
-    ["resting", ".admin-button"],
-    ["hovered", ".admin-button:hover"],
-  ])("keeps its label legible while %s", (_state, selector) => {
+    // Body text and headings, on the page and on a card. AAA, because
+    // this is where she reads and writes for as long as she is here.
+    ["ink on paper", "--foreground", "--background", 7],
+    ["ink on a card", "--foreground", "--card", 7],
+    // The secondary weight: field labels, the "changes appear once you
+    // save" line, the sidebar's section label.
+    ["stone on paper", "--muted-foreground", "--background", 4.5],
+    ["stone on cream", "--muted-foreground", "--muted", 4.5],
+    // The filled primary — Save, Add — and the filled destructive.
+    ["the primary's label on its fill", "--primary-foreground", "--primary", 4.5],
+    [
+      "the destructive's label on its fill",
+      "--destructive-foreground",
+      "--destructive",
+      4.5,
+    ],
+    // Maroon as a foreground: "See your site", the phone menu's links out.
+    ["maroon on paper", "--accent", "--background", 4.5],
+    ["maroon on cream", "--accent", "--muted", 4.5],
+  ])("keeps %s legible", (_pair, foreground, surface, floor) => {
+    expect(contrastRatio(token(foreground), token(surface))).toBeGreaterThanOrEqual(
+      floor,
+    );
+  });
+
+  // The active section's pill is the green at 11% on the cream sidebar,
+  // with the same green as its label — a tint of the very colour it is
+  // marking, so the text has to clear the tint it sits on rather than the
+  // bare sidebar.
+  it("keeps the current section's label legible on its own pill", () => {
     expect(
-      contrastRatio(label, colorOf(filled(selector, "background-color"))),
+      contrastRatio(
+        token("--sidebar-accent-foreground"),
+        over("--sidebar-accent", "--sidebar"),
+      ),
     ).toBeGreaterThanOrEqual(4.5);
   });
 
-  // Hover has to be VISIBLE as well as legible — a state change nobody can
-  // see is not feedback. Not a WCAG threshold; just "these are two colours".
-  it("darkens visibly under the pointer", () => {
-    const resting = colorOf(filled(".admin-button", "background-color"));
-    const hovered = colorOf(filled(".admin-button:hover", "background-color"));
-    expect(hovered).not.toEqual(resting);
-    expect(relativeLuminance(hovered)).toBeLessThan(relativeLuminance(resting));
+  // What makes every number above a whole answer rather than a best case.
+  // The admin imports the shared index.css for its tokens and its shell
+  // frame, and that stylesheet paints the site's background photograph in
+  // `body::before`; left on, every "opaque fill" here would be sitting on
+  // an admin-chosen image and none of these ratios would mean anything.
+  it("turns the shared background photo off", () => {
+    expect(declaration(themeCss, "body::before", "content")).toBe("none");
+    expect(declaration(themeCss, "body", "background-color")).toBe(
+      "var(--background)",
+    );
   });
 });
 
@@ -637,7 +599,6 @@ describe("the admin's filled primary button", () => {
 // from the dark part of whichever photo is currently set.
 const HEADER_BARS: ReadonlyArray<[string, string]> = [
   ["public header", ".header"],
-  ["admin header", ".admin-header"],
 ];
 
 const headerOver = (photo: Rgb, selector: string): Rgb =>
@@ -683,7 +644,6 @@ describe("the header bar over the background photo", () => {
     ["the bar tint", ".header", "background-color", "--header-background"],
     ["the site title", ".header-title", "color", "--header-title-color"],
     ["the mobile title", ".header-title-mobile", "color", "--header-title-color"],
-    ["the admin title", ".admin-header-title", "color", "--header-title-color"],
     ["the nav links", ".pages a", "color", "--header-nav-color"],
     ["the menu button", ".header-menu-button", "color", "--header-nav-color"],
   ])("makes %s settable, with a default to fall back to", (
@@ -735,15 +695,6 @@ describe("the header bar over the background photo", () => {
       ).toBeGreaterThanOrEqual(7);
     },
   );
-
-  it("keeps the admin user name at WCAG AA over the lightest possible photo", () => {
-    expect(
-      contrastRatio(
-        colorOf(declaration(headerCss, ".header-user-name", "color")),
-        headerOver(WHITE, ".admin-header"),
-      ),
-    ).toBeGreaterThanOrEqual(4.5);
-  });
 
   it.each(HEADER_BARS)(
     "%s renders as much the same bar over a light photo as a dark one",

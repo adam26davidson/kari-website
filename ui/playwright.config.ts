@@ -40,6 +40,29 @@ export const ADMIN_STORAGE_STATE = "e2e/.auth/admin.json";
  */
 export const E2E_COMMIT_SHA = "e2e11ead0000000000000000000000000000cafe";
 
+/**
+ * A file-name pattern, anchored to the last path segment.
+ *
+ * Playwright matches `testMatch` / `testIgnore` against a spec's ABSOLUTE
+ * path, so a bare `/admin-.*\.spec\.ts/` also matches every spec in a
+ * checkout whose directory happens to contain "admin-" — which a worktree
+ * named for the issue it is working on very easily does
+ * (`kari-website-admin-shadcn-shell`). There the visitor project ignored
+ * ALL FOUR specs and `npm run test:e2e` exited with "No tests found"
+ * rather than running anything, which is the worst possible failure for a
+ * suite: a green-looking run that tested nothing.
+ *
+ * The anchoring is only half of it, and the half that is easy to get
+ * wrong: `[\\/]` in front and `$` behind pin the pattern to ONE segment
+ * only if the pattern itself cannot cross a separator. `.` matches `/`,
+ * so `[\\/]admin-.*\.spec\.ts$` still matches
+ * `…/admin-anything/ui/e2e/visitor.spec.ts` and reproduces the exact
+ * failure above in any checkout whose directory STARTS with `admin-`.
+ * So a wildcard here is `[^\\/]*`, never `.*`.
+ */
+const SPEC = (pattern: RegExp) =>
+  new RegExp(`[\\\\/]${pattern.source}$`);
+
 const hasAuthCredentials = Boolean(
   process.env.E2E_AUTH0_USERNAME && process.env.E2E_AUTH0_PASSWORD,
 );
@@ -74,12 +97,12 @@ export default defineConfig({
             // Logs in through Auth0 once and saves storageState for the
             // admin project; first checks the local API is up and healthy.
             name: "setup",
-            testMatch: /auth\.setup\.ts/,
+            testMatch: SPEC(/auth\.setup\.ts/),
             timeout: 300_000,
           },
           {
             name: "admin",
-            testMatch: /admin-journeys\.spec\.ts/,
+            testMatch: SPEC(/admin-journeys\.spec\.ts/),
             dependencies: ["setup"],
             // Admin journeys mutate shared test-bucket lists with whole-list
             // PUTs; all of them live in one file and fullyParallel: false
@@ -96,7 +119,7 @@ export default defineConfig({
             // require nor their long timeouts, and gets its own project
             // rather than slowing that file down.
             name: "admin-status",
-            testMatch: /admin-whats-on-test\.spec\.ts/,
+            testMatch: SPEC(/admin-whats-on-test\.spec\.ts/),
             dependencies: ["setup"],
             use: { storageState: ADMIN_STORAGE_STATE },
           },
@@ -106,7 +129,7 @@ export default defineConfig({
       // Every admin-*.spec.ts needs the login the setup project captures,
       // so none of them belong to this credential-free project.
       name: "visitor",
-      testIgnore: /admin-.*\.spec\.ts/,
+      testIgnore: SPEC(/admin-[^\\/]*\.spec\.ts/),
     },
   ],
   webServer: {

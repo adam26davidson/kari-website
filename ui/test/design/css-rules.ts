@@ -68,8 +68,22 @@ interface Frame {
   hasNested: boolean;
 }
 
-/** Whitespace-normalized, so a prelude reads the same however it was wrapped. */
-const normalize = (text: string) => text.trim().replace(/\s+/g, " ");
+/**
+ * A block's prelude, whitespace-normalized so it reads the same however it
+ * was wrapped.
+ *
+ * Everything up to the last `;` is dropped first, because a statement
+ * at-rule (`@import "tailwindcss";`, `@source "…";`) ends at its semicolon
+ * and is not part of the selector that follows it. Without this, the first
+ * rule of the admin's Tailwind entry stylesheet would be named
+ * `@import "tailwindcss"; @source "…"; :root` and every lookup for `:root`
+ * in that file would miss.
+ */
+const normalize = (text: string) =>
+  text
+    .slice(text.lastIndexOf(";") + 1)
+    .trim()
+    .replace(/\s+/g, " ");
 
 /**
  * Every rule in one stylesheet, in source order. Blocks are matched by

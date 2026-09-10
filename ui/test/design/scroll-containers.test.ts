@@ -15,14 +15,15 @@ import { RULES, declaration, declarations, label } from "./css-rules";
 // After the consolidation exactly two boxes scroll, one per app:
 //
 //   * `.content` (packages/shared/src/styles/app.css) — the public site's
-//     scroller. It is a child of `.whole-page`, which is exactly as tall as
-//     the visible viewport (#558), so it is the box that turns a tall page
-//     into a scrollbar. Inert on the admin side by construction:
-//     `.admin-container` is pinned to `height: 100%`, so nothing inside it
-//     can make `.content` overflow.
+//     scroller, and since #592 ONLY the public site's: the admin app no
+//     longer imports that stylesheet at all. It is a child of
+//     `.whole-page`, which is exactly as tall as the visible viewport
+//     (#558), so it is the box that turns a tall page into a scrollbar.
 //   * `.admin-content` (apps/admin/src/admin.css) — the admin's scroller,
-//     `height: 100%` + `overflow-y: auto`, which #794 made the single
-//     scroller for the editor cards.
+//     `flex: 1` + `min-height: 0` + `overflow-y: auto`, which #794 made the
+//     single scroller for the editor cards and #592 re-sized so it works as
+//     a flex item of the shell's row (sidebar beside it) and of its column
+//     (top bar above it) alike.
 //
 // Everything between those and the content GROWS instead: a page wrapper
 // with no `overflow` and no height cap contributes its full height to its

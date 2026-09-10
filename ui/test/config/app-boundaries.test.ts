@@ -52,8 +52,12 @@ const SHARED_IMPORTS = importsUnder("packages/shared/src");
 
 /**
  * Packages only the admin app may depend on: the Auth0 SDK it authenticates
- * with, and the tiptap editor stack behind the blog-post editor. Together
- * they were most of the weight #272 fought to keep out of the entry chunk.
+ * with, the tiptap editor stack behind the blog-post editor, and — since
+ * #592 — the Tailwind/shadcn stack its shell is built from. The first two
+ * were most of the weight #272 fought to keep out of the entry chunk; the
+ * third is the reason the admin became its own build at all (#591), and
+ * leaking any of it into the public app would put a second design system
+ * on a site that has one.
  */
 const ADMIN_ONLY_PACKAGES = [
   "@auth0/auth0-react",
@@ -63,6 +67,19 @@ const ADMIN_ONLY_PACKAGES = [
   // StarterKit and split the lists into @tiptap/extension-list). isFrom
   // matches any subpath, so one entry covers the scope for good.
   "@tiptap",
+  // The shadcn/ui stack: Radix's primitives, the toast library, the icon
+  // set, and the three class helpers a shadcn component is written with.
+  "radix-ui",
+  "sonner",
+  "lucide-react",
+  "class-variance-authority",
+  "clsx",
+  "tailwind-merge",
+  // Tailwind itself, which the admin loads through one CSS entry point and
+  // one vite plugin. The public site's stylesheets are hand-written and
+  // stay that way until someone decides otherwise in the open.
+  "tailwindcss",
+  "@tailwindcss/vite",
 ];
 
 /** Whether `specifier` is (or is a subpath of) `pkg`. */

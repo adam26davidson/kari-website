@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { RULES, declaration, label } from "./css-rules";
 
-// The header bar's title is the page's <h1> (#504) — the only level-1
-// heading either app has, since the public pages carry none of their own and
-// the admin pages open at level 2.
+// The public header bar's title is the page's <h1> (#504) — the only
+// level-1 heading that app has, since its pages carry none of their own.
+//
+// The admin's <h1> is not checked here and needs no rule of its own: since
+// #592 that app loads Tailwind's preflight, which strips the three defaults
+// below from every heading, and the shell's wordmark states its size,
+// weight and margin as utility classes.
 //
 // Promoting it from a <div> handed it three browser defaults a <div> never
 // had: `font-size: 2em`, `font-weight: bold` and `margin: 0.67em 0`. The
@@ -19,12 +23,8 @@ import { RULES, declaration, label } from "./css-rules";
 // .header-title-mobile`), so the class's own rule is not where every
 // declaration lives.
 
-/** The classes the header title wears, one per bar and viewport (#482). */
-const TITLE_CLASSES = [
-  ".header-title",
-  ".admin-header-title",
-  ".header-title-mobile",
-];
+/** The classes the header title wears, one per viewport (#482). */
+const TITLE_CLASSES = [".header-title", ".header-title-mobile"];
 
 /** The <h1> defaults a rule must override for the bar to look unchanged. */
 const NEUTRALIZED = ["margin", "font-size", "font-weight"];

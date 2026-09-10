@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router";
-import "@kari/shared/styles/header.css";
+import "./header.css";
 import { useIsMobile } from "@kari/shared/hooks/use-is-mobile";
 import { MOBILE_MENU_ID, PAGES } from "@kari/shared/constants";
 

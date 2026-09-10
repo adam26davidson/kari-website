@@ -1,4 +1,6 @@
-import "./admin-button.css";
+import { buttonVariants } from "../ui/button-variants";
+import { Button } from "../ui/button";
+import { cn } from "../ui/cn";
 
 /**
  * How much weight the button carries on the screen it sits on. Every screen
@@ -15,8 +17,41 @@ import "./admin-button.css";
  * case where destroying IS the point (the image-cleanup sweep).
  */
 export type AdminButtonVariant =
-  "primary" | "secondary" | "danger" | "danger-secondary";
+  | "primary"
+  | "secondary"
+  | "danger"
+  | "danger-secondary";
 
+/** This component's four weights, as the shadcn recipe's names for them. */
+const RECIPE_VARIANT = {
+  primary: "primary",
+  secondary: "secondary",
+  danger: "danger",
+  "danger-secondary": "dangerSecondary",
+} as const;
+
+/**
+ * The classes this button wore before #592. They are no longer what styles
+ * it — the recipe above is — but they are still load-bearing twice over:
+ * `admin-item-list.css` reaches a row's buttons through
+ * `.admin-data-list-item-controls .admin-button` (and its Delete through
+ * `.danger-secondary`), and the e2e journeys click Save, Log In and the
+ * confirmation's Yes/No by `.admin-button`. They go with those two, in the
+ * per-page migrations and #240.
+ */
+const LEGACY_CLASS = {
+  primary: "admin-button",
+  secondary: "admin-button secondary",
+  danger: "admin-button danger",
+  "danger-secondary": "admin-button danger-secondary",
+} as const;
+
+/**
+ * The admin's button: an adapter over the vendored shadcn `Button` (#592)
+ * that keeps this component's own small API — four named weights, an
+ * optional `htmlFor` that turns it into a label — so its ~40 call sites did
+ * not have to change with the styling.
+ */
 export function AdminButton({
   children,
   onClick,
@@ -27,25 +62,33 @@ export function AdminButton({
    * no disabled state, and nothing in the admin needs a disabled picker.
    */
   disabled,
+  /**
+   * Button branch only, and here for one caller: Radix's `AlertDialog.Cancel`
+   * has to reach the underlying element to make it what the dialog focuses
+   * on open. Passed through `asChild`, so it arrives as a prop like any
+   * other (React 19).
+   */
+  ref,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   htmlFor?: string;
   variant?: AdminButtonVariant;
   disabled?: boolean;
+  ref?: React.Ref<HTMLButtonElement>;
 }) {
-  const className =
-    variant === "primary" ? "admin-button" : `admin-button ${variant}`;
+  const className = LEGACY_CLASS[variant];
   if (htmlFor === undefined) {
     return (
-      <button
-        type="button"
+      <Button
+        ref={ref}
+        variant={RECIPE_VARIANT[variant]}
         onClick={onClick}
         disabled={disabled}
         className={className}
       >
         {children}
-      </button>
+      </Button>
     );
   }
   // A label wired to a form control (e.g. the photo picker's hidden file
@@ -65,7 +108,10 @@ export function AdminButton({
       onKeyDown={handleKeyDown}
       role="button"
       tabIndex={0}
-      className={className}
+      className={cn(
+        buttonVariants({ variant: RECIPE_VARIANT[variant] }),
+        className,
+      )}
     >
       {children}
     </label>

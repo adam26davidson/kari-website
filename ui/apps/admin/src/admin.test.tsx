@@ -1,6 +1,5 @@
-import { readFileSync } from "node:fs";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { Admin } from "./admin";
 import { useAuth0 } from "@auth0/auth0-react";
@@ -10,7 +9,9 @@ vi.mock("@auth0/auth0-react", () => ({
 }));
 
 // The sub-pages have their own tests; stub them so this file exercises
-// only the shell: auth gating, the menu, and section routing.
+// only what Admin itself decides: auth gating, which sections exist and in
+// what order, and section routing. The shell that draws them has its own
+// tests in components/app-shell/.
 vi.mock("./home-page-editor/home-page-editor", () => ({
   HomePageEditor: () => <div>home-page-stub</div>,
 }));
@@ -73,6 +74,12 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+/** The workshop nav, which is the shell's only list of sections. */
+const sectionLinks = () =>
+  within(screen.getByRole("navigation", { name: "Your workshop" })).getAllByRole(
+    "link",
+  );
+
 describe("Admin authentication gating", () => {
   it("offers login when unauthenticated", () => {
     mockAuth({ isAuthenticated: false });
@@ -81,7 +88,7 @@ describe("Admin authentication gating", () => {
     fireEvent.click(screen.getByRole("button", { name: "Log In" }));
 
     expect(loginWithRedirect).toHaveBeenCalledOnce();
-    expect(screen.queryByText("Home")).toBeNull();
+    expect(screen.queryByRole("navigation")).toBeNull();
   });
 
   it("shows neither login nor menu while auth is loading", () => {
@@ -89,7 +96,22 @@ describe("Admin authentication gating", () => {
     renderAdmin();
 
     expect(screen.queryByRole("button", { name: "Log In" })).toBeNull();
-    expect(screen.queryByText("Home")).toBeNull();
+    expect(screen.queryByRole("navigation")).toBeNull();
+  });
+
+  // The signed-out screen is the whole page, so it has to carry the <h1>
+  // the shell's sidebar carries everywhere else (#504) — and it is where
+  // e2e/smoke.spec.ts checks that /admin served the admin app at all.
+  it.each([
+    ["signed out", false],
+    ["still checking", true],
+  ])("names the app while %s", (_state, isLoading) => {
+    mockAuth({ isAuthenticated: false, isLoading });
+    renderAdmin();
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Kari Davidson - Admin" }),
+    ).toBeInTheDocument();
   });
 });
 
@@ -100,7 +122,7 @@ describe("Admin menu", () => {
     vi.stubEnv("VITE_SHOW_TEST_STATUS", "");
     renderAdmin();
 
-    const links = screen.getAllByRole("link");
+    const links = sectionLinks();
     expect(links.map((link) => link.textContent)).toEqual([
       "Home",
       "Haiku",
@@ -124,7 +146,10 @@ describe("Admin menu", () => {
   it("redirects /admin to the home section", () => {
     renderAdmin("/admin");
     expect(screen.getByText("home-page-stub")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Home" })).toHaveClass("selected");
+    expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it.each([
@@ -140,19 +165,32 @@ describe("Admin menu", () => {
     fireEvent.click(screen.getByRole("link", { name: label }));
 
     expect(screen.getByText(stub)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: label })).toHaveClass("selected");
+    expect(screen.getByRole("link", { name: label })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(screen.queryByText("home-page-stub")).toBeNull();
   });
 
   it("opens a section directly from its URL", () => {
     renderAdmin("/admin/haiku");
     expect(screen.getByText("haiku-page-stub")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Haiku" })).toHaveClass("selected");
+    expect(screen.getByRole("link", { name: "Haiku" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
-  it("marks the section link selected on its editor URLs too", () => {
+  // aria-current, not a class: which section she is in is said to a screen
+  // reader by the link itself, and NavLink is what sets it. The green pill
+  // that says the same thing to everyone else is a Tailwind class the
+  // shell's own tests cover.
+  it("marks the section link current on its editor URLs too", () => {
     renderAdmin("/admin/haiku/some-id");
-    expect(screen.getByRole("link", { name: "Haiku" })).toHaveClass("selected");
+    expect(screen.getByRole("link", { name: "Haiku" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it("redirects unknown sections to home", () => {
@@ -173,7 +211,7 @@ describe("Admin what's-on-test section (staging-only)", () => {
     ).toBeInTheDocument();
     const link = screen.getByRole("link", { name: "What's on test" });
     expect(link).toHaveAttribute("href", "/admin/whats-on-test");
-    expect(link).toHaveClass("selected");
+    expect(link).toHaveAttribute("aria-current", "page");
   });
 
   it("has neither the menu entry nor the route without the staging flag", () => {
@@ -184,87 +222,5 @@ describe("Admin what's-on-test section (staging-only)", () => {
     expect(screen.queryByText("whats-on-test-page-stub")).toBeNull();
     // The unknown section falls through to the home redirect.
     expect(screen.getByText("home-page-stub")).toBeInTheDocument();
-  });
-});
-
-// jsdom applies no stylesheet, so what the menu looks like is read out of
-// the CSS rather than measured. Comments are stripped so an explanatory
-// `/* ... */` between declarations can't hide the one that follows it.
-const adminCss = readFileSync("apps/admin/src/admin.css", "utf-8").replace(
-  /\/\*[\s\S]*?\*\//g,
-  "",
-);
-
-/** The first block declared for `selector`, comments already gone. */
-const ruleFor = (css: string, selector: string) =>
-  css.match(
-    new RegExp(
-      `(?:^|\\})\\s*${selector.replace(/[.]/g, "\\.")}\\s*\\{([^}]*)\\}`,
-    ),
-  )?.[1] ?? "";
-
-// The selected section used to differ from its neighbours by colour alone
-// (--dark-text against --muted-text), which WCAG 1.4.1 (Use of Color) asks
-// us not to rely on: someone who cannot separate two dark greys had no way
-// to tell which section she was in. The link also carries aria-current from
-// NavLink, so this is the sighted half of the same answer (#500).
-describe("the selected admin menu item", () => {
-  const base = ruleFor(adminCss, ".admin-menu-item");
-  const selected = ruleFor(adminCss, ".admin-menu-item.selected");
-
-  it("is marked by a shape appearing, not only by a darker colour", () => {
-    expect(base).toMatch(/border-left\s*:\s*[1-9]\d*px\s+solid\s+transparent/);
-    expect(selected).toMatch(/border-left-color\s*:\s*var\(--admin-primary\)/);
-  });
-
-  it("reserves the marker's width on every item so the label never jumps", () => {
-    // The items are content-box inside a fixed 200px sidebar, so an extra
-    // 3px of border is 3px of overflow — and the label would shift right
-    // the moment she navigated. The border therefore comes out of the left
-    // padding, leaving the text where it has always been.
-    const borderPx = Number(/border-left\s*:\s*(\d+)px/.exec(base)?.[1]);
-    const paddingLeftPx = Number(
-      /padding\s*:\s*[^;]*?(\d+)px\s*;/.exec(base)?.[1],
-    );
-    expect(borderPx).toBeGreaterThan(0);
-    expect(borderPx + paddingLeftPx).toBe(30);
-  });
-
-  it("changes nothing but colour when it becomes selected", () => {
-    // Anything that resizes the item on selection (a wider border, its own
-    // padding) reintroduces the jump the reservation above prevents.
-    expect(selected).not.toMatch(/padding|width|font-size|border-left\s*:/);
-  });
-});
-
-describe("the admin menu at phone width", () => {
-  const atPhoneWidth = (() => {
-    const media = adminCss.indexOf("@media (max-width: 767.98px)");
-    expect(media).toBeGreaterThanOrEqual(0);
-    return adminCss.slice(adminCss.indexOf("{", media) + 1);
-  })();
-  const block = (selector: string) => ruleFor(atPhoneWidth, selector);
-
-  // Eight links at a ~35px pitch with no row gap read as a dense index
-  // rather than a menu (design brief §1), and 35px is under the size a
-  // fingertip stops missing at — the same 44px floor the list rows' own
-  // controls take at this breakpoint.
-  it("gives every link a fingertip-sized row", () => {
-    const menuItem = block(".admin-menu-item");
-    expect(menuItem).toMatch(/min-height\s*:\s*(4[4-9]|[5-9]\d)px/);
-    // Without border-box the base rule's content-box adds the padding on
-    // top of the floor, so the number above would not be what she taps.
-    expect(menuItem).toMatch(/box-sizing\s*:\s*border-box/);
-  });
-
-  it("separates the rows rather than letting them meet", () => {
-    expect(block(".admin-menu")).toMatch(/gap\s*:\s*[1-9]/);
-  });
-
-  // The menu is width:100%, so any side padding it takes has to come out of
-  // that 100% — content-box pushed the grid past a 390px viewport by
-  // exactly the padding.
-  it("keeps its side padding inside the viewport", () => {
-    expect(block(".admin-menu")).toMatch(/box-sizing\s*:\s*border-box/);
   });
 });

@@ -87,9 +87,13 @@ describe("PhotographyPostEditor", () => {
       .filter(
         (button) =>
           // Primary is the absence of a variant class, so any variant
-          // added later is excluded here without editing this list.
+          // added later is excluded here without editing this list. The
+          // rest of the classes are the shadcn recipe's (#592), which is
+          // why this counts variant names rather than the whole list.
           button.classList.contains("admin-button") &&
-          button.classList.length === 1,
+          !["secondary", "danger", "danger-secondary"].some((variant) =>
+            button.classList.contains(variant),
+          ),
       )
       .map((button) => button.textContent);
     expect(filled).toEqual(["Save"]);

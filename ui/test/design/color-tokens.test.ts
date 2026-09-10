@@ -26,9 +26,19 @@ import { RULES, declaration, label } from "./css-rules";
 // will silently miss — and one the contrast floors will go on vouching for
 // while it quietly says something else.
 
-/** The shared stylesheet both apps import, and the admin's own. */
+/** The shared stylesheet both apps import, and the admin's two. */
 const SHARED_ROOT = "packages/shared/src/styles/index.css";
 const ADMIN_ROOT = "apps/admin/src/admin.css";
+/**
+ * The admin's shadcn/Tailwind theme (#592). It is a definition site like
+ * the other two rather than a consumer of them, and it is also the one
+ * place a colour is deliberately declared TWICE on this site: it re-points
+ * `--primary` (and `--primary-hover`) at the design boards' Fir green for
+ * the admin build alone, which is how the seven pages still wearing their
+ * pre-shadcn stylesheets follow the new palette without being rewritten.
+ * The public app never imports it, so its brown is untouched.
+ */
+const THEME_ROOT = "apps/admin/src/styles/theme.css";
 
 /**
  * Every semantic colour, the `:root` that owns it, and the one hex it is
@@ -39,7 +49,6 @@ const TOKENS: ReadonlyArray<[string, string, string]> = [
   // Foregrounds. Two for the dark surfaces (the page over the photo, the
   // header bar), two for the pale ones (the panels and cards).
   [SHARED_ROOT, "--light-text", "#e6e6e6"],
-  [SHARED_ROOT, "--muted-light-text", "#c9c9c9"],
   [SHARED_ROOT, "--dark-text", "#181818"],
   [SHARED_ROOT, "--muted-text", "#3d3d3d"],
   // Surfaces.
@@ -54,19 +63,34 @@ const TOKENS: ReadonlyArray<[string, string, string]> = [
   // that destroys anything, so a destructive colour there would be a
   // colour with nothing to say.
   [ADMIN_ROOT, "--admin-danger", "#a33327"],
-  [ADMIN_ROOT, "--admin-danger-hover", "#872a20"],
+  // The admin's warm studio palette, by the name the design boards call
+  // each colour (docs/design/admin-redesign/README.md). Every shadcn
+  // variable in that stylesheet aliases one of these rather than repeating
+  // a hex, so "what colour is the sidebar" has one answer to change.
+  [THEME_ROOT, "--paper", "#faf7f2"],
+  [THEME_ROOT, "--cream", "#f4efe6"],
+  [THEME_ROOT, "--sand", "#e9e0cf"],
+  [THEME_ROOT, "--ink", "#2a2723"],
+  [THEME_ROOT, "--stone", "#6f6759"],
+  [THEME_ROOT, "--fir", "#2e5a44"],
+  [THEME_ROOT, "--maroon", "#7a3b3f"],
 ];
 
 /**
- * The admin's semantic names for shared colours. These stay as names —
- * "the admin's primary" is what the rules that spend them mean, and a
- * future admin palette can re-point them without touching the public
- * site — but they alias rather than re-declare, or the hex would be back
- * to living in two places.
+ * The admin's semantic name for a shared colour. It stays a name — "the
+ * admin's primary" is what the rules that spend it mean — but it aliases
+ * rather than re-declares, or the hex would be back to living in two
+ * places. That indirection is what #592 spent: re-pointing `--primary` in
+ * theme.css moved every filled control, ring, glyph and tick in the legacy
+ * admin CSS to the new green in one edit.
+ *
+ * `--admin-primary-hover` and `--admin-danger-hover` were here until #592
+ * and went with the only rules that spent them (admin-button.css): the
+ * shadcn recipe darkens a fill with an opacity step or with
+ * `--primary-hover` directly.
  */
 const ADMIN_ALIASES: ReadonlyArray<[string, string]> = [
   ["--admin-primary", "var(--primary)"],
-  ["--admin-primary-hover", "var(--primary-hover)"],
 ];
 
 /**
@@ -80,7 +104,7 @@ const BANNED_LITERALS: ReadonlyArray<[string, string]> = [
 ];
 
 const roots = new Map(
-  [SHARED_ROOT, ADMIN_ROOT].map((file) => [
+  [SHARED_ROOT, ADMIN_ROOT, THEME_ROOT].map((file) => [
     file,
     RULES.find((rule) => rule.file === file && rule.selector === ":root"),
   ]),

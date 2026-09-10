@@ -41,6 +41,101 @@
   overflow-wrap: anywhere;
 }
 
+/* --- What the post will look like -----------------------------------
+   The editor is a preview, and the public page renders this same HTML back
+   out with no stylesheet of its own for it: a reader's headings, markers
+   and block spacing all come from the browser's default sheet.
+
+   The admin does not have that sheet any more. #592 turns Tailwind's
+   preflight on, unscoped, and preflight states exactly the properties the
+   UA default used to supply — `font-size: inherit; font-weight: inherit`
+   on h1-h6, `list-style: none` with no indent on ul/ol, and `margin: 0` on
+   every block. Measured against the built stylesheets, a heading, a
+   bulleted list and two paragraphs in this editor all came out 16px/400,
+   marker-less and touching, while the published post showed 32px bold,
+   disc markers and a line between blocks. Three toolbar controls — the
+   text-style dropdown and the two list buttons — changed the document and
+   nothing on screen.
+
+   Markers, indent and block spacing are restored to exactly what the
+   public page shows, measured there in a browser rather than recalled:
+   disc and decimal, 40px of indent, and 1em of margin either side of a
+   block (0.67 / 0.83em on h1 and h2, which is what the UA sheet gives
+   them). In `em`, so they follow the writing size rather than pin to it.
+
+   The heading SIZES deliberately do not match to the pixel. A reader's h1
+   is the browser's 2em/32px, which is off the top of the admin's type
+   scale; type-scale.test.ts allows admin text only a step of that scale,
+   and inventing a step for a preview would be the tail wagging the dog. So
+   the headings take the scale's top three steps and keep the ordering that
+   is what the preview is actually for — 25 / 20 / 18px bold over 16px body,
+   against a reader's 32 / 24 / 18.7. The shape of the post is faithful; the
+   h1 is a little smaller than it will be in the wild.
+
+   Unlike the compat block in admin.css this is not transitional: preflight
+   stays on after #237 migrates this page, so the editor keeps needing to
+   say what a post looks like. Pinned by test/design/editor-content.test.ts. */
+.tiptap h1,
+.tiptap h2,
+.tiptap h3 {
+  font-weight: 700;
+}
+
+.tiptap h1 {
+  font-size: var(--text-2xl);
+  margin: 0.67em 0;
+}
+
+.tiptap h2 {
+  font-size: var(--text-xl);
+  margin: 0.83em 0;
+}
+
+.tiptap h3 {
+  font-size: var(--text-lg);
+  margin: 1em 0;
+}
+
+.tiptap p,
+.tiptap ul,
+.tiptap ol,
+.tiptap blockquote,
+.tiptap pre {
+  margin: 1em 0;
+}
+
+.tiptap ul {
+  list-style-type: disc;
+  padding-inline-start: 40px;
+}
+
+.tiptap ol {
+  list-style-type: decimal;
+  padding-inline-start: 40px;
+}
+
+/* A list nested in another one is part of the item above it, not a new
+   block: the browser gives it no margin of its own, and the rule above
+   would otherwise open a blank line either side of every sub-list. */
+.tiptap ul ul,
+.tiptap ul ol,
+.tiptap ol ul,
+.tiptap ol ol {
+  margin-block: 0;
+}
+
+/* A list indented inside another one changes marker, as it does for a
+   reader — otherwise a nested bullet is indistinguishable from its
+   parent. Ordered lists stay decimal at every depth, which is also what
+   the browser does. */
+.tiptap ul ul {
+  list-style-type: circle;
+}
+
+.tiptap ul ul ul {
+  list-style-type: square;
+}
+
 /* The one deliberate opt-out from the site-wide focus ring (#501): a
    contenteditable matches :focus-visible for as long as it has focus, so
    the ring would frame the whole editor the entire time the admin is

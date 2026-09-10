@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router";
-import "@kari/shared/styles/mobile-menu.css";
+import "./mobile-menu.css";
 import { MOBILE_MENU_ID, PAGES } from "@kari/shared/constants";
 
 export function MobileMenu({
