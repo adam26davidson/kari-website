@@ -20,8 +20,16 @@
    leaving the panel looking cut off rather than deliberately closed
    (clearest in the photography editor, whose rows grow when the caption
    wraps under the picker). Mobile had already dropped the bound for
-   exactly this reason; #578 extends that to every width. */
-.data-editor {
+   exactly this reason; #578 extends that to every width.
+
+   `:not([data-slot="editor"])` is the migrated editors' opt-out, and it is
+   load-bearing rather than tidy: this file is unlayered and stays loaded
+   for the pages still on the fork, so without it the centring and
+   `min-height: 100%` here would beat every Tailwind utility
+   components/editor-page states (see the same guard on the input rules in
+   admin.css). components/editor-page keeps the class because the e2e
+   journeys locate an open editor by it. */
+.data-editor:not([data-slot="editor"]) {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -108,7 +116,10 @@
   font-size: 20px;
 }
 
-.data-editor-item-controls {
+/* Guarded like .data-editor above: components/editor-page wears this class
+   so the e2e journeys can scope Save/Close to it, and lays the pair out
+   with utilities of its own. */
+.data-editor-item-controls:not([data-slot="editor-controls"]) {
   display: flex;
   flex-direction: row;
   align-items: center;

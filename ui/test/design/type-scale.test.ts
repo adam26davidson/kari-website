@@ -212,9 +212,9 @@ const FROZEN_ADMIN_SIZES = new Set([
   "13px",
   "14px",
   "15px",
-  "16px",
   "17px",
-  "18px",
+  // "16px" and "18px" went with admin-haiku-page.css, which #234 deleted
+  // when that page moved to Tailwind — the shrink this set is for.
   "20px",
   "22px",
   "0.85rem",

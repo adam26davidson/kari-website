@@ -50,6 +50,14 @@ export const buttonVariants = cva(
       size: {
         default: "h-10 px-5 py-2",
         sm: "h-9 px-3 text-sm",
+        // The move arrows, and only them: since #457 every icon-only
+        // control left in the admin is a low-consequence directional
+        // nudge, and the boards draw those as circles. Square, so the
+        // `rounded-full` is a circle rather than a pill, and 44px below
+        // `sm` — the size a touch target stops being a gamble at, which
+        // the legacy `.admin-icon-button` phone rule says in its own way
+        // and which stays behind with that fork (#240).
+        icon: "size-10 rounded-full max-sm:size-11",
       },
     },
     defaultVariants: { variant: "primary", size: "default" },

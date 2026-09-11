@@ -82,6 +82,16 @@ const listCss = strip(
 );
 const adminCss = strip("apps/admin/src/admin.css");
 
+/**
+ * How this fork's row rule is spelled since #234. The migrated
+ * `components/item-list` row wears the same `admin-data-list-item` class
+ * (the e2e journeys locate rows by it) and opts out of the styling with
+ * `data-slot="list-row"`, so the rules below apply to THIS component's
+ * rows only. The assertions that read them have to name the guarded
+ * selector, because `px()` matches a selector exactly.
+ */
+const LEGACY_ROW = '.admin-data-list-item:not([data-slot="list-row"])';
+
 /** Everything inside the narrow-viewport media query. */
 const atPhoneWidth = (() => {
   const media = listCss.indexOf("@media (max-width: 767.98px)");
@@ -509,7 +519,7 @@ describe("AdminItemList", () => {
     it("is padded at least as generously as a list row", () => {
       expect(
         px(listCss, ".admin-data-list-header", "padding"),
-      ).toBeGreaterThanOrEqual(px(listCss, ".admin-data-list-item", "padding"));
+      ).toBeGreaterThanOrEqual(px(listCss, LEGACY_ROW, "padding"));
     });
   });
 
@@ -537,7 +547,9 @@ describe("AdminItemList", () => {
     // haiga's caption at any width (#457, design brief §1).
     it("gives the content a full line and the controls one below it", () => {
       expect(listCss).toMatch(
-        /\.admin-data-list-item\s*\{[^}]*flex-wrap\s*:\s*wrap/,
+        new RegExp(
+          `${LEGACY_ROW.replace(/[.[\]()"]/g, "\\$&")}\\s*\\{[^}]*flex-wrap\\s*:\\s*wrap`,
+        ),
       );
       expect(listCss).toMatch(
         /\.admin-data-list-item-content\s*\{[^}]*flex-basis\s*:\s*100%/,
@@ -580,13 +592,12 @@ describe("AdminItemList", () => {
   });
 
   describe("the destructive row control", () => {
-    const DELETE = ".admin-data-list-item-controls .admin-button.danger-secondary";
+    const DELETE =
+      ".admin-data-list-item-controls .admin-button.danger-secondary";
     /** What the controls' own rhythm leaves between two neighbours. */
-    const neighbourGap = px(
-      listCss,
-      ".admin-data-list-item-controls",
-      "gap",
-    ) + 2 * px(adminCss, ".admin-icon-button", "margin");
+    const neighbourGap =
+      px(listCss, ".admin-data-list-item-controls", "gap") +
+      2 * px(adminCss, ".admin-icon-button", "margin");
 
     // Colour and a word are not on their own enough: the brief asks that a
     // destructive action never be the closest thing to the one she reaches

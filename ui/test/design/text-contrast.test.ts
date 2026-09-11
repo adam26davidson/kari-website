@@ -129,8 +129,12 @@ function contrastRatio(a: Rgb, b: Rgb): number {
 const indexCss = read("packages/shared/src/styles/index.css");
 const dataListCss = read("apps/public/src/components/data-list/data-list.css");
 const headerCss = read("apps/public/src/components/header/header.css");
-const haikuCss = read("packages/shared/src/components/haiku-content/haiku-content.css");
-const haigaCss = read("packages/shared/src/components/haiga-content/haiga-content.css");
+const haikuCss = read(
+  "packages/shared/src/components/haiku-content/haiku-content.css",
+);
+const haigaCss = read(
+  "packages/shared/src/components/haiga-content/haiga-content.css",
+);
 const photographyCss = read(
   "apps/public/src/pages/photography-page/components/" +
     "photography-post-content/photography-post-content.css",
@@ -138,7 +142,6 @@ const photographyCss = read(
 const adminCss = read("apps/admin/src/admin.css");
 const themeCss = read("apps/admin/src/styles/theme.css");
 const adminCardCss = read("apps/admin/src/components/card/card.css");
-const adminHaikuCss = read("apps/admin/src/admin-haiku-page/admin-haiku-page.css");
 const adminItemListCss = read(
   "apps/admin/src/components/admin-item-list/admin-item-list.css",
 );
@@ -308,7 +311,11 @@ describe("secondary text on the public cards", () => {
 const ADMIN_SECONDARY_TEXT_RULES: ReadonlyArray<[string, string, string]> = [
   ["empty-result notice", adminItemListCss, ".admin-data-list-empty"],
   ["search match count", adminItemListCss, ".admin-data-list-count"],
-  ["haiku list publisher", adminHaikuCss, ".admin-haiku-list-publisher"],
+  // The admin haiku list's publisher line was here until #234 migrated
+  // that page: its row is now Tailwind on the admin's own flat palette
+  // (`text-muted-foreground`, the same Stone this token resolves to), and
+  // the stylesheet that declared it is gone. The palette pairs it has to
+  // clear are pinned in "the admin's warm studio palette" below.
   // Only ever rendered on the admin other-works list (the public page
   // passes showPublished={false}), and the last piece of admin secondary
   // text still carrying a hex of its own: #666, which is 4.0:1 on the row
@@ -324,7 +331,15 @@ const ADMIN_SECONDARY_TEXT_RULES: ReadonlyArray<[string, string, string]> = [
 const ADMIN_PANELS: ReadonlyArray<[string, string, string]> = [
   ["empty-result notice", adminItemListCss, ".admin-data-list-empty"],
   ["search match count", adminItemListCss, ".admin-data-list-count"],
-  ["list row", adminItemListCss, ".admin-data-list-item"],
+  // Spelled with its #234 opt-out: a MIGRATED list's row wears the same
+  // class (the e2e journeys locate rows by it) and is styled by Tailwind
+  // on the admin's flat paper, so this rule — and this assertion — is
+  // about the rows still on the legacy fork.
+  [
+    "list row",
+    adminItemListCss,
+    '.admin-data-list-item:not([data-slot="list-row"])',
+  ],
   ["list header panel", adminItemListCss, ".admin-data-list-header"],
   // The one-card sections (image cleanup, what's on test). Each page used
   // to spell this backing out in its own stylesheet, so neither was under
@@ -543,9 +558,7 @@ describe("the admin's warm studio palette", () => {
 
   /** A token over a surface, compositing if the token is translucent. */
   const over = (name: string, surface: string): Rgb => {
-    const { rgb, alpha } = resolveSurface(
-      declaration(themeCss, ":root", name),
-    );
+    const { rgb, alpha } = resolveSurface(declaration(themeCss, ":root", name));
     return composite(rgb, token(surface), alpha);
   };
 
@@ -559,7 +572,12 @@ describe("the admin's warm studio palette", () => {
     ["stone on paper", "--muted-foreground", "--background", 4.5],
     ["stone on cream", "--muted-foreground", "--muted", 4.5],
     // The filled primary — Save, Add — and the filled destructive.
-    ["the primary's label on its fill", "--primary-foreground", "--primary", 4.5],
+    [
+      "the primary's label on its fill",
+      "--primary-foreground",
+      "--primary",
+      4.5,
+    ],
     [
       "the destructive's label on its fill",
       "--destructive-foreground",
@@ -570,9 +588,9 @@ describe("the admin's warm studio palette", () => {
     ["maroon on paper", "--accent", "--background", 4.5],
     ["maroon on cream", "--accent", "--muted", 4.5],
   ])("keeps %s legible", (_pair, foreground, surface, floor) => {
-    expect(contrastRatio(token(foreground), token(surface))).toBeGreaterThanOrEqual(
-      floor,
-    );
+    expect(
+      contrastRatio(token(foreground), token(surface)),
+    ).toBeGreaterThanOrEqual(floor);
   });
 
   // The active section's pill is the green at 11% on the cream sidebar,
@@ -627,11 +645,9 @@ const headerDefault = (selector: string, property: string): string =>
   varFallback(declaration(headerCss, selector, property));
 
 /** One field of the shared HEADER_COLOR_DEFAULTS, as source text. */
-const HEADER_COLOR_DEFAULTS_SOURCE = (
-  read("packages/shared/src/utils/color.ts").match(
-    /HEADER_COLOR_DEFAULTS\s*=\s*\{([^}]*)\}/,
-  ) ?? []
-)[1];
+const HEADER_COLOR_DEFAULTS_SOURCE = (read(
+  "packages/shared/src/utils/color.ts",
+).match(/HEADER_COLOR_DEFAULTS\s*=\s*\{([^}]*)\}/) ?? [])[1];
 
 function headerColorDefault(field: string): string {
   const match = HEADER_COLOR_DEFAULTS_SOURCE?.match(
@@ -658,19 +674,22 @@ describe("the header bar over the background photo", () => {
   it.each([
     ["the bar tint", ".header", "background-color", "--header-background"],
     ["the site title", ".header-title", "color", "--header-title-color"],
-    ["the mobile title", ".header-title-mobile", "color", "--header-title-color"],
+    [
+      "the mobile title",
+      ".header-title-mobile",
+      "color",
+      "--header-title-color",
+    ],
     ["the nav links", ".pages a", "color", "--header-nav-color"],
     ["the menu button", ".header-menu-button", "color", "--header-nav-color"],
-  ])("makes %s settable, with a default to fall back to", (
-    _name,
-    selector,
-    property,
-    token,
-  ) => {
-    const value = declaration(headerCss, selector, property);
-    expect(value).toContain(`var(${token},`);
-    expect(varFallback(value)).not.toBe(value);
-  });
+  ])(
+    "makes %s settable, with a default to fall back to",
+    (_name, selector, property, token) => {
+      const value = declaration(headerCss, selector, property);
+      expect(value).toContain(`var(${token},`);
+      expect(varFallback(value)).not.toBe(value);
+    },
+  );
 
   it("draws the hover underline in the nav link's own colour", () => {
     // The underline is the same mark as the word above it; a settable link

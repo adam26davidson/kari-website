@@ -84,24 +84,25 @@
    <textarea> in the app is on the admin side, so these rules (formerly
    globals in index.css) live with the admin bundle.
 
-   `:not([data-slot="textarea"])` is what lets a migrated page opt out, and
-   it is not optional decoration: these rules are UNLAYERED, and everything
-   Tailwind emits sits in `@layer utilities`, which loses to an unlayered
-   rule whatever its specificity (see styles/theme.css). Without the guard
-   the vendored components/ui/textarea.tsx would render as this grey 400px
-   box no matter what utilities it carries — and no test would notice, only
-   the screenshot. The guard goes when the last legacy page migrates and
-   these rules go with it (#238/#240). */
-input[type="text"],
-input[type="email"],
-input[type="password"],
-input[type="number"],
-input[type="date"],
+   `:not([data-slot="textarea"])` / `:not([data-slot="input"])` is what lets
+   a migrated page opt out, and it is not optional decoration: these rules
+   are UNLAYERED, and everything Tailwind emits sits in `@layer utilities`,
+   which loses to an unlayered rule whatever its specificity (see
+   styles/theme.css). Without the guard the vendored
+   components/ui/textarea.tsx and components/ui/input.tsx would render as
+   this grey 400px box no matter what utilities they carry — and no test
+   would notice, only the screenshot. The guards go when the last legacy
+   page migrates and these rules go with it (#238/#240). */
+input[type="text"]:not([data-slot="input"]),
+input[type="email"]:not([data-slot="input"]),
+input[type="password"]:not([data-slot="input"]),
+input[type="number"]:not([data-slot="input"]),
+input[type="date"]:not([data-slot="input"]),
 textarea:not([data-slot="textarea"]) {
   width: 400px;
 }
 
-input,
+input:not([data-slot="input"]),
 textarea:not([data-slot="textarea"]) {
   padding: 5px;
   border-radius: 3px;
@@ -125,8 +126,8 @@ textarea:not([data-slot="textarea"]) {
    fields match :focus-visible whenever they are focused, so a focused field
    wears the site ring — which is the point, the admin can always see where
    typing will land (#501). */
-input:focus,
-input:active,
+input:not([data-slot="input"]):focus,
+input:not([data-slot="input"]):active,
 textarea:not([data-slot="textarea"]):focus,
 textarea:not([data-slot="textarea"]):active {
   border: 1px solid rgba(0, 0, 0, 0.3);
@@ -349,7 +350,13 @@ input[type="checkbox"] {
    now and once when the rule goes. This block goes with the last of
    them. */
 .card,
-.admin-data-list-item,
+/* Guarded like the input rules above, and for the same reason: a MIGRATED
+   list's row (components/item-list) still wears `.admin-data-list-item`,
+   because that class is what the e2e journeys locate a row by. It is sized
+   by Tailwind utilities written against border-box, so restoring
+   content-box for it would add its padding outside its width — the one
+   rule in this block that would reach a page that has already left. */
+.admin-data-list-item:not([data-slot="list-row"]),
 .admin-danger-banner,
 .header-colors-swatch,
 .button-group select {

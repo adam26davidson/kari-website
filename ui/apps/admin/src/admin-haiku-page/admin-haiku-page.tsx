@@ -1,10 +1,7 @@
 import { useEffect, useState } from "react";
-import "./admin-haiku-page.css";
-import "../admin.css";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate, useParams } from "react-router";
 import { Haiku } from "@kari/shared/models";
-import { HaikuContent } from "@kari/shared/components/haiku-content/haiku-content";
 import { HaikuService } from "@kari/shared/services/haiku";
 import {
   moveItemByIdByOne,
@@ -12,7 +9,7 @@ import {
 } from "@kari/shared/utils/data-list-helpers";
 import { HaikuEditor } from "./components/haiku-editor/haiku-editor";
 import { LoadError } from "@kari/shared/components/load-error/load-error";
-import { AdminItemList } from "../components/admin-item-list/admin-item-list";
+import { ItemList } from "../components/item-list/item-list";
 import { deleteConfirmationMessage } from "../delete-confirmation";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
@@ -90,9 +87,8 @@ export function AdminHaikuPage() {
     // A haiku has no title, so its first written line names it in the
     // confirmation — the same words the row shows.
     const haiku = haikuList.find((item) => item.id === id);
-    confirm(
-      deleteConfirmationMessage("haiku", ...(haiku?.lines ?? [])),
-      () => deleteHaiku(id),
+    confirm(deleteConfirmationMessage("haiku", ...(haiku?.lines ?? [])), () =>
+      deleteHaiku(id),
     );
   };
 
@@ -134,19 +130,35 @@ export function AdminHaikuPage() {
       onClose={() => navigate(listUrl)}
     />
   ) : (
-    <AdminItemList
+    <ItemList
       items={haikuList}
       // Matches the sidebar link, so the page says which section she is in.
       title="Haiku"
       noun="haiku"
       addLabel="Add a haiku"
       getSearchText={(haiku) => [...haiku.lines, haiku.publisher].join(" ")}
-      compact={true}
       onNewItem={onNewItem}
       onEdit={onEdit}
       onDelete={onDelete}
       onMove={onMove}
-      renderItem={(haiku) => <HaikuContent haiku={haiku} compact={true} />}
+      // The row's own markup rather than the shared HaikuContent: that
+      // component's `compact` variant is styled by the PUBLIC site's
+      // unlayered haiku-content.css, which would beat anything stated
+      // here, and it renders the poem over a photograph rather than on the
+      // admin's paper. The boards want her lines in the serif she wrote
+      // them in, with the publisher quiet underneath (`HaikuList.png`).
+      renderItem={(haiku) => (
+        <>
+          <div className="text-foreground font-serif text-[17px] leading-relaxed">
+            {haiku.lines.map((line, index) => (
+              <div key={index}>{line}</div>
+            ))}
+          </div>
+          <div className="text-muted-foreground mt-2 font-sans text-sm">
+            {haiku.publisher}
+          </div>
+        </>
+      )}
     />
   );
 }
