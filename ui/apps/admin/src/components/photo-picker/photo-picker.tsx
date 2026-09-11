@@ -1,7 +1,6 @@
 import { faArrowPointer } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useEffect, useId, useState } from "react";
-import "./photo-picker.css";
 import { AdminButton } from "../admin-button/admin-button";
 import { apiImageUrl } from "@kari/shared/utils/image-management-helpers";
 
@@ -39,7 +38,13 @@ export function PhotoPicker({
   };
 
   return (
-    <div className="photo-picker">
+    // The photo beside its button at any usable width, stacked on a phone —
+    // the arrangement every board in docs/design/admin-redesign draws.
+    //
+    // `photo-picker` and `photo-picker-image` below are not styling: they are
+    // how the e2e journeys reach the hidden file input and assert that a
+    // picked photo previews (e2e/admin-journeys.spec.ts, three sections).
+    <div className="photo-picker flex flex-col items-start gap-3 sm:flex-row sm:items-start">
       <input
         id={inputId}
         type="file"
@@ -48,15 +53,16 @@ export function PhotoPicker({
         hidden
       />
       {(previewUrl || fileName !== "") && (
-        <div className="photo-picker-selection">
-          <img
-            src={previewUrl ?? apiImageUrl(fileName, "thumb")}
-            alt="Selected"
-            className="photo-picker-image"
-            loading="lazy"
-            decoding="async"
-          />
-        </div>
+        <img
+          src={previewUrl ?? apiImageUrl(fileName, "thumb")}
+          alt="Selected"
+          // Whatever shape the photo is, it fits inside this box rather than
+          // being cropped or stretched to it — an editor's preview has to
+          // show her the picture she is about to publish.
+          className="photo-picker-image border-border max-h-40 max-w-full rounded-lg border object-contain sm:max-w-56"
+          loading="lazy"
+          decoding="async"
+        />
       )}
       {/* Secondary: picking a photo is a step towards saving, not the
           screen's primary action — the two used to carry identical
