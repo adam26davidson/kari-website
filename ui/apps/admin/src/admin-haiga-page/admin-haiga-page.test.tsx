@@ -395,6 +395,37 @@ describe("AdminHaigaPage search", () => {
   });
 });
 
+describe("AdminHaigaPage list rows", () => {
+  // The artwork IS the content of a haiga, so the row's picture has to
+  // carry the words that live inside it — the lines field feeds the alt
+  // and nothing else.
+  it("describes each row's artwork with the haiga's lines", async () => {
+    vi.mocked(HaigaService.getListFromApi).mockResolvedValue([
+      {
+        id: "h1",
+        lines: ["old pond", "a frog jumps in"],
+        publisher: "kari",
+        image: "a.png",
+      },
+    ]);
+    renderPage();
+
+    const thumbnail = await screen.findByRole("img", {
+      name: "old pond, a frog jumps in",
+    });
+    expect(thumbnail).toHaveAttribute("src", expect.stringContaining("a.png"));
+  });
+
+  it("names the artwork plainly when the haiga carries no lines", async () => {
+    vi.mocked(HaigaService.getListFromApi).mockResolvedValue([
+      { id: "h1", lines: [], publisher: "kari", image: "a.png" },
+    ]);
+    renderPage();
+
+    expect(await screen.findByRole("img", { name: "haiga" })).toBeVisible();
+  });
+});
+
 describe("AdminHaigaPage load failure", () => {
   beforeEach(() => {
     savedHaiga = {
