@@ -44,12 +44,22 @@ export function PageTitle({
           It bleeds further left of the text at md and up because that is
           where the content column gains its 32px gutter (admin.css); on a
           phone the gutter is 8px and a wider bleed would push the page
-          sideways. */}
+          sideways.
+
+          The minimum width is what makes it a brush stroke rather than a
+          blot on the SHORT titles (#234): every section is one or two words
+          ("Haiku", "Haiga"), and at `preserveAspectRatio="none"` a 320-unit
+          sweep squeezed into 80px comes out as a pink wedge beside the word
+          instead of sweeping past it. The boards draw the stroke running
+          well clear of the title's last letter (`HaikuList.png`), which is
+          the length these two numbers hold it to; a longer title (the home
+          page's greeting) is already wider than both and keeps stretching
+          the stroke as before. */}
       <svg
         aria-hidden="true"
         viewBox="0 0 320 50"
         preserveAspectRatio="none"
-        className="fill-accent pointer-events-none absolute -bottom-4 -left-1 h-[1.55em] w-[calc(100%+0.75rem)] opacity-[0.125] md:-left-5 md:w-[calc(100%+1.75rem)]"
+        className="fill-accent pointer-events-none absolute -bottom-4 -left-1 h-[1.55em] w-[calc(100%+0.75rem)] min-w-[190px] opacity-[0.125] md:-left-5 md:w-[calc(100%+1.75rem)] md:min-w-[240px]"
       >
         <path d="M0,32 C60,18 160,4 315,0 C200,9 110,26 44,50 Z" />
       </svg>
