@@ -187,9 +187,14 @@ export function ItemList<T extends { id: string }>({
                   directional, low-consequence, and "Move up" is what the
                   arrow already says. */}
               <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+                {/* 44px tall and tighter horizontally below `sm`: the
+                    touch-target floor the legacy phone rule also held these
+                    to, and the padding that keeps all four controls on ONE
+                    line inside a 390px card rather than wrapping Delete
+                    onto a row of its own. */}
                 <Button
                   variant="secondary"
-                  className="max-sm:h-11"
+                  className="max-sm:h-11 max-sm:px-3"
                   onClick={() => onEdit(item.id)}
                 >
                   <FontAwesomeIcon icon={faPencil} />
@@ -226,7 +231,7 @@ export function ItemList<T extends { id: string }>({
                     own; migrated, it is said here. */}
                 <Button
                   variant="dangerSecondary"
-                  className="ml-4 max-sm:h-11"
+                  className="ml-4 max-sm:h-11 max-sm:px-3"
                   onClick={() => onDelete(item.id)}
                 >
                   <FontAwesomeIcon icon={faTrash} />
