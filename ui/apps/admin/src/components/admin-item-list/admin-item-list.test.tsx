@@ -90,7 +90,8 @@ const adminCss = strip("apps/admin/src/admin.css");
  * rows only. The assertions that read them have to name the guarded
  * selector, because `px()` matches a selector exactly.
  */
-const LEGACY_ROW = '.admin-data-list-item:not([data-slot="list-row"])';
+const LEGACY_ROW =
+  '.admin-data-list-item:where(:not([data-slot="list-row"]))';
 
 /** Everything inside the narrow-viewport media query. */
 const atPhoneWidth = (() => {

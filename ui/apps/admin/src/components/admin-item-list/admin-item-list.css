@@ -119,8 +119,11 @@
    every Tailwind utility components/item-list states on its own row (see
    the same guard on the input rules in admin.css). That component keeps
    the class because the e2e journeys locate a row by it. The compound
-   `.compact` rule below needs no guard: a migrated row never wears it. */
-.admin-data-list-item:not([data-slot="list-row"]) {
+   `.compact` rule below needs no guard: a migrated row never wears it.
+   `:where()` is what keeps the guard free — a bare `:not()` carries its
+   argument's specificity and would start outranking rules this one used to
+   lose to (see test/design/legacy-css-guards.test.ts). */
+.admin-data-list-item:where(:not([data-slot="list-row"])) {
   background-color: var(--panel-tint);
   /* The tint alone lets the background photograph read through, and the
      row's secondary line (a haiku's publisher, a post's date) is small

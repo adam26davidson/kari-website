@@ -338,7 +338,7 @@ const ADMIN_PANELS: ReadonlyArray<[string, string, string]> = [
   [
     "list row",
     adminItemListCss,
-    '.admin-data-list-item:not([data-slot="list-row"])',
+    '.admin-data-list-item:where(:not([data-slot="list-row"]))',
   ],
   ["list header panel", adminItemListCss, ".admin-data-list-header"],
   // The one-card sections (image cleanup, what's on test). Each page used

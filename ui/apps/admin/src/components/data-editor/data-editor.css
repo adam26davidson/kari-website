@@ -28,8 +28,11 @@
    `min-height: 100%` here would beat every Tailwind utility
    components/editor-page states (see the same guard on the input rules in
    admin.css). components/editor-page keeps the class because the e2e
-   journeys locate an open editor by it. */
-.data-editor:not([data-slot="editor"]) {
+   journeys locate an open editor by it. `:where()` is what keeps the guard
+   free: `:not()` would carry its argument's specificity and start
+   outranking rules this one used to lose to (see admin.css and
+   test/design/legacy-css-guards.test.ts). */
+.data-editor:where(:not([data-slot="editor"])) {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -119,7 +122,7 @@
 /* Guarded like .data-editor above: components/editor-page wears this class
    so the e2e journeys can scope Save/Close to it, and lays the pair out
    with utilities of its own. */
-.data-editor-item-controls:not([data-slot="editor-controls"]) {
+.data-editor-item-controls:where(:not([data-slot="editor-controls"])) {
   display: flex;
   flex-direction: row;
   align-items: center;

@@ -92,18 +92,29 @@
    components/ui/textarea.tsx and components/ui/input.tsx would render as
    this grey 400px box no matter what utilities they carry — and no test
    would notice, only the screenshot. The guards go when the last legacy
-   page migrates and these rules go with it (#238/#240). */
-input[type="text"]:not([data-slot="input"]),
-input[type="email"]:not([data-slot="input"]),
-input[type="password"]:not([data-slot="input"]),
-input[type="number"]:not([data-slot="input"]),
-input[type="date"]:not([data-slot="input"]),
-textarea:not([data-slot="textarea"]) {
+   page migrates and these rules go with it (#238/#240).
+
+   Each guard is wrapped in `:where()`, which is never decoration either:
+   `:not()` takes its argument's specificity, so a bare
+   `input[type="text"]:not([data-slot="input"])` would be (0,2,1) where the
+   `input[type="text"]` it replaced was (0,1,1) — enough to start OUTRANKING
+   `.admin-field > input { width: 100% }` below and put every legacy Title
+   box back at 400px inside a full-width card (#457's lopsided panel), and
+   enough for the block below to overrule `.header-colors-swatch`'s
+   deliberate colour mount. `:where()` contributes nothing, so the opt-out
+   is bought without touching the cascade the un-migrated pages still sit
+   in. test/design/legacy-css-guards.test.ts pins that. */
+input[type="text"]:where(:not([data-slot="input"])),
+input[type="email"]:where(:not([data-slot="input"])),
+input[type="password"]:where(:not([data-slot="input"])),
+input[type="number"]:where(:not([data-slot="input"])),
+input[type="date"]:where(:not([data-slot="input"])),
+textarea:where(:not([data-slot="textarea"])) {
   width: 400px;
 }
 
-input:not([data-slot="input"]),
-textarea:not([data-slot="textarea"]) {
+input:where(:not([data-slot="input"])),
+textarea:where(:not([data-slot="textarea"])) {
   padding: 5px;
   border-radius: 3px;
   border: 1px solid var(--admin-field-border);
@@ -126,14 +137,14 @@ textarea:not([data-slot="textarea"]) {
    fields match :focus-visible whenever they are focused, so a focused field
    wears the site ring — which is the point, the admin can always see where
    typing will land (#501). */
-input:not([data-slot="input"]):focus,
-input:not([data-slot="input"]):active,
-textarea:not([data-slot="textarea"]):focus,
-textarea:not([data-slot="textarea"]):active {
+input:where(:not([data-slot="input"])):focus,
+input:where(:not([data-slot="input"])):active,
+textarea:where(:not([data-slot="textarea"])):focus,
+textarea:where(:not([data-slot="textarea"])):active {
   border: 1px solid rgba(0, 0, 0, 0.3);
 }
 
-textarea:not([data-slot="textarea"]) {
+textarea:where(:not([data-slot="textarea"])) {
   height: 100px;
   resize: none;
 }
@@ -355,8 +366,10 @@ input[type="checkbox"] {
    because that class is what the e2e journeys locate a row by. It is sized
    by Tailwind utilities written against border-box, so restoring
    content-box for it would add its padding outside its width — the one
-   rule in this block that would reach a page that has already left. */
-.admin-data-list-item:not([data-slot="list-row"]),
+   rule in this block that would reach a page that has already left.
+   `:where()` for the same reason as the input guards above: the guard must
+   cost no specificity. */
+.admin-data-list-item:where(:not([data-slot="list-row"])),
 .admin-danger-banner,
 .header-colors-swatch,
 .button-group select {
