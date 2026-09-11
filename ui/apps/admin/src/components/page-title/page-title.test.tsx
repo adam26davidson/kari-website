@@ -23,6 +23,21 @@ describe("PageTitle", () => {
     );
   });
 
+  it("keeps the swash off the viewport edge at phone width", () => {
+    const { container } = render(<PageTitle>Haiga</PageTitle>);
+
+    const swash = container.querySelector("svg");
+    const classes = swash?.getAttribute("class")?.split(/\s+/) ?? [];
+    // The phone content gutter is 8px (admin.css), so any un-prefixed
+    // negative left offset lands the stroke's taper within a few pixels of
+    // the screen edge and it reads as sliding off the page rather than as a
+    // flourish. Bleeding left is for md and up, where there is a 32px
+    // gutter to bleed into.
+    expect(classes).toContain("left-2");
+    expect(classes.filter((c) => /^-left-/.test(c))).toEqual([]);
+    expect(classes).toContain("md:-left-5");
+  });
+
   it("takes a caller's classes alongside its own", () => {
     render(<PageTitle className="mb-8">Haiku</PageTitle>);
 
