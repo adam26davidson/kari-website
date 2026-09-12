@@ -104,6 +104,26 @@ describe("the editor previews what the post will look like", () => {
     ).toEqual(expect.any(String));
   });
 
+  // The toolbar's link button, its unlink button and the bubble menu are
+  // all about one mark, and preflight gives `a` `color: inherit;
+  // text-decoration: inherit` — so a linked phrase looked exactly like the
+  // words either side of it, which is the one thing about her own post the
+  // author cannot check by reading it.
+  it("keeps a link looking like a link", () => {
+    expect(
+      {
+        color: editorDeclaration("a", "color"),
+        "text-decoration":
+          editorDeclaration("a", "text-decoration") ??
+          editorDeclaration("a", "text-decoration-line"),
+      },
+      `a link in the editor is invisible; ${rulesFor("a")}`,
+    ).toEqual({
+      color: expect.any(String),
+      "text-decoration": expect.any(String),
+    });
+  });
+
   // Preflight zeroes the margin on every block element. Two paragraphs then
   // run together with nothing between them, which is the difference a
   // reader notices first.

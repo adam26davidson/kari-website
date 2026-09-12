@@ -88,6 +88,22 @@
   padding-inline-start: 40px;
 }
 
+/* A link, which preflight flattens exactly as thoroughly as it flattens a
+   heading — `color: inherit; text-decoration: inherit` — so a linked phrase
+   in the editor was indistinguishable from the words around it while the
+   published post showed it coloured and underlined. That is the one thing
+   the author cannot check by reading her own text, and the toolbar has two
+   buttons and a bubble menu devoted to it.
+
+   Maroon rather than the reader's blue: this is the admin's palette, where
+   maroon is what "points out of here" means (`docs/design/admin-redesign`),
+   and the editor is allowed to diverge from the public rendering as long as
+   the SHAPE of the post is faithful — which underlined-and-coloured is. */
+.tiptap a {
+  color: var(--admin-danger);
+  text-decoration: underline;
+}
+
 /* A list nested in another one is part of the item above it, not a new
    block: the browser gives it no margin of its own, and the rule above
    would otherwise open a blank line either side of every sub-list. */

@@ -341,7 +341,7 @@ const MenuBar = ({
     // scope to the toolbar (e2e/admin-journeys.spec.ts), the same
     // convention `data-editor` and `tiptap-container` document. The
     // stylesheet that used to key off it is gone.
-    <div className="control-group border-border relative w-full border-b">
+    <div className="control-group border-border bg-muted/40 relative w-full rounded-t-lg border-b">
       <div className="flex flex-row flex-wrap items-center gap-y-1 p-1.5">
         <select
           aria-label="text style"
