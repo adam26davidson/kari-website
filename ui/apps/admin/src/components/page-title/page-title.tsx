@@ -41,10 +41,20 @@ export function PageTitle({
           Opacity 0.125 is measured, not guessed: the swash on Main.png is
           #EAE0DC over the #FAF7F2 paper, which is Maroon at 12.5%.
 
-          It bleeds further left of the text at md and up because that is
-          where the content column gains its 32px gutter (admin.css); on a
-          phone the gutter is 8px and a wider bleed would push the page
-          sideways.
+          At md and up it BLEEDS left of the text, into the 32px gutter the
+          content column gains there (admin.css), so the stroke starts on
+          paper before the first letter.
+
+          At phone width it does the opposite and starts INSIDE the column.
+          The phone gutter is only 8px, so the old -4px bleed put the
+          stroke's taper 4px from the viewport edge: with no paper in front
+          of it, the widest part of the lower lobe ran straight into the
+          screen edge and the flourish read as a graphic sliding off the
+          page rather than a brush mark. `left-2` puts the taper 16px in —
+          twice the page gutter — which is the least inset at which the
+          stroke visibly begins on paper. It starts under the title's first
+          letter instead of before it, which a stroke sitting below the
+          baseline carries fine.
 
           The minimum width is what makes it a brush stroke rather than a
           blot on the SHORT titles (#234): every section is one or two words
@@ -59,7 +69,7 @@ export function PageTitle({
         aria-hidden="true"
         viewBox="0 0 320 50"
         preserveAspectRatio="none"
-        className="fill-accent pointer-events-none absolute -bottom-4 -left-1 h-[1.55em] w-[calc(100%+0.75rem)] min-w-[190px] opacity-[0.125] md:-left-5 md:w-[calc(100%+1.75rem)] md:min-w-[240px]"
+        className="fill-accent pointer-events-none absolute -bottom-4 left-2 h-[1.55em] w-[calc(100%+0.75rem)] min-w-[190px] opacity-[0.125] md:-left-5 md:w-[calc(100%+1.75rem)] md:min-w-[240px]"
       >
         <path d="M0,32 C60,18 160,4 315,0 C200,9 110,26 44,50 Z" />
       </svg>

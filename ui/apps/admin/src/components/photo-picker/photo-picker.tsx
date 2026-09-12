@@ -38,13 +38,15 @@ export function PhotoPicker({
   };
 
   return (
-    // The photo beside its button at any usable width, stacked on a phone —
-    // the arrangement every board in docs/design/admin-redesign draws.
+    // The button sits UNDER the photo at every width: that is what every
+    // board drawing a picker shows (`HaigaEditor`, `HaigaEditorMobile`,
+    // `PhotoEditor`, `Appearance`), and it keeps "Select a different image"
+    // attached to the picture it replaces rather than floating beside it.
     //
     // `photo-picker` and `photo-picker-image` below are not styling: they are
     // how the e2e journeys reach the hidden file input and assert that a
     // picked photo previews (e2e/admin-journeys.spec.ts, three sections).
-    <div className="photo-picker flex flex-col items-start gap-3 sm:flex-row sm:items-start">
+    <div className="photo-picker flex flex-col items-start gap-3">
       <input
         id={inputId}
         type="file"

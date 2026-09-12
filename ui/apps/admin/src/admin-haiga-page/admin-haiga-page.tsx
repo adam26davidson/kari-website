@@ -9,9 +9,12 @@ import {
   moveItemByIdByOne,
   removeItemById,
 } from "@kari/shared/utils/data-list-helpers";
-import { HaigaContent } from "@kari/shared/components/haiga-content/haiga-content";
+import {
+  onS3ImageError,
+  s3ImageUrl,
+} from "@kari/shared/utils/image-management-helpers";
 import { LoadError } from "@kari/shared/components/load-error/load-error";
-import { AdminItemList } from "../components/admin-item-list/admin-item-list";
+import { ItemList } from "../components/item-list/item-list";
 import { deleteConfirmationMessage } from "../delete-confirmation";
 import { useAdminToken } from "../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
@@ -185,19 +188,41 @@ export function AdminHaigaPage() {
       onClose={() => navigate(listUrl)}
     />
   ) : (
-    <AdminItemList
+    <ItemList
       items={haigaList}
       // Matches the sidebar link, so the page says which section she is in.
       title="Haiga"
       noun="haiga"
       addLabel="Add a haiga"
       getSearchText={(haiga) => [...haiga.lines, haiga.publisher].join(" ")}
-      compact={true}
       onNewItem={onNewItem}
       onEdit={onEdit}
       onDelete={onDelete}
       onMove={onMove}
-      renderItem={(haiga) => <HaigaContent haiga={haiga} compact={true} />}
+      // The row's own markup rather than the shared HaigaContent: that
+      // component's `compact` variant is styled by the PUBLIC site's
+      // unlayered haiga-content.css, which would beat anything stated here.
+      // The boards (`HaigaList.png`, `HaigaListMobile.png`) want the
+      // artwork's small square thumbnail with the publisher quietly beside
+      // it, at every width.
+      renderItem={(haiga) => (
+        <div className="flex flex-row items-center gap-4">
+          <img
+            src={s3ImageUrl(haiga.image)}
+            onError={onS3ImageError}
+            // The haiku lines are part of the artwork itself and are never
+            // rendered as text here, so they only describe the picture —
+            // and most haiga carry none, hence the plain fallback.
+            alt={haiga.lines.join(", ") || "haiga"}
+            className="size-20 shrink-0 rounded-lg object-cover"
+            loading="lazy"
+            decoding="async"
+          />
+          <div className="text-muted-foreground min-w-0 font-sans text-sm">
+            {haiga.publisher}
+          </div>
+        </div>
+      )}
     />
   );
 }

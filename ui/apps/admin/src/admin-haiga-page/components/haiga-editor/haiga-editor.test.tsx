@@ -71,6 +71,15 @@ describe("HaigaEditor", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
+  it("explains where the haiku's words are, before she looks for them", () => {
+    renderEditor();
+    expect(
+      screen.getByText(
+        "The haiku's words live inside the image itself, so the picture is all that's needed.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("says what it is editing and names both fields", () => {
     renderEditor();
     expect(
