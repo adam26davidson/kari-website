@@ -15,6 +15,14 @@ import { apiImageUrl } from "@kari/shared/utils/image-management-helpers";
  * `photography-post-summary-image` is not styling either: it is how the e2e
  * journey checks that an uploaded photo reaches the admin list
  * (e2e/admin-journeys.spec.ts).
+ *
+ * The thumbnails are LANDSCAPE frames, not the square the haiga row uses:
+ * `PhotoList.png` draws them 68x52 in a 898px card (and `PhotoListMobile.png`
+ * 62x40), where `HaigaList.png` draws its single artwork as a square. A
+ * photograph is usually wider than it is tall, so a square frame both crops
+ * more of it away and makes the row 20px taller than the board's — which is
+ * what left the right-pinned Edit/Delete floating beside a tall grey block
+ * with an empty band between (CI visual review, PR #844).
  */
 export function PhotographyPostSummary({
   post,
@@ -24,7 +32,7 @@ export function PhotographyPostSummary({
   onClick: (post: PhotographyPost) => void;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-3">
+    <div className="flex min-w-0 flex-col gap-2">
       <button
         type="button"
         className="text-foreground w-fit max-w-full cursor-pointer text-left font-serif text-[17px] leading-relaxed hover:underline"
@@ -33,11 +41,11 @@ export function PhotographyPostSummary({
         {post.title}
       </button>
       {post.images.length > 0 && (
-        <div className="flex flex-row flex-wrap gap-3">
+        <div className="flex flex-row flex-wrap gap-2">
           {post.images.map((img) => (
             <img
               key={img.image}
-              className="photography-post-summary-image size-20 shrink-0 rounded-lg object-cover"
+              className="photography-post-summary-image h-15 w-20 shrink-0 rounded-lg object-cover"
               src={apiImageUrl(img.image, "thumb")}
               alt={img.blurb}
               loading="lazy"
