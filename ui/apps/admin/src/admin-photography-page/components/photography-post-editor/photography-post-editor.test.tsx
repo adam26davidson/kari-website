@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { MemoryRouter } from "react-router";
 import { PhotographyPostEditor } from "./photography-post-editor";
 import { EditorImage, newEditorImage } from "./editor-image";
 import { PhotographyPost } from "@kari/shared/models";
@@ -36,20 +35,16 @@ function renderEditor(overrides?: {
   const setImages = vi.fn();
   const onSave = vi.fn();
   const onClose = vi.fn();
-  // A router, because the image list is an AdminItemList and that reads
-  // its search query from the URL.
   const utils = render(
-    <MemoryRouter>
-      <PhotographyPostEditor
-        post={post}
-        setPost={setPost}
-        saveDisabled={overrides?.saveDisabled ?? false}
-        onSave={onSave}
-        onClose={onClose}
-        images={images}
-        setImages={setImages}
-      />
-    </MemoryRouter>,
+    <PhotographyPostEditor
+      post={post}
+      setPost={setPost}
+      saveDisabled={overrides?.saveDisabled ?? false}
+      onSave={onSave}
+      onClose={onClose}
+      images={images}
+      setImages={setImages}
+    />,
   );
   return { ...utils, post, images, setPost, setImages, onSave, onClose };
 }
@@ -82,19 +77,14 @@ describe("PhotographyPostEditor", () => {
   // and Save were both filled brown and competed as equals (#457).
   it("leaves Save as the only primary action on the screen", () => {
     renderEditor();
+    // The filled-green recipe's own class (button-variants.ts): after the
+    // migration Save and Close are shadcn `Button`s and carry no
+    // `admin-button` class to sort by, and `bg-primary` is what "filled
+    // green primary" now IS. PhotoPicker's "Select an image" is an
+    // AdminButton, but a secondary one, so it is excluded on the same test.
     const filled = screen
       .getAllByRole("button")
-      .filter(
-        (button) =>
-          // Primary is the absence of a variant class, so any variant
-          // added later is excluded here without editing this list. The
-          // rest of the classes are the shadcn recipe's (#592), which is
-          // why this counts variant names rather than the whole list.
-          button.classList.contains("admin-button") &&
-          !["secondary", "danger", "danger-secondary"].some((variant) =>
-            button.classList.contains(variant),
-          ),
-      )
+      .filter((button) => button.classList.contains("bg-primary"))
       .map((button) => button.textContent);
     expect(filled).toEqual(["Save"]);
   });
@@ -205,6 +195,27 @@ describe("PhotographyPostEditor", () => {
     expect(updated.map((e) => e.id)).toEqual(["img-a", "img-c", "img-b"]);
   });
 
+  // Nothing is above the first image or below the last, so the control
+  // that would say so is not drawn — the same rule every admin list has
+  // followed since #457, now stated by the editor itself rather than
+  // inherited from the list component it used to borrow.
+  it("hides the move controls that would do nothing", () => {
+    const { container } = renderEditor();
+    // In document order across the three rows: the first has only "Move
+    // down", the middle has both, the last has only "Move up". Read off
+    // the DOM rather than per-row containers, so this pins the arrangement
+    // without pinning the row's markup.
+    const arrows = Array.from(
+      container.querySelectorAll('button[aria-label^="Move "]'),
+    ).map((button) => button.getAttribute("aria-label"));
+    expect(arrows).toEqual([
+      "Move down",
+      "Move up",
+      "Move down",
+      "Move up",
+    ]);
+  });
+
   it("edits a single image's blurb", () => {
     const { setImages } = renderEditor();
 
@@ -294,11 +305,7 @@ describe("PhotographyPostEditor", () => {
     }
 
     it("keeps a typed blurb and its DOM node with the item when moved", async () => {
-      render(
-        <MemoryRouter>
-          <StatefulEditor />
-        </MemoryRouter>,
-      );
+      render(<StatefulEditor />);
 
       const firstBlurb = imageBlurbs()[0];
       fireEvent.change(firstBlurb, { target: { value: "typed caption" } });
