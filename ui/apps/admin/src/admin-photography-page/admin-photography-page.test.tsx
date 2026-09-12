@@ -47,11 +47,11 @@ function iconButton(container: HTMLElement, icon: string): HTMLElement {
 /**
  * The editor's Save control. A floppy-disk icon circle until #457 made it
  * a labelled text button; it is the first control in the editor header.
+ * Reached through the header's `data-slot`, because since the shadcn
+ * migration (#236) Save is a plain `Button` and carries no `admin-button`.
  */
 function saveButton(container: HTMLElement): HTMLElement {
-  const button = container.querySelector(
-    ".data-editor-item-controls .admin-button",
-  );
+  const button = container.querySelector('[data-slot="editor-controls"] button');
   if (!(button instanceof HTMLElement)) {
     throw new Error("no save button in the editor");
   }

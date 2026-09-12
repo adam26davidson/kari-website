@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import "../admin.css";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate, useParams } from "react-router";
 import { PhotographyPost } from "@kari/shared/models";
@@ -16,7 +15,7 @@ import {
 } from "./components/photography-post-editor/editor-image";
 import { PhotographyPostSummary } from "./components/photography-post-summary/photography-post-summary";
 import { LoadError } from "@kari/shared/components/load-error/load-error";
-import { AdminItemList } from "../components/admin-item-list/admin-item-list";
+import { ItemList } from "../components/item-list/item-list";
 import { deleteConfirmationMessage } from "../delete-confirmation";
 import { useAdminToken } from "../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
@@ -232,7 +231,7 @@ export function AdminPhotographyPage() {
       setImages={setEditorImages}
     />
   ) : (
-    <AdminItemList
+    <ItemList
       items={postList}
       // Matches the sidebar link, so the page says which section she is in.
       title="Photography"

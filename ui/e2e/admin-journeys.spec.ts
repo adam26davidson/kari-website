@@ -547,13 +547,22 @@ test.describe("photography", () => {
     expect(lastRemoveBox.y).toBeGreaterThan(viewportHeight);
 
     // Containment: the fields end inside the card, with the card's own
-    // 24px of bottom padding intact below them. Before #578 they ran past
-    // the rim instead.
-    const contentBottom = await boundingBottom(page, ".data-editor-content");
-    const inputsBottom = await boundingBottom(page, ".data-list-item-inputs");
+    // bottom padding intact below them. Before #578 they ran past the rim
+    // instead. The card is the migrated editor's (#236) — `p-5 sm:p-8`, and
+    // this viewport is well past `sm`, so 32px is what should be left below
+    // the last field. `.data-editor-content` and `.data-list-item-inputs`
+    // were the LEGACY editor's boxes and went with its stylesheet.
+    const contentBottom = await boundingBottom(
+      page,
+      '.data-editor [data-slot="card"]',
+    );
+    const inputsBottom = await boundingBottom(
+      page,
+      ".photography-post-editor-images",
+    );
     expect(inputsBottom).toBeLessThanOrEqual(contentBottom);
-    expect(contentBottom - inputsBottom).toBeGreaterThanOrEqual(23);
-    expect(contentBottom - inputsBottom).toBeLessThanOrEqual(25);
+    expect(contentBottom - inputsBottom).toBeGreaterThanOrEqual(31);
+    expect(contentBottom - inputsBottom).toBeLessThanOrEqual(33);
 
     // Reachability: scrolling the page brings the last row's control into
     // view (nothing is stranded below the fold).

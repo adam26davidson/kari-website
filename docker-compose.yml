@@ -10,9 +10,17 @@
 # assume). Set KARI_MINIO_PORT to publish on another port, or to 0 for an
 # ephemeral one — discover it with `docker compose port minio 9000`.
 # scripts/dev.sh does exactly that when 9000 is already taken.
+#
+# The image comes from quay.io, not Docker Hub: MinIO removed the
+# `minio/minio` Docker Hub repository, so every `docker pull` there now
+# fails with "pull access denied" (CI dies at "Start local S3 (MinIO)";
+# machines with the image cached keep working, which hides it locally).
+# quay.io/minio/minio is MinIO's own registry and still publishes it.
+# The tag is pinned so a CI run and a laptop agree on the binary; bump it
+# deliberately.
 services:
   minio:
-    image: minio/minio
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     command: server /data
     ports:
       - "${KARI_MINIO_PORT:-9000}:9000"
