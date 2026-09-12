@@ -67,21 +67,26 @@ const renderTiptap = (content = "<p>hello</p>") => {
   return { container, setContent, onAddImage };
 };
 
+// The toolbar's buttons, in DOM order. Every one of them is an icon with a
+// label, and the only other control in the row is the text-style select.
+const toolbarButtons = (container: HTMLElement) => [
+  ...container.querySelectorAll<HTMLElement>(".control-group button"),
+];
+
 describe("Tiptap toolbar", () => {
-  it("renders the grouped toolbar structure", () => {
+  it("renders every control in its group", () => {
     const { container } = renderTiptap();
 
-    const groups = container.querySelectorAll(".grouped-buttons");
-    expect(groups).toHaveLength(3);
-    // marks, alignments, lists
-    expect(groups[0].querySelectorAll("button")).toHaveLength(3);
-    expect(groups[1].querySelectorAll("button")).toHaveLength(4);
-    expect(groups[2].querySelectorAll("button")).toHaveLength(2);
-    // link, unlink and image render as bare buttons in the button row
-    expect(container.querySelectorAll(".button-group > button")).toHaveLength(
-      3
-    );
-    expect(container.querySelectorAll(".button-group button")).toHaveLength(12);
+    // Four groups — marks, insert, lists, alignment — each a run of
+    // buttons with its own wrapper, so the row wraps between groups
+    // rather than mid-group at phone width.
+    const groups = [
+      ...container.querySelectorAll(".control-group > div > div"),
+    ];
+    expect(groups.map((group) => group.querySelectorAll("button").length)) //
+      .toEqual([3, 3, 2, 4]);
+    // Everything lives in a group now: no control is loose in the row.
+    expect(toolbarButtons(container)).toHaveLength(12);
   });
 
   it("omits the toolbar entirely until the editor exists", () => {
@@ -105,7 +110,7 @@ describe("Tiptap toolbar", () => {
   it("labels every toolbar button and the block-style select", () => {
     const { container } = renderTiptap();
 
-    for (const button of container.querySelectorAll(".button-group button")) {
+    for (const button of toolbarButtons(container)) {
       expect(button).toHaveAttribute("aria-label");
       expect(button.getAttribute("title")).toBe(
         button.getAttribute("aria-label")
@@ -122,23 +127,25 @@ describe("Tiptap toolbar", () => {
     // to read as English rather than as the item's internal slug.
     const { container } = renderTiptap();
 
-    const names = [...container.querySelectorAll(".button-group button")].map(
-      (button) => button.getAttribute("aria-label")
+    const names = toolbarButtons(container).map((button) =>
+      button.getAttribute("aria-label")
     );
 
+    // The board's order (`WorksEditor.png`): what the words look like,
+    // then what they point at, then how the block is shaped.
     expect(names).toEqual([
       "Bold",
       "Italic",
       "Strikethrough",
+      "Add or edit a link",
+      "Remove the link",
+      "Add an image",
+      "Bulleted list",
+      "Numbered list",
       "Align left",
       "Align center",
       "Align right",
       "Justify",
-      "Bulleted list",
-      "Numbered list",
-      "Add or edit a link",
-      "Remove the link",
-      "Add an image",
     ]);
   });
 
@@ -158,15 +165,14 @@ describe("Tiptap toolbar", () => {
       renderTiptap();
       const button = getButton(mark);
 
-      // The class is what a sighted author sees; aria-pressed is the same
-      // fact for anyone who cannot see the highlight, so they move together.
-      expect(button.className).not.toContain("is-active");
+      // aria-pressed is the WHOLE of the active state since #237: the
+      // highlight a sighted author sees is drawn from this attribute
+      // (`aria-pressed:bg-primary/10`), so the two can no longer drift
+      // apart the way the old `is-active` class could.
       expect(button).toHaveAttribute("aria-pressed", "false");
       await user.click(button);
-      expect(button.className).toContain("is-active");
       expect(button).toHaveAttribute("aria-pressed", "true");
       await user.click(button);
-      expect(button.className).not.toContain("is-active");
       expect(button).toHaveAttribute("aria-pressed", "false");
     }
   );
@@ -195,9 +201,7 @@ describe("Tiptap toolbar", () => {
 
     expect(center).toHaveAttribute("aria-pressed", "false");
     await user.click(center);
-    expect(center.className).toContain("is-active");
     expect(center).toHaveAttribute("aria-pressed", "true");
-    expect(left.className).not.toContain("is-active");
     expect(left).toHaveAttribute("aria-pressed", "false");
     // Tiptap 3's TextAlign extension terminates the inline style with a
     // semicolon; Tiptap 2 did not. Cosmetic in the stored HTML, and the
@@ -207,9 +211,7 @@ describe("Tiptap toolbar", () => {
     );
 
     await user.click(left);
-    expect(left.className).toContain("is-active");
     expect(left).toHaveAttribute("aria-pressed", "true");
-    expect(center.className).not.toContain("is-active");
     expect(center).toHaveAttribute("aria-pressed", "false");
   });
 
@@ -218,15 +220,13 @@ describe("Tiptap toolbar", () => {
     const { setContent } = renderTiptap();
 
     await user.click(getButton("Bulleted list"));
-    expect(getButton("Bulleted list").className).toContain("is-active");
     expect(getButton("Bulleted list")).toHaveAttribute("aria-pressed", "true");
     expect(setContent).toHaveBeenLastCalledWith(
       "<ul><li><p>hello</p></li></ul>"
     );
 
     await user.click(getButton("Numbered list"));
-    expect(getButton("Numbered list").className).toContain("is-active");
-    expect(getButton("Bulleted list").className).not.toContain("is-active");
+    expect(getButton("Numbered list")).toHaveAttribute("aria-pressed", "true");
     expect(getButton("Bulleted list")).toHaveAttribute("aria-pressed", "false");
     expect(setContent).toHaveBeenLastCalledWith(
       "<ol><li><p>hello</p></li></ol>"
@@ -261,8 +261,10 @@ describe("Tiptap toolbar", () => {
     const unlink = getButton("Remove the link");
     const link = getButton("Add or edit a link");
 
-    // the initial cursor sits at the start of the link text
-    expect(link.className).toContain("is-active");
+    // the initial cursor sits at the start of the link text. The link
+    // button is a disclosure, so it reports aria-expanded rather than
+    // aria-pressed; that the cursor IS on a link is what enables unlink.
+    expect(link).toHaveAttribute("aria-expanded", "false");
     expect(unlink).toBeEnabled();
     await user.click(unlink);
     expect(setContent).toHaveBeenLastCalledWith("<p>hello</p>");
@@ -406,7 +408,11 @@ describe("Tiptap toolbar", () => {
 
     expect(getLinkInput()).toHaveValue("javascript:alert(1)");
     expect(setContent).not.toHaveBeenCalled();
-    expect(getButton("Add or edit a link").className).not.toContain("is-active");
+    // The panel is still open, so the refusal can be corrected in place.
+    expect(getButton("Add or edit a link")).toHaveAttribute(
+      "aria-expanded",
+      "true"
+    );
   });
 
   it("keeps the panel open when the block cannot hold a link", async () => {

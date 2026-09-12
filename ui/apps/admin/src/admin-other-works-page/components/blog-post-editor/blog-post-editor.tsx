@@ -29,6 +29,8 @@ export function BlogPostEditor({
   const titleId = useId();
   const dateId = useId();
   const publishedId = useId();
+  const publishedLabelId = `${publishedId}-label`;
+  const publishedHintId = `${publishedId}-hint`;
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // toPostDate pins the picked day to UTC midnight, the one shape
     // stored post dates take (#379), and returns null for a value that
@@ -95,20 +97,32 @@ export function BlogPostEditor({
             DOES before she flips it, rather than leaving "Published" to be
             found out (design brief §9). */}
         <div className="flex flex-row flex-wrap items-center gap-x-3 gap-y-1 pb-2">
+          {/* Named through `aria-labelledby` as well as by the `htmlFor`
+              below, because a `<label for>` is only a reliable name source
+              for the labelable CONTROLS — and Radix renders a switch as a
+              `<button>` with no text of its own, which a browser would
+              otherwise compute an empty name for. The `htmlFor` stays: it
+              is what makes clicking the word flip the switch. */}
           <Switch
             id={publishedId}
+            aria-labelledby={publishedLabelId}
+            aria-describedby={publishedHintId}
             checked={post.isPublished}
             onCheckedChange={(checked) =>
               setPost({ ...post, isPublished: checked })
             }
           />
           <label
+            id={publishedLabelId}
             className="text-foreground cursor-pointer font-sans text-sm font-medium"
             htmlFor={publishedId}
           >
             Published
           </label>
-          <span className="text-muted-foreground font-sans text-sm">
+          <span
+            id={publishedHintId}
+            className="text-muted-foreground font-sans text-sm"
+          >
             — visitors can read this
           </span>
         </div>

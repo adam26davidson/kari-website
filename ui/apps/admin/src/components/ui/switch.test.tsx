@@ -45,7 +45,7 @@ describe("Switch", () => {
   });
 
   it("lets a caller's class win over its own", () => {
-    render(<Switch aria-label="Published" readOnly className="w-20" />);
+    render(<Switch aria-label="Published" checked={false} className="w-20" />);
 
     const control = screen.getByRole("switch", { name: "Published" });
     expect(control).toHaveClass("w-20");

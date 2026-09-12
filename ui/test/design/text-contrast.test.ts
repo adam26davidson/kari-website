@@ -145,9 +145,6 @@ const adminCardCss = read("apps/admin/src/components/card/card.css");
 const adminItemListCss = read(
   "apps/admin/src/components/admin-item-list/admin-item-list.css",
 );
-const blogPostSummaryCss = read(
-  "packages/shared/src/components/blog-post-summary/blog-post-summary.css",
-);
 // Since #480 almost nothing in these stylesheets is a literal any more: the
 // surfaces and the palette live as custom properties in the shared `:root`,
 // the admin's `:root` re-exports two of them under its own names, and an
@@ -316,15 +313,11 @@ const ADMIN_SECONDARY_TEXT_RULES: ReadonlyArray<[string, string, string]> = [
   // (`text-muted-foreground`, the same Stone this token resolves to), and
   // the stylesheet that declared it is gone. The palette pairs it has to
   // clear are pinned in "the admin's warm studio palette" below.
-  // Only ever rendered on the admin other-works list (the public page
-  // passes showPublished={false}), and the last piece of admin secondary
-  // text still carrying a hex of its own: #666, which is 4.0:1 on the row
-  // and the "Published" two visual reviews running named as hard to read.
-  [
-    "other-works published status",
-    blogPostSummaryCss,
-    ".blog-post-summary-status",
-  ],
+  // The other-works "Published" line was here until #237 migrated that
+  // page: it only ever rendered on the ADMIN list (the public page passed
+  // showPublished={false}), so the admin's own row took it over as a
+  // Tailwind badge on the flat palette, and both the prop and the rule
+  // that styled it are gone.
 ];
 
 /** Every admin surface the rules above render their text on. */
