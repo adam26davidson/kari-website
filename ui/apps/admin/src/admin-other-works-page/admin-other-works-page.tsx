@@ -1,6 +1,4 @@
 import { Suspense, useEffect, useRef, useState } from "react";
-import "./admin-other-works-page.css";
-import "../admin.css";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate, useParams } from "react-router";
 import { BlogPost } from "@kari/shared/models";
@@ -10,11 +8,11 @@ import {
 } from "@kari/shared/utils/data-list-helpers";
 import { formatPostDate, todayAsPostDate } from "@kari/shared/utils/date-helpers";
 import { BlogService } from "@kari/shared/services/blog";
-import { BlogPostSummary } from "@kari/shared/components/blog-post-summary/blog-post-summary";
 import { ImageService } from "@kari/shared/services/images";
 import { lazyWithRetry } from "@kari/shared/components/error-boundary/lazy-with-retry";
 import { LoadError } from "@kari/shared/components/load-error/load-error";
-import { AdminItemList } from "../components/admin-item-list/admin-item-list";
+import { BlogPostRow } from "./components/blog-post-row/blog-post-row";
+import { ItemList } from "../components/item-list/item-list";
 import { deleteConfirmationMessage } from "../delete-confirmation";
 import { useAdminToken } from "../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
@@ -297,7 +295,7 @@ export function AdminOtherWorksPage() {
       />
     </Suspense>
   ) : (
-    <AdminItemList
+    <ItemList
       items={postList}
       // Matches the sidebar link, so the page says which section she is in.
       title="Other works"
@@ -312,12 +310,7 @@ export function AdminOtherWorksPage() {
       onDelete={onDelete}
       onMove={onMove}
       renderItem={(post) => (
-        <BlogPostSummary
-          post={post}
-          showPublished={true}
-          isAdmin={true}
-          onClick={() => onEdit(post.id)}
-        />
+        <BlogPostRow post={post} onClick={() => onEdit(post.id)} />
       )}
     />
   );

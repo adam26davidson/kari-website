@@ -1,40 +1,12 @@
-/* The writing surface, which grows with the post. It used to declare
-   `overflow-y: scroll` to scroll itself inside a container that a
-   percentage `max-height` chain bound to the viewport; #794 removed that
-   chain, so the container is auto-height, this box never had overflow to
-   scroll, and all the declaration still did was reserve a permanent
-   scrollbar gutter down the right of the editor — narrowing the writing
-   measure for a bar that never moved (#581). `.admin-content` scrolls the
-   admin. */
-.editor {
-  width: 100%;
-  flex: 1;
-}
-
-/* `min-height` with no max: a short post still gets a surface worth
-   writing in, a long one grows the card and the page scrolls. The
-   `max-height: calc(100% - 24px)` that used to sit here resolved against
-   an auto-height parent — i.e. to `none` — from #794 onward, so it read as
-   a viewport clamp that was not one. */
-.tiptap-container {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
-  width: 800px;
-  max-width: 100%;
-  box-sizing: border-box;
-  min-height: 350px;
-  margin: 10px 0;
-  border-radius: 3px;
-  border: 1px solid var(--admin-field-border);
-  /* Opaque fill shared with the other admin fields so post text never
-     sits directly on the photo background (#210, #308) */
-  background-color: var(--admin-field-bg);
-}
+/* What the editor's CONTENT looks like, and nothing else.
+   ---------------------------------------------------------------------
+   The editor's CHROME — the container, the toolbar row, its buttons, the
+   link panel — moved to Tailwind utilities in the component when #237
+   migrated this page. What is left here cannot follow it, and the block
+   below says why: these rules style HTML the AUTHOR writes, which carries
+   no class names for Tailwind to see. */
 
 .tiptap {
-  height: content-fit;
   margin: 10px;
   /* The body text must not inherit the page's light-on-photo color */
   color: var(--dark-text);
@@ -72,9 +44,11 @@
    against a reader's 32 / 24 / 18.7. The shape of the post is faithful; the
    h1 is a little smaller than it will be in the wild.
 
-   Unlike the compat block in admin.css this is not transitional: preflight
-   stays on after #237 migrates this page, so the editor keeps needing to
-   say what a post looks like. Pinned by test/design/editor-content.test.ts. */
+   This is the one part of the editor that stays CSS after #237. Preflight
+   stays on, so the editor keeps needing to say what a post looks like —
+   and it cannot say it in utilities, because this styles the HTML the
+   AUTHOR writes, which carries no class names. Pinned by
+   test/design/editor-content.test.ts. */
 .tiptap h1,
 .tiptap h2,
 .tiptap h3 {
@@ -147,153 +121,16 @@
   box-shadow: none;
 }
 
-.control-group {
-  width: 100%;
-  /* anchors the link popover under the toolbar row */
-  position: relative;
-}
-
-.button-group {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-start;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.button-group button {
-  /* height: 34px; */
-  padding: 5px;
-  margin: 3px;
-  font-size: 14px;
-  background-color: rgb(232, 232, 232);
-  color: rgb(55, 55, 55);
-  border-width: 0px;
-}
-
-.button-group button.is-active {
-  background-color: rgb(55, 55, 55);
-  color: rgb(232, 232, 232);
-}
-
-.button-group button[disabled] {
-  color: rgb(111, 111, 111);
-  cursor: not-allowed;
-}
-
-.button-group button[disabled]:hover {
-  background-color: rgb(232, 232, 232);
-  color: rgb(111, 111, 111);
-}
-
-.button-group button:hover {
-  background-color: rgb(72, 72, 72);
-  color: rgb(232, 232, 232);
-}
-
-.grouped-buttons {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  background-color: rgb(232, 232, 232);
-  border-radius: 3px;
-  overflow: hidden;
-  margin: 5px;
-}
-
-.grouped-buttons button {
-  margin: 0px;
-  border-radius: 0px;
-}
-
-.button-group select {
-  font-size: 14px;
-  height: 30px;
-  background-color: rgb(232, 232, 232);
-  color: rgb(55, 55, 55);
-  margin: 3px;
-  padding: 5px;
-  border-radius: 3px;
-  border-width: 0px;
-}
-
-.button-group select:hover {
-  background-color: rgb(72, 72, 72);
-  color: rgb(232, 232, 232);
-  cursor: pointer;
-}
-
-/* Link popover: an on-demand panel hanging off the toolbar row. It sits
-   outside .button-group so the toolbar's flex row cannot wrap around it,
-   which is also why its buttons repeat the .button-group button look. */
-.link-popover {
-  position: absolute;
-  top: 100%;
-  left: 8px;
-  z-index: 2;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  max-width: calc(100% - 16px);
-  box-sizing: border-box;
-  padding: 8px;
-  border-radius: 3px;
-  background-color: rgb(232, 232, 232);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-}
-
-.link-popover input {
-  /* min-width: 0 lets the input shrink inside the flex row instead of
-     pushing the panel past the editor's width at 390px */
-  flex: 1 1 220px;
-  min-width: 0;
-  padding: 5px;
-  font-size: 14px;
-  color: var(--dark-text);
-  background-color: white;
-  border: 1px solid var(--admin-field-border);
-  border-radius: 3px;
-}
-
-.link-popover button {
-  padding: 5px;
-  font-size: 14px;
-  background-color: rgb(212, 212, 212);
-  color: rgb(55, 55, 55);
-  border-width: 0px;
-  border-radius: 3px;
-}
-
-.link-popover button:hover {
-  background-color: rgb(72, 72, 72);
-  color: rgb(232, 232, 232);
-}
-
-.link-popover-error {
-  /* Full-width row under the input, in the same red/white as
-     .admin-danger-banner (admin.css) so it stays legible on the grey
-     panel. Not that class itself: this one sits inside a popover, so it is
-     tighter and smaller than a banner spanning a whole card. */
-  flex-basis: 100%;
-  margin: 0;
-  padding: 6px 8px;
-  border-radius: 3px;
-  background-color: var(--admin-danger);
-  color: white;
-  font-size: 13px;
-  overflow-wrap: anywhere;
-}
-
-.blog-post-image {
+/* An image the author has placed in the post. Both rules are about the
+   author's own HTML, like the block above — and the second used to be a
+   bare, GLOBAL `img` selector, so every image anywhere in the admin was
+   capped at 90% of its container from the moment this lazy chunk loaded.
+   Scoped to the editor, which is the only place it was ever meant. */
+.tiptap .blog-post-image {
   width: 100px;
 }
 
-img {
+.tiptap img {
   max-width: 90%;
   max-height: 100%;
 }
