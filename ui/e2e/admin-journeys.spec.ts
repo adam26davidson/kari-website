@@ -304,10 +304,12 @@ test.describe("blog (other works)", () => {
     await openAdminSection(page, "Other works");
     await createNewItem(page);
     await page.getByLabel("Title", { exact: true }).fill(marker);
-    // Leave "Published" unchecked: this is a draft.
+    // Leave "Published" off: this is a draft. The control is a Radix
+    // switch — a <button role="switch">, not a checkbox — so its state is
+    // read from aria-checked rather than through toBeChecked().
     await expect(
-      page.locator(".blog-post-editor-status-checkbox"),
-    ).not.toBeChecked();
+      page.getByRole("switch", { name: "Published" }),
+    ).toHaveAttribute("aria-checked", "false");
     await saveEditor(page);
     // The editor closes itself after a successful save.
     await expect(page.locator(".data-editor")).toBeHidden({
@@ -342,9 +344,7 @@ test.describe("blog (other works)", () => {
     await prose.click();
     await page.keyboard.type(`Body ${marker} content`);
     const chooser = page.waitForEvent("filechooser");
-    await page
-      .locator('.control-group button:has(svg[data-icon="image"])')
-      .click();
+    await page.getByRole("button", { name: "Add an image" }).click();
     await (await chooser).setFiles(pngFixturePath());
     // The image lands in the editor as an inline preview.
     await expect(prose.locator("img")).toBeVisible();
@@ -366,7 +366,9 @@ test.describe("blog (other works)", () => {
     // Edit the content and publish.
     await prose.locator("p", { hasText: marker }).first().click();
     await page.keyboard.type(" EDITED ");
-    await page.locator(".blog-post-editor-status-checkbox").check();
+    const published = page.getByRole("switch", { name: "Published" });
+    await published.click();
+    await expect(published).toHaveAttribute("aria-checked", "true");
     await saveEditor(page);
     await expect(page.locator(".data-editor")).toBeHidden({
       timeout: 180_000,

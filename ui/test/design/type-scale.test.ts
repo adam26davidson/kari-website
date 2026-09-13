@@ -209,7 +209,9 @@ const FLUID_SIZES = new Set([
  */
 const FROZEN_ADMIN_SIZES = new Set([
   "12px",
-  "13px",
+  // "13px" went with the tiptap editor's chrome — the link panel's error
+  // line and the bubble's address — which #237 restyled in Tailwind when
+  // the other-works page moved.
   "14px",
   "15px",
   "17px",

@@ -3,6 +3,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { AdminOtherWorksPage } from "./admin-other-works-page";
 import { BlogPost } from "@kari/shared/models";
 import { BlogService } from "@kari/shared/services/blog";
+import { formatPostDate } from "@kari/shared/utils/date-helpers";
 import { ImageService } from "@kari/shared/services/images";
 import { TokenGetter } from "@kari/shared/services/http";
 import {
@@ -77,34 +78,14 @@ vi.mock("../components/tiptap/tiptap", () => ({
 }));
 
 /**
- * A per-row control located by its FontAwesome glyph. Since #457 edit and
- * delete are labelled .admin-button text buttons and the move arrows are
- * .admin-icon-button circles, so this closes on the button element itself
- * rather than on either class.
+ * A row's control, by the words on it. Since #457 every control in an
+ * admin list says what it does — Edit, Delete, and the move arrows through
+ * their labels — so there is nothing left here to find by its glyph.
  */
-function iconButton(container: HTMLElement, icon: string): HTMLElement {
-  const button = container
-    .querySelector(`svg[data-icon="${icon}"]`)
-    ?.closest("button");
-  if (!(button instanceof HTMLElement)) {
-    throw new Error(`no icon button for "${icon}"`);
-  }
-  return button;
-}
+const rowButton = (name: string) => screen.getByRole("button", { name });
 
-/**
- * The editor's Save control. A floppy-disk icon circle until #457 made it
- * a labelled text button; it is the first control in the editor header.
- */
-function saveButton(container: HTMLElement): HTMLElement {
-  const button = container.querySelector(
-    ".data-editor-item-controls .admin-button",
-  );
-  if (!(button instanceof HTMLElement)) {
-    throw new Error("no save button in the editor");
-  }
-  return button;
-}
+/** Resolves once the list has rendered its rows. */
+const listRendered = () => screen.findAllByRole("button", { name: "Edit" });
 
 // The saved post as it exists in the published list before the edit, and
 // its stored content, which references old.png.
@@ -113,24 +94,24 @@ const savedContent =
   '<p>hello</p><img src="https://api.test.local/images/old.png">';
 
 async function renderPage(initialEntry?: string) {
-  const { container, adminUi, router } = renderAdminPage(
+  const { adminUi, router } = renderAdminPage(
     <AdminOtherWorksPage />,
     "/other-works/:id?",
     initialEntry,
   );
   const notify = adminUi.notify;
-  await waitFor(() => iconButton(container, "pencil"));
-  return { container, notify, adminUi, router };
+  await listRendered();
+  return { notify, adminUi, router };
 }
 
 // Renders the page, opens the only post in the editor, and removes the
 // image from its content — the state right before the user hits save.
 async function openEditorAndRemoveImage() {
-  const { container, notify } = await renderPage();
-  fireEvent.click(iconButton(container, "pencil"));
+  const { notify } = await renderPage();
+  fireEvent.click(rowButton("Edit"));
   const textarea = await screen.findByPlaceholderText("post content");
   fireEvent.change(textarea, { target: { value: "<p>hello</p>" } });
-  return { container, notify };
+  return { notify };
 }
 
 beforeEach(() => {
@@ -153,9 +134,9 @@ describe("AdminOtherWorksPage image removal on save", () => {
     vi.mocked(BlogService.updateList).mockRejectedValue(
       new Error("PUT failed"),
     );
-    const { container, notify } = await openEditorAndRemoveImage();
+    const { notify } = await openEditorAndRemoveImage();
 
-    fireEvent.click(saveButton(container));
+    fireEvent.click(rowButton("Save"));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
@@ -177,9 +158,9 @@ describe("AdminOtherWorksPage image removal on save", () => {
     vi.mocked(BlogService.updateContent).mockRejectedValue(
       new Error("PUT failed"),
     );
-    const { container, notify } = await openEditorAndRemoveImage();
+    const { notify } = await openEditorAndRemoveImage();
 
-    fireEvent.click(saveButton(container));
+    fireEvent.click(rowButton("Save"));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
@@ -190,9 +171,9 @@ describe("AdminOtherWorksPage image removal on save", () => {
   });
 
   it("saves content then list, leaving the removed image in storage", async () => {
-    const { container, notify } = await openEditorAndRemoveImage();
+    const { notify } = await openEditorAndRemoveImage();
 
-    fireEvent.click(saveButton(container));
+    fireEvent.click(rowButton("Save"));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Other works item saved"),
@@ -211,8 +192,8 @@ describe("AdminOtherWorksPage image removal on save", () => {
 describe("AdminOtherWorksPage pending image files", () => {
   it("keeps a pending file attached to its image through a content reorder", async () => {
     vi.mocked(ImageService.upload).mockResolvedValue("fresh-uploaded.png");
-    const { container, notify } = await renderPage();
-    fireEvent.click(iconButton(container, "pencil"));
+    const { notify } = await renderPage();
+    fireEvent.click(rowButton("Edit"));
     const textarea = await screen.findByPlaceholderText("post content");
 
     // Attach a not-yet-uploaded image (its img lands last in the
@@ -227,7 +208,7 @@ describe("AdminOtherWorksPage pending image files", () => {
       },
     });
 
-    fireEvent.click(saveButton(container));
+    fireEvent.click(rowButton("Save"));
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Other works item saved"),
     );
@@ -255,16 +236,16 @@ describe("AdminOtherWorksPage content serialization on save", () => {
   // Renders the page and opens the only post in the editor without
   // touching its content — the state right before an unchanged re-save.
   async function openEditor() {
-    const { container, notify } = await renderPage();
-    fireEvent.click(iconButton(container, "pencil"));
+    const { notify } = await renderPage();
+    fireEvent.click(rowButton("Edit"));
     await screen.findByPlaceholderText("post content");
-    return { container, notify };
+    return { notify };
   }
 
   it("saves the body fragment without html/head/body wrappers", async () => {
-    const { container, notify } = await openEditorAndRemoveImage();
+    const { notify } = await openEditorAndRemoveImage();
 
-    fireEvent.click(saveButton(container));
+    fireEvent.click(rowButton("Save"));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Other works item saved"),
@@ -279,9 +260,9 @@ describe("AdminOtherWorksPage content serialization on save", () => {
   });
 
   it("re-saves already-clean content byte-for-byte (round-trip no-op)", async () => {
-    const { container, notify } = await openEditor();
+    const { notify } = await openEditor();
 
-    fireEvent.click(saveButton(container));
+    fireEvent.click(rowButton("Save"));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Other works item saved"),
@@ -298,9 +279,9 @@ describe("AdminOtherWorksPage content serialization on save", () => {
     vi.mocked(BlogService.getContent).mockResolvedValue(
       `<html><head></head><body>${savedContent}</body></html>`,
     );
-    const { container, notify } = await openEditor();
+    const { notify } = await openEditor();
 
-    fireEvent.click(saveButton(container));
+    fireEvent.click(rowButton("Save"));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Other works item saved"),
@@ -330,14 +311,14 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
     "b.png",
   )}">`;
 
-  // Opens the only post in the editor and toggles its published checkbox
+  // Opens the only post in the editor and toggles its published switch
   // — the state right before the user hits save on a publish/unpublish.
   async function openEditorAndTogglePublished() {
-    const { container, notify } = await renderPage();
-    fireEvent.click(iconButton(container, "pencil"));
+    const { notify } = await renderPage();
+    fireEvent.click(rowButton("Edit"));
     await screen.findByPlaceholderText("post content");
-    fireEvent.click(screen.getByRole("checkbox"));
-    return { container, notify };
+    fireEvent.click(screen.getByRole("switch"));
+    return { notify };
   }
 
   function callsOf(fn: (...args: never[]) => unknown) {
@@ -352,9 +333,9 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
     });
 
     it("flips images public, then saves content, then the list", async () => {
-      const { container, notify } = await openEditorAndTogglePublished();
+      const { notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(saveButton(container));
+      fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith("Other works item saved"),
@@ -391,9 +372,9 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       vi.mocked(BlogService.getContent).mockResolvedValue(
         draftContent + '<img src="https://api.test.local/images/">',
       );
-      const { container, notify } = await openEditorAndTogglePublished();
+      const { notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(saveButton(container));
+      fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith("Other works item saved"),
@@ -412,9 +393,9 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
           }
         },
       );
-      const { container, notify } = await openEditorAndTogglePublished();
+      const { notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(saveButton(container));
+      fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -437,9 +418,9 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       vi.mocked(BlogService.updateContent).mockRejectedValue(
         new Error("PUT failed"),
       );
-      const { container, notify } = await openEditorAndTogglePublished();
+      const { notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(saveButton(container));
+      fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -462,9 +443,9 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       vi.mocked(BlogService.updateList).mockRejectedValue(
         new Error("PUT failed"),
       );
-      const { container, notify } = await openEditorAndTogglePublished();
+      const { notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(saveButton(container));
+      fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -506,9 +487,9 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
           }
         },
       );
-      const { container, notify } = await openEditorAndTogglePublished();
+      const { notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(saveButton(container));
+      fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -529,9 +510,9 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       vi.mocked(BlogService.updateContent)
         .mockResolvedValueOnce(undefined)
         .mockRejectedValue(new Error("rollback PUT failed"));
-      const { container, notify } = await openEditorAndTogglePublished();
+      const { notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(saveButton(container));
+      fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -550,9 +531,9 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
     });
 
     it("hides the post first, then saves content, then flips images", async () => {
-      const { container, notify } = await openEditorAndTogglePublished();
+      const { notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(saveButton(container));
+      fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith("Other works item saved"),
@@ -587,9 +568,9 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       vi.mocked(BlogService.updateList).mockRejectedValue(
         new Error("PUT failed"),
       );
-      const { container, notify } = await openEditorAndTogglePublished();
+      const { notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(saveButton(container));
+      fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -605,9 +586,9 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       vi.mocked(BlogService.updateContent).mockRejectedValue(
         new Error("PUT failed"),
       );
-      const { container, notify } = await openEditorAndTogglePublished();
+      const { notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(saveButton(container));
+      fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -641,9 +622,9 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       vi.mocked(BlogService.updateList)
         .mockResolvedValueOnce(undefined)
         .mockRejectedValue(new Error("rollback PUT failed"));
-      const { container, notify } = await openEditorAndTogglePublished();
+      const { notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(saveButton(container));
+      fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -678,9 +659,9 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       vi.mocked(BlogService.updateContent)
         .mockResolvedValueOnce(undefined)
         .mockRejectedValue(new Error("rollback PUT failed"));
-      const { container, notify } = await openEditorAndTogglePublished();
+      const { notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(saveButton(container));
+      fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -704,9 +685,9 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
           }
         },
       );
-      const { container, notify } = await openEditorAndTogglePublished();
+      const { notify } = await openEditorAndTogglePublished();
 
-      fireEvent.click(saveButton(container));
+      fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -743,9 +724,9 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       vi.mocked(BlogService.updateContent).mockRejectedValue(
         new Error("PUT failed"),
       );
-      const { container, notify } = await openEditorAndRemoveImage();
+      const { notify } = await openEditorAndRemoveImage();
 
-      fireEvent.click(saveButton(container));
+      fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
@@ -766,16 +747,16 @@ describe("AdminOtherWorksPage deletion", () => {
   // Renders the page, clicks the delete control of the only post, and
   // confirms the deletion dialog.
   async function confirmDelete() {
-    const { container, notify, adminUi } = await renderPage();
-    fireEvent.click(iconButton(container, "trash"));
+    const { notify, adminUi } = await renderPage();
+    fireEvent.click(rowButton("Delete"));
     await answerYes(adminUi);
     return { notify };
   }
 
   it("names the item being deleted in the confirmation", async () => {
-    const { container, adminUi } = await renderPage();
+    const { adminUi } = await renderPage();
 
-    fireEvent.click(iconButton(container, "trash"));
+    fireEvent.click(rowButton("Delete"));
 
     expect(adminUi.confirm).toHaveBeenCalledWith(
       'Delete the other works item "A Post"?',
@@ -787,9 +768,9 @@ describe("AdminOtherWorksPage deletion", () => {
     vi.mocked(BlogService.getListFromApi).mockResolvedValue([
       { ...savedPost, title: "" },
     ]);
-    const { container, adminUi } = await renderPage();
+    const { adminUi } = await renderPage();
 
-    fireEvent.click(iconButton(container, "trash"));
+    fireEvent.click(rowButton("Delete"));
 
     expect(adminUi.confirm).toHaveBeenCalledWith(
       "Delete this untitled other works item?",
@@ -844,9 +825,9 @@ describe("AdminOtherWorksPage creation", () => {
   // Renders the page and clicks the add-item control, so the creation
   // dialog has been handed to confirm().
   async function openCreateConfirmation() {
-    const { container, notify, adminUi } = await renderPage();
+    const { notify, adminUi } = await renderPage();
     fireEvent.click(screen.getByRole("button", { name: "Add a post" }));
-    return { container, notify, adminUi };
+    return { notify, adminUi };
   }
 
   it("creates an empty draft and opens it in the editor on Yes", async () => {
@@ -931,13 +912,39 @@ describe("AdminOtherWorksPage creation", () => {
   });
 });
 
-/** The date text the list row for the given title actually renders. */
-function displayedDate(title: string): string {
+/** The list row whose title is `title`. */
+function rowFor(title: string): HTMLElement {
   const row = screen
     .getByRole("button", { name: title })
-    .closest(".blog-post-summary");
-  return row?.querySelector("span")?.textContent ?? "";
+    .closest("[data-slot='list-row']");
+  if (!(row instanceof HTMLElement)) {
+    throw new Error(`no list row for "${title}"`);
+  }
+  return row;
 }
+
+/** The date text the list row for the given title actually renders. */
+function displayedDate(title: string): string {
+  return rowFor(title).querySelector("span")?.textContent ?? "";
+}
+
+describe("AdminOtherWorksPage list rows", () => {
+  it("shows each post's date and whether a visitor can read it", async () => {
+    vi.mocked(BlogService.getListFromApi).mockResolvedValue([
+      savedPost,
+      { ...savedPost, id: "b2", title: "B Post", isPublished: true },
+    ]);
+    await renderPage();
+
+    // The date the row renders is the same string the search box matches
+    // against (the page's getSearchText spends formatPostDate too).
+    expect(displayedDate("A Post")).toBe(formatPostDate(savedPost.date));
+    // Draft or Published, in words: the one thing about a post she cannot
+    // see by looking at it, and the e2e journey's proof that a save landed.
+    expect(rowFor("A Post")).toHaveTextContent("Draft");
+    expect(rowFor("B Post")).toHaveTextContent("Published");
+  });
+});
 
 describe("AdminOtherWorksPage search", () => {
   beforeEach(() => {
@@ -1034,9 +1041,9 @@ describe("AdminOtherWorksPage opening the editor", () => {
     vi.mocked(BlogService.getContent).mockRejectedValue(
       new Error("GET failed"),
     );
-    const { container, notify } = await renderPage();
+    const { notify } = await renderPage();
 
-    fireEvent.click(iconButton(container, "pencil"));
+    fireEvent.click(rowButton("Edit"));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Failed to load content", "error"),
@@ -1052,10 +1059,7 @@ describe("AdminOtherWorksPage load failure", () => {
     vi.mocked(BlogService.getListFromApi).mockRejectedValueOnce(
       new Error("GET failed"),
     );
-    const { container } = renderAdminPage(
-      <AdminOtherWorksPage />,
-      "/other-works/:id?",
-    );
+    renderAdminPage(<AdminOtherWorksPage />, "/other-works/:id?");
 
     await screen.findByText("Failed to load other works.");
     // No editable list — saving one would overwrite the real data.
@@ -1063,14 +1067,14 @@ describe("AdminOtherWorksPage load failure", () => {
 
     // Retry reloads and shows the list.
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    await waitFor(() => iconButton(container, "pencil"));
+    await listRendered();
   });
 });
 
 describe("AdminOtherWorksPage closing the editor", () => {
   it("abandons the open post without saving", async () => {
-    const { container, adminUi } = await renderPage();
-    fireEvent.click(iconButton(container, "pencil"));
+    const { adminUi } = await renderPage();
+    fireEvent.click(rowButton("Edit"));
     await screen.findByPlaceholderText("post content");
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -1082,15 +1086,15 @@ describe("AdminOtherWorksPage closing the editor", () => {
     expect(BlogService.updateContent).not.toHaveBeenCalled();
     expect(adminUi.confirm).not.toHaveBeenCalled();
     // Back on the list view.
-    iconButton(container, "pencil");
+    rowButton("Edit");
   });
 });
 
 describe("AdminOtherWorksPage routing", () => {
   it("keeps the search filter through the editor round trip", async () => {
-    const { container, router } = await renderPage("/other-works?q=post");
+    const { router } = await renderPage("/other-works?q=post");
 
-    fireEvent.click(iconButton(container, "pencil"));
+    fireEvent.click(rowButton("Edit"));
     await screen.findByPlaceholderText("post content");
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
@@ -1101,9 +1105,9 @@ describe("AdminOtherWorksPage routing", () => {
   });
 
   it("opens the editor at /admin/other-works/:id when editing", async () => {
-    const { container, router } = await renderPage();
+    const { router } = await renderPage();
 
-    fireEvent.click(iconButton(container, "pencil"));
+    fireEvent.click(rowButton("Edit"));
     await screen.findByPlaceholderText("post content");
 
     expect(router.state.location.pathname).toBe("/other-works/b1");
@@ -1122,13 +1126,13 @@ describe("AdminOtherWorksPage routing", () => {
   });
 
   it("falls back to the list for an unknown editor URL", async () => {
-    const { container, router } = renderAdminPage(
+    const { router } = renderAdminPage(
       <AdminOtherWorksPage />,
       "/other-works/:id?",
       "/other-works/no-such-id",
     );
 
-    await waitFor(() => iconButton(container, "pencil"));
+    await listRendered();
     await waitFor(() =>
       expect(router.state.location.pathname).toBe("/other-works"),
     );
@@ -1138,9 +1142,9 @@ describe("AdminOtherWorksPage routing", () => {
     vi.mocked(BlogService.getContent).mockRejectedValue(
       new Error("GET failed"),
     );
-    const { container, notify, router } = await renderPage();
+    const { notify, router } = await renderPage();
 
-    fireEvent.click(iconButton(container, "pencil"));
+    fireEvent.click(rowButton("Edit"));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Failed to load content", "error"),
@@ -1148,12 +1152,12 @@ describe("AdminOtherWorksPage routing", () => {
     await waitFor(() =>
       expect(router.state.location.pathname).toBe("/other-works"),
     );
-    iconButton(container, "pencil");
+    rowButton("Edit");
   });
 
   it("returns to the list on browser back", async () => {
-    const { container, router } = await renderPage();
-    fireEvent.click(iconButton(container, "pencil"));
+    const { router } = await renderPage();
+    fireEvent.click(rowButton("Edit"));
     await screen.findByPlaceholderText("post content");
 
     await navigateInTest(router, -1);
@@ -1161,12 +1165,12 @@ describe("AdminOtherWorksPage routing", () => {
     await waitFor(() =>
       expect(screen.queryByPlaceholderText("post content")).toBeNull(),
     );
-    iconButton(container, "pencil");
+    rowButton("Edit");
   });
 
   it("asks before discarding edited content on Close", async () => {
-    const { container, adminUi } = await renderPage();
-    fireEvent.click(iconButton(container, "pencil"));
+    const { adminUi } = await renderPage();
+    fireEvent.click(rowButton("Edit"));
     const textarea = await screen.findByPlaceholderText("post content");
     fireEvent.change(textarea, { target: { value: "<p>changed</p>" } });
 
@@ -1180,8 +1184,8 @@ describe("AdminOtherWorksPage routing", () => {
   });
 
   it("asks before discarding an edited title on Close", async () => {
-    const { container, adminUi } = await renderPage();
-    fireEvent.click(iconButton(container, "pencil"));
+    const { adminUi } = await renderPage();
+    fireEvent.click(rowButton("Edit"));
     await screen.findByPlaceholderText("post content");
     fireEvent.change(screen.getByLabelText("Title"), {
       target: { value: "New Title" },
@@ -1197,12 +1201,12 @@ describe("AdminOtherWorksPage routing", () => {
   });
 
   it("returns to the list after a successful save without asking", async () => {
-    const { container, notify, adminUi } = await renderPage();
-    fireEvent.click(iconButton(container, "pencil"));
+    const { notify, adminUi } = await renderPage();
+    fireEvent.click(rowButton("Edit"));
     const textarea = await screen.findByPlaceholderText("post content");
     fireEvent.change(textarea, { target: { value: "<p>hello</p>" } });
 
-    fireEvent.click(saveButton(container));
+    fireEvent.click(rowButton("Save"));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Other works item saved"),
@@ -1211,19 +1215,19 @@ describe("AdminOtherWorksPage routing", () => {
       expect(screen.queryByPlaceholderText("post content")).toBeNull(),
     );
     expect(adminUi.confirm).not.toHaveBeenCalled();
-    iconButton(container, "pencil");
+    rowButton("Edit");
   });
 });
 
 describe("AdminOtherWorksPage image upload on save", () => {
   it("treats an empty upload result as a failed upload", async () => {
     vi.mocked(ImageService.upload).mockResolvedValue("");
-    const { container, notify } = await renderPage();
-    fireEvent.click(iconButton(container, "pencil"));
+    const { notify } = await renderPage();
+    fireEvent.click(rowButton("Edit"));
     await screen.findByPlaceholderText("post content");
     fireEvent.click(screen.getByText("attach pending file"));
 
-    fireEvent.click(saveButton(container));
+    fireEvent.click(rowButton("Save"));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(

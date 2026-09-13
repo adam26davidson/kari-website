@@ -11,7 +11,7 @@ export function OtherWorksPage() {
       fetchList={BlogService.getPublicListFromS3}
       errorMessage="Failed to load posts."
       renderItem={(post) => (
-        <BlogPostSummary post={post} showPublished={false} isAdmin={false} />
+        <BlogPostSummary post={post} />
       )}
     />
   );
