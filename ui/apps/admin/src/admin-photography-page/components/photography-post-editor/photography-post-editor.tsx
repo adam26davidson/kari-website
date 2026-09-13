@@ -7,6 +7,7 @@ import {
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { PhotographyPost } from "@kari/shared/models";
 import { EditorPage } from "../../../components/editor-page/editor-page";
+import { FieldLabel } from "../../../components/field-label/field-label";
 import { Button } from "../../../components/ui/button";
 import { Input } from "../../../components/ui/input";
 import { Textarea } from "../../../components/ui/textarea";
@@ -86,12 +87,7 @@ export function PhotographyPostEditor({
       disableSave={saveDisabled}
     >
       <div className="flex flex-col gap-2">
-        <label
-          className="text-muted-foreground font-sans text-sm"
-          htmlFor={titleId}
-        >
-          Title
-        </label>
+        <FieldLabel htmlFor={titleId}>Title</FieldLabel>
         <Input
           id={titleId}
           type="text"
@@ -100,12 +96,7 @@ export function PhotographyPostEditor({
         />
       </div>
       <div className="flex flex-col gap-2">
-        <label
-          className="text-muted-foreground font-sans text-sm"
-          htmlFor={subtitleId}
-        >
-          Subtitle
-        </label>
+        <FieldLabel htmlFor={subtitleId}>Subtitle</FieldLabel>
         <Input
           id={subtitleId}
           type="text"
@@ -114,12 +105,7 @@ export function PhotographyPostEditor({
         />
       </div>
       <div className="flex flex-col gap-2">
-        <label
-          className="text-muted-foreground font-sans text-sm"
-          htmlFor={blurbId}
-        >
-          Blurb (optional)
-        </label>
+        <FieldLabel htmlFor={blurbId}>Blurb (optional)</FieldLabel>
         <Textarea
           id={blurbId}
           value={post.blurb}
@@ -139,11 +125,8 @@ export function PhotographyPostEditor({
           count (e2e/admin-journeys.spec.ts). */}
       <div className="photography-post-editor-images flex flex-col gap-4">
         <div className="flex flex-row items-center justify-between gap-4">
-          {/* A group label, not a control's: the rows below are what it
-              names. */}
-          <span className="text-muted-foreground font-sans text-sm">
-            Images
-          </span>
+          {/* No `htmlFor`: the rows below are what this names. */}
+          <FieldLabel>Images</FieldLabel>
           {/* Secondary: Save, on the paper above, is this screen's one
               primary. Filled, these two competed as equals (#457). */}
           <Button variant="secondary" onClick={onNewImage}>
@@ -170,11 +153,9 @@ export function PhotographyPostEditor({
           >
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-5">
               <div className="flex shrink-0 flex-col gap-2">
-                {/* Group label: the picker is a composite, not one control,
-                    so there is nothing to point `for` at. */}
-                <span className="text-muted-foreground font-sans text-sm">
-                  Photo
-                </span>
+                {/* No `htmlFor`: the picker is a composite, not one
+                    control. */}
+                <FieldLabel>Photo</FieldLabel>
                 <PhotoPicker
                   imageFile={entry.file}
                   fileName={entry.image}
@@ -182,12 +163,9 @@ export function PhotographyPostEditor({
                 />
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-2">
-                <label
-                  className="text-muted-foreground font-sans text-sm"
-                  htmlFor={`${captionIdPrefix}-${entry.id}`}
-                >
+                <FieldLabel htmlFor={`${captionIdPrefix}-${entry.id}`}>
                   Caption (optional)
-                </label>
+                </FieldLabel>
                 <Textarea
                   id={`${captionIdPrefix}-${entry.id}`}
                   value={entry.blurb}

@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from "vitest";
-import { readFileSync } from "node:fs";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BlogPostEditor } from "./blog-post-editor";
@@ -125,7 +124,7 @@ describe("BlogPostEditor", () => {
 
   it("toggles the published flag", async () => {
     const { setPost } = renderEditor();
-    await userEvent.click(screen.getByRole("checkbox"));
+    await userEvent.click(screen.getByRole("switch"));
     expect(setPost).toHaveBeenCalledWith({ ...post, isPublished: true });
   });
 
@@ -152,7 +151,7 @@ describe("BlogPostEditor", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 
-  it("says what it is editing and labels the title, date and checkbox", () => {
+  it("says what it is editing and labels the title, date and switch", () => {
     renderEditor();
     expect(
       screen.getByRole("heading", { name: "Edit post" }),
@@ -160,10 +159,30 @@ describe("BlogPostEditor", () => {
     expect(screen.getByLabelText("Title")).toHaveValue(post.title);
     expect(screen.getByLabelText("Date")).toHaveValue("2024-05-01");
     // The bare <label>Published</label> pointed at nothing, so clicking
-    // the word did not toggle the box (#457).
-    expect(screen.getByLabelText("Published")).toBe(
-      screen.getByRole("checkbox"),
+    // the word did not toggle the control (#457).
+    expect(screen.getByLabelText("Published")).toBe(screen.getByRole("switch"));
+    // The hint is the switch's DESCRIPTION, not part of its name: a
+    // screen reader announces "Published, switch" and then explains.
+    expect(screen.getByRole("switch")).toHaveAccessibleDescription(
+      "\u2014 visitors can read this",
     );
+  });
+
+  it("says what publishing does before she does it", () => {
+    renderEditor();
+
+    // "Published" alone leaves the consequence to be found out afterwards;
+    // the boards put the plain-words hint beside the switch instead
+    // (`WorksEditor.png`, design brief §9).
+    expect(
+      screen.getByText("\u2014 visitors can read this"),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the switch as on for a published post", () => {
+    renderEditor({ post: { ...post, isPublished: true } });
+
+    expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "true");
   });
 
   it("toggles the published flag by clicking its label", async () => {
@@ -172,19 +191,4 @@ describe("BlogPostEditor", () => {
     expect(setPost).toHaveBeenCalledWith({ ...post, isPublished: true });
   });
 
-  // A ticked checkbox is the one control the browser still paints itself,
-  // and it paints it system blue — the only blue on a screen of warm
-  // browns. jsdom applies no stylesheet, so the tint is read from the CSS.
-  // Since #565 the tint is the shared `--admin-primary` token rather than a
-  // repeated hex, so what this pins is "the admin's brown", not "some
-  // literal colour" — which is the stronger claim anyway. That the token
-  // itself is defined, and defined once, is ui/test/design's job.
-  it("tints the checkbox with the admin's own colour, not the browser's", () => {
-    const adminCss = readFileSync("apps/admin/src/admin.css", "utf-8").replace(
-      /\/\*[\s\S]*?\*\//g,
-      "",
-    );
-    const block = adminCss.match(/input\[type="checkbox"\]\s*\{([^}]*)\}/)?.[1];
-    expect(block).toMatch(/accent-color\s*:\s*var\(\s*--admin-primary\s*\)/i);
-  });
 });

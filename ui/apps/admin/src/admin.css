@@ -149,15 +149,6 @@ textarea:where(:not([data-slot="textarea"])) {
   resize: none;
 }
 
-/* Checkboxes are the one control the browser still paints in its own
-   colour, and that colour is a saturated system blue — the only blue on a
-   screen otherwise made of warm browns and greys, so a ticked "Published"
-   was the loudest thing in the other-works editor. Tinted to the admin's
-   primary brown, once, so any checkbox added later inherits it. */
-input[type="checkbox"] {
-  accent-color: var(--admin-primary);
-}
-
 /* A labelled form field: the visible label sitting above its control.
    Shared by every admin editor so no box is left for her to guess at
    (#457). */
@@ -371,7 +362,6 @@ input[type="checkbox"] {
    cost no specificity. */
 .admin-data-list-item:where(:not([data-slot="list-row"])),
 .admin-danger-banner,
-.header-colors-swatch,
-.button-group select {
+.header-colors-swatch {
   box-sizing: content-box;
 }

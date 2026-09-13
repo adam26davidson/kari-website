@@ -21,8 +21,12 @@ import { Editor, EditorContent, useEditor } from "@tiptap/react";
 import { FormEvent, useState } from "react";
 import StarterKit from "@tiptap/starter-kit";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { ChevronDown } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { cn } from "../ui/cn";
 import { LinkBubbleMenu } from "./link-bubble-menu";
 import { linkRefusedMessage } from "./link-refusal-message";
 
@@ -72,16 +76,20 @@ interface ToolbarItem {
 
 interface ToolbarGroup {
   name: string;
-  // Grouped items render inside a shared .grouped-buttons wrapper;
-  // ungrouped items render as bare buttons in the .button-group row.
-  grouped: boolean;
   items: ToolbarItem[];
 }
 
+// The board's order (`WorksEditor.png`): what the words look like, then
+// what they point at, then how the block is shaped. Every group is a group
+// now — the old `grouped` flag existed because three of them sat inside a
+// shared grey slab and the other two did not, which grouped by look rather
+// than by meaning and left link, unlink and image floating as loose
+// buttons. Each group is a run of ghost buttons behind a hairline, so the
+// toolbar reads as five short sentences instead of thirteen identical
+// glyphs (visual review, PR #829; the 390px wrap remainder is #681).
 const TOOLBAR_GROUPS: ToolbarGroup[] = [
   {
     name: "marks",
-    grouped: true,
     items: [
       {
         name: "bold",
@@ -106,27 +114,37 @@ const TOOLBAR_GROUPS: ToolbarGroup[] = [
       },
     ],
   },
+  // What the words point at: putting a link or a picture into the post,
+  // and taking a link back off. Both link controls stay — whether the
+  // unlink button earns its place beside the panel's "submit it empty" is
+  // #698's question, not this migration's.
   {
-    name: "alignment",
-    grouped: true,
-    items: (
-      [
-        { align: "left", label: "Align left", icon: faAlignLeft },
-        { align: "center", label: "Align center", icon: faAlignCenter },
-        { align: "right", label: "Align right", icon: faAlignRight },
-        { align: "justify", label: "Justify", icon: faAlignJustify },
-      ] as const
-    ).map(({ align, label, icon }) => ({
-      name: `align-${align}`,
-      label,
-      icon,
-      command: (editor) => editor.chain().focus().setTextAlign(align).run(),
-      isActive: (editor) => editor.isActive({ textAlign: align }),
-    })),
+    name: "insert",
+    items: [
+      {
+        name: "link",
+        label: "Add or edit a link",
+        icon: faLink,
+        command: (_editor, menu) => menu.toggleLinkPanel(),
+        isActive: (editor) => editor.isActive("link"),
+      },
+      {
+        name: "unlink",
+        label: "Remove the link",
+        icon: faUnlink,
+        command: (editor) => editor.chain().focus().unsetLink().run(),
+        isDisabled: (editor) => !editor.isActive("link"),
+      },
+      {
+        name: "image",
+        label: "Add an image",
+        icon: faImage,
+        command: (_editor, menu) => menu.addImage(),
+      },
+    ],
   },
   {
     name: "lists",
-    grouped: true,
     items: [
       {
         name: "bullet-list",
@@ -145,36 +163,21 @@ const TOOLBAR_GROUPS: ToolbarGroup[] = [
     ],
   },
   {
-    name: "links",
-    grouped: false,
-    items: [
-      {
-        name: "link",
-        label: "Add or edit a link",
-        icon: faLink,
-        command: (_editor, menu) => menu.toggleLinkPanel(),
-        isActive: (editor) => editor.isActive("link"),
-      },
-      {
-        name: "unlink",
-        label: "Remove the link",
-        icon: faUnlink,
-        command: (editor) => editor.chain().focus().unsetLink().run(),
-        isDisabled: (editor) => !editor.isActive("link"),
-      },
-    ],
-  },
-  {
-    name: "images",
-    grouped: false,
-    items: [
-      {
-        name: "image",
-        label: "Add an image",
-        icon: faImage,
-        command: (_editor, menu) => menu.addImage(),
-      },
-    ],
+    name: "alignment",
+    items: (
+      [
+        { align: "left", label: "Align left", icon: faAlignLeft },
+        { align: "center", label: "Align center", icon: faAlignCenter },
+        { align: "right", label: "Align right", icon: faAlignRight },
+        { align: "justify", label: "Justify", icon: faAlignJustify },
+      ] as const
+    ).map(({ align, label, icon }) => ({
+      name: `align-${align}`,
+      label,
+      icon,
+      command: (editor) => editor.chain().focus().setTextAlign(align).run(),
+      isActive: (editor) => editor.isActive({ textAlign: align }),
+    })),
   },
 ];
 
@@ -202,7 +205,21 @@ const ToolbarButton = ({
       // both would tell assistive tech two stories about one press — and a
       // button that just acts once reports neither.
       aria-pressed={expanded === undefined ? active : undefined}
-      className={active ? "is-active" : undefined}
+      // Ghost until it is on or under the pointer, and then the board's
+      // filled green pill (`WorksEditor.png`). Driven off `aria-pressed`
+      // and `aria-expanded` rather than off a class of its own: the state
+      // a screen reader is told and the state a sighted author sees are
+      // then the SAME fact, and cannot drift apart the way an `is-active`
+      // class could.
+      className={cn(
+        "text-muted-foreground inline-flex size-9 shrink-0 cursor-pointer",
+        "items-center justify-center rounded-md bg-transparent",
+        "transition-colors hover:bg-muted hover:text-foreground",
+        "aria-pressed:bg-primary/10 aria-pressed:text-primary",
+        "aria-expanded:bg-primary/10 aria-expanded:text-primary",
+        "disabled:pointer-events-none disabled:opacity-40",
+        "[&_svg]:size-4",
+      )}
       disabled={item.isDisabled?.(editor)}
       aria-label={item.label}
       title={item.label}
@@ -321,45 +338,70 @@ const MenuBar = ({
   const menu: MenuActions = { toggleLinkPanel, addImage };
 
   return (
-    <div className="control-group">
-      <div className="button-group">
-        <select
-          aria-label="text style"
-          onChange={(event) => {
-            const value = event.target.value;
-            const level = HEADING_LEVELS.find((l) => value === `h${l}`);
-            if (level) {
-              editor.chain().focus().toggleHeading({ level }).run();
-            } else if (value === "p") {
-              editor.chain().focus().setParagraph().run();
-            }
-          }}
-          value={headingValue}
-        >
-          {/* Blocks that are neither a heading nor a paragraph (a code
-              block, say) select nothing. Without a blank option to land
-              on, the select would fall back to its first option and
-              mislabel such a block as "Heading 1". */}
-          <option value="" disabled hidden></option>
-          <option value="h1">Heading 1</option>
-          <option value="h2">Heading 2</option>
-          <option value="h3">Heading 3</option>
-          <option value="p">Paragraph</option>
-        </select>
-        {TOOLBAR_GROUPS.map((group) =>
-          group.grouped ? (
-            <div className="grouped-buttons" key={group.name}>
-              {group.items.map((item) => (
-                <ToolbarButton
-                  key={item.name}
-                  editor={editor}
-                  item={item}
-                  menu={menu}
-                />
-              ))}
-            </div>
-          ) : (
-            group.items.map((item) => (
+    // `control-group` is NOT styling — it is how the admin e2e journeys
+    // scope to the toolbar (e2e/admin-journeys.spec.ts), the same
+    // convention `data-editor` and `tiptap-container` document. The
+    // stylesheet that used to key off it is gone.
+    <div className="control-group border-border bg-muted/40 relative w-full rounded-t-lg border-b">
+      <div className="flex flex-row flex-wrap items-center gap-y-1 p-1.5">
+        {/* Still a native <select> — it keeps the OS picker, the keyboard
+            behaviour and the `combobox` role the tests and e2e locate by,
+            and needs no extra dependency. What changes is that
+            `appearance-none` takes the OS chrome OFF (the system arrow and
+            the platform's own corner and background rendering, which is
+            what made it the one control in this toolbar that looked
+            borrowed from another program: visual review, PR #852), leaving
+            the field skin below to draw the whole control. The chevron is
+            then ours, in the toolbar's muted ink. */}
+        <span className="relative mr-1.5 inline-flex items-center">
+          <select
+            aria-label="text style"
+            // The one control here with words rather than a glyph, so it
+            // wears the field skin the rest of the editor's inputs do.
+            // `pr-8` is the room the chevron beside it stands in.
+            className="border-input bg-popover text-foreground h-9 cursor-pointer appearance-none rounded-md border py-0 pl-2 pr-8 font-sans text-sm"
+            onChange={(event) => {
+              const value = event.target.value;
+              const level = HEADING_LEVELS.find((l) => value === `h${l}`);
+              if (level) {
+                editor.chain().focus().toggleHeading({ level }).run();
+              } else if (value === "p") {
+                editor.chain().focus().setParagraph().run();
+              }
+            }}
+            value={headingValue}
+          >
+            {/* Blocks that are neither a heading nor a paragraph (a code
+                block, say) select nothing. Without a blank option to land
+                on, the select would fall back to its first option and
+                mislabel such a block as "Heading 1". */}
+            <option value="" disabled hidden></option>
+            <option value="h1">Heading 1</option>
+            <option value="h2">Heading 2</option>
+            <option value="h3">Heading 3</option>
+            <option value="p">Paragraph</option>
+          </select>
+          {/* Decorative: the select it sits on is already named and
+              already announces its own value, so this is hidden from
+              assistive tech and transparent to the pointer — clicking the
+              arrow has to open the menu, not do nothing. */}
+          <ChevronDown
+            aria-hidden="true"
+            className="text-muted-foreground pointer-events-none absolute top-1/2 right-2 size-4 -translate-y-1/2"
+          />
+        </span>
+        {TOOLBAR_GROUPS.map((group, idx) => (
+          // A hairline before each group but the first, and the groups are
+          // what the row wraps at: at 390px the toolbar breaks between
+          // sentences rather than mid-word (`WorksEditorMobile.png`).
+          <div
+            key={group.name}
+            className={cn(
+              "flex flex-row items-center",
+              idx > 0 && "border-border ml-1.5 border-l pl-1.5",
+            )}
+          >
+            {group.items.map((item) => (
               <ToolbarButton
                 key={item.name}
                 editor={editor}
@@ -367,9 +409,9 @@ const MenuBar = ({
                 menu={menu}
                 expanded={item.name === "link" ? linkDraft !== null : undefined}
               />
-            ))
-          ),
-        )}
+            ))}
+          </div>
+        ))}
       </div>
       {/* One link surface at a time: while the panel is open it holds the
           address being edited, and a bubble still showing the old one over
@@ -378,16 +420,22 @@ const MenuBar = ({
         <LinkBubbleMenu editor={editor} onEdit={openLinkPanel} />
       )}
       {linkDraft !== null && (
+        // An on-demand panel hanging off the toolbar row. It sits OUTSIDE
+        // the toolbar's flex row so that row cannot wrap around it, which
+        // is why it positions itself against `.control-group` above.
         <form
-          className="link-popover"
+          className="border-border bg-card absolute top-full left-2 z-2 flex max-w-[calc(100%-1rem)] flex-wrap items-center gap-2 rounded-lg border p-2 shadow-[0_4px_16px_rgba(74,62,40,0.16)]"
           onSubmit={(event) => applyLink(event, linkDraft)}
         >
-          <input
+          <Input
             aria-label="link url"
             // Not type="url": the extension accepts relative paths and
             // mailto: without a host, which native url validation rejects.
             type="text"
             autoFocus
+            // `min-w-0` lets the field shrink inside the flex row instead
+            // of pushing the panel past the editor's width at 390px.
+            className="h-9 w-auto min-w-0 flex-[1_1_220px]"
             value={linkDraft}
             onChange={(event) => {
               setLinkDraft(event.target.value);
@@ -400,12 +448,25 @@ const MenuBar = ({
             }}
             placeholder="https://"
           />
-          <button type="submit">apply</button>
-          <button type="button" onClick={toggleLinkPanel}>
+          <Button type="submit" size="sm">
+            apply
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={toggleLinkPanel}
+          >
             cancel
-          </button>
+          </Button>
           {linkError && (
-            <p className="link-popover-error" role="alert">
+            // A full-width row under the field, in the admin's one danger
+            // colour — the same statement the error toasts and the
+            // outlined Delete make, in the shape a popover can afford.
+            <p
+              className="bg-destructive text-destructive-foreground basis-full rounded-md px-2 py-1.5 font-sans text-xs [overflow-wrap:anywhere]"
+              role="alert"
+            >
               {linkError}
             </p>
           )}
@@ -472,9 +533,18 @@ export function Tiptap({
   });
 
   return (
-    <div className="tiptap-container">
+    // The writing surface: the boards' field skin, sized like one — the
+    // toolbar along its top and the post below it (`WorksEditor.png`).
+    // `min-h` with no max, so a short post still gets a surface worth
+    // writing in and a long one grows the card; `.admin-content` is the
+    // admin's one scroll container.
+    //
+    // `tiptap-container` is NOT styling — it is how the admin e2e journeys
+    // find the prose area (`.tiptap-container .ProseMirror`), the same
+    // convention `data-editor` and `control-group` document.
+    <div className="tiptap-container border-input bg-popover flex min-h-[350px] w-full flex-col items-start justify-start rounded-lg border">
       <MenuBar editor={editor} onAddImage={onAddImage} />
-      <EditorContent editor={editor} className="editor" />
+      <EditorContent editor={editor} className="editor w-full flex-1" />
     </div>
   );
 }

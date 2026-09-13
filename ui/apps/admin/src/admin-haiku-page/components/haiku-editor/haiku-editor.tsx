@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { EditorPage } from "../../../components/editor-page/editor-page";
+import { FieldLabel } from "../../../components/field-label/field-label";
 import { Input } from "../../../components/ui/input";
 import { Textarea } from "../../../components/ui/textarea";
 import { Haiku } from "@kari/shared/models";
@@ -27,12 +28,7 @@ export function HaikuEditor({
       disableSave={saveDisabled}
     >
       <div className="flex flex-col gap-2">
-        <label
-          className="text-muted-foreground font-sans text-sm"
-          htmlFor={linesId}
-        >
-          Haiku
-        </label>
+        <FieldLabel htmlFor={linesId}>Haiku</FieldLabel>
         <Textarea
           id={linesId}
           value={haiku.lines.join("\n")}
@@ -48,12 +44,7 @@ export function HaikuEditor({
         />
       </div>
       <div className="flex flex-col gap-2">
-        <label
-          className="text-muted-foreground font-sans text-sm"
-          htmlFor={publisherId}
-        >
-          Publisher
-        </label>
+        <FieldLabel htmlFor={publisherId}>Publisher</FieldLabel>
         <Input
           id={publisherId}
           type="text"

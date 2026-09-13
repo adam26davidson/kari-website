@@ -3,6 +3,7 @@ import { Card } from "../components/ui/card";
 import { Textarea } from "../components/ui/textarea";
 import { Button } from "../components/ui/button";
 import { PageTitle } from "../components/page-title/page-title";
+import { FieldLabel } from "../components/field-label/field-label";
 import { greetingFor } from "./greeting";
 import { useAdminAccount } from "../auth/use-admin-account";
 import { useAdminToken } from "../hooks/use-admin-token";
@@ -114,11 +115,9 @@ export function HomePageEditor() {
         <PageTitle>{greetingFor(new Date().getHours(), name)}</PageTitle>
         <Card className="flex flex-col gap-6 p-5 sm:p-8">
           <div className="flex flex-col gap-2">
-            {/* Group label: the picker is a composite, not one control, so
-                there is nothing to point `for` at. */}
-            <span className="text-muted-foreground font-sans text-sm">
-              Your photo
-            </span>
+            {/* No `htmlFor`: the picker is a composite, not one
+                control. */}
+            <FieldLabel>Your photo</FieldLabel>
             <PhotoPicker
               imageFile={imageFile}
               fileName={homePageData.photo}
@@ -126,12 +125,7 @@ export function HomePageEditor() {
             />
           </div>
           <div className="flex flex-col gap-2">
-            <label
-              className="text-muted-foreground font-sans text-sm"
-              htmlFor={blurbId}
-            >
-              Your welcome text
-            </label>
+            <FieldLabel htmlFor={blurbId}>Your welcome text</FieldLabel>
             <Textarea
               id={blurbId}
               value={homePageData.blurb}
