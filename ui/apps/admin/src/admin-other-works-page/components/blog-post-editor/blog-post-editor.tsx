@@ -2,6 +2,7 @@ import { useId } from "react";
 import { BlogPost } from "@kari/shared/models";
 import { toDateInputValue, toPostDate } from "@kari/shared/utils/date-helpers";
 import { EditorPage } from "../../../components/editor-page/editor-page";
+import { FieldLabel } from "../../../components/field-label/field-label";
 import { Input } from "../../../components/ui/input";
 import { Switch } from "../../../components/ui/switch";
 import { Tiptap } from "../../../components/tiptap/tiptap";
@@ -49,12 +50,7 @@ export function BlogPostEditor({
       disableSave={saveDisabled}
     >
       <div className="flex flex-col gap-2">
-        <label
-          className="text-muted-foreground font-sans text-sm"
-          htmlFor={titleId}
-        >
-          Title
-        </label>
+        <FieldLabel htmlFor={titleId}>Title</FieldLabel>
         <Input
           id={titleId}
           type="text"
@@ -68,12 +64,7 @@ export function BlogPostEditor({
           rather than with the label above it. */}
       <div className="flex flex-row flex-wrap items-end gap-x-6 gap-y-4">
         <div className="flex flex-col gap-2">
-          <label
-            className="text-muted-foreground font-sans text-sm"
-            htmlFor={dateId}
-          >
-            Date
-          </label>
+          <FieldLabel htmlFor={dateId}>Date</FieldLabel>
           {/* Still the browser's own date control, rendered through the
               boards' field skin: it brings a picker, a keyboard entry mode
               and a locale format that no hand-rolled calendar here would
@@ -112,13 +103,13 @@ export function BlogPostEditor({
               setPost({ ...post, isPublished: checked })
             }
           />
-          <label
-            id={publishedLabelId}
-            className="text-foreground cursor-pointer font-sans text-sm font-medium"
+          <FieldLabel
+            className="cursor-pointer"
             htmlFor={publishedId}
+            id={publishedLabelId}
           >
             Published
-          </label>
+          </FieldLabel>
           <span
             id={publishedHintId}
             className="text-muted-foreground font-sans text-sm"

@@ -557,13 +557,19 @@ describe("the admin's warm studio palette", () => {
 
   it.each([
     // Body text and headings, on the page and on a card. AAA, because
-    // this is where she reads and writes for as long as she is here.
+    // this is where she reads and writes for as long as she is here —
+    // and, since #237's visual review, the editors' field labels too
+    // (components/field-label), which the boards set in Ink beside the
+    // value they name rather than in the muted tone.
     ["ink on paper", "--foreground", "--background", 7],
     ["ink on a card", "--foreground", "--card", 7],
-    // The secondary weight: field labels, the "changes appear once you
-    // save" line, the sidebar's section label.
+    // The secondary weight, and only what is genuinely an aside: a hint
+    // under a switch, the "changes appear once you save" line, a list
+    // row's date, the sidebar's "YOUR WORKSHOP" and "Sign out". A card is
+    // in the list because the editors' hints sit on one.
     ["stone on paper", "--muted-foreground", "--background", 4.5],
     ["stone on cream", "--muted-foreground", "--muted", 4.5],
+    ["stone on a card", "--muted-foreground", "--card", 4.5],
     // The filled primary — Save, Add — and the filled destructive.
     [
       "the primary's label on its fill",

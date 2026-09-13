@@ -1,6 +1,7 @@
 import { useId } from "react";
 import { Haiga } from "@kari/shared/models";
 import { EditorPage } from "../../../components/editor-page/editor-page";
+import { FieldLabel } from "../../../components/field-label/field-label";
 import { Input } from "../../../components/ui/input";
 import { PhotoPicker } from "../../../components/photo-picker/photo-picker";
 
@@ -30,9 +31,9 @@ export function HaigaEditor({
       disableSave={saveDisabled}
     >
       <div className="flex flex-col gap-2">
-        {/* The picker is a composite (preview + file input + button), so
-            this labels the group rather than pointing at one control. */}
-        <span className="text-muted-foreground font-sans text-sm">Image</span>
+        {/* No `htmlFor`: the picker is a composite (preview + file input
+            + button), not one control. */}
+        <FieldLabel>Image</FieldLabel>
         <PhotoPicker
           imageFile={imageFile}
           fileName={haiga.image}
@@ -40,12 +41,7 @@ export function HaigaEditor({
         />
       </div>
       <div className="flex flex-col gap-2">
-        <label
-          className="text-muted-foreground font-sans text-sm"
-          htmlFor={publisherId}
-        >
-          Publisher
-        </label>
+        <FieldLabel htmlFor={publisherId}>Publisher</FieldLabel>
         <Input
           id={publisherId}
           type="text"
