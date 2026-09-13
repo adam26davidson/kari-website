@@ -208,7 +208,9 @@ const FLUID_SIZES = new Set([
  * migration deletes the rules that use them.
  */
 const FROZEN_ADMIN_SIZES = new Set([
-  "12px",
+  // "12px" went with admin-image-gc-page.css, whose missing-picture tile
+  // was its last holder — #238 deleted that sheet when the image-cleanup
+  // page moved to Tailwind.
   // "13px" went with the tiptap editor's chrome — the link panel's error
   // line and the bubble's address — which #237 restyled in Tailwind when
   // the other-works page moved.

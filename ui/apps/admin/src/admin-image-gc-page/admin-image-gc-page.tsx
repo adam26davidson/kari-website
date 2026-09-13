@@ -301,7 +301,7 @@ export function AdminImageGcPage() {
               />
             ) : (
               <ImageList
-                title="Deleted"
+                title="No longer used — deleted"
                 images={report.deleted}
                 run={run}
                 open
