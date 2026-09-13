@@ -21,6 +21,7 @@ import { Editor, EditorContent, useEditor } from "@tiptap/react";
 import { FormEvent, useState } from "react";
 import StarterKit from "@tiptap/starter-kit";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { ChevronDown } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 
 import { Button } from "../ui/button";
@@ -343,32 +344,52 @@ const MenuBar = ({
     // stylesheet that used to key off it is gone.
     <div className="control-group border-border bg-muted/40 relative w-full rounded-t-lg border-b">
       <div className="flex flex-row flex-wrap items-center gap-y-1 p-1.5">
-        <select
-          aria-label="text style"
-          // The one control here with words rather than a glyph, so it
-          // wears the field skin the rest of the editor's inputs do.
-          className="border-input bg-popover text-foreground mr-1.5 h-9 cursor-pointer rounded-md border px-2 font-sans text-sm"
-          onChange={(event) => {
-            const value = event.target.value;
-            const level = HEADING_LEVELS.find((l) => value === `h${l}`);
-            if (level) {
-              editor.chain().focus().toggleHeading({ level }).run();
-            } else if (value === "p") {
-              editor.chain().focus().setParagraph().run();
-            }
-          }}
-          value={headingValue}
-        >
-          {/* Blocks that are neither a heading nor a paragraph (a code
-              block, say) select nothing. Without a blank option to land
-              on, the select would fall back to its first option and
-              mislabel such a block as "Heading 1". */}
-          <option value="" disabled hidden></option>
-          <option value="h1">Heading 1</option>
-          <option value="h2">Heading 2</option>
-          <option value="h3">Heading 3</option>
-          <option value="p">Paragraph</option>
-        </select>
+        {/* Still a native <select> — it keeps the OS picker, the keyboard
+            behaviour and the `combobox` role the tests and e2e locate by,
+            and needs no extra dependency. What changes is that
+            `appearance-none` takes the OS chrome OFF (the system arrow and
+            the platform's own corner and background rendering, which is
+            what made it the one control in this toolbar that looked
+            borrowed from another program: visual review, PR #852), leaving
+            the field skin below to draw the whole control. The chevron is
+            then ours, in the toolbar's muted ink. */}
+        <span className="relative mr-1.5 inline-flex items-center">
+          <select
+            aria-label="text style"
+            // The one control here with words rather than a glyph, so it
+            // wears the field skin the rest of the editor's inputs do.
+            // `pr-8` is the room the chevron beside it stands in.
+            className="border-input bg-popover text-foreground h-9 cursor-pointer appearance-none rounded-md border py-0 pl-2 pr-8 font-sans text-sm"
+            onChange={(event) => {
+              const value = event.target.value;
+              const level = HEADING_LEVELS.find((l) => value === `h${l}`);
+              if (level) {
+                editor.chain().focus().toggleHeading({ level }).run();
+              } else if (value === "p") {
+                editor.chain().focus().setParagraph().run();
+              }
+            }}
+            value={headingValue}
+          >
+            {/* Blocks that are neither a heading nor a paragraph (a code
+                block, say) select nothing. Without a blank option to land
+                on, the select would fall back to its first option and
+                mislabel such a block as "Heading 1". */}
+            <option value="" disabled hidden></option>
+            <option value="h1">Heading 1</option>
+            <option value="h2">Heading 2</option>
+            <option value="h3">Heading 3</option>
+            <option value="p">Paragraph</option>
+          </select>
+          {/* Decorative: the select it sits on is already named and
+              already announces its own value, so this is hidden from
+              assistive tech and transparent to the pointer — clicking the
+              arrow has to open the menu, not do nothing. */}
+          <ChevronDown
+            aria-hidden="true"
+            className="text-muted-foreground pointer-events-none absolute top-1/2 right-2 size-4 -translate-y-1/2"
+          />
+        </span>
         {TOOLBAR_GROUPS.map((group, idx) => (
           // A hairline before each group but the first, and the groups are
           // what the row wraps at: at 390px the toolbar breaks between

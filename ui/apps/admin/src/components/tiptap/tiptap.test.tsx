@@ -107,6 +107,25 @@ describe("Tiptap toolbar", () => {
     expect(screen.getByRole("combobox", { name: "text style" })).toHaveValue("");
   });
 
+  it("draws the text-style select itself instead of wearing OS chrome", () => {
+    // Visual review, PR #852: left with its native appearance this was the
+    // one control in the toolbar the operating system drew — system arrow
+    // and platform corners next to themed inputs and buttons. It stays a
+    // real <select> (same role, same keyboard, no new dependency) with the
+    // chrome switched off and our own chevron beside it.
+    const { container } = renderTiptap();
+    const select = screen.getByRole("combobox", { name: "text style" });
+
+    expect(select).toHaveClass("appearance-none");
+
+    // The chevron is decoration over a control that already names itself,
+    // so it must neither be announced nor swallow the click that opens the
+    // menu.
+    const chevron = container.querySelector(".control-group svg.lucide");
+    expect(chevron).toHaveAttribute("aria-hidden", "true");
+    expect(chevron).toHaveClass("pointer-events-none");
+  });
+
   it("labels every toolbar button and the block-style select", () => {
     const { container } = renderTiptap();
 
