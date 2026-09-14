@@ -7,6 +7,7 @@ import { MobileMenu } from "./components/mobile-menu/mobile-menu";
 import { Suspense, useState } from "react";
 import { RouteErrorBoundary } from "@kari/shared/components/error-boundary/error-boundary";
 import { lazyWithRetry } from "@kari/shared/components/error-boundary/lazy-with-retry";
+import { PreviewOverridesProvider } from "./preview/preview-overrides-provider";
 
 // Route-level code splitting: each page loads as its own chunk.
 // lazyWithRetry retries a failed chunk fetch and auto-reloads once after a
@@ -56,34 +57,40 @@ export function App() {
   // app served under /admin (issue #591). Nothing on the public site links
   // to it; its two users reach it by URL.
   return (
-    <div className="whole-page">
-      <Header
-        showingMobileMenu={showingMobileMenu}
-        setShowingMobileMenu={setShowingMobileMenu}
-      />
-      <div className="content">
-        {isMobile && showingMobileMenu && (
-          <MobileMenu setShowingMobileMenu={setShowingMobileMenu} />
-        )}
-        {!showingMobileMenu && (
-          <RouteErrorBoundary>
-            <Suspense fallback={<RouteFallback />}>
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="haiku" element={<HaikuPage />} />
-                <Route path="haiga" element={<HaigaPage />} />
-                <Route path="other-works" element={<OtherWorksPage />} />
-                <Route
-                  path="blog"
-                  element={<Navigate to="/other-works" replace />}
-                />
-                <Route path="blog/:id" element={<BlogPostPage />} />
-                <Route path="photography" element={<PhotographyPage />} />
-              </Routes>
-            </Suspense>
-          </RouteErrorBoundary>
-        )}
+    // PreviewOverridesProvider sits ABOVE the routes so the admin editor's
+    // unsaved state survives navigation inside the preview pane (#239). It
+    // is inert — no listener, no message, the context default — unless this
+    // document is that pane; see preview/preview-mode.ts.
+    <PreviewOverridesProvider>
+      <div className="whole-page">
+        <Header
+          showingMobileMenu={showingMobileMenu}
+          setShowingMobileMenu={setShowingMobileMenu}
+        />
+        <div className="content">
+          {isMobile && showingMobileMenu && (
+            <MobileMenu setShowingMobileMenu={setShowingMobileMenu} />
+          )}
+          {!showingMobileMenu && (
+            <RouteErrorBoundary>
+              <Suspense fallback={<RouteFallback />}>
+                <Routes>
+                  <Route path="/" element={<Home />} />
+                  <Route path="haiku" element={<HaikuPage />} />
+                  <Route path="haiga" element={<HaigaPage />} />
+                  <Route path="other-works" element={<OtherWorksPage />} />
+                  <Route
+                    path="blog"
+                    element={<Navigate to="/other-works" replace />}
+                  />
+                  <Route path="blog/:id" element={<BlogPostPage />} />
+                  <Route path="photography" element={<PhotographyPage />} />
+                </Routes>
+              </Suspense>
+            </RouteErrorBoundary>
+          )}
+        </div>
       </div>
-    </div>
+    </PreviewOverridesProvider>
   );
 }

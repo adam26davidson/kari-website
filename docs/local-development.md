@@ -52,6 +52,28 @@ down` in one worktree never touches another's stack.
   app, so plain `npm run dev` does not start it — `dev.sh` does, alongside
   the public one.
 
+### The admin dev server proxies the public site
+
+The admin editors embed a live preview of the public page they edit in a
+same-origin iframe (#239). A built `ui/dist` and the deployed vhost are
+already single-origin (`/admin*` → the admin app, everything else → the
+public app), but two dev servers are two origins, so on 5174 alone the
+pane would load `/` and get the ADMIN index — an admin app inside the
+admin app.
+
+So `ui/apps/admin/vite.config.ts` proxies everything NOT under `/admin`
+to `http://localhost:5173`, making 5174 behave like the deployed host.
+This needs BOTH dev servers up, which is what `./scripts/dev.sh` starts;
+`npm run dev:admin` on its own leaves the preview pane blank. The public
+port is hardcoded, so in a parallel stack whose public vite got bumped to
+5175 the pane frames the *first* stack's site — only the pane, nothing
+else.
+
+One visible side effect: `http://localhost:5174/` now serves the public
+site rather than redirecting to `/admin/`. Go to
+`http://localhost:5174/admin/` for the admin app (`/admin` without the
+trailing slash 404s on the dev server, with or without this proxy).
+
 ### Auth0 callbacks and the admin port
 
 The admin app's Auth0 callback is `<origin>/admin`, so logging in locally
