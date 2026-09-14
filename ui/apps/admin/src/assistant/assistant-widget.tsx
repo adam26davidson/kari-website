@@ -94,15 +94,20 @@ export function AssistantWidget({
 
   return (
     <div
-      // Floating card on desktop and tablet; at phone width it fills the
-      // screen rather than perching in a corner, so the conversation is
-      // comfortable to read and type into.
+      // A floating card on desktop and tablet; at phone width it spans the
+      // screen and sits on the bottom edge, where a thumb is.
+      //
+      // In BOTH cases the height follows the content up to a cap, rather
+      // than being fixed. That is what keeps the short states calm: a
+      // full-height panel holding one sentence ("the helper is resting")
+      // reads as a dead end, which is exactly what it is not.
       className={
         "admin-assistant fixed bottom-6 right-6 z-[1000] flex w-[380px] " +
         "max-h-[min(560px,calc(100vh-80px))] flex-col overflow-hidden " +
         "rounded-xl border border-border bg-card " +
         "shadow-[0_18px_48px_rgba(74,62,40,0.22)] " +
-        "max-sm:inset-0 max-sm:max-h-none max-sm:w-auto max-sm:rounded-none"
+        "max-sm:inset-x-0 max-sm:bottom-0 max-sm:w-auto max-sm:max-h-[85vh] " +
+        "max-sm:rounded-b-none max-sm:border-x-0 max-sm:border-b-0"
       }
       role="dialog"
       aria-label="The helper"
