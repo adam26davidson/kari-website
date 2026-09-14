@@ -123,6 +123,16 @@ export default defineConfig({
             dependencies: ["setup"],
             use: { storageState: ADMIN_STORAGE_STATE },
           },
+          {
+            // The helper (#214) only reads: opening the panel creates no
+            // conversation, and with no ANTHROPIC_API_KEY on the e2e stack
+            // it never reaches a model at all. So, like the status page
+            // above, it needs neither serial execution nor a long timeout.
+            name: "admin-assistant",
+            testMatch: SPEC(/admin-assistant\.spec\.ts/),
+            dependencies: ["setup"],
+            use: { storageState: ADMIN_STORAGE_STATE },
+          },
         ]
       : []),
     {
