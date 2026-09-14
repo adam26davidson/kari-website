@@ -1,8 +1,9 @@
 import { faArrowPointer } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { useEffect, useId, useState } from "react";
+import { useId } from "react";
 import { AdminButton } from "../admin-button/admin-button";
 import { apiImageUrl } from "@kari/shared/utils/image-management-helpers";
+import { useObjectUrl } from "@kari/shared/hooks/use-object-url";
 
 export function PhotoPicker({
   imageFile,
@@ -14,19 +15,10 @@ export function PhotoPicker({
   setImageFile: (file: File | null) => void;
 }) {
   const inputId = useId();
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!imageFile) {
-      setPreviewUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(imageFile);
-    setPreviewUrl(url);
-    return () => {
-      URL.revokeObjectURL(url);
-    };
-  }, [imageFile]);
+  // The object URL used to be built by an effect right here; the in-editor
+  // site preview needs the same one for a candidate photo it renders on the
+  // public page, so it moved to the shared hook (#239).
+  const previewUrl = useObjectUrl(imageFile);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {

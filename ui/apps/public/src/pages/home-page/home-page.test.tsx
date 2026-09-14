@@ -3,6 +3,8 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Home } from "./home-page";
 import { HomePageService } from "@kari/shared/services/home-page";
+import { HomePageOverride } from "@kari/shared/utils/preview-channel";
+import { PreviewOverridesContext } from "../../preview/preview-overrides-context";
 
 vi.mock("@kari/shared/services/home-page", () => ({
   HomePageService: {
@@ -86,5 +88,82 @@ describe("Home", () => {
       screen.queryByText("Failed to load home page."),
     ).not.toBeInTheDocument();
     expect(HomePageService.getFromS3).toHaveBeenCalledTimes(2);
+  });
+});
+
+/**
+ * Inside the admin's preview pane the page is handed the editor's unsaved
+ * state through context (#239) and must render THAT, not what is deployed.
+ */
+describe("Home inside the admin's preview pane", () => {
+  const renderWithDraft = (homePage: HomePageOverride) =>
+    render(
+      <PreviewOverridesContext.Provider value={{ homePage }}>
+        <Home />
+      </PreviewOverridesContext.Provider>,
+    );
+
+  beforeEach(() => {
+    vi.mocked(HomePageService.getFromS3).mockResolvedValue(homePageData);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  it("renders the draft blurb rather than the deployed one", async () => {
+    renderWithDraft({ photo: "kari.jpg", blurb: "Unsaved words", photoFile: null });
+
+    expect(await screen.findByText("Unsaved words")).toBeInTheDocument();
+    expect(screen.queryByText("Welcome to the site")).not.toBeInTheDocument();
+  });
+
+  it("renders a picked-but-unsaved photo from its blob URL", () => {
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:candidate");
+
+    renderWithDraft({
+      photo: "kari.jpg",
+      blurb: "Unsaved words",
+      photoFile: new File(["pixels"], "new.png"),
+    });
+
+    const img = document.querySelector("img");
+    expect(img?.getAttribute("src")).toBe("blob:candidate");
+  });
+
+  it("falls back to the stored photo when none has been picked", () => {
+    renderWithDraft({ photo: "kari.jpg", blurb: "Just new words", photoFile: null });
+
+    const img = document.querySelector("img");
+    expect(img?.src).toMatch(/\/images\/kari\.jpg\/original\.jpg$/);
+  });
+
+  it("renders no image when the draft has neither a photo nor a file", () => {
+    renderWithDraft({ photo: "", blurb: "Words only", photoFile: null });
+
+    expect(screen.getByText("Words only")).toBeInTheDocument();
+    expect(document.querySelector("img")).not.toBeInTheDocument();
+  });
+
+  it("shows the draft immediately, without waiting for the S3 read", () => {
+    // The draft IS the whole page, so a pending load must not hide it.
+    vi.mocked(HomePageService.getFromS3).mockReturnValueOnce(
+      new Promise(() => {}),
+    );
+
+    renderWithDraft({ photo: "", blurb: "Words only", photoFile: null });
+
+    expect(screen.getByText("Words only")).toBeInTheDocument();
+    expect(screen.queryByText("Loading...")).not.toBeInTheDocument();
+  });
+
+  it("shows the draft rather than an error when the S3 read fails", async () => {
+    vi.mocked(HomePageService.getFromS3).mockRejectedValueOnce(
+      new Error("network down"),
+    );
+
+    renderWithDraft({ photo: "", blurb: "Words only", photoFile: null });
+
+    expect(await screen.findByText("Words only")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Failed to load home page."),
+    ).not.toBeInTheDocument();
   });
 });
