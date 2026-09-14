@@ -48,6 +48,25 @@
      share a measure. */
   --admin-prose-size: 15px;
   --admin-prose-measure: 60ch;
+  /* Room at the bottom of the scroller for the helper's floating toggle
+     (src/assistant/assistant-widget.tsx), so the page always ENDS above it.
+
+     The toggle is a fixed 56px disc sitting 24px off the bottom-right
+     corner. On a wide desktop that corner is empty gutter beside the
+     content column, which is why it read as harmless; but the content
+     column IS the viewport on a phone and all but a sliver of it on a
+     tablet, so the disc came down on the last thing on the page — over the
+     home editor's phone preview, and over the photography editor's "Remove
+     this image", a control she could not reach because nothing scrolled
+     past it (#874, caught by the visual review rather than by a test).
+
+     80px is the disc's reach (24 + 56); the extra 8 is so the last row
+     clears it rather than touching it. A floating affordance still passes
+     OVER content mid-scroll — that is the pattern — but with this nothing
+     is ever parked underneath it. test/design/helper-clearance.test.ts
+     pins the arithmetic, since the disc's own numbers are Tailwind
+     utilities in the TSX and would otherwise drift away from this one. */
+  --admin-helper-reserve: 88px;
 }
 
 /* The admin's ONE scroll container (test/design/scroll-containers.test.ts).
@@ -68,15 +87,23 @@
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
-  padding: 32px;
+  /* The bottom side is the gutter plus the floating helper's reserve — see
+     --admin-helper-reserve. Written as a shorthand rather than a separate
+     `padding-bottom` because the phone rule below re-declares the
+     shorthand, and a shorthand resets every side: a lone `padding-bottom`
+     here would be silently thrown away at exactly the width that needs it
+     most. */
+  padding: 32px 32px calc(32px + var(--admin-helper-reserve));
   box-sizing: border-box;
 }
 
 @media (max-width: 767.98px) {
   .admin-content {
     /* The list cards carry their own margin; a narrow phone can't spare
-       the full gutter on top of it. */
-    padding: 12px 8px;
+       the full gutter on top of it. The bottom keeps the helper's reserve
+       at full size, though — the gutter is what a phone can't spare, and
+       this is not gutter, it is the floating toggle's own footprint. */
+    padding: 12px 8px calc(12px + var(--admin-helper-reserve));
   }
 }
 
