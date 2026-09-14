@@ -36,8 +36,10 @@ pub const DEFAULT_EFFORT: &str = "medium";
 
 /// Ceiling on one reply. Adaptive thinking is billed inside this, so it is
 /// not as generous as it looks — but the helper writes chat-sized answers,
-/// and a smaller number is a cheaper accident when it does not.
-pub const MAX_TOKENS: u32 = 8192;
+/// and a smaller number is a cheaper accident when it does not. Overridable
+/// via `ANTHROPIC_MAX_TOKENS`, so trimming the helper's most expensive knob
+/// is a host edit and a restart rather than a deploy.
+pub const DEFAULT_MAX_TOKENS: u32 = 8192;
 
 /// Server-side refusal fallbacks: on a policy decline the API re-runs the
 /// turn on another model inside the same call, instead of handing us a dead
@@ -63,6 +65,8 @@ pub struct AnthropicConfig {
     pub base_url: String,
     pub model: String,
     pub effort: String,
+    /// Ceiling on one reply, `ANTHROPIC_MAX_TOKENS`.
+    pub max_tokens: u32,
     /// `None` disables the fallbacks parameter and its beta header entirely
     /// (set `ANTHROPIC_FALLBACKS=off`), so the feature can be switched off on
     /// the host if the beta ever changes shape.
@@ -77,6 +81,27 @@ fn env_opt(var: &str) -> Option<String> {
         .ok()
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty())
+}
+
+/// Read a positive whole number from `var`.
+///
+/// Anything unparseable — or a zero, which would silently turn the ceiling it
+/// configures into "never" — is ignored with a warning, so a typo on the host
+/// degrades to the built-in default rather than to a helper that refuses
+/// every message. Shared with `assistant::AssistantLimits`, which reads its
+/// own ceilings the same way.
+pub(crate) fn env_positive<T>(var: &str) -> Option<T>
+where
+    T: std::str::FromStr + Default + PartialEq,
+{
+    let raw = env_opt(var)?;
+    match raw.parse::<T>() {
+        Ok(value) if value != T::default() => Some(value),
+        _ => {
+            tracing::warn!("ignoring {var}={raw:?}: expected a positive whole number");
+            None
+        }
+    }
 }
 
 impl AnthropicConfig {
@@ -94,6 +119,7 @@ impl AnthropicConfig {
                 .to_string(),
             model: env_opt("ANTHROPIC_MODEL").unwrap_or_else(|| DEFAULT_MODEL.to_string()),
             effort: env_opt("ANTHROPIC_EFFORT").unwrap_or_else(|| DEFAULT_EFFORT.to_string()),
+            max_tokens: env_positive("ANTHROPIC_MAX_TOKENS").unwrap_or(DEFAULT_MAX_TOKENS),
             fallbacks: match env_opt("ANTHROPIC_FALLBACKS") {
                 Some(v) if v.eq_ignore_ascii_case("off") => None,
                 Some(v) => Some(v),
@@ -180,6 +206,17 @@ impl MessageResponse {
         self.content.as_array().map(|a| a.as_slice()).unwrap_or(&[])
     }
 
+    /// Whether the turn produced anything at all.
+    ///
+    /// A refusal whose classifier fires BEFORE any output comes back as an
+    /// empty `content` array, and the Messages API rejects a stored message
+    /// with empty content — so a caller that replays transcripts has to know
+    /// the difference between "the model said this" and "the model said
+    /// nothing" before it keeps the blocks.
+    pub fn has_content(&self) -> bool {
+        !self.blocks().is_empty()
+    }
+
     /// Every `text` block joined into one string — what the admin shows.
     pub fn text(&self) -> String {
         self.blocks()
@@ -256,7 +293,7 @@ pub fn build_request(
 ) -> Value {
     let mut body = json!({
         "model": config.model,
-        "max_tokens": MAX_TOKENS,
+        "max_tokens": config.max_tokens,
         "system": [{
             "type": "text",
             "text": system,

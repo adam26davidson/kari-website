@@ -246,7 +246,7 @@ describe("AssistantWidget", () => {
     expect(box).toHaveValue("Why is the photo sideways");
   });
 
-  it("falls back to resting when a send finds the helper gone", async () => {
+  it("lets her try again when a send finds the helper busy", async () => {
     available();
     service.createSession.mockResolvedValue({
       id: "s1",
@@ -259,16 +259,31 @@ describe("AssistantWidget", () => {
     await openPanel();
     await screen.findByText(/^Hi Kari/);
 
-    await userEvent.type(
-      screen.getByRole("textbox", { name: "Your message" }),
-      "Hello",
-    );
+    const box = screen.getByRole("textbox", { name: "Your message" });
+    await userEvent.type(box, "Why is the photo sideways");
     await userEvent.click(screen.getByRole("button", { name: "Send" }));
 
-    expect(await screen.findByText(/resting right now/)).toBeInTheDocument();
+    // A blip upstream is the one case where the panel used to collapse to
+    // "resting", taking the box away with her words still in it — leaving
+    // her told to try again later with no way to try at all.
+    expect(
+      await screen.findByText(/your message is still here/),
+    ).toBeInTheDocument();
+    expect(box).toHaveValue("Why is the photo sideways");
+    expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
+
+    service.sendMessage.mockResolvedValue({
+      id: "s1",
+      messages: [{ role: "assistant", text: "It is the orientation tag." }],
+      turnsRemaining: 39,
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(
+      await screen.findByText("It is the orientation tag."),
+    ).toBeInTheDocument();
   });
 
-  it("says when this conversation has gone on long enough", async () => {
+  it("says when the helper has talked enough for now", async () => {
     available();
     service.createSession.mockResolvedValue({
       id: "s1",
@@ -287,8 +302,10 @@ describe("AssistantWidget", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: "Send" }));
 
+    // The API sends this same 429 for the day's cap as well as this
+    // conversation's, so the words must hold for both.
     expect(
-      await screen.findByText(/Start a new one whenever you like/),
+      await screen.findByText(/Start a new conversation, or try again later/),
     ).toBeInTheDocument();
   });
 

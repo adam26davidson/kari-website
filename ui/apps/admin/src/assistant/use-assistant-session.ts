@@ -63,8 +63,13 @@ function clearId(storage: StorageLike | null): void {
  *
  * - `idle` — not opened yet; nothing has been asked of the API.
  * - `checking` — finding out whether the helper is configured.
- * - `resting` — it is not, or its upstream is down.
+ * - `resting` — it is not, or the check could not be made at all.
  * - `ready` — it can be talked to.
+ *
+ * Only the availability check sets `resting`, and it runs before she has
+ * typed anything. Once the panel is `ready` it stays that way: a message
+ * that fails is reported under the transcript, with her words still in the
+ * box, rather than by folding the conversation away.
  */
 export type AssistantPhase = "idle" | "checking" | "resting" | "ready";
 
@@ -87,13 +92,25 @@ export interface AssistantSessionState {
 export const RESTING_MESSAGE =
   "The helper is resting right now. Everything else works as usual — try again later.";
 
-/** Shown when a send fails. Her words are still in the box; say so. */
+/**
+ * Shown when a send fails, including when the helper's upstream is briefly
+ * unreachable. Her words are still in the box; say so, and say that trying
+ * again is worth doing — because unlike the resting state, it is.
+ */
 export const SEND_FAILED_MESSAGE =
   "Couldn't reach the helper — your message is still here; try again in a moment.";
 
-/** Shown when this conversation has run out of room. */
-export const CONVERSATION_FULL_MESSAGE =
-  "This conversation has gone on a while. Start a new one whenever you like.";
+/**
+ * Shown when a ceiling is reached.
+ *
+ * Word for word the API's own `ENOUGH_FOR_NOW_MESSAGE`, and both halves
+ * matter: the API sends the same 429 for a conversation that has run its
+ * length AND for the day's total across all conversations, so a message that
+ * only offered "start a new one" would be plainly false on the daily cap —
+ * she would start a new conversation, send, and be told the very same thing.
+ */
+export const ENOUGH_FOR_NOW_MESSAGE =
+  "The helper has talked enough for now. Start a new conversation, or try again later.";
 
 /**
  * Owns the conversation: whether the helper is available, the transcript,
@@ -218,13 +235,14 @@ export function useAssistantSession(
         setMessages((current) => current.slice(0, -1));
         const status =
           sendError instanceof HttpError ? sendError.status : undefined;
-        if (status === 503) {
-          setPhase("resting");
-        } else if (status === 429) {
-          setError(CONVERSATION_FULL_MESSAGE);
-        } else {
-          setError(SEND_FAILED_MESSAGE);
-        }
+        // The PHASE is never changed here, only the message under the
+        // transcript. A failed send — including the 503 one upstream blip
+        // produces — has to leave the conversation usable: moving to
+        // "resting" would take the box away with her words still in it and
+        // offer her no way to do the one thing the message tells her to do,
+        // short of reloading the page. "Resting" belongs to the availability
+        // check alone, which runs before she has typed anything.
+        setError(status === 429 ? ENOUGH_FOR_NOW_MESSAGE : SEND_FAILED_MESSAGE);
         return false;
       } finally {
         setSending(false);

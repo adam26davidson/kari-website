@@ -23,7 +23,7 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 use crate::services::anthropic::{
-    create_message, AnthropicConfig, AnthropicError, ApiMessage, MessageResponse,
+    create_message, env_positive, AnthropicConfig, AnthropicError, ApiMessage, MessageResponse,
 };
 use crate::services::object_store::ObjectStore;
 use crate::services::s3::S3Error;
@@ -65,7 +65,7 @@ pub fn session_key(id: &str) -> String {
 
 /// Ceilings. These are the second line of defence; the first is the hard
 /// monthly spend cap set on the Anthropic console, which no code can undo.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AssistantLimits {
     /// How many times one turn may round-trip through tools before giving up.
     pub max_tool_iterations_per_turn: usize,
@@ -87,6 +87,29 @@ impl Default for AssistantLimits {
             max_turns_per_session: 40,
             max_session_tokens: 400_000,
             daily_turn_limit: 200,
+        }
+    }
+}
+
+impl AssistantLimits {
+    /// The defaults above, with each ceiling overridable on the host.
+    ///
+    /// Spend is the one thing about this feature the maintainer may need to
+    /// change in a hurry, and a hurry is exactly when a code change and a
+    /// deploy are the wrong tools. Every variable is optional and a bad value
+    /// is ignored with a warning (see `env_positive`), so a host that sets
+    /// none of them — which is every host today — behaves exactly as before.
+    pub fn from_env() -> Self {
+        let defaults = Self::default();
+        Self {
+            max_tool_iterations_per_turn: env_positive("ASSISTANT_MAX_TOOL_ITERATIONS_PER_TURN")
+                .unwrap_or(defaults.max_tool_iterations_per_turn),
+            max_turns_per_session: env_positive("ASSISTANT_MAX_TURNS_PER_SESSION")
+                .unwrap_or(defaults.max_turns_per_session),
+            max_session_tokens: env_positive("ASSISTANT_MAX_SESSION_TOKENS")
+                .unwrap_or(defaults.max_session_tokens),
+            daily_turn_limit: env_positive("ASSISTANT_DAILY_TURN_LIMIT")
+                .unwrap_or(defaults.daily_turn_limit),
         }
     }
 }
@@ -145,7 +168,7 @@ impl AssistantState {
     /// so this never fails and never panics — an unconfigured host simply
     /// gets a resting helper.
     pub fn from_env() -> Self {
-        Self::new(AnthropicConfig::from_env(), AssistantLimits::default())
+        Self::new(AnthropicConfig::from_env(), AssistantLimits::from_env())
     }
 
     /// Is there an API key? This is all `GET /assistant/status` reports; the
@@ -446,25 +469,49 @@ pub async fn send_message(
             crate::services::anthropic::build_request(config, &system, &session.api_messages, &[]);
         let response = call_anthropic(state, config, &body).await?;
         session.tokens_used += response.usage.total();
-        // Echoed back unchanged on the next iteration — thinking blocks and
-        // any block type this code does not know about included.
-        session
-            .api_messages
-            .push(ApiMessage::assistant(response.content.clone()));
 
-        if response.is_refusal() {
-            reply = Some(REFUSAL_MESSAGE.to_string());
-            break;
-        }
-
+        // Work out what she will be told BEFORE the turn is recorded, because
+        // a turn that produced nothing cannot be recorded as itself. `Some`
+        // means this iteration ends the turn; `None` means tools were asked
+        // for and the loop goes round again.
         let tool_uses = response.tool_uses();
-        if tool_uses.is_empty() {
+        let ending: Option<String> = if response.is_refusal() {
+            Some(REFUSAL_MESSAGE.to_string())
+        } else if tool_uses.is_empty() {
             let text = response.text();
-            reply = Some(if text.is_empty() {
+            Some(if text.is_empty() {
                 TANGLED_MESSAGE.to_string()
             } else {
                 text
-            });
+            })
+        } else {
+            None
+        };
+
+        // Echoed back unchanged on the next iteration — thinking blocks and
+        // any block type this code does not know about included — EXCEPT when
+        // there are none.
+        //
+        // A refusal whose classifier fires before any output is an HTTP 200
+        // with an EMPTY `content` array, and the Messages API rejects a
+        // message with empty content. Storing that verbatim would poison the
+        // conversation for good: every later turn replays it, gets a 400 back
+        // and shows her "the helper could not answer" until she starts again.
+        // Recording the words she is actually shown instead keeps the
+        // transcript both replayable and honest about what happened.
+        session
+            .api_messages
+            .push(ApiMessage::assistant(if response.has_content() {
+                response.content.clone()
+            } else {
+                json!([{
+                    "type": "text",
+                    "text": ending.as_deref().unwrap_or(TANGLED_MESSAGE),
+                }])
+            }));
+
+        if let Some(text) = ending {
+            reply = Some(text);
             break;
         }
 

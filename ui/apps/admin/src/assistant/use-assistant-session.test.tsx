@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { HttpError } from "@kari/shared/services/http-error";
 import {
-  CONVERSATION_FULL_MESSAGE,
+  ENOUGH_FOR_NOW_MESSAGE,
   SEND_FAILED_MESSAGE,
   SESSION_STORAGE_KEY,
   defaultStorage,
@@ -213,7 +213,7 @@ describe("useAssistantSession", () => {
     expect(result.current.messages).toEqual([]);
   });
 
-  it("rests when a send is answered with a 503", async () => {
+  it("stays usable when a send is answered with a 503", async () => {
     available();
     service.createSession.mockResolvedValue({
       id: "s1",
@@ -227,10 +227,26 @@ describe("useAssistantSession", () => {
     await waitFor(() => expect(result.current.phase).toBe("ready"));
     await act(async () => void (await result.current.send("Hello", {})));
 
-    expect(result.current.phase).toBe("resting");
+    // One upstream blip must not fold the conversation away: the message
+    // tells her to try again in a moment, so trying again has to be possible
+    // without reloading the page.
+    expect(result.current.phase).toBe("ready");
+    expect(result.current.error).toBe(SEND_FAILED_MESSAGE);
+
+    service.sendMessage.mockResolvedValue({
+      id: "s1",
+      messages: [{ role: "assistant", text: "There you are." }],
+      turnsRemaining: 39,
+    });
+    let sent: boolean | undefined;
+    await act(async () => {
+      sent = await result.current.send("Hello", {});
+    });
+    expect(sent).toBe(true);
+    expect(result.current.error).toBeNull();
   });
 
-  it("says the conversation is full when a send is capped", async () => {
+  it("says the helper has had enough when a send is capped", async () => {
     available();
     service.createSession.mockResolvedValue({
       id: "s1",
@@ -244,8 +260,13 @@ describe("useAssistantSession", () => {
     await waitFor(() => expect(result.current.phase).toBe("ready"));
     await act(async () => void (await result.current.send("Hello", {})));
 
-    expect(result.current.error).toBe(CONVERSATION_FULL_MESSAGE);
-    // Still ready: a new conversation works, which is what the message says.
+    // Both halves are needed: the same 429 covers a conversation that has run
+    // its length and the day's total across all of them, and only "try again
+    // later" is true of the second.
+    expect(result.current.error).toBe(ENOUGH_FOR_NOW_MESSAGE);
+    expect(result.current.error).toMatch(/Start a new conversation/);
+    expect(result.current.error).toMatch(/try again later/);
+    // Still ready either way, so neither remedy is out of reach.
     expect(result.current.phase).toBe("ready");
   });
 

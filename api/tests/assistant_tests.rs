@@ -134,6 +134,7 @@ fn configured(base_url: &str, limits: AssistantLimits) -> AssistantState {
             base_url: base_url.to_string(),
             model: "claude-opus-5".to_string(),
             effort: "medium".to_string(),
+            max_tokens: 8192,
             fallbacks: Some("default".to_string()),
         }),
         limits,
@@ -507,17 +508,22 @@ async fn a_model_that_only_asks_for_tools_gives_up_kindly() {
     assert_eq!(stub.call_count(), 3, "the iteration cap must hold");
 }
 
-#[tokio::test]
-async fn a_declined_turn_becomes_a_friendly_message() {
-    let stub = spawn_anthropic(vec![(
+/// A refusal whose classifier fired before any output: HTTP 200, an EMPTY
+/// content array, and `stop_reason: "refusal"`.
+fn refusal_reply() -> (StatusCode, Value) {
+    (
         StatusCode::OK,
         json!({
             "content": [],
             "stop_reason": "refusal",
             "usage": {"input_tokens": 10, "output_tokens": 0},
         }),
-    )])
-    .await;
+    )
+}
+
+#[tokio::test]
+async fn a_declined_turn_becomes_a_friendly_message() {
+    let stub = spawn_anthropic(vec![refusal_reply()]).await;
     let (_, app) = app_with(&stub, AssistantLimits::default());
     let id = new_session(&app).await;
 
@@ -534,6 +540,40 @@ async fn a_declined_turn_becomes_a_friendly_message() {
     // like a blank reply or a crash.
     assert_eq!(status, StatusCode::OK);
     assert_eq!(last_message(&body), REFUSAL_MESSAGE);
+}
+
+#[tokio::test]
+async fn a_declined_turn_does_not_poison_the_conversation() {
+    let stub = spawn_anthropic(vec![refusal_reply(), text_reply("Of course, gladly.")]).await;
+    let (_, app) = app_with(&stub, AssistantLimits::default());
+    let id = new_session(&app).await;
+
+    for text in ["Something odd", "Something ordinary"] {
+        let (status, _) = send(
+            &app,
+            post_auth(
+                &format!("/assistant/sessions/{id}/messages"),
+                json!({"text": text}),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{text}");
+    }
+
+    // The refused turn was recorded as the words she was shown, NOT as the
+    // model's empty content. An empty `content` is a 400 on the next request,
+    // so replaying one verbatim would break every later message in this
+    // conversation until she started again.
+    let replayed = stub.requests()[1]["messages"].as_array().unwrap().clone();
+    for message in &replayed {
+        let blocks = message["content"].as_array().expect("content is an array");
+        assert!(
+            !blocks.is_empty(),
+            "no replayed message may have empty content: {message}"
+        );
+    }
+    assert_eq!(replayed[1]["role"], "assistant");
+    assert_eq!(replayed[1]["content"][0]["text"], REFUSAL_MESSAGE);
 }
 
 #[tokio::test]
@@ -824,6 +864,9 @@ async fn the_request_matches_what_this_model_accepts() {
     let request = &stub.requests()[0];
     assert_eq!(request["model"], "claude-opus-5");
     assert_eq!(request["output_config"]["effort"], "medium");
+    // From the config, not a constant: `max_tokens` is the helper's most
+    // expensive knob and has to be tunable on the host.
+    assert_eq!(request["max_tokens"], 8192);
     assert_eq!(request["fallbacks"], "default");
     assert_eq!(request["system"][0]["cache_control"]["type"], "ephemeral");
     for rejected in ["thinking", "temperature", "top_p", "budget_tokens"] {
