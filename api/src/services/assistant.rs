@@ -31,7 +31,8 @@ use crate::services::s3::S3Error;
 /// Shown whenever the helper cannot run: unconfigured, or upstream is down.
 /// The admin echoes this tone; keeping the words here means the two cannot
 /// drift apart into "Service Unavailable".
-pub const RESTING_MESSAGE: &str = "The helper is resting right now. Everything else works as usual — try again later.";
+pub const RESTING_MESSAGE: &str =
+    "The helper is resting right now. Everything else works as usual — try again later.";
 
 /// Shown when a ceiling is reached. Different from resting on purpose: this
 /// one is about this conversation having gone on a while, not a fault.
@@ -292,9 +293,7 @@ pub struct AssistantSession {
 
 /// Create and persist an empty session. The id is generated HERE — a
 /// client-supplied one would be a client-supplied S3 key.
-pub async fn create_session(
-    store: &dyn ObjectStore,
-) -> Result<AssistantSession, AppError> {
+pub async fn create_session(store: &dyn ObjectStore) -> Result<AssistantSession, AppError> {
     let session = AssistantSession {
         id: Uuid::new_v4().to_string(),
         ..Default::default()
@@ -303,10 +302,7 @@ pub async fn create_session(
     Ok(session)
 }
 
-pub async fn load_session(
-    store: &dyn ObjectStore,
-    id: &str,
-) -> Result<AssistantSession, AppError> {
+pub async fn load_session(store: &dyn ObjectStore, id: &str) -> Result<AssistantSession, AppError> {
     match store.get_object(&session_key(id)).await {
         // Corrupt stored JSON is a hard error, not an empty conversation:
         // silently starting over would lose a transcript she may be halfway
@@ -446,12 +442,8 @@ pub async fn send_message(
     let mut reply: Option<String> = None;
 
     for _ in 0..limits.max_tool_iterations_per_turn {
-        let body = crate::services::anthropic::build_request(
-            config,
-            &system,
-            &session.api_messages,
-            &[],
-        );
+        let body =
+            crate::services::anthropic::build_request(config, &system, &session.api_messages, &[]);
         let response = call_anthropic(state, config, &body).await?;
         session.tokens_used += response.usage.total();
         // Echoed back unchanged on the next iteration — thinking blocks and
