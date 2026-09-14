@@ -59,7 +59,29 @@ export default defineConfig({
   // Deliberately no `strictPort`: parallel worktree stacks still need vite's
   // "5174 is taken, using 5175" behaviour, and a second stack's admin login
   // is a rarer need than a second stack starting at all.
-  server: { port: 5174 },
+  //
+  // The proxy makes this origin single-origin in dev, the way the built dist
+  // and the deployed vhost already are (serve.mjs / nginx: /admin* -> the
+  // admin app, everything else -> the public app). Without it the in-editor
+  // site preview (#239) has nothing to frame locally: the pane loads `/`,
+  // which on 5174 is the ADMIN index, so dev.sh would show an admin app
+  // inside the admin app while the deployed site showed the real preview.
+  // Everything the admin app itself serves lives under /admin/ because of
+  // `base` above — its index, its assets, its HMR client — so handing the
+  // rest of the path space to the public dev server takes nothing away.
+  // `ws: true` keeps the public app's own HMR socket working inside the
+  // frame. 5173 is hardcoded because vite offers no way to ask the sibling
+  // server; a parallel stack whose public vite got bumped to 5175 will
+  // frame the FIRST stack's site, which affects only the dev pane.
+  server: {
+    port: 5174,
+    proxy: {
+      "^/(?!admin($|/))": {
+        target: "http://localhost:5173",
+        ws: true,
+      },
+    },
+  },
   build: {
     outDir: `${uiRoot}dist/admin`,
     // Outside this app's root, so vite wants the intent stated explicitly.

@@ -644,3 +644,94 @@ test.describe("home page", () => {
     // assertion above failed.
   });
 });
+
+test.describe("home page preview", () => {
+  // The whole point of the in-editor preview (#239) is that she sees the
+  // change BEFORE saving, so nothing here saves anything: no snapshot, no
+  // restore, no upload. The editor is left dirty and the test ends; the
+  // unsaved-changes guard only fires on an in-app navigation, and each test
+  // gets a fresh page.
+  const PREVIEW = 'iframe[title="Preview of your site"]';
+
+  let marker: string;
+  test.beforeEach(({ page }) => {
+    marker = uniqueMarker("preview");
+    // The editor is left with unsaved edits on purpose, so the browser's
+    // own "leave site?" prompt would otherwise block teardown.
+    page.on("dialog", (dialog) => dialog.accept());
+  });
+
+  /** Opens the home editor and waits for its real data to be in the form. */
+  async function openHomeEditor(page: Page) {
+    await openAdminSection(page, "Home");
+    const blurb = page.locator(".home-page-editor textarea");
+    await expect(blurb).toBeVisible({ timeout: 60_000 });
+    await expect(blurb).not.toHaveValue("");
+    return blurb;
+  }
+
+  test("shows the unsaved blurb and photo on the real home page", async ({
+    page,
+  }) => {
+    const blurb = await openHomeEditor(page);
+    const preview = page.frameLocator(PREVIEW);
+
+    // The pane frames the real public home page, which renders the
+    // deployed blurb until the editor sends anything.
+    await expect(preview.locator(".home-page-blurb")).toBeVisible({
+      timeout: 60_000,
+    });
+
+    await blurb.fill(`${marker} unsaved blurb`);
+    await expect(preview.getByText(`${marker} unsaved blurb`)).toBeVisible();
+
+    // A candidate photo travels as a File and renders from a blob: URL —
+    // nothing has been uploaded at this point.
+    await page
+      .locator('.photo-picker input[type="file"]')
+      .setInputFiles(pngFixturePath());
+    await expect(preview.locator(".home-page-photo")).toHaveAttribute(
+      "src",
+      /^blob:/,
+    );
+
+    // Nothing was saved, so the LIVE page still shows the old text.
+    await page.goto("/");
+    await expect(page.getByText(`${marker} unsaved blurb`)).toHaveCount(0);
+  });
+
+  test("keeps the draft while she browses inside the pane", async ({
+    page,
+  }) => {
+    const blurb = await openHomeEditor(page);
+    const preview = page.frameLocator(PREVIEW);
+    await blurb.fill(`${marker} unsaved blurb`);
+    await expect(preview.getByText(`${marker} unsaved blurb`)).toBeVisible();
+
+    // The pane is the real SPA: click through to another page and back.
+    await preview.getByRole("link", { name: "Haiku" }).click();
+    await expect(preview.getByRole("link", { name: "Home" })).toBeVisible();
+    await preview.getByRole("link", { name: "Home" }).click();
+
+    // The overrides live above the framed router, so they survived.
+    await expect(preview.getByText(`${marker} unsaved blurb`)).toBeVisible();
+  });
+
+  test("shows the page at a phone's width when asked", async ({ page }) => {
+    await openHomeEditor(page);
+    const frame = page.locator(PREVIEW);
+    await expect(frame).toBeVisible();
+
+    const wide = (await frame.boundingBox())!.width;
+    // The desktop frame is scaled down to fit the editor column rather than
+    // rendered at the column's own width, which would be the phone layout.
+    expect(wide).toBeGreaterThan(400);
+
+    await page.getByRole("button", { name: "Phone" }).click();
+    const narrow = (await frame.boundingBox())!.width;
+    expect(narrow).toBeLessThanOrEqual(391);
+    await expect(
+      page.frameLocator(PREVIEW).locator(".home-page.mobile"),
+    ).toBeVisible();
+  });
+});

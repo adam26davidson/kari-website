@@ -203,6 +203,48 @@ describe("HomePageEditor photo replacement", () => {
   });
 });
 
+describe("HomePageEditor's site preview", () => {
+  it("frames the public home page in preview mode", async () => {
+    renderPage();
+    await screen.findByDisplayValue("hello");
+
+    expect(screen.getByTitle("Preview of your site")).toHaveAttribute(
+      "src",
+      "/?preview=1",
+    );
+  });
+
+  it("hands the pane her unsaved blurb and her picked photo", async () => {
+    const { container } = renderPage();
+    await screen.findByDisplayValue("hello");
+    const post = vi.fn();
+    Object.defineProperty(
+      screen.getByTitle("Preview of your site"),
+      "contentWindow",
+      { value: { postMessage: post }, configurable: true },
+    );
+
+    const file = new File(["img"], "next.png", { type: "image/png" });
+    fireEvent.change(container.querySelector('input[type="file"]')!, {
+      target: { files: [file] },
+    });
+    fireEvent.change(screen.getByDisplayValue("hello"), {
+      target: { value: "new words" },
+    });
+
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    const [message, origin] = post.mock.calls.at(-1)!;
+    expect(origin).toBe(window.location.origin);
+    // The stored photo id travels alongside the candidate File, so the page
+    // can fall back to it when she has picked nothing.
+    expect(message.overrides.homePage).toEqual({
+      photo: "old.png",
+      blurb: "new words",
+      photoFile: file,
+    });
+  });
+});
+
 describe("HomePageEditor unsaved-changes guard", () => {
   it("navigates away without confirmation while clean", async () => {
     const { adminUi, router } = renderPage();

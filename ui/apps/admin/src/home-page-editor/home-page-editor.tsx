@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { Card } from "../components/ui/card";
 import { Textarea } from "../components/ui/textarea";
 import { Button } from "../components/ui/button";
@@ -14,6 +14,8 @@ import { HomePageService } from "@kari/shared/services/home-page";
 import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { useAdminUi } from "../admin-ui-context";
 import { useUnsavedChanges } from "../use-unsaved-changes";
+import { SitePreview } from "../components/site-preview/site-preview";
+import { PreviewOverrides } from "@kari/shared/utils/preview-channel";
 
 export function HomePageEditor() {
   const { isLoading, showLoading, hideLoading, notify } = useAdminUi();
@@ -39,6 +41,15 @@ export function HomePageEditor() {
   useUnsavedChanges(
     !!imageFile ||
       JSON.stringify(homePageData) !== JSON.stringify(savedHomePageData),
+  );
+
+  // What the preview pane below the form is asked to render: the form as it
+  // stands, including a photo she has picked but not uploaded (#239).
+  // Memoised because SitePreview debounces on this object's identity — a
+  // fresh one per render would restart the debounce forever and never send.
+  const previewOverrides = useMemo<PreviewOverrides>(
+    () => ({ homePage: { ...homePageData, photoFile: imageFile } }),
+    [homePageData, imageFile],
   );
 
   const fetchHomePageData = async () => {
@@ -157,6 +168,13 @@ export function HomePageEditor() {
             </Button>
           </div>
         </Card>
+        {/* Below the form, not beside it: the boards give this column one
+            card at a time, and on a phone there is no "beside". */}
+        <SitePreview
+          path="/"
+          description="This is how your home page will look with the changes above. It updates as you type, before you save."
+          overrides={previewOverrides}
+        />
       </div>
     )
   );
