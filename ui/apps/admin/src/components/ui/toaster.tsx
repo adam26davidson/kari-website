@@ -19,6 +19,13 @@ export function Toaster() {
   return (
     <Sonner
       position="bottom-right"
+      // Lifted clear of the helper's round button, which sits in this same
+      // corner (#214): 24px inset + 56px button + 16px gap. Without this a
+      // "Saved" toast would land squarely on top of it — and the toast is
+      // the one that has to move, because the boards draw it bottom-right
+      // and the button has to stay reachable while a toast is up.
+      offset={{ bottom: "96px" }}
+      mobileOffset={{ bottom: "96px" }}
       toastOptions={{
         className: "admin-toast",
         duration: 3000,
