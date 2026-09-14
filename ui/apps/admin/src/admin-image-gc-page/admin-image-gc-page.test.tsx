@@ -57,22 +57,42 @@ async function clickPreview() {
   });
 }
 
+/**
+ * The report's one sentence, read whole.
+ *
+ * The summary emphasises the number that matters and the reassurance at
+ * the end, so its words are spread across `<strong>`s inside the
+ * paragraph. Testing Library matches a string against an element's DIRECT
+ * text nodes, which would silently drop exactly those emphasised parts —
+ * so the paragraph is located by its opening word and then read through
+ * `textContent`, which is what she actually sees.
+ */
+function summaryText() {
+  return screen
+    .getByText(/^(Preview:|Deleted)/)
+    .textContent?.replace(/\s+/g, " ")
+    .trim();
+}
+
+/** The collapsible group whose header carries `title`. */
+function group(title: string) {
+  return screen.getByText(title).closest("details");
+}
+
 beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 describe("AdminImageGcPage dry run", () => {
-  // The card is the shared .admin-page-card, not a block of its own: this
-  // page and what's-on-test had each written the same translucent card out
-  // in full, so one tweak was two edits (#547). Its own class stays for the
-  // one thing that differs, the width.
-  it("renders on the shared admin page card", () => {
-    const { container } = renderPage();
+  it("opens with the section's title and what the page is for", () => {
+    renderPage();
 
-    expect(container.firstElementChild).toHaveClass(
-      "admin-page-card",
-      "admin-image-gc-page",
-    );
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Image cleanup" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Finds pictures no page of the site uses any more/),
+    ).toBeInTheDocument();
   });
 
   it("calls the endpoint in dry-run mode and renders the report", async () => {
@@ -85,20 +105,14 @@ describe("AdminImageGcPage dry run", () => {
     expect(ImageService.gc).toHaveBeenCalledWith(true, expect.any(Function));
     // Counts are IMAGES, not the objects each image stores: five images
     // across the three categories, ten objects between them.
-    expect(
-      screen.getByText(
-        "Preview: 2 images are no longer used by any page and would be " +
-          "deleted, 2 still in use, 1 uploaded in the last hour and left " +
-          "alone. Nothing has been deleted.",
-      ),
-    ).toBeTruthy();
-    expect(
-      screen.getByText("No longer used (would be deleted) (2)"),
-    ).toBeTruthy();
-    expect(screen.getByText("Still in use (kept) (2)")).toBeTruthy();
-    expect(
-      screen.getByText("Uploaded in the last hour (kept) (1)"),
-    ).toBeTruthy();
+    expect(summaryText()).toBe(
+      "Preview: 2 pictures are no longer used by any page and can be " +
+        "deleted. 2 are still in use and 1 was uploaded in the last hour — " +
+        "those are all kept. Nothing has been deleted yet.",
+    );
+    expect(screen.getByText("No longer used — would be deleted")).toBeTruthy();
+    expect(screen.getByText("Still in use — kept")).toBeTruthy();
+    expect(screen.getByText("Uploaded in the last hour — kept")).toBeTruthy();
     // Every image shows as a picture, one thumbnail each (#495).
     for (const id of [
       "orphan-1.png",
@@ -124,6 +138,37 @@ describe("AdminImageGcPage dry run", () => {
     ]) {
       expect(screen.queryByText(key)).toBeNull();
     }
+  });
+
+  // The boards (docs/design/admin-redesign/Cleanup.png) open the group the
+  // page is about and fold the two kept ones away, so what she came to
+  // check is the only thing on screen — and the forty-odd "still in use"
+  // thumbnails are not fetched before she asks for them.
+  it("opens the unused group and leaves the kept ones folded away", async () => {
+    vi.mocked(ImageService.gc).mockResolvedValue(dryRunReport);
+    renderPage();
+
+    await clickPreview();
+
+    expect(group("No longer used — would be deleted")).toHaveAttribute("open");
+    expect(group("Still in use — kept")).not.toHaveAttribute("open");
+    expect(group("Uploaded in the last hour — kept")).not.toHaveAttribute(
+      "open",
+    );
+  });
+
+  it("counts each group beside its name", async () => {
+    vi.mocked(ImageService.gc).mockResolvedValue(dryRunReport);
+    renderPage();
+
+    await clickPreview();
+
+    expect(
+      group("No longer used — would be deleted")?.textContent,
+    ).toContain("(2)");
+    expect(group("Uploaded in the last hour — kept")?.textContent).toContain(
+      "(1)",
+    );
   });
 
   it("shows a plain placeholder for a picture that will not load", async () => {
@@ -192,20 +237,18 @@ describe("AdminImageGcPage dry run", () => {
     vi.mocked(ImageService.gc).mockResolvedValue({
       ...dryRunReport,
       orphaned: [image("orphan-1.png")],
-      referenced: [],
-      skipped_recent: [],
+      referenced: [image("kept-1.png")],
+      skipped_recent: [image("fresh-1.png"), image("fresh-2.png")],
     });
     renderPage();
 
     await clickPreview();
 
-    expect(
-      screen.getByText(
-        "Preview: 1 image is no longer used by any page and would be " +
-          "deleted, 0 still in use, 0 uploaded in the last hour and left " +
-          "alone. Nothing has been deleted.",
-      ),
-    ).toBeTruthy();
+    expect(summaryText()).toBe(
+      "Preview: 1 picture is no longer used by any page and can be " +
+        "deleted. 1 is still in use and 2 were uploaded in the last hour — " +
+        "those are all kept. Nothing has been deleted yet.",
+    );
     expect(screen.getByText("Delete 1 unused image")).toBeTruthy();
   });
 
@@ -219,6 +262,32 @@ describe("AdminImageGcPage dry run", () => {
     await clickPreview();
 
     expect(screen.queryByText(/^Delete \d/)).toBeNull();
+    // Good news, said as good news rather than as "0 pictures are no
+    // longer used": there is nothing for her to do here.
+    expect(summaryText()).toBe(
+      "Preview: every picture is still used by a page, so there is nothing " +
+        "to clean up. 2 are still in use and 1 was uploaded in the last " +
+        "hour — those are all kept. Nothing has been deleted.",
+    );
+  });
+
+  // A sweep of an empty bucket used to recite "0 still in use, 0 uploaded
+  // in the last hour and left alone" at her. There is nothing being kept,
+  // so the page says nothing about keeping.
+  it("leaves out the kept sentence when nothing is being kept", async () => {
+    vi.mocked(ImageService.gc).mockResolvedValue({
+      ...dryRunReport,
+      referenced: [],
+      skipped_recent: [],
+    });
+    renderPage();
+
+    await clickPreview();
+
+    expect(summaryText()).toBe(
+      "Preview: 2 pictures are no longer used by any page and can be " +
+        "deleted. Nothing has been deleted yet.",
+    );
   });
 
   it("wraps the loading state around the request", async () => {
@@ -259,8 +328,8 @@ describe("AdminImageGcPage real run", () => {
       expect.any(Function),
     );
     expect(notify).toHaveBeenCalledWith("Deleted 2 unused images");
-    expect(screen.getByText("Deleted 2 unused images.")).toBeTruthy();
-    expect(screen.getByText("Deleted (2)")).toBeTruthy();
+    expect(summaryText()).toBe("Deleted 2 unused images.");
+    expect(screen.getByText("No longer used — deleted")).toBeTruthy();
     // Deleted pictures are gone from storage, so asking for their
     // thumbnails would only draw broken images — say so instead (#495).
     expect(screen.queryByAltText("orphan-1.png")).toBeNull();
@@ -308,9 +377,13 @@ describe("AdminImageGcPage failures", () => {
     expect(alert.textContent).toContain(
       "Image cleanup failed (HTTP 500): Image GC aborted before any delete",
     );
-    // Red, in the admin's one danger treatment — the same rule what's-on-
-    // test's truncation warning wears (#547).
-    expect(alert).toHaveClass("admin-danger-banner");
+    // And what to do next, rather than a dead end (design brief §5).
+    expect(alert.textContent).toContain(
+      "Nothing further was deleted. Try previewing again in a moment.",
+    );
+    // The admin's one danger treatment, now spelled in the migrated
+    // palette's tokens rather than the legacy banner's class.
+    expect(alert).toHaveClass("bg-destructive", "text-destructive-foreground");
     // The stale successful report must not remain visible as if current.
     expect(screen.queryByText(/^Preview: /)).toBeNull();
   });
@@ -325,6 +398,6 @@ describe("AdminImageGcPage failures", () => {
     await clickPreview();
 
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(screen.getByText(/^Preview: /)).toBeTruthy();
+    expect(summaryText()).toContain("Preview:");
   });
 });
