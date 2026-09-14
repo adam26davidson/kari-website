@@ -69,6 +69,11 @@ port is hardcoded, so in a parallel stack whose public vite got bumped to
 5175 the pane frames the *first* stack's site — only the pane, nothing
 else.
 
+One visible side effect: `http://localhost:5174/` now serves the public
+site rather than redirecting to `/admin/`. Go to
+`http://localhost:5174/admin/` for the admin app (`/admin` without the
+trailing slash 404s on the dev server, with or without this proxy).
+
 ### Auth0 callbacks and the admin port
 
 The admin app's Auth0 callback is `<origin>/admin`, so logging in locally

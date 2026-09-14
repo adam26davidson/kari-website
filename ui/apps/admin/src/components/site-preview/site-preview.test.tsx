@@ -196,6 +196,23 @@ describe("SitePreview's live updates", () => {
 });
 
 describe("SitePreview's width toggle", () => {
+  it("starts on Phone when the admin itself is on a phone", () => {
+    // A 1280px frame inside a 320px pane is an unreadable thumbnail, so the
+    // width she is holding is the one worth opening on.
+    const wide = window.innerWidth;
+    window.innerWidth = 390;
+    try {
+      renderPreview();
+      expect(screen.getByRole("button", { name: "Phone" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      expect(frame().style.width).toBe("390px");
+    } finally {
+      window.innerWidth = wide;
+    }
+  });
+
   it("starts on Computer, at a real computer's width", () => {
     renderPreview();
     expect(

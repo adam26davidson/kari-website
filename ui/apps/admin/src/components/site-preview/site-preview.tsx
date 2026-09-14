@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowUpRight, Monitor, Smartphone } from "lucide-react";
+import { useIsMobile } from "@kari/shared/hooks/use-is-mobile";
 import {
   PREVIEW_OVERRIDES,
   PREVIEW_QUERY_PARAM,
@@ -81,7 +82,14 @@ export function SitePreview({
    */
   overrides: PreviewOverrides;
 }) {
-  const [device, setDevice] = useState<DeviceName>("computer");
+  // On a phone the pane is barely 320px wide, so a 1280px frame scaled into
+  // it is a thumbnail nobody can read (verified by capture: at that width
+  // the site's own nav is a few pixels tall). Start her on the width she is
+  // actually holding; the toggle still offers the other one.
+  const onAPhone = useIsMobile();
+  const [device, setDevice] = useState<DeviceName>(
+    onAPhone ? "phone" : "computer",
+  );
   const [scale, setScale] = useState(1);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
