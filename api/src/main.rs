@@ -6,6 +6,7 @@ use kari_website_api::middleware::auth::{fetch_jwks, JwksCache, AUTH0_JWKS_URL};
 use kari_website_api::migrate::run_migrate_images_command;
 use kari_website_api::routes::create_router;
 use kari_website_api::routes::health::HealthCache;
+use kari_website_api::services::assistant::AssistantState;
 use kari_website_api::services::object_store::ObjectStore;
 use kari_website_api::services::s3::S3Service;
 use kari_website_api::AppState;
@@ -57,10 +58,24 @@ async fn main() {
         .expect("Failed to fetch JWKS");
 
     // Create application state
+    // Every assistant variable is optional, so this never fails: an
+    // ANTHROPIC_API_KEY-less host gets a helper that politely reports itself
+    // unavailable, and the admin carries on without it.
+    let assistant = Arc::new(AssistantState::from_env());
+    tracing::info!(
+        "admin assistant {}",
+        if assistant.is_available() {
+            "configured"
+        } else {
+            "resting (no ANTHROPIC_API_KEY)"
+        }
+    );
+
     let state = AppState {
         jwks: Arc::new(JwksCache::new(jwks, AUTH0_JWKS_URL.to_string())),
         s3_service,
         health: Arc::new(HealthCache::default()),
+        assistant,
     };
 
     // Create router with routes

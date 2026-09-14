@@ -17,6 +17,7 @@ use bytes::Bytes;
 use jsonwebtoken::jwk::JwkSet;
 use kari_website_api::middleware::auth::JwksCache;
 use kari_website_api::routes::health::HealthCache;
+use kari_website_api::services::assistant::AssistantState;
 use kari_website_api::services::object_store::{ObjectMeta, ObjectStore};
 use kari_website_api::services::s3::S3Error;
 use kari_website_api::AppState;
@@ -302,8 +303,20 @@ impl ObjectStore for InMemoryStore {
 }
 
 /// Build a real `AppState` (real JWKS cache, real health cache) around the
-/// given in-memory store.
+/// given in-memory store, with the assistant unconfigured.
 pub fn state_with_store(jwks: JwkSet, store: Arc<InMemoryStore>) -> AppState {
+    state_with_store_and_assistant(jwks, store, AssistantState::default())
+}
+
+/// As `state_with_store`, but with an explicit `AssistantState` — how the
+/// assistant tests point the helper at a local stub Anthropic and set their
+/// own ceilings. Configuration is injected rather than read from the
+/// environment, so cases stay isolated under parallel test threads.
+pub fn state_with_store_and_assistant(
+    jwks: JwkSet,
+    store: Arc<InMemoryStore>,
+    assistant: AssistantState,
+) -> AppState {
     AppState {
         jwks: Arc::new(JwksCache::new(
             jwks,
@@ -311,5 +324,6 @@ pub fn state_with_store(jwks: JwkSet, store: Arc<InMemoryStore>) -> AppState {
         )),
         s3_service: store,
         health: Arc::new(HealthCache::default()),
+        assistant: Arc::new(assistant),
     }
 }

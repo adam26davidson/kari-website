@@ -1,3 +1,4 @@
+pub mod assistant;
 pub mod blog;
 pub mod haiga;
 pub mod haiku;
@@ -74,6 +75,21 @@ pub fn create_router(state: AppState) -> Router {
         .route("/blog-content", put(blog::update_blog_post_content))
         .route("/blog-content/{id}", get(blog::get_blog_post_content))
         .route("/blog-content/{id}", delete(blog::delete_blog_post_content))
+        // The admin helper. Behind the same auth as everything else here —
+        // there is one admin, so a valid token is the authorization.
+        .route("/assistant/status", get(assistant::assistant_status_handler))
+        .route(
+            "/assistant/sessions",
+            post(assistant::create_session_handler),
+        )
+        .route(
+            "/assistant/sessions/{id}",
+            get(assistant::get_session_handler),
+        )
+        .route(
+            "/assistant/sessions/{id}/messages",
+            post(assistant::send_message_handler),
+        )
         .layer(DefaultBodyLimit::disable())
         .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024 /* 10mb */))
         // Applied to the merged router so auth still covers the upload
