@@ -497,19 +497,30 @@ pub async fn send_message(
         };
 
         // Echoed back unchanged on the next iteration — thinking blocks and
-        // any block type this code does not know about included — EXCEPT when
-        // there are none.
+        // any block type this code does not know about included — EXCEPT for
+        // a turn that cannot be replayed as itself, which is recorded as the
+        // words she was actually shown.
         //
-        // A refusal whose classifier fires before any output is an HTTP 200
-        // with an EMPTY `content` array, and the Messages API rejects a
-        // message with empty content. Storing that verbatim would poison the
-        // conversation for good: every later turn replays it, gets a 400 back
-        // and shows her "the helper could not answer" until she starts again.
-        // Recording the words she is actually shown instead keeps the
-        // transcript both replayable and honest about what happened.
+        // Two ways that happens, and both would poison the conversation for
+        // good if stored verbatim — every later turn replays the transcript,
+        // gets a 400 back and shows her "the helper could not answer" until
+        // she starts again:
+        //
+        // - A refusal whose classifier fires before any output is an HTTP 200
+        //   with an EMPTY `content` array, and the Messages API rejects a
+        //   message with empty content.
+        // - A refusal that fires MID-STREAM keeps whatever the model had
+        //   finished, which can include a completed `tool_use` block. The
+        //   turn ends there, so nothing answers that call, and the API
+        //   rejects a `tool_use` that is not followed by its `tool_result`.
+        //
+        // A refusal is therefore never kept verbatim. Its text is the
+        // classifier's, not the model's answer, and there is nothing in it
+        // worth replaying.
+        let replayable = response.has_content() && !response.is_refusal();
         session
             .api_messages
-            .push(ApiMessage::assistant(if response.has_content() {
+            .push(ApiMessage::assistant(if replayable {
                 response.content.clone()
             } else {
                 spoken(ending.as_deref().unwrap_or(TANGLED_MESSAGE))

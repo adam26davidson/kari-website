@@ -548,14 +548,7 @@ async fn an_exhausted_tool_loop_does_not_poison_the_conversation() {
     // every later message in this conversation would fail until she started
     // again.
     let replayed = stub.requests()[3]["messages"].as_array().unwrap().clone();
-    let roles: Vec<&str> = replayed
-        .iter()
-        .map(|m| m["role"].as_str().expect("role"))
-        .collect();
-    for (i, role) in roles.iter().enumerate() {
-        let expected = if i % 2 == 0 { "user" } else { "assistant" };
-        assert_eq!(role, &expected, "roles must alternate, got {roles:?}");
-    }
+    assert_transcript_is_replayable(&replayed);
     // ...and the closing turn says what she was told, not nothing.
     let closing = &replayed[replayed.len() - 2];
     assert_eq!(closing["role"], "assistant");
@@ -571,6 +564,28 @@ fn refusal_reply() -> (StatusCode, Value) {
             "content": [],
             "stop_reason": "refusal",
             "usage": {"input_tokens": 10, "output_tokens": 0},
+        }),
+    )
+}
+
+/// A refusal whose classifier fired MID-STREAM, after the model had already
+/// completed a `tool_use` block: HTTP 200, PARTIAL content, and
+/// `stop_reason: "refusal"`.
+fn partial_refusal_reply() -> (StatusCode, Value) {
+    (
+        StatusCode::OK,
+        json!({
+            "content": [
+                {"type": "text", "text": "Let me look."},
+                {
+                    "type": "tool_use",
+                    "id": "toolu_1",
+                    "name": "search_repo",
+                    "input": {"q": "x"},
+                },
+            ],
+            "stop_reason": "refusal",
+            "usage": {"input_tokens": 10, "output_tokens": 5},
         }),
     )
 }
@@ -628,6 +643,90 @@ async fn a_declined_turn_does_not_poison_the_conversation() {
     }
     assert_eq!(replayed[1]["role"], "assistant");
     assert_eq!(replayed[1]["content"][0]["text"], REFUSAL_MESSAGE);
+}
+
+#[tokio::test]
+async fn a_declined_turn_with_partial_output_does_not_poison_the_conversation() {
+    let stub = spawn_anthropic(vec![
+        partial_refusal_reply(),
+        text_reply("Of course, gladly."),
+    ])
+    .await;
+    let (_, app) = app_with(&stub, AssistantLimits::default());
+    let id = new_session(&app).await;
+
+    let mut last = Value::Null;
+    for text in ["Something odd", "Something ordinary"] {
+        let (status, body) = send(
+            &app,
+            post_auth(
+                &format!("/assistant/sessions/{id}/messages"),
+                json!({"text": text}),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{text}");
+        last = body;
+    }
+    assert_eq!(last_message(&last), "Of course, gladly.");
+
+    // A refusal can arrive mid-stream, AFTER the model has completed a
+    // `tool_use` block. The turn ends there, so nothing ever answers that
+    // call: replayed verbatim the transcript's last assistant message holds a
+    // `tool_use` with no `tool_result` after it, the Messages API answers
+    // that with a 400, and every later message in this conversation fails
+    // until she starts again.
+    let replayed = stub.requests()[1]["messages"].as_array().unwrap().clone();
+    assert_transcript_is_replayable(&replayed);
+    assert_eq!(replayed[1]["role"], "assistant");
+    assert_eq!(replayed[1]["content"][0]["text"], REFUSAL_MESSAGE);
+}
+
+/// Everything the Messages API insists on for a transcript it is asked to
+/// continue: alternating roles, no empty content, and every `tool_use`
+/// answered by a `tool_result` in the message immediately after it.
+fn assert_transcript_is_replayable(messages: &[Value]) {
+    let roles: Vec<&str> = messages
+        .iter()
+        .map(|m| m["role"].as_str().expect("role"))
+        .collect();
+    for (i, role) in roles.iter().enumerate() {
+        let expected = if i % 2 == 0 { "user" } else { "assistant" };
+        assert_eq!(role, &expected, "roles must alternate, got {roles:?}");
+    }
+
+    for (i, message) in messages.iter().enumerate() {
+        let blocks = message["content"].as_array().expect("content is an array");
+        assert!(
+            !blocks.is_empty(),
+            "no replayed message may have empty content: {message}"
+        );
+        let calls: Vec<&str> = blocks
+            .iter()
+            .filter(|b| b["type"] == "tool_use")
+            .map(|b| b["id"].as_str().expect("tool_use id"))
+            .collect();
+        if calls.is_empty() {
+            continue;
+        }
+        let answers: Vec<&str> = messages
+            .get(i + 1)
+            .and_then(|m| m["content"].as_array())
+            .map(|blocks| {
+                blocks
+                    .iter()
+                    .filter(|b| b["type"] == "tool_result")
+                    .filter_map(|b| b["tool_use_id"].as_str())
+                    .collect()
+            })
+            .unwrap_or_default();
+        for call in calls {
+            assert!(
+                answers.contains(&call),
+                "tool_use {call} is never answered: {messages:#?}"
+            );
+        }
+    }
 }
 
 #[tokio::test]
