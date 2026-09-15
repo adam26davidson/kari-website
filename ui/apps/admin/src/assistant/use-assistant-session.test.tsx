@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { HttpError } from "@kari/shared/services/http-error";
 import {
   ENOUGH_FOR_NOW_MESSAGE,
+  RESTORE_FAILED_MESSAGE,
   SEND_FAILED_MESSAGE,
   SESSION_STORAGE_KEY,
   defaultStorage,
@@ -180,12 +181,174 @@ describe("useAssistantSession", () => {
     expect(storage.getItem(SESSION_STORAGE_KEY)).toBeNull();
   });
 
-  it("rests when restoring fails for any other reason", async () => {
+  it("stays usable when the remembered conversation cannot be read", async () => {
     available();
     service.getSession.mockRejectedValue(new HttpError("boom", 500));
-    const { result } = setup(fakeStorage({ [SESSION_STORAGE_KEY]: "old" }));
+    service.createSession.mockResolvedValue({
+      id: "s2",
+      messages: [],
+      turnsRemaining: 40,
+    });
+    service.sendMessage.mockResolvedValue({
+      id: "s2",
+      messages: [{ role: "assistant", text: "Fresh start." }],
+      turnsRemaining: 39,
+    });
+    const storage = fakeStorage({ [SESSION_STORAGE_KEY]: "corrupt" });
+
+    const { result } = setup(storage);
+    act(() => result.current.begin());
+
+    // The API answers 500 — deliberately — for a conversation whose stored
+    // JSON is corrupt, so "resting" here was a one-way door: the id stayed,
+    // every reload repeated the same failure, and the resting state has no
+    // Start again to escape by.
+    await waitFor(() =>
+      expect(result.current.error).toBe(RESTORE_FAILED_MESSAGE),
+    );
+    expect(result.current.phase).toBe("ready");
+    expect(result.current.messages).toEqual([]);
+
+    await act(async () => void (await result.current.send("Hello", {})));
+    expect(result.current.messages).toEqual([
+      { role: "assistant", text: "Fresh start." },
+    ]);
+    // Her first message writes a new id over the unreadable one, so the
+    // problem cannot outlive the conversation it came from.
+    expect(storage.getItem(SESSION_STORAGE_KEY)).toBe("s2");
+  });
+
+  it("asks again when she reopens a resting panel", async () => {
+    service.getStatus.mockRejectedValueOnce(new HttpError("down", 500));
+    service.getStatus.mockResolvedValue({ available: true, canFile: false });
+
+    const { result } = setup();
     act(() => result.current.begin());
     await waitFor(() => expect(result.current.phase).toBe("resting"));
+
+    // One status blip should not need a page reload to recover from: opening
+    // the panel again asks again.
+    act(() => result.current.begin());
+    await waitFor(() => expect(result.current.phase).toBe("ready"));
+  });
+
+  it("drops a reply that lands after she has started again", async () => {
+    available();
+    service.createSession.mockResolvedValue({
+      id: "s1",
+      messages: [],
+      turnsRemaining: 40,
+    });
+    let land: (session: unknown) => void = () => {};
+    service.sendMessage.mockReturnValue(
+      new Promise((resolve) => {
+        land = resolve;
+      }),
+    );
+    const storage = fakeStorage();
+
+    const { result } = setup(storage);
+    act(() => result.current.begin());
+    await waitFor(() => expect(result.current.phase).toBe("ready"));
+
+    let sent: Promise<boolean> | undefined;
+    await act(async () => {
+      sent = result.current.send("Hello", {});
+    });
+    await waitFor(() => expect(result.current.sending).toBe(true));
+
+    act(() => result.current.startOver());
+    expect(result.current.messages).toEqual([]);
+    // She is not made to sit out the rest of a turn she abandoned — an Opus
+    // answer can take most of three minutes.
+    expect(result.current.sending).toBe(false);
+
+    await act(async () => {
+      land({
+        id: "s1",
+        messages: [
+          { role: "user", text: "Hello" },
+          { role: "assistant", text: "Hello to you." },
+        ],
+        turnsRemaining: 39,
+      });
+      await sent;
+    });
+
+    // The reply belonged to the conversation she cleared, so it must not
+    // paint itself back over the empty panel.
+    expect(result.current.messages).toEqual([]);
+    expect(result.current.sending).toBe(false);
+    expect(storage.getItem(SESSION_STORAGE_KEY)).toBeNull();
+    // Nothing to put back in the box either: those words went with it.
+    await expect(sent).resolves.toBe(true);
+  });
+
+  it("does not remember a conversation she abandoned while it was being made", async () => {
+    available();
+    let made: (session: unknown) => void = () => {};
+    service.createSession.mockReturnValue(
+      new Promise((resolve) => {
+        made = resolve;
+      }),
+    );
+    const storage = fakeStorage();
+
+    const { result } = setup(storage);
+    act(() => result.current.begin());
+    await waitFor(() => expect(result.current.phase).toBe("ready"));
+
+    let sent: Promise<boolean> | undefined;
+    await act(async () => {
+      sent = result.current.send("Hello", {});
+    });
+    act(() => result.current.startOver());
+
+    await act(async () => {
+      made({ id: "s1", messages: [], turnsRemaining: 40 });
+      await sent;
+    });
+
+    // The message is never sent, and the id she just cleared is not written
+    // back over the top of the clearing.
+    expect(service.sendMessage).not.toHaveBeenCalled();
+    expect(storage.getItem(SESSION_STORAGE_KEY)).toBeNull();
+    expect(result.current.messages).toEqual([]);
+  });
+
+  it("drops a failure that lands after she has started again", async () => {
+    available();
+    service.createSession.mockResolvedValue({
+      id: "s1",
+      messages: [],
+      turnsRemaining: 40,
+    });
+    let fail: (reason: unknown) => void = () => {};
+    service.sendMessage.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      }),
+    );
+
+    const { result } = setup();
+    act(() => result.current.begin());
+    await waitFor(() => expect(result.current.phase).toBe("ready"));
+
+    let sent: Promise<boolean> | undefined;
+    await act(async () => {
+      sent = result.current.send("Hello", {});
+    });
+    await waitFor(() => expect(result.current.sending).toBe(true));
+
+    act(() => result.current.startOver());
+    await act(async () => {
+      fail(new HttpError("boom", 503));
+      await sent;
+    });
+
+    // No error about a conversation she is no longer having.
+    expect(result.current.error).toBeNull();
+    expect(result.current.messages).toEqual([]);
   });
 
   it("keeps nothing and says so when a send fails", async () => {

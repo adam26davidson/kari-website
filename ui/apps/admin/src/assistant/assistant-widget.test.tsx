@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { HttpError } from "@kari/shared/services/http-error";
@@ -343,6 +343,26 @@ describe("AssistantWidget", () => {
     expect(storage.getItem(SESSION_STORAGE_KEY)).toBeNull();
   });
 
+  it("still offers a conversation when the remembered one cannot be read", async () => {
+    available();
+    service.getSession.mockRejectedValue(new HttpError("corrupt", 500));
+
+    renderWidget({
+      storage: fakeStorage({ [SESSION_STORAGE_KEY]: "corrupt" }),
+    });
+    await openPanel();
+
+    // Not the resting dead end: the helper answered, so the box stays and
+    // she can start a new conversation right here.
+    expect(
+      await screen.findByText(/Couldn't bring your last conversation back/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/resting right now/)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: "Your message" }),
+    ).toBeInTheDocument();
+  });
+
   it("lets her start the conversation again", async () => {
     available();
     service.createSession.mockResolvedValue({
@@ -373,6 +393,57 @@ describe("AssistantWidget", () => {
 
     expect(screen.queryByText("Hello to you.")).not.toBeInTheDocument();
     expect(screen.getByText(/^Hi Kari/)).toBeInTheDocument();
+  });
+
+  it("lets her start again while a reply is still coming", async () => {
+    available();
+    service.createSession.mockResolvedValue({
+      id: "s1",
+      messages: [],
+      turnsRemaining: 40,
+    });
+    let land: (session: unknown) => void = () => {};
+    service.sendMessage.mockReturnValue(
+      new Promise((resolve) => {
+        land = resolve;
+      }),
+    );
+
+    renderWidget();
+    await openPanel();
+    await screen.findByText(/^Hi Kari/);
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Your message" }),
+      "Why is the photo sideways",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("Thinking…");
+
+    // The button is right there through the whole wait, and an Opus turn can
+    // take most of three minutes.
+    await userEvent.click(screen.getByRole("button", { name: "Start again" }));
+    expect(await screen.findByText(/^Hi Kari/)).toBeInTheDocument();
+
+    await act(async () => {
+      land({
+        id: "s1",
+        messages: [
+          { role: "user", text: "Why is the photo sideways" },
+          { role: "assistant", text: "It is the orientation tag." },
+        ],
+        turnsRemaining: 39,
+      });
+    });
+
+    // The cleared panel stays cleared, and her old words are not pushed back
+    // into the box as if the send had failed.
+    expect(
+      screen.queryByText("It is the orientation tag."),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Your message" })).toHaveValue(
+      "",
+    );
   });
 
   it("offers starting again only once there is something to clear", async () => {

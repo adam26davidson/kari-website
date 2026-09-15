@@ -116,6 +116,11 @@ export function AssistantWidget({
         <h2 className="font-serif text-lg italic text-foreground">Helper</h2>
         <div className="flex items-center gap-2">
           {messages.length > 0 && (
+            // Deliberately usable while a reply is still coming: a long
+            // answer can take most of three minutes, and "wait it out" is no
+            // answer to "I did not mean to ask that". The hook ties each send
+            // to the conversation it began in, so the abandoned reply lands
+            // nowhere instead of restoring the transcript she just cleared.
             <Button
               variant="secondary"
               size="sm"
