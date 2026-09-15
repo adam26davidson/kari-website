@@ -28,7 +28,11 @@ const uiRoot = fileURLToPath(new URL("../..", import.meta.url));
 //   icons the shell's nav names, and cva/clsx/tailwind-merge. That weight
 //   is a maintainer's, downloaded once behind a login, and it replaces
 //   hand-written overlays that had no focus management at all. Tailwind's
-//   own output is CSS and does not count here.
+//   own output is CSS and does not count here. #214's helper panel then
+//   took it to 808.8 kB: the widget, its session hook and one more lucide
+//   glyph. It is deliberately NOT lazy — it is a button in the corner of
+//   every admin screen, so a separate chunk would be fetched on every page
+//   anyway, for a round trip and no saving.
 // - "blog-post-editor" is the lazy chunk holding the editor, tiptap,
 //   prosemirror and their CSS (499 kB), fetched only when a post is
 //   opened. It was 445 kB until #427 added the link bubble menu, which
@@ -93,6 +97,6 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    bundleBudget({ index: 820, "blog-post-editor": 525 }),
+    bundleBudget({ index: 835, "blog-post-editor": 525 }),
   ],
 });

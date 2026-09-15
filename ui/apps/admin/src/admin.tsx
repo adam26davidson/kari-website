@@ -21,6 +21,8 @@ import { AdminImageGcPage } from "./admin-image-gc-page/admin-image-gc-page";
 import { AdminBackgroundPage } from "./admin-background-page/admin-background-page";
 import { AdminButton } from "./components/admin-button/admin-button";
 import { AdminUiProvider } from "./admin-ui-provider";
+import { AssistantProvider } from "./assistant/assistant-provider";
+import { AssistantWidget } from "./assistant/assistant-widget";
 import { AppShell } from "./components/app-shell/app-shell";
 import type { AdminPage } from "./components/app-shell/admin-page";
 import { Wordmark } from "./components/app-shell/wordmark";
@@ -90,28 +92,37 @@ export function Admin() {
   return (
     <AppShell pages={pages}>
       <AdminUiProvider>
-        <Routes>
-          <Route path="home" element={<HomePageEditor />} />
-          <Route path="haiku/:id?" element={<AdminHaikuPage />} />
-          <Route path="haiga/:id?" element={<AdminHaigaPage />} />
-          <Route path="photography/:id?" element={<AdminPhotographyPage />} />
-          <Route path="other-works/:id?" element={<AdminOtherWorksPage />} />
-          <Route path="background" element={<AdminBackgroundPage />} />
-          <Route path="image-cleanup" element={<AdminImageGcPage />} />
-          {showTestStatus && (
-            <Route
-              path="whats-on-test"
-              element={
-                // Local boundary: keep the shell in place while the page's
-                // lazy chunk loads.
-                <Suspense fallback={<div className="loading">Loading...</div>}>
-                  <AdminWhatsOnTestPage />
-                </Suspense>
-              }
-            />
-          )}
-          <Route path="*" element={<Navigate to="/home" replace />} />
-        </Routes>
+        {/* The helper sits BESIDE the routes, not inside one, so the
+            conversation survives every client-side navigation — which is
+            what lets it walk her through something spanning several pages
+            (#214). Inside AdminUiProvider so it can use the shared chrome. */}
+        <AssistantProvider>
+          <Routes>
+            <Route path="home" element={<HomePageEditor />} />
+            <Route path="haiku/:id?" element={<AdminHaikuPage />} />
+            <Route path="haiga/:id?" element={<AdminHaigaPage />} />
+            <Route path="photography/:id?" element={<AdminPhotographyPage />} />
+            <Route path="other-works/:id?" element={<AdminOtherWorksPage />} />
+            <Route path="background" element={<AdminBackgroundPage />} />
+            <Route path="image-cleanup" element={<AdminImageGcPage />} />
+            {showTestStatus && (
+              <Route
+                path="whats-on-test"
+                element={
+                  // Local boundary: keep the shell in place while the page's
+                  // lazy chunk loads.
+                  <Suspense
+                    fallback={<div className="loading">Loading...</div>}
+                  >
+                    <AdminWhatsOnTestPage />
+                  </Suspense>
+                }
+              />
+            )}
+            <Route path="*" element={<Navigate to="/home" replace />} />
+          </Routes>
+          <AssistantWidget />
+        </AssistantProvider>
       </AdminUiProvider>
     </AppShell>
   );
