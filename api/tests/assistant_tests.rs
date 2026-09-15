@@ -508,6 +508,60 @@ async fn a_model_that_only_asks_for_tools_gives_up_kindly() {
     assert_eq!(stub.call_count(), 3, "the iteration cap must hold");
 }
 
+#[tokio::test]
+async fn an_exhausted_tool_loop_does_not_poison_the_conversation() {
+    let _trace = capture_tracing();
+    // Three tool requests use the whole cap, so the first turn ends on
+    // unanswered tool_results; the fourth reply serves her NEXT message.
+    let stub = spawn_anthropic(vec![
+        tool_reply("search_repo"),
+        tool_reply("search_repo"),
+        tool_reply("search_repo"),
+        text_reply("Of course, gladly."),
+    ])
+    .await;
+    let limits = AssistantLimits {
+        max_tool_iterations_per_turn: 3,
+        ..AssistantLimits::default()
+    };
+    let (_, app) = app_with(&stub, limits);
+    let id = new_session(&app).await;
+
+    let mut last = Value::Null;
+    for text in ["Anything", "Something ordinary"] {
+        let (status, body) = send(
+            &app,
+            post_auth(
+                &format!("/assistant/sessions/{id}/messages"),
+                json!({"text": text}),
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{text}");
+        last = body;
+    }
+    assert_eq!(last_message(&last), "Of course, gladly.");
+
+    // The exhausted turn was closed off with the words she was shown. Left
+    // ending on its tool_results, the transcript would put two user-role
+    // messages in a row, and the Messages API answers that with a 400 — so
+    // every later message in this conversation would fail until she started
+    // again.
+    let replayed = stub.requests()[3]["messages"].as_array().unwrap().clone();
+    let roles: Vec<&str> = replayed
+        .iter()
+        .map(|m| m["role"].as_str().expect("role"))
+        .collect();
+    for (i, role) in roles.iter().enumerate() {
+        let expected = if i % 2 == 0 { "user" } else { "assistant" };
+        assert_eq!(role, &expected, "roles must alternate, got {roles:?}");
+    }
+    // ...and the closing turn says what she was told, not nothing.
+    let closing = &replayed[replayed.len() - 2];
+    assert_eq!(closing["role"], "assistant");
+    assert_eq!(closing["content"][0]["text"], TANGLED_MESSAGE);
+}
+
 /// A refusal whose classifier fired before any output: HTTP 200, an EMPTY
 /// content array, and `stop_reason: "refusal"`.
 fn refusal_reply() -> (StatusCode, Value) {

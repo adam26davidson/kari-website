@@ -426,6 +426,14 @@ on the page she is editing, and nothing is public until she saves."
     )
 }
 
+/// The content array for an assistant turn that says exactly `text`.
+///
+/// Used wherever the transcript has to record the words she was shown rather
+/// than what the model sent, so the stored conversation stays replayable.
+fn spoken(text: &str) -> Value {
+    json!([{"type": "text", "text": text}])
+}
+
 /// Add one message to the conversation and return the updated session.
 ///
 /// This is the whole turn: ceilings, the tool loop, and the write-back.
@@ -504,10 +512,7 @@ pub async fn send_message(
             .push(ApiMessage::assistant(if response.has_content() {
                 response.content.clone()
             } else {
-                json!([{
-                    "type": "text",
-                    "text": ending.as_deref().unwrap_or(TANGLED_MESSAGE),
-                }])
+                spoken(ending.as_deref().unwrap_or(TANGLED_MESSAGE))
             }));
 
         if let Some(text) = ending {
@@ -533,12 +538,22 @@ pub async fn send_message(
         session.api_messages.push(ApiMessage::user(json!(results)));
     }
 
-    session
-        .display
-        .push(DisplayMessage::assistant(reply.unwrap_or_else(|| {
-            tracing::warn!("assistant turn exhausted its tool iterations");
-            TANGLED_MESSAGE.to_string()
-        })));
+    // A turn that used up every iteration stops mid-exchange: the last thing
+    // recorded is the user-role `tool_result`s nobody answered. Left that way
+    // the next message would follow one user turn with another, the Messages
+    // API rejects that with a 400, and this conversation would be broken for
+    // good — the same permanent poisoning an empty `content` would cause
+    // above. Closing the turn with the words she is shown keeps the stored
+    // transcript replayable and honest about where it stopped.
+    let reply = reply.unwrap_or_else(|| {
+        tracing::warn!("assistant turn exhausted its tool iterations");
+        session
+            .api_messages
+            .push(ApiMessage::assistant(spoken(TANGLED_MESSAGE)));
+        TANGLED_MESSAGE.to_string()
+    });
+
+    session.display.push(DisplayMessage::assistant(reply));
     session.turns += 1;
     save_session(store, &session).await?;
     Ok(session)
