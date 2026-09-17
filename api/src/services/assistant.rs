@@ -12,6 +12,7 @@
 //! simply unconfigured, every route answers 503, and the admin shows a calm
 //! "resting" panel — so this ships and deploys long before any secret exists.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -196,6 +197,8 @@ pub struct AssistantState {
     /// calls makes the spend rate predictable.
     gate: Semaphore,
     daily: Mutex<DailyTurns>,
+    /// One write lock per conversation — see `session_lock`.
+    session_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
 }
 
 impl AssistantState {
@@ -217,6 +220,7 @@ impl AssistantState {
             limits,
             gate: Semaphore::new(1),
             daily: Mutex::new(DailyTurns::default()),
+            session_locks: Mutex::new(HashMap::new()),
         }
     }
 
@@ -265,6 +269,34 @@ impl AssistantState {
         self.github
             .as_ref()
             .ok_or(AppError::Unavailable(FILING_OFF_MESSAGE))
+    }
+
+    /// The write lock for one conversation. Hold it across the whole
+    /// load → mutate → save, not just the save.
+    ///
+    /// The store has no compare-and-set, so every write is last-write-wins.
+    /// What used to make that safe was that a conversation had one writer.
+    /// It has two now — a turn (`send_message`) and her decision about the
+    /// draft on screen (`decide_on_draft`) — and a turn holds its loaded
+    /// copy for as long as the model takes to answer, which is tens of
+    /// seconds with the card's buttons live in front of her. Without this,
+    /// filing mid-turn created the GitHub issue and was then erased by the
+    /// turn's save: the card came back, pressing it again filed a SECOND
+    /// issue, and the model was never told about the first.
+    ///
+    /// In-process is the whole story: there is exactly one API process per
+    /// environment, each with its own bucket (`docs/test-deployment-setup.md`),
+    /// so serialising here serialises every writer there is.
+    async fn session_lock(&self, id: &str) -> Arc<Mutex<()>> {
+        let mut locks = self.session_locks.lock().await;
+        // Forget conversations nobody is working on, so a long-lived
+        // process does not keep one mutex per conversation it ever served.
+        // An entry in use is referenced by its holder as well as by this
+        // map, so a strong count of one means idle — and a count of one
+        // cannot be observed while someone holds it, since holding means
+        // holding the `Arc` this returns.
+        locks.retain(|_, lock| Arc::strong_count(lock) > 1);
+        locks.entry(id.to_string()).or_default().clone()
     }
 
     /// Count one turn against today's allowance, resetting when the date
@@ -489,7 +521,9 @@ pub struct AssistantSession {
 }
 
 /// Create and persist an empty session. The id is generated HERE — a
-/// client-supplied one would be a client-supplied S3 key.
+/// client-supplied one would be a client-supplied S3 key, and it is also
+/// why this needs no write lock: nothing else can name this conversation
+/// until the id is in the reply.
 pub async fn create_session(store: &dyn ObjectStore) -> Result<AssistantSession, AppError> {
     let session = AssistantSession {
         id: Uuid::new_v4().to_string(),
@@ -513,9 +547,11 @@ pub async fn load_session(store: &dyn ObjectStore, id: &str) -> Result<Assistant
 
 /// Write the session back.
 ///
-/// Last write wins. S3 has no read-modify-write, and that is fine here:
-/// there is one admin, and the widget will not send a second message while
-/// the first is in flight. Same pragmatism as the rendition gate's comment.
+/// Last write wins. S3 has no read-modify-write, so what keeps that safe is
+/// the caller: every writer holds that conversation's write lock
+/// (`AssistantState::session_lock`) across its whole load → mutate → save,
+/// which is what makes "last" mean "the one that read the other's work".
+/// Do not call this from a path that has not taken the lock.
 pub async fn save_session(
     store: &dyn ObjectStore,
     session: &AssistantSession,
@@ -706,6 +742,12 @@ pub async fn send_message(
     let config = state.config()?;
     let limits = state.limits;
 
+    // Held for the whole turn, model call included: this is the long
+    // writer, and a decision she makes while it runs must not be undone by
+    // its save. See `AssistantState::session_lock`.
+    let lock = state.session_lock(session_id).await;
+    let _write = lock.lock().await;
+
     let mut session = load_session(store, session_id).await?;
     if session.turns >= limits.max_turns_per_session
         || session.tokens_used >= limits.max_session_tokens
@@ -885,6 +927,15 @@ pub async fn decide_on_draft(
         DraftDecision::File => Some(state.github()?),
         DraftDecision::Dismiss => None,
     };
+
+    // Taken before the session is read, so this either waits out a turn
+    // already in flight or makes that turn wait — never both at once on
+    // the same conversation. Waiting is the right answer rather than a
+    // "try again": she pressed a button and the filing must happen, and
+    // reading after the turn means filing whatever the card actually
+    // shows once it settles.
+    let lock = state.session_lock(session_id).await;
+    let _write = lock.lock().await;
 
     let mut session = load_session(store, session_id).await?;
     // Taken, not borrowed: whichever way this goes the card leaves her

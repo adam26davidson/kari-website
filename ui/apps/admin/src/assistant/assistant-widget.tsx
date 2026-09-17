@@ -221,6 +221,7 @@ export function AssistantWidget({
             draft={draft}
             canFile={canFile}
             deciding={deciding}
+            sending={sending}
             error={draftError}
             unavailableMessage={FILING_OFF_MESSAGE}
             onFile={() => void fileIssue()}

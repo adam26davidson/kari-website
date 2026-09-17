@@ -17,8 +17,8 @@ mod common;
 use axum::http::StatusCode;
 use common::assistant::{
     app_from, app_from_store, configured, get_auth, github_config, last_message, new_session,
-    post_auth, say, send, spawn_stub, text_reply, tool_call_reply, tool_reply, Stub,
-    ABSENT_SESSION,
+    post_auth, say, send, spawn_stub, spawn_stub_holding, text_reply, tool_call_reply, tool_reply,
+    Stub, ABSENT_SESSION,
 };
 use common::capture_tracing;
 use common::store::InMemoryStore;
@@ -604,5 +604,148 @@ async fn a_very_long_conversation_still_fits_in_an_issue() {
     assert!(
         filed_body.contains("**Helper:** Have a look."),
         "kept the tail"
+    );
+}
+
+// ------------------------------------------------- two writers, one session
+
+/// The transcript's lines, in order — what she can actually see.
+fn texts(body: &Value) -> Vec<String> {
+    body["messages"]
+        .as_array()
+        .expect("messages")
+        .iter()
+        .map(|m| m["text"].as_str().unwrap_or_default().to_string())
+        .collect()
+}
+
+#[tokio::test]
+async fn filing_during_a_turn_is_not_undone_when_the_turn_saves() {
+    // The reachable race, and the one that cost the most: an Opus turn
+    // takes tens of seconds and the card's buttons are live the whole time.
+    // She types a follow-up, presses Send, then presses "File this issue"
+    // while the reply is still coming. Both paths are load → mutate → save
+    // against a store with no compare-and-set, so the turn's save used to
+    // land last and restore the draft it had loaded — putting the card back
+    // over an issue that had already been created, ready to file a second.
+    let anthropic = spawn_stub_holding(
+        vec![
+            draft_reply(),
+            text_reply("It's there for you to look over."),
+            // Her follow-up. Held, so the turn is still running when she
+            // presses the button.
+            text_reply("Alright."),
+        ],
+        2,
+    )
+    .await;
+    let github = spawn_stub(vec![created_issue(41)]).await;
+    let (_store, app) = app_that_can_file(&anthropic, &github);
+    let id = session_with_a_draft(&app).await;
+
+    let turn = tokio::spawn({
+        let (app, id) = (app.clone(), id.clone());
+        async move { say(&app, &id, "Also the fonts look odd").await }
+    });
+    // The turn is now inside its model call: it has loaded the session and
+    // will save it when the call returns. That is the window under test.
+    anthropic.wait_for_calls(3).await;
+
+    let filing = tokio::spawn({
+        let (app, id) = (app.clone(), id.clone());
+        async move { decide(&app, &id, "file").await }
+    });
+    // Let the filing get as far as it can before the turn finishes, so the
+    // ordering under test is the damaging one rather than a tidy sequence.
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    anthropic.release();
+
+    let (turn_status, turn_body) = turn.await.expect("the turn");
+    let (filed_status, filed_body) = filing.await.expect("the filing");
+    assert_eq!(turn_status, StatusCode::OK, "{turn_body}");
+    assert_eq!(filed_status, StatusCode::OK, "{filed_body}");
+
+    // One issue, and one only.
+    assert_eq!(github.call_count(), 1, "filed {:?}", github.paths());
+
+    // The stored conversation holds BOTH writers' work: the card gone, the
+    // filed line kept, and her follow-up exchange still there.
+    let (status, body) = send(&app, get_auth(&format!("/assistant/sessions/{id}"))).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["draft"], Value::Null, "the card came back: {body}");
+    let lines = texts(&body);
+    assert!(
+        lines.iter().any(|t| t == FILED_MESSAGE),
+        "the filing was erased: {lines:?}"
+    );
+    assert!(
+        lines.iter().any(|t| t == "Also the fonts look odd"),
+        "her follow-up was erased: {lines:?}"
+    );
+    assert!(
+        lines.iter().any(|t| t == "Alright."),
+        "the reply was erased: {lines:?}"
+    );
+
+    // And because the draft really is gone, pressing the button again
+    // cannot make a duplicate issue.
+    let (again, again_body) = decide(&app, &id, "file").await;
+    assert_eq!(again, StatusCode::BAD_REQUEST, "{again_body}");
+    assert_eq!(again_body, json!({"error": NOTHING_TO_FILE_MESSAGE}));
+    assert_eq!(github.call_count(), 1);
+}
+
+#[tokio::test]
+async fn a_turn_sent_during_a_filing_keeps_both() {
+    // The other ordering: she presses the button, then types while GitHub
+    // is still answering. Unserialised, the turn loaded the conversation
+    // without the filing and saved that copy back over it — losing the
+    // filed line and the note the model is owed.
+    let anthropic = spawn_stub(vec![
+        draft_reply(),
+        text_reply("It's there for you to look over."),
+        text_reply("Alright."),
+    ])
+    .await;
+    let github = spawn_stub_holding(vec![created_issue(42)], 0).await;
+    let (_store, app) = app_that_can_file(&anthropic, &github);
+    let id = session_with_a_draft(&app).await;
+
+    let filing = tokio::spawn({
+        let (app, id) = (app.clone(), id.clone());
+        async move { decide(&app, &id, "file").await }
+    });
+    github.wait_for_calls(1).await;
+
+    let turn = tokio::spawn({
+        let (app, id) = (app.clone(), id.clone());
+        async move { say(&app, &id, "Also the fonts look odd").await }
+    });
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    github.release();
+
+    let (filed_status, filed_body) = filing.await.expect("the filing");
+    let (turn_status, turn_body) = turn.await.expect("the turn");
+    assert_eq!(filed_status, StatusCode::OK, "{filed_body}");
+    assert_eq!(turn_status, StatusCode::OK, "{turn_body}");
+
+    let (status, body) = send(&app, get_auth(&format!("/assistant/sessions/{id}"))).await;
+    assert_eq!(status, StatusCode::OK);
+    let lines = texts(&body);
+    assert!(
+        lines.iter().any(|t| t == FILED_MESSAGE),
+        "the filing was erased: {lines:?}"
+    );
+    assert!(
+        lines.iter().any(|t| t == "Also the fonts look odd"),
+        "her message was erased: {lines:?}"
+    );
+    // The model is told what she decided, once, on the message that
+    // followed the filing — not swallowed by the turn that raced it.
+    let sent = anthropic.requests();
+    let last = sent.last().expect("a request").to_string();
+    assert!(
+        last.contains("She filed the problem you drafted as issue #42"),
+        "the model was never told: {last}"
     );
 }

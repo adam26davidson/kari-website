@@ -391,11 +391,16 @@ export function useAssistantSession(
    * stays a mirror of the server — the filed confirmation and its link
    * arrive as an ordinary line of the transcript rather than as something
    * this hook has to assemble.
+   *
+   * Nothing is decided while a message is in flight. The card's buttons are
+   * already disabled then (`AssistantDraftCard`); this is the same rule
+   * where it cannot be got round by a click that beat the re-render, and it
+   * is what keeps one conversation to one question at a time.
    */
   const decide = useCallback(
     async (action: "file" | "dismiss"): Promise<void> => {
       const id = sessionId.current;
-      if (!id || deciding) return;
+      if (!id || deciding || sending) return;
       const mine = turn.current;
       setDeciding(true);
       setDraftError(null);
@@ -416,7 +421,7 @@ export function useAssistantSession(
         if (turn.current === mine) setDeciding(false);
       }
     },
-    [deciding, getToken],
+    [deciding, sending, getToken],
   );
 
   const fileIssue = useCallback(() => decide("file"), [decide]);

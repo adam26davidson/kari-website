@@ -17,6 +17,7 @@ export function AssistantDraftCard({
   draft,
   canFile,
   deciding,
+  sending,
   error,
   unavailableMessage,
   onFile,
@@ -26,6 +27,16 @@ export function AssistantDraftCard({
   canFile: boolean;
   /** True while her decision is in flight. */
   deciding: boolean;
+  /**
+   * True while a message is in flight — and a reason to wait, not just to
+   * look busy. A reply can take most of three minutes, and the card sits
+   * there the whole time; deciding mid-reply means the server is answering
+   * two questions about one conversation at once. It copes now (the API
+   * serialises them), but there is nothing here for her to gain by it: the
+   * reply may well rewrite this very card. So the buttons rest until it
+   * lands, and the answer she gives is an answer to what she can see.
+   */
+  sending: boolean;
   /** A plain-language problem to show, if the last attempt failed. */
   error: string | null;
   /** What to say instead of the button when filing is switched off. */
@@ -33,6 +44,15 @@ export function AssistantDraftCard({
   onFile: () => void;
   onDismiss: () => void;
 }) {
+  const busy = deciding || sending;
+  // A resting button here has to stay a button. The site-wide disabled fill
+  // is `bg-muted`, which is this card's OWN fill — so on any other surface
+  // it reads as "quiet", and on this one the control would simply disappear
+  // into the card and reappear when the reply landed. `bg-card` is the fill
+  // the secondary already wears while it is live, so the shape survives at
+  // a contrast that is already on screen, and the state still reads: the
+  // primary gives up its green, both give up their dark text.
+  const resting = "disabled:bg-card";
   return (
     <div
       // `.admin-assistant-draft` is the e2e hook.
@@ -66,7 +86,12 @@ export function AssistantDraftCard({
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {canFile && (
-          <Button size="sm" disabled={deciding} onClick={onFile}>
+          <Button
+            size="sm"
+            className={resting}
+            disabled={busy}
+            onClick={onFile}
+          >
             File this issue
           </Button>
         )}
@@ -75,7 +100,8 @@ export function AssistantDraftCard({
           // do — so it stops being the quiet option and becomes the one.
           variant={canFile ? "secondary" : "primary"}
           size="sm"
-          disabled={deciding}
+          className={resting}
+          disabled={busy}
           onClick={onDismiss}
         >
           Not now

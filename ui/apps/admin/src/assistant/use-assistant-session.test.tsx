@@ -695,6 +695,56 @@ describe("useAssistantSession", () => {
     expect(result.current.deciding).toBe(false);
   });
 
+  it("decides nothing while a message is still in flight", async () => {
+    // One conversation, one question at a time. A reply takes tens of
+    // seconds with the card in front of her the whole time, and a decision
+    // taken mid-reply asks the server about the same conversation twice —
+    // which is how filing once used to come back as filing twice. The
+    // card's buttons are disabled then; this is the same rule where a
+    // click that beat the re-render cannot get round it.
+    const { result } = await withADraft();
+    let reply: (session: unknown) => void = () => {};
+    service.sendMessage.mockReturnValue(
+      new Promise((resolve) => {
+        reply = resolve;
+      }),
+    );
+
+    let sending: Promise<boolean> | undefined;
+    await act(async () => {
+      sending = result.current.send("And the fonts look odd", {});
+    });
+    expect(result.current.sending).toBe(true);
+
+    await act(async () => await result.current.fileIssue());
+    await act(async () => await result.current.dismissDraft());
+    expect(service.fileIssue).not.toHaveBeenCalled();
+    expect(service.dismissDraft).not.toHaveBeenCalled();
+    // The card is untouched — it is waiting, not gone.
+    expect(result.current.draft).toEqual(DRAFT);
+    expect(result.current.deciding).toBe(false);
+
+    // Once the reply lands, her decision goes through as usual.
+    service.fileIssue.mockResolvedValue({
+      id: "s1",
+      messages: [{ role: "assistant", text: "Filed." }],
+      turnsRemaining: 38,
+      draft: null,
+    });
+    await act(async () => {
+      reply({
+        id: "s1",
+        messages: [{ role: "assistant", text: "Alright." }],
+        turnsRemaining: 38,
+        draft: DRAFT,
+      });
+      await sending;
+    });
+    await act(async () => await result.current.fileIssue());
+    expect(service.fileIssue).toHaveBeenCalledWith("s1", getToken);
+    expect(result.current.draft).toBeNull();
+  });
+
   it("works when there is no storage at all", async () => {
     available();
     const { result } = setup(null);

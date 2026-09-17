@@ -53,6 +53,8 @@ pub struct SeenRequest {
 pub struct Stub {
     seen: Arc<Mutex<Vec<SeenRequest>>>,
     calls: Arc<AtomicUsize>,
+    /// Permits the held replies wait on — one per `release()`.
+    release: Arc<tokio::sync::Semaphore>,
     pub base_url: String,
 }
 
@@ -64,15 +66,28 @@ pub struct Stub {
 /// for Anthropic and for GitHub, and a test can assert WHICH path the code
 /// under test chose — which is half of what these tests are checking.
 pub async fn spawn_stub(replies: Vec<(StatusCode, Value)>) -> Stub {
+    spawn_stub_holding(replies, usize::MAX).await
+}
+
+/// `spawn_stub`, but the reply to call `hold_from` and every call after it
+/// waits until the test calls `release()`.
+///
+/// This is how a test gets a request to sit still mid-flight — the window
+/// in which the code under test has loaded a conversation but not yet saved
+/// it, which is exactly when a second writer can race it.
+pub async fn spawn_stub_holding(replies: Vec<(StatusCode, Value)>, hold_from: usize) -> Stub {
     let seen = Arc::new(Mutex::new(Vec::new()));
     let calls = Arc::new(AtomicUsize::new(0));
+    let release = Arc::new(tokio::sync::Semaphore::new(0));
     let replies = Arc::new(replies);
 
     let handler_seen = seen.clone();
     let handler_calls = calls.clone();
+    let handler_release = release.clone();
     let app = Router::new().fallback(move |request: Request<Body>| {
         let seen = handler_seen.clone();
         let calls = handler_calls.clone();
+        let release = handler_release.clone();
         let replies = replies.clone();
         async move {
             let path = request.uri().path().to_string();
@@ -99,6 +114,11 @@ pub async fn spawn_stub(replies: Vec<(StatusCode, Value)>) -> Stub {
                 headers,
             });
             let n = calls.fetch_add(1, Ordering::SeqCst);
+            // The count is bumped BEFORE the wait, so a test can poll it to
+            // learn that the held request has arrived.
+            if n >= hold_from {
+                release.acquire().await.expect("stub release").forget();
+            }
             let (status, reply) = replies[n.min(replies.len() - 1)].clone();
             (status, Json(reply))
         }
@@ -115,6 +135,7 @@ pub async fn spawn_stub(replies: Vec<(StatusCode, Value)>) -> Stub {
     Stub {
         seen,
         calls,
+        release,
         base_url: format!("http://{addr}"),
     }
 }
@@ -151,6 +172,23 @@ impl Stub {
 
     pub fn call_count(&self) -> usize {
         self.calls.load(Ordering::SeqCst)
+    }
+
+    /// Let one held reply through.
+    pub fn release(&self) {
+        self.release.add_permits(1);
+    }
+
+    /// Wait until the stub has received `n` requests, so a test can act on
+    /// "the turn is now mid-call" rather than on a guessed delay.
+    pub async fn wait_for_calls(&self, n: usize) {
+        for _ in 0..2_000 {
+            if self.call_count() >= n {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+        }
+        panic!("stub only saw {} of {n} calls", self.call_count());
     }
 }
 

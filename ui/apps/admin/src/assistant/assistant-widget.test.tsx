@@ -571,6 +571,61 @@ describe("AssistantWidget", () => {
     ).toBeEnabled();
   });
 
+  it("rests the card's buttons while a reply is on its way", async () => {
+    // A reply can take most of three minutes, and the card sits there the
+    // whole time. Deciding mid-reply asked the server two things about one
+    // conversation at once — which is how filing once came back as filing
+    // twice — and the answer she gave could be an answer to a card the
+    // reply was about to rewrite. So the buttons wait for it.
+    filing();
+    service.getSession.mockResolvedValue({
+      id: "old",
+      messages: [{ role: "assistant", text: "Have a look at this." }],
+      turnsRemaining: 30,
+      draft: DRAFT,
+    });
+    let reply: (session: unknown) => void = () => {};
+    service.sendMessage.mockReturnValue(
+      new Promise((resolve) => {
+        reply = resolve;
+      }),
+    );
+
+    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    await openPanel();
+    await screen.findByText(DRAFT.title);
+
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Your message" }),
+      "And the fonts look odd",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("Thinking…");
+
+    // The card is still there — waiting, not gone — and cannot be answered.
+    expect(screen.getByText(DRAFT.title)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "File this issue" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Not now" })).toBeDisabled();
+
+    // Once the reply lands they come back.
+    await act(async () => {
+      reply({
+        id: "old",
+        messages: [{ role: "assistant", text: "Alright." }],
+        turnsRemaining: 29,
+        draft: DRAFT,
+      });
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "File this issue" }),
+      ).toBeEnabled(),
+    );
+    expect(service.fileIssue).not.toHaveBeenCalled();
+  });
+
   it("offers only to let the card go where filing is switched off", async () => {
     // A host with an API key and no GitHub token, holding a draft written
     // before the token went away.
