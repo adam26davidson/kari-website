@@ -37,19 +37,16 @@ fn draft_reply() -> (StatusCode, Value) {
             "kind": "bug",
             "title": "Photographs come out sideways",
             "summary": "Your upright photographs are showing on their side \
-once they are uploaded.",
+        once they are uploaded.",
             "body": "Kari uploads a portrait photograph from her phone and \
-it appears rotated in the gallery.\n\nExpected: the photograph keeps the \
-orientation it had.",
+        it appears rotated in the gallery.\n\nExpected: the photograph keeps the \
+        orientation it had.",
         }),
     )
 }
 
 /// An app whose helper can both talk and file, pointed at the two stubs.
-fn app_that_can_file(
-    anthropic: &Stub,
-    github: &Stub,
-) -> (Arc<InMemoryStore>, axum::Router) {
+fn app_that_can_file(anthropic: &Stub, github: &Stub) -> (Arc<InMemoryStore>, axum::Router) {
     app_from(
         configured(&anthropic.base_url, AssistantLimits::default())
             .with_github(Some(github_config(&github.base_url))),
@@ -115,6 +112,15 @@ async fn the_tool_is_offered_only_to_a_helper_that_can_file() {
     // Enough of a schema for the model to fill in correctly.
     let required = tools[0]["input_schema"]["required"].clone();
     assert_eq!(required, json!(["kind", "title", "summary", "body"]));
+    // The description is what stops the model believing the tool files
+    // anything — and it is written as a continued string literal, where a
+    // rustfmt reindent would show up as doubled spaces mid-sentence.
+    let description = tools[0]["description"].as_str().expect("a description");
+    assert!(
+        description.contains("does NOT file anything"),
+        "{description}"
+    );
+    assert!(!description.contains("  "), "reindented: {description}");
 
     // A host with an API key and no GitHub token declares NO tools: a
     // helper that cannot file must not be able to promise a draft.
@@ -154,7 +160,7 @@ async fn a_drafted_issue_waits_on_her_and_nothing_reaches_github() {
             "kind": "bug",
             "title": "Photographs come out sideways",
             "summary": "Your upright photographs are showing on their side \
-once they are uploaded.",
+        once they are uploaded.",
         })
     );
     assert_eq!(
@@ -244,7 +250,11 @@ async fn an_unknown_tool_is_still_refused() {
     let _trace = capture_tracing();
     // Reading the repo is a later slice. A call for it must be answered, not
     // dropped — an unanswered `tool_use` breaks the next request.
-    let anthropic = spawn_stub(vec![tool_reply("search_repo"), text_reply("I can't look yet.")]).await;
+    let anthropic = spawn_stub(vec![
+        tool_reply("search_repo"),
+        text_reply("I can't look yet."),
+    ])
+    .await;
     let github = spawn_stub(vec![created_issue(1)]).await;
     let (_, app) = app_that_can_file(&anthropic, &github);
 
@@ -306,7 +316,10 @@ async fn filing_sends_the_draft_the_transcript_and_the_context_to_github() {
 
     let filed_body = filed["body"].as_str().expect("an issue body");
     // What the model wrote, for whoever picks it up.
-    assert!(filed_body.contains("appears rotated in the gallery"), "{filed_body}");
+    assert!(
+        filed_body.contains("appears rotated in the gallery"),
+        "{filed_body}"
+    );
     // The sentence she actually approved on screen.
     assert!(filed_body.contains("showing on their side"), "{filed_body}");
     // Where she was, so the issue is not a mystery.
@@ -319,7 +332,10 @@ async fn filing_sends_the_draft_the_transcript_and_the_context_to_github() {
         filed_body.contains("**Kari:** My photographs come out sideways"),
         "{filed_body}"
     );
-    assert!(filed_body.contains("**Helper:** Have a look."), "{filed_body}");
+    assert!(
+        filed_body.contains("**Helper:** Have a look."),
+        "{filed_body}"
+    );
     assert!(filed_body.contains(USER_FEEDBACK_LABEL), "{filed_body}");
 
     // What she is told: one warm line with somewhere to click.
@@ -366,7 +382,10 @@ async fn the_model_hears_what_she_decided_on_her_next_message() {
     // Carried in front of her next message rather than pushed in as a
     // message of its own: the stored transcript alternates user and
     // assistant turns, and the loop's replay guarantees depend on that.
-    let messages = anthropic.requests()[2]["messages"].as_array().unwrap().clone();
+    let messages = anthropic.requests()[2]["messages"]
+        .as_array()
+        .unwrap()
+        .clone();
     let latest = messages.last().unwrap()["content"][0]["text"]
         .as_str()
         .unwrap()
@@ -476,7 +495,10 @@ async fn a_github_outage_keeps_the_draft_for_another_try() {
     let (status, retried) = decide(&app, &id, "file").await;
     assert_eq!(status, StatusCode::OK, "{retried}");
     assert_eq!(last_message(&retried), FILED_MESSAGE);
-    assert_eq!(retried["messages"].as_array().unwrap().last().unwrap()["issue"]["number"], 55);
+    assert_eq!(
+        retried["messages"].as_array().unwrap().last().unwrap()["issue"]["number"],
+        55
+    );
 }
 
 #[tokio::test]
@@ -579,5 +601,8 @@ async fn a_very_long_conversation_still_fits_in_an_issue() {
     );
     // The end of the conversation — the part that led to the draft — is
     // what survives the trim.
-    assert!(filed_body.contains("**Helper:** Have a look."), "kept the tail");
+    assert!(
+        filed_body.contains("**Helper:** Have a look."),
+        "kept the tail"
+    );
 }
