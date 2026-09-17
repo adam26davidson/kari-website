@@ -20,6 +20,7 @@ use aws_sdk_s3::Client;
 use jsonwebtoken::{encode, jwk::JwkSet, Algorithm, EncodingKey, Header};
 use kari_website_api::middleware::auth::JwksCache;
 use kari_website_api::routes::health::HealthCache;
+use kari_website_api::services::assistant::AssistantState;
 use kari_website_api::services::object_store::ObjectStore;
 use kari_website_api::services::s3::S3Service;
 use kari_website_api::AppState;
@@ -176,6 +177,11 @@ pub fn test_state_with_jwks_url(jwks: JwkSet, jwks_url: String) -> AppState {
         jwks: Arc::new(JwksCache::new(jwks, jwks_url)),
         s3_service,
         health: Arc::new(HealthCache::default()),
+        // Unconfigured, like a host with no ANTHROPIC_API_KEY. The assistant
+        // tests build their own state pointing at a local stub instead —
+        // configuration is injected, never read from the environment, so
+        // tests stay parallel-safe.
+        assistant: Arc::new(AssistantState::default()),
     }
 }
 

@@ -92,6 +92,11 @@ const ADMIN_ROUTES = [
   },
   { route: "/admin/other-works", name: "admin-other-works-list" },
   { route: "/admin/other-works/seed-blog-1", name: "admin-other-works-editor" },
+  // The helper's panel, opened by the query parameter it supports for
+  // exactly this reason (#214) — otherwise the capture would only ever show
+  // the closed button, and the panel is the part worth reviewing. On the
+  // e2e stack it has no API key, so this photographs the resting state.
+  { route: "/admin/haiku?assistant=open", name: "admin-assistant-open" },
   { route: "/admin/background", name: "admin-background" },
   { route: "/admin/image-cleanup", name: "admin-image-cleanup" },
   // Staging-only section; the test-mode bundle sets VITE_SHOW_TEST_STATUS

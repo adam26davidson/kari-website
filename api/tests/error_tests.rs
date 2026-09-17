@@ -28,6 +28,28 @@ async fn bad_request_maps_to_400() {
 }
 
 #[tokio::test]
+async fn unavailable_maps_to_503_with_the_friendly_words() {
+    // 503 rather than 500 is the whole point: the admin shows a calm
+    // "resting" panel for this, and an apology for a bug for the other.
+    let response = AppError::Unavailable("The helper is resting").into_response();
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(
+        body_json(response).await,
+        serde_json::json!({"error": "The helper is resting"})
+    );
+}
+
+#[tokio::test]
+async fn too_many_requests_maps_to_429() {
+    let response = AppError::TooManyRequests("Enough for now").into_response();
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(
+        body_json(response).await,
+        serde_json::json!({"error": "Enough for now"})
+    );
+}
+
+#[tokio::test]
 async fn internal_maps_to_500_and_hides_the_cause() {
     // The underlying cause is logged, not sent to the client.
     let response =
