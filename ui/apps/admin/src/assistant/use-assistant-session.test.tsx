@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { HttpError } from "@kari/shared/services/http-error";
 import {
   ENOUGH_FOR_NOW_MESSAGE,
+  FILING_FAILED_MESSAGE,
   RESTORE_FAILED_MESSAGE,
   SEND_FAILED_MESSAGE,
   SESSION_STORAGE_KEY,
@@ -17,6 +18,8 @@ const { service } = vi.hoisted(() => ({
     createSession: vi.fn(),
     getSession: vi.fn(),
     sendMessage: vi.fn(),
+    fileIssue: vi.fn(),
+    dismissDraft: vi.fn(),
   },
 }));
 
@@ -52,8 +55,45 @@ const hostileStorage: StorageLike = {
 const available = () =>
   service.getStatus.mockResolvedValue({ available: true, canFile: false });
 
+/** A helper that can both talk and write things down. */
+const canFile = () =>
+  service.getStatus.mockResolvedValue({ available: true, canFile: true });
+
+/** The draft the helper puts on screen, as the API returns it. */
+const DRAFT = {
+  kind: "bug",
+  title: "Photographs come out sideways",
+  summary: "Your upright photographs are showing on their side.",
+};
+
 function setup(storage: StorageLike | null = fakeStorage()) {
   return renderHook(() => useAssistantSession(getToken, storage));
+}
+
+/** Get to the state the decision tests are about: a card on screen. */
+async function withADraft() {
+  canFile();
+  service.createSession.mockResolvedValue({
+    id: "s1",
+    messages: [],
+    turnsRemaining: 40,
+    draft: null,
+  });
+  service.sendMessage.mockResolvedValue({
+    id: "s1",
+    messages: [{ role: "assistant", text: "Have a look at this." }],
+    turnsRemaining: 39,
+    draft: DRAFT,
+  });
+
+  const rendered = setup();
+  act(() => rendered.result.current.begin());
+  await waitFor(() => expect(rendered.result.current.phase).toBe("ready"));
+  await act(
+    async () => void (await rendered.result.current.send("Photos", {})),
+  );
+  expect(rendered.result.current.draft).toEqual(DRAFT);
+  return rendered;
 }
 
 describe("useAssistantSession", () => {
@@ -505,6 +545,154 @@ describe("useAssistantSession", () => {
     ]);
     act(() => result.current.startOver());
     expect(result.current.messages).toEqual([]);
+  });
+
+  it("has no draft and cannot file until the helper says otherwise", async () => {
+    available();
+    const { result } = setup();
+    act(() => result.current.begin());
+    await waitFor(() => expect(result.current.phase).toBe("ready"));
+
+    expect(result.current.draft).toBeNull();
+    expect(result.current.canFile).toBe(false);
+  });
+
+  it("files the draft only when she says so", async () => {
+    canFile();
+    service.createSession.mockResolvedValue({
+      id: "s1",
+      messages: [],
+      turnsRemaining: 40,
+      draft: null,
+    });
+    service.sendMessage.mockResolvedValue({
+      id: "s1",
+      messages: [
+        { role: "user", text: "Photos are sideways" },
+        { role: "assistant", text: "Have a look at this." },
+      ],
+      turnsRemaining: 39,
+      draft: DRAFT,
+    });
+    service.fileIssue.mockResolvedValue({
+      id: "s1",
+      messages: [
+        { role: "user", text: "Photos are sideways" },
+        { role: "assistant", text: "Have a look at this." },
+        {
+          role: "assistant",
+          text: "Filed — I'll make sure it gets looked at.",
+          issue: { number: 7, url: "https://example.test/7", title: DRAFT.title },
+        },
+      ],
+      turnsRemaining: 39,
+      draft: null,
+    });
+
+    const { result } = setup();
+    act(() => result.current.begin());
+    await waitFor(() => expect(result.current.canFile).toBe(true));
+    await act(async () => void (await result.current.send("Photos are sideways", {})));
+
+    // The helper's tool can do no more than this: put a card on screen.
+    expect(result.current.draft).toEqual(DRAFT);
+    expect(service.fileIssue).not.toHaveBeenCalled();
+
+    await act(async () => await result.current.fileIssue());
+
+    expect(service.fileIssue).toHaveBeenCalledWith("s1", getToken);
+    // The confirmation arrives as an ordinary line of the transcript, with
+    // somewhere to look — so a reload shows exactly what filing showed.
+    expect(result.current.messages.at(-1)?.issue?.number).toBe(7);
+    expect(result.current.draft).toBeNull();
+    expect(result.current.draftError).toBeNull();
+  });
+
+  it("lets the draft go without filing anything", async () => {
+    const { result } = await withADraft();
+    service.dismissDraft.mockResolvedValue({
+      id: "s1",
+      messages: [{ role: "assistant", text: "Have a look at this." }],
+      turnsRemaining: 39,
+      draft: null,
+    });
+
+    await act(async () => await result.current.dismissDraft());
+
+    expect(service.dismissDraft).toHaveBeenCalledWith("s1", getToken);
+    expect(service.fileIssue).not.toHaveBeenCalled();
+    expect(result.current.draft).toBeNull();
+  });
+
+  it("keeps the card when filing does not land", async () => {
+    const { result } = await withADraft();
+    service.fileIssue.mockRejectedValue(new HttpError("no", 503));
+
+    await act(async () => await result.current.fileIssue());
+
+    // The server keeps the draft on every failure, so the card has to stay:
+    // pressing the button again is the remedy the message promises.
+    expect(result.current.draftError).toBe(FILING_FAILED_MESSAGE);
+    expect(result.current.draft).toEqual(DRAFT);
+    expect(result.current.deciding).toBe(false);
+  });
+
+  it("brings a draft back with the conversation after a reload", async () => {
+    canFile();
+    service.getSession.mockResolvedValue({
+      id: "old",
+      messages: [{ role: "assistant", text: "Have a look at this." }],
+      turnsRemaining: 30,
+      draft: DRAFT,
+    });
+
+    const { result } = setup(fakeStorage({ [SESSION_STORAGE_KEY]: "old" }));
+    act(() => result.current.begin());
+
+    // A decision she was partway through is not lost to a page reload.
+    await waitFor(() => expect(result.current.draft).toEqual(DRAFT));
+  });
+
+  it("takes the card with the conversation she clears", async () => {
+    const { result } = await withADraft();
+    act(() => result.current.startOver());
+    expect(result.current.draft).toBeNull();
+  });
+
+  it("does nothing with a draft when there is no conversation yet", async () => {
+    canFile();
+    const { result } = setup();
+    act(() => result.current.begin());
+    await waitFor(() => expect(result.current.phase).toBe("ready"));
+
+    await act(async () => await result.current.fileIssue());
+    expect(service.fileIssue).not.toHaveBeenCalled();
+  });
+
+  it("drops a filing that lands after she has started again", async () => {
+    const { result } = await withADraft();
+    let land: (session: unknown) => void = () => {};
+    service.fileIssue.mockReturnValue(
+      new Promise((resolve) => {
+        land = resolve;
+      }),
+    );
+
+    let filing: Promise<void> | undefined;
+    await act(async () => {
+      filing = result.current.fileIssue();
+    });
+    act(() => result.current.startOver());
+
+    await act(async () => {
+      land({ id: "s1", messages: [], turnsRemaining: 39, draft: null });
+      await filing;
+    });
+
+    // Nothing from the conversation she cleared comes back, not even a
+    // confirmation for something that did get filed.
+    expect(result.current.messages).toEqual([]);
+    expect(result.current.deciding).toBe(false);
   });
 
   it("works when there is no storage at all", async () => {

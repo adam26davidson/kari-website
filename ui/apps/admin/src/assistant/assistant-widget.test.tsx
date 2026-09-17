@@ -14,6 +14,8 @@ const { service, getToken } = vi.hoisted(() => ({
     createSession: vi.fn(),
     getSession: vi.fn(),
     sendMessage: vi.fn(),
+    fileIssue: vi.fn(),
+    dismissDraft: vi.fn(),
   },
   // Stable across renders: the session hook has it in an effect's
   // dependencies, so a fresh function each render would loop.
@@ -42,6 +44,17 @@ function fakeStorage(initial?: Record<string, string>): StorageLike {
 
 const available = () =>
   service.getStatus.mockResolvedValue({ available: true, canFile: false });
+
+/** A helper that can both talk and write things down. */
+const filing = () =>
+  service.getStatus.mockResolvedValue({ available: true, canFile: true });
+
+/** The draft the helper puts on screen, as the API returns it. */
+const DRAFT = {
+  kind: "bug",
+  title: "Photographs come out sideways",
+  summary: "Your upright photographs are showing on their side.",
+};
 
 function renderWidget({
   route = "/haiku",
@@ -455,6 +468,132 @@ describe("AssistantWidget", () => {
     expect(
       screen.queryByRole("button", { name: "Start again" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows the drafted issue and files it only when she asks", async () => {
+    filing();
+    service.getSession.mockResolvedValue({
+      id: "old",
+      messages: [{ role: "assistant", text: "Have a look at this." }],
+      turnsRemaining: 30,
+      draft: DRAFT,
+    });
+    service.fileIssue.mockResolvedValue({
+      id: "old",
+      messages: [
+        { role: "assistant", text: "Have a look at this." },
+        {
+          role: "assistant",
+          text: "Filed — I'll make sure it gets looked at.",
+          issue: {
+            number: 7,
+            url: "https://github.test/issues/7",
+            title: DRAFT.title,
+          },
+        },
+      ],
+      turnsRemaining: 30,
+      draft: null,
+    });
+
+    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    await openPanel();
+
+    // The card shows what she needs to judge it by, and asks.
+    expect(await screen.findByText(DRAFT.title)).toBeInTheDocument();
+    expect(screen.getByText(DRAFT.summary)).toBeInTheDocument();
+    expect(screen.getByText(/Shall I write this down/)).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "File this issue" }),
+    );
+
+    expect(service.fileIssue).toHaveBeenCalledWith("old", getToken);
+    // One warm line and a quiet link, and the question is gone.
+    expect(await screen.findByText(/^Filed/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "See what I wrote down" }),
+    ).toHaveAttribute("href", "https://github.test/issues/7");
+    expect(screen.queryByText(DRAFT.title)).not.toBeInTheDocument();
+  });
+
+  it("lets her say not now", async () => {
+    filing();
+    service.getSession.mockResolvedValue({
+      id: "old",
+      messages: [{ role: "assistant", text: "Have a look at this." }],
+      turnsRemaining: 30,
+      draft: DRAFT,
+    });
+    service.dismissDraft.mockResolvedValue({
+      id: "old",
+      messages: [{ role: "assistant", text: "Have a look at this." }],
+      turnsRemaining: 30,
+      draft: null,
+    });
+
+    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    await openPanel();
+    await screen.findByText(DRAFT.title);
+
+    await userEvent.click(screen.getByRole("button", { name: "Not now" }));
+
+    expect(service.dismissDraft).toHaveBeenCalledWith("old", getToken);
+    expect(service.fileIssue).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.queryByText(DRAFT.title)).not.toBeInTheDocument(),
+    );
+  });
+
+  it("says so when filing did not land, and keeps the card", async () => {
+    filing();
+    service.getSession.mockResolvedValue({
+      id: "old",
+      messages: [{ role: "assistant", text: "Have a look at this." }],
+      turnsRemaining: 30,
+      draft: DRAFT,
+    });
+    service.fileIssue.mockRejectedValue(new HttpError("no", 503));
+
+    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    await openPanel();
+    await screen.findByText(DRAFT.title);
+    await userEvent.click(
+      screen.getByRole("button", { name: "File this issue" }),
+    );
+
+    expect(
+      await screen.findByText(/it's still here, so you can try again/),
+    ).toBeInTheDocument();
+    // Still there to press again, which is what the message promises.
+    expect(
+      screen.getByRole("button", { name: "File this issue" }),
+    ).toBeEnabled();
+  });
+
+  it("offers only to let the card go where filing is switched off", async () => {
+    // A host with an API key and no GitHub token, holding a draft written
+    // before the token went away.
+    available();
+    service.getSession.mockResolvedValue({
+      id: "old",
+      messages: [{ role: "assistant", text: "Have a look at this." }],
+      turnsRemaining: 30,
+      draft: DRAFT,
+    });
+
+    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    await openPanel();
+
+    expect(await screen.findByText(DRAFT.title)).toBeInTheDocument();
+    // No button that cannot work — and the one thing to do is said plainly.
+    expect(
+      screen.queryByRole("button", { name: "File this issue" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/I can't write things down just yet/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Not now" })).toBeInTheDocument();
   });
 
   it("keeps the line breaks in a step-by-step answer", async () => {
