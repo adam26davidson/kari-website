@@ -2,11 +2,38 @@ import { TokenGetter, authorizedFetch, ensureOk } from "./http";
 
 const API_ASSISTANT_URL = import.meta.env.VITE_API_URL + "/assistant";
 
+/** An issue that has been written down, and where to read it. */
+export interface AssistantIssue {
+  number: number;
+  url: string;
+  title: string;
+}
+
 /** One line of the conversation, as the panel shows it. */
 export interface AssistantMessage {
   /** "user" is Kari; "assistant" is the helper. */
   role: "user" | "assistant";
   text: string;
+  /**
+   * Set only on the line confirming that something was written down, which
+   * the panel renders with a quiet link. The confirmation lives in the
+   * transcript so it survives a reload and stays with the conversation it
+   * belongs to.
+   */
+  issue?: AssistantIssue;
+}
+
+/**
+ * A would-be issue, waiting on her decision.
+ *
+ * The title and the plain sentence only: the issue body the helper wrote is
+ * for whoever picks the issue up, and is deliberately not sent here.
+ */
+export interface AssistantDraft {
+  /** "bug" or "idea" — how the card introduces itself. */
+  kind: string;
+  title: string;
+  summary: string;
 }
 
 /** A conversation, as the API returns it. */
@@ -15,12 +42,18 @@ export interface AssistantSession {
   messages: AssistantMessage[];
   /** How many more times she can write before this conversation is full. */
   turnsRemaining: number;
+  /** The draft on screen awaiting her decision, if there is one. */
+  draft: AssistantDraft | null;
 }
 
 /** Whether the helper can run at all, and what it can do. */
 export interface AssistantStatus {
   available: boolean;
-  /** Whether it can write things down as GitHub issues. Not yet. */
+  /**
+   * Whether it can write things down as GitHub issues — configured on the
+   * host separately from the helper itself, so it can be off while the
+   * conversation works perfectly well.
+   */
   canFile: boolean;
 }
 
@@ -120,6 +153,56 @@ export class AssistantService {
       },
     );
     ensureOk(response, "Failed to send the message");
+    return await response.json();
+  }
+
+  /**
+   * File the drafted issue. This — a request made because she pressed the
+   * button — is the ONLY thing that creates a GitHub issue; the helper's
+   * own tool can do no more than put a draft on screen.
+   *
+   * Throws an `HttpError` with status 503 when the helper has nowhere to
+   * file or filing did not land; the draft is kept either way, so trying
+   * again is worth offering.
+   */
+  static async fileIssue(
+    id: string,
+    getAccessTokenSilently: TokenGetter,
+  ): Promise<AssistantSession> {
+    return await AssistantService.decideOnDraft(
+      id,
+      "file",
+      getAccessTokenSilently,
+    );
+  }
+
+  /** Let the draft go. Files nothing and clears the card. */
+  static async dismissDraft(
+    id: string,
+    getAccessTokenSilently: TokenGetter,
+  ): Promise<AssistantSession> {
+    return await AssistantService.decideOnDraft(
+      id,
+      "dismiss",
+      getAccessTokenSilently,
+    );
+  }
+
+  private static async decideOnDraft(
+    id: string,
+    action: "file" | "dismiss",
+    getAccessTokenSilently: TokenGetter,
+  ): Promise<AssistantSession> {
+    const response = await authorizedFetch(
+      `${API_ASSISTANT_URL}/sessions/${encodeURIComponent(id)}/issue`,
+      getAccessTokenSilently,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      },
+    );
+    ensureOk(response, "Failed to reach the helper");
     return await response.json();
   }
 }
