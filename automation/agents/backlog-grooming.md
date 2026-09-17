@@ -46,10 +46,14 @@ already said and not say it again.
 - Never remove `blocked`, `needs-clarification`, or `in progress` —
   those are set by humans or by the pipeline and a human takes them
   off. You may ADD `needs-clarification` (with a comment) when unsure.
-- Never add or remove `priority`. It is the maintainer's own "do this
-  next", the one ordering signal in this repo that no agent writes,
-  and Phase B works its slice ahead of every other. An issue you think
-  deserves it is a step-7 ask, not a label you apply.
+- Never add or remove `priority` or `user-feedback`. `priority` is the
+  maintainer's own "do this next"; `user-feedback` is put on by the API
+  when Kari files something through the helper in her admin (#214), and
+  Phase B works both slices ahead of every other. They are the two
+  ordering signals in this repo that no agent writes. An issue you think
+  deserves either is a step-7 ask, not a label you apply — and an
+  agent-filed issue wearing `user-feedback` is a mislabel worth
+  reporting, never one to imitate.
 - Close at most 3 issues per tick, and only for the reasons in steps
   2, 2a and 3 below, each with a comment that gives the evidence
   (the canonical issue, the umbrella, or the merged PR / commit). A

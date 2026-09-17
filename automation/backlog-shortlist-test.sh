@@ -208,6 +208,45 @@ expect_eq "$(jq -c '.tooling | map(.number)' "$work/out")" "[]" \
 expect_eq "$(jq -r '.ready' "$work/out")" 3 \
   "priority: discard labels still apply to a priority issue"
 
+# --- user-feedback: Kari's own, above everything but the maintainer -----
+
+work="$(new_work)"
+{
+  issue 210 10 "user-feedback"                # hers, plain
+  issue 211 11 "user-feedback,bug"            # outranks bug
+  issue 212 12 "user-feedback,automation,tooling" # outranks provenance+topic
+  issue 213 13 "priority,user-feedback"       # priority still wins
+  issue 214 14 "user-feedback,in progress"    # discarded: claimed
+  issue 215 15 "bug"                          # left in bugs
+  issue 216 16 ""                             # left in maintainer
+} >"$work/response.ndjson"
+run_shortlist "$work"
+expect_eq "$(jq -c '.user_feedback | map(.number)' "$work/out")" "[210,211,212]" \
+  "user-feedback: takes every ready one, whatever else it carries"
+expect_eq "$(jq -c '.priority | map(.number)' "$work/out")" "[213]" \
+  "user-feedback: the maintainer's own label still comes first"
+expect_eq "$(jq -c '.bugs | map(.number)' "$work/out")" "[215]" \
+  "user-feedback: her bug leaves the bugs slice"
+expect_eq "$(jq -c '.maintainer | map(.number)' "$work/out")" "[216]" \
+  "user-feedback: hers is not counted as ordinary maintainer work"
+expect_eq "$(jq -c '.product | map(.number)' "$work/out")" "[]" \
+  "user-feedback: wins over provenance"
+expect_eq "$(jq -c '.tooling | map(.number)' "$work/out")" "[]" \
+  "user-feedback: wins over topic"
+expect_eq "$(jq -r '.ready' "$work/out")" 6 \
+  "user-feedback: discard labels still apply to one of hers"
+
+# The slice is uncapped — what she asks for is never dropped silently.
+work="$(new_work)"
+{
+  issue 220 01 "user-feedback"
+  issue 221 02 "user-feedback"
+  issue 222 03 "user-feedback"
+} >"$work/response.ndjson"
+PRODUCT_LIMIT=1 TOOLING_LIMIT=1 run_shortlist "$work"
+expect_eq "$(jq -c '.user_feedback | map(.number)' "$work/out")" "[220,221,222]" \
+  "user-feedback: uncapped, like priority and bugs"
+
 # --- unblocks: from bodies, from comments, open blockers only -----------
 
 work="$(new_work)"

@@ -4,9 +4,13 @@
 # a tick never has to read the whole backlog (~180 issues and growing)
 # to choose one.
 #
-#   priority    every open issue labelled `priority` — the maintainer's
-#               own "do this next", uncapped
-#   bugs        every open issue labelled `bug`, oldest first
+#   priority      every open issue labelled `priority` — the maintainer's
+#                 own "do this next", uncapped
+#   user_feedback every open issue labelled `user-feedback`: filed by the
+#                 site's author herself through the admin helper (#214).
+#                 Product work, picked before the fleet's own backlog and
+#                 before bugs — the person the site is for asked for it.
+#   bugs          every open issue labelled `bug`, oldest first
 #   maintainer  maintainer-filed product work (no `automation` label —
 #               filed by a human, not the fleet — and not `tooling`)
 #   product     agent-filed product work (`automation` without
@@ -14,13 +18,18 @@
 #   tooling     machinery work (`tooling`), top
 #               KARI_SHORTLIST_TOOLING_LIMIT
 #
-# An issue appears in at most one slice (`priority` wins over `bug`,
-# `bug` over the rest), and issues carrying any discard label — in
-# progress, has-dependencies, needs-clarification, idea, blocked,
-# needs-human, duplicate — appear in none. `priority` is the
-# maintainer's label alone: no agent adds or removes it, which is what
-# makes it a channel a human can rely on rather than another signal the
-# fleet talks to itself with.
+# An issue appears in at most one slice (`priority` wins over
+# `user-feedback`, `user-feedback` over `bug`, `bug` over the rest), and
+# issues carrying any discard label — in progress, has-dependencies,
+# needs-clarification, idea, blocked, needs-human, duplicate — appear in
+# none. `priority` is the maintainer's label alone: no agent adds or
+# removes it, which is what makes it a channel a human can rely on
+# rather than another signal the fleet talks to itself with.
+# `user-feedback` is the same kind of channel from the other direction:
+# the API adds it when Kari files something through the admin helper
+# (`api/src/services/assistant.rs`), and no agent adds it to anything
+# else — an agent-filed issue wearing it would be the fleet promoting
+# its own work into the queue reserved for hers.
 #
 # Within every slice, issues are ordered by `unblocks` descending and
 # then `created_at` ascending — most-unblocking first, oldest as the
@@ -43,9 +52,10 @@
 # The `*_omitted` counts make the caps visible — a slice that silently
 # dropped its tail would read exactly like a complete one, which is how
 # #484's truncated candidate list impersonated a working oldest-first
-# rule for three days. `priority`, `bugs` and `maintainer` are
-# uncapped: all three are small by nature, and if one balloons that is
-# a backlog problem the counts in this output make visible.
+# rule for three days. `priority`, `user_feedback`, `bugs` and
+# `maintainer` are uncapped: all four are small by nature, and if one
+# balloons that is a backlog problem the counts in this output make
+# visible.
 #
 # Fetches via the paginated REST API rather than `gh issue list`, for
 # two reasons: `gh issue list` needs a --limit that silently truncates
@@ -165,18 +175,25 @@ printf '%s\n' "$raw" | "$JQ_BIN" -s \
   | def rank: map(. + {unblocks: ($unblocks[(.number | tostring)] // 0)})
               | sort_by([-(.unblocks), .created_at]);
     ($open | map(select((.labels - discard) == .labels)) | rank) as $ready
-  | ($ready | map(select(.labels | index("priority")))) as $prio
+  # The two slices above every other. An issue in either is in none of
+  # the rest: one issue is only ever in one slice, and these two are
+  # where a human asked for something directly.
+  | def above: (.labels | index("priority"))
+               or (.labels | index("user-feedback"));
+    ($ready | map(select(.labels | index("priority")))) as $prio
   | ($ready | map(select((.labels | index("priority") | not)
+      and (.labels | index("user-feedback"))))) as $feedback
+  | ($ready | map(select((above | not)
       and (.labels | index("bug"))))) as $bugs
-  | ($ready | map(select((.labels | index("priority") | not)
+  | ($ready | map(select((above | not)
       and (.labels | index("bug") | not)
       and (.labels | index("automation") | not)
       and (.labels | index("tooling") | not)))) as $maint
-  | ($ready | map(select((.labels | index("priority") | not)
+  | ($ready | map(select((above | not)
       and (.labels | index("bug") | not)
       and (.labels | index("automation"))
       and (.labels | index("tooling") | not)))) as $prod
-  | ($ready | map(select((.labels | index("priority") | not)
+  | ($ready | map(select((above | not)
       and (.labels | index("bug") | not)
       and (.labels | index("tooling"))))) as $tool
   | {
@@ -185,6 +202,7 @@ printf '%s\n' "$raw" | "$JQ_BIN" -s \
       dependents_scanned: $scanned,
       dependents_omitted: ([$deptotal - $scanned, 0] | max),
       priority: $prio,
+      user_feedback: $feedback,
       bugs: $bugs,
       maintainer: $maint,
       product: ($prod | .[0:$plim]),
