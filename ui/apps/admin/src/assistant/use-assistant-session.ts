@@ -96,7 +96,11 @@ export interface AssistantSessionState {
   deciding: boolean;
   /** A plain-language problem to show on the draft card, if any. */
   draftError: string | null;
-  /** File the draft. Keeps the card when it does not land. */
+  /**
+   * File the draft. Keeps the card when it does not land, so pressing
+   * again is a real remedy — unless the server has already settled this
+   * draft, in which case the card goes and the transcript is refetched.
+   */
   fileIssue: () => Promise<void>;
   /** Let the draft go. */
   dismissDraft: () => Promise<void>;
@@ -160,6 +164,21 @@ export const RESTORE_FAILED_MESSAGE =
  */
 export const FILING_FAILED_MESSAGE =
   "Couldn't write that down just now — it's still here, so you can try again in a moment.";
+
+/**
+ * Shown under the transcript when a decision arrives about a draft the
+ * server has already settled — it answers 400 ("there is nothing to file")
+ * from then on.
+ *
+ * Reachable without anyone doing anything odd: the filing lands and its
+ * answer is lost on the way back (a dropped connection), or a second window
+ * on the same conversation decides first. Both buttons would go on getting
+ * that 400 forever, so the card cannot stay and the words cannot promise a
+ * retry — they say what happened and leave the conversation open, which is
+ * the one thing that still works.
+ */
+export const DRAFT_SETTLED_MESSAGE =
+  "That one's already been settled — written down, or let go. Ask me again if there's something else you'd like written down.";
 
 /**
  * Shown on the card when this host has nowhere to file — the API's
@@ -397,6 +416,35 @@ export function useAssistantSession(
    * where it cannot be got round by a click that beat the re-render, and it
    * is what keeps one conversation to one question at a time.
    */
+  /**
+   * Take the server's copy of the conversation as the truth again.
+   *
+   * Called when the panel and the server disagree about the draft. The card
+   * goes either way — the 400 that brought us here is proof the server has
+   * none — and the transcript that comes back carries the filed line, and
+   * its link, if that is what became of it.
+   */
+  const resettle = useCallback(
+    async (id: string, mine: number): Promise<void> => {
+      try {
+        const session = await AssistantService.getSession(id, getToken);
+        if (turn.current !== mine) return;
+        setMessages(session.messages);
+        setDraft(session.draft ?? null);
+      } catch {
+        // A refetch that fails changes nothing about the draft: it is gone
+        // on the server, so leaving the card would be an offer nothing can
+        // accept. The transcript on screen is simply a little behind, and
+        // her next message brings it back up to date.
+        if (turn.current !== mine) return;
+        setDraft(null);
+      }
+      setDraftError(null);
+      setError(DRAFT_SETTLED_MESSAGE);
+    },
+    [getToken],
+  );
+
   const decide = useCallback(
     async (action: "file" | "dismiss"): Promise<void> => {
       const id = sessionId.current;
@@ -412,16 +460,27 @@ export function useAssistantSession(
         if (turn.current !== mine) return;
         setMessages(session.messages);
         setDraft(session.draft ?? null);
-      } catch {
+      } catch (decideError) {
         if (turn.current !== mine) return;
-        // The card stays: the server keeps the draft on every failure, so
-        // the button she just pressed is still the right one to press.
+        const status =
+          decideError instanceof HttpError ? decideError.status : undefined;
+        if (status === 400) {
+          // The server has no draft to decide about any more, so both
+          // buttons would go on getting this same 400 until the page was
+          // reloaded. Keeping the card and promising a retry would be a
+          // dead end; the remedy is to stop disagreeing with the server.
+          await resettle(id, mine);
+          return;
+        }
+        // Anything else leaves the draft where it is — the server keeps it
+        // on every failure — so the card stays and the button she just
+        // pressed is still the right one to press.
         setDraftError(FILING_FAILED_MESSAGE);
       } finally {
         if (turn.current === mine) setDeciding(false);
       }
     },
-    [deciding, sending, getToken],
+    [deciding, sending, getToken, resettle],
   );
 
   const fileIssue = useCallback(() => decide("file"), [decide]);

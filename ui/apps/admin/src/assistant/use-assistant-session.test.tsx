@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { HttpError } from "@kari/shared/services/http-error";
 import {
+  DRAFT_SETTLED_MESSAGE,
   ENOUGH_FOR_NOW_MESSAGE,
   FILING_FAILED_MESSAGE,
   RESTORE_FAILED_MESSAGE,
@@ -635,6 +636,85 @@ describe("useAssistantSession", () => {
     expect(result.current.draftError).toBe(FILING_FAILED_MESSAGE);
     expect(result.current.draft).toEqual(DRAFT);
     expect(result.current.deciding).toBe(false);
+  });
+
+  it("re-syncs when the server has already settled the draft", async () => {
+    const { result } = await withADraft();
+    // The filing landed but its answer did not come back — a dropped
+    // connection, or a second window that decided first. Every further
+    // press gets the same 400, so keeping the card would promise a retry
+    // that can never work.
+    service.fileIssue.mockRejectedValue(new HttpError("nothing to file", 400));
+    service.getSession.mockResolvedValue({
+      id: "s1",
+      messages: [
+        { role: "assistant", text: "Have a look at this." },
+        {
+          role: "assistant",
+          text: "Filed — I'll make sure it gets looked at.",
+          issue: {
+            number: 7,
+            url: "https://example.test/7",
+            title: DRAFT.title,
+          },
+        },
+      ],
+      turnsRemaining: 39,
+      draft: null,
+    });
+
+    await act(async () => await result.current.fileIssue());
+
+    expect(service.getSession).toHaveBeenCalledWith("s1", getToken);
+    // The server's copy is the truth: the card goes and the filing she
+    // could not see is there in the transcript, with its link.
+    expect(result.current.draft).toBeNull();
+    expect(result.current.messages.at(-1)?.issue?.number).toBe(7);
+    expect(result.current.draftError).toBeNull();
+    expect(result.current.error).toBe(DRAFT_SETTLED_MESSAGE);
+    expect(result.current.deciding).toBe(false);
+  });
+
+  it("clears a settled card even when the conversation cannot be refetched", async () => {
+    const { result } = await withADraft();
+    service.dismissDraft.mockRejectedValue(
+      new HttpError("nothing to file", 400),
+    );
+    service.getSession.mockRejectedValue(new HttpError("no", 500));
+
+    await act(async () => await result.current.dismissDraft());
+
+    // The 400 is proof the server has no draft, so the card goes whatever
+    // the refetch did — an offer nothing can accept is a dead end.
+    expect(result.current.draft).toBeNull();
+    expect(result.current.error).toBe(DRAFT_SETTLED_MESSAGE);
+    expect(result.current.draftError).toBeNull();
+  });
+
+  it("drops a re-sync that lands after she has started again", async () => {
+    const { result } = await withADraft();
+    service.fileIssue.mockRejectedValue(new HttpError("nothing to file", 400));
+    let land: (session: unknown) => void = () => {};
+    service.getSession.mockReturnValue(
+      new Promise((resolve) => {
+        land = resolve;
+      }),
+    );
+
+    let decided: Promise<void> = Promise.resolve();
+    act(() => {
+      decided = result.current.fileIssue();
+    });
+    act(() => result.current.startOver());
+    await act(async () => {
+      land({ id: "s1", messages: [], turnsRemaining: 39, draft: null });
+      await decided;
+    });
+
+    // The conversation she cleared must not be painted back over the empty
+    // one she asked for, nor a note about it left under it.
+    expect(result.current.error).toBeNull();
+    expect(result.current.draft).toBeNull();
   });
 
   it("brings a draft back with the conversation after a reload", async () => {

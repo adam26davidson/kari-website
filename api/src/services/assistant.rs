@@ -52,12 +52,29 @@ pub const REFUSAL_MESSAGE: &str =
 pub const TANGLED_MESSAGE: &str =
     "I got a bit tangled trying to answer that. Could you ask me again, maybe in different words?";
 
-/// Told to the model when it asks for a tool it does not have. Reading the
-/// repo arrives in later work, and `propose_issue` itself is undeclared on a
-/// host with no GitHub token — so a call that gets this back is answered in
-/// words instead.
+/// Told to the model when it asks for a tool it does not have on a host
+/// with NO GitHub token. Reading the repo arrives in later work, and
+/// `propose_issue` is undeclared here too — so filing really is still to
+/// come, which is what `system_prompt`'s no-filing half says as well.
 pub const NO_TOOLS_YET: &str =
     "That isn't something I can do yet. Answer in words instead, and if she wants something logged, say the filing feature is coming soon.";
+
+/// The same, on a host that CAN file. `propose_issue` is declared here and
+/// the button behind it works, so a call that lands here is for something
+/// else — reading the repo, say — and telling the model to promise filing
+/// "soon" would contradict both its own instructions and the card she can
+/// already be looking at.
+pub const NO_OTHER_TOOLS_YET: &str =
+    "That isn't something I can do yet. Answer in words instead, and if she wants something written down, use propose_issue as usual.";
+
+/// Which of the two an unknown tool call is answered with.
+fn no_such_tool(can_file: bool) -> &'static str {
+    if can_file {
+        NO_OTHER_TOOLS_YET
+    } else {
+        NO_TOOLS_YET
+    }
+}
 
 /// The one tool the helper has: writing up a draft issue for her to look at.
 pub const PROPOSE_ISSUE_TOOL: &str = "propose_issue";
@@ -97,7 +114,11 @@ pub const FILING_FAILED_MESSAGE: &str =
     "Couldn't write that down just now — it's still here, so you can try again in a moment.";
 
 /// What a `file` with no draft on the session gets. Only reachable from a
-/// stale panel (two windows, or a reload mid-decision).
+/// stale panel: two windows deciding on one conversation, a reload
+/// mid-decision, or a filing that landed with its answer lost on the way
+/// back. The admin reads this 400 as "the server has settled it" and
+/// re-reads the conversation rather than offering a retry that cannot
+/// succeed (`use-assistant-session.ts`).
 pub const NOTHING_TO_FILE_MESSAGE: &str = "There is nothing to file just now.";
 
 /// The S3 prefix sessions live under.
@@ -861,7 +882,7 @@ pub async fn send_message(
                 }
             } else {
                 tracing::info!("assistant asked for an unavailable tool: {}", tool.name);
-                (true, NO_TOOLS_YET)
+                (true, no_such_tool(can_file))
             };
             results.push(json!({
                 "type": "tool_result",

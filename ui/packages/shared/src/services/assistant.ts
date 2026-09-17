@@ -163,7 +163,9 @@ export class AssistantService {
    *
    * Throws an `HttpError` with status 503 when the helper has nowhere to
    * file or filing did not land; the draft is kept either way, so trying
-   * again is worth offering.
+   * again is worth offering. Status 400 means the opposite — the draft has
+   * already been settled, so there is nothing left to press — and callers
+   * re-read the conversation rather than offering a retry.
    */
   static async fileIssue(
     id: string,

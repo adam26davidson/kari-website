@@ -24,7 +24,8 @@ use common::capture_tracing;
 use common::store::InMemoryStore;
 use kari_website_api::services::assistant::{
     session_key, AssistantLimits, FILED_MESSAGE, FILING_FAILED_MESSAGE, FILING_OFF_MESSAGE,
-    NOTHING_TO_FILE_MESSAGE, PROPOSE_ISSUE_TOOL, USER_FEEDBACK_LABEL,
+    NOTHING_TO_FILE_MESSAGE, NO_OTHER_TOOLS_YET, NO_TOOLS_YET, PROPOSE_ISSUE_TOOL,
+    USER_FEEDBACK_LABEL,
 };
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -266,7 +267,38 @@ async fn an_unknown_tool_is_still_refused() {
     let requests = anthropic.requests();
     let result = &requests[1]["messages"].as_array().unwrap().last().unwrap()["content"][0];
     assert_eq!(result["is_error"], true);
+    // On a host that CAN file, the refusal must not send the model off to
+    // promise that filing is coming soon: `propose_issue` is declared, the
+    // button works, and saying otherwise would contradict both its own
+    // instructions and a card she may be looking at.
+    assert_eq!(result["content"], json!(NO_OTHER_TOOLS_YET));
+    let answer = result["content"].as_str().expect("a tool result");
+    assert!(!answer.contains("coming soon"), "{answer}");
+    assert!(answer.contains(PROPOSE_ISSUE_TOOL), "{answer}");
     assert_eq!(body["draft"], Value::Null);
+}
+
+#[tokio::test]
+async fn an_unknown_tool_on_a_host_that_cannot_file_still_says_filing_is_coming() {
+    let _trace = capture_tracing();
+    let anthropic = spawn_stub(vec![
+        tool_reply("search_repo"),
+        text_reply("I can't look yet."),
+    ])
+    .await;
+    // No GitHub token: `propose_issue` is not declared here either, so
+    // filing genuinely is still to come and the wording matches the
+    // instructions this host's system prompt gives.
+    let (_, app) = app_from(configured(&anthropic.base_url, AssistantLimits::default()));
+
+    let id = new_session(&app).await;
+    let (status, _) = say(&app, &id, "What does the home page show?").await;
+    assert_eq!(status, StatusCode::OK);
+
+    let requests = anthropic.requests();
+    let result = &requests[1]["messages"].as_array().unwrap().last().unwrap()["content"][0];
+    assert_eq!(result["is_error"], true);
+    assert_eq!(result["content"], json!(NO_TOOLS_YET));
 }
 
 // -------------------------------------------------------------- her decision
