@@ -63,11 +63,16 @@ async fn main() {
     // unavailable, and the admin carries on without it.
     let assistant = Arc::new(AssistantState::from_env());
     tracing::info!(
-        "admin assistant {}",
+        "admin assistant {}, filing {}",
         if assistant.is_available() {
             "configured"
         } else {
             "resting (no ANTHROPIC_API_KEY)"
+        },
+        if assistant.can_file() {
+            "configured"
+        } else {
+            "off (no GITHUB_ISSUES_TOKEN)"
         }
     );
 

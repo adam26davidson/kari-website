@@ -1,5 +1,6 @@
 pub mod anthropic;
 pub mod assistant;
+pub mod github_issues;
 pub mod image_gc;
 pub mod image_keys;
 pub mod object_store;

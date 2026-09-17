@@ -1,6 +1,6 @@
 //! The admin helper's endpoints.
 //!
-//! All four live behind the admin JWT, like the rest of `secure_routes` —
+//! All of them live behind the admin JWT, like the rest of `secure_routes` —
 //! there is one admin, so a valid token IS the authorization. The handlers
 //! stay thin: `services::assistant` owns the ceilings and the model loop.
 
@@ -14,7 +14,8 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 use crate::services::assistant::{
-    create_session, load_session, send_message, AssistantSession, PageContext,
+    create_session, decide_on_draft, load_session, send_message, AssistantSession, DraftDecision,
+    PageContext,
 };
 use crate::AppState;
 
@@ -37,6 +38,15 @@ fn session_view(session: &AssistantSession, turns_allowed: u32) -> Value {
         "id": session.id,
         "messages": session.display,
         "turnsRemaining": turns_allowed.saturating_sub(session.turns),
+        // The draft awaiting her decision, if any — title and the plain
+        // sentence the card shows. The issue body the model wrote is
+        // deliberately NOT here: it is written for whoever picks the issue
+        // up, and showing it would turn a calm card into a form to read.
+        "draft": session.pending_draft.as_ref().map(|draft| json!({
+            "kind": draft.kind,
+            "title": draft.title,
+            "summary": draft.summary,
+        })),
     })
 }
 
@@ -109,6 +119,46 @@ pub async fn send_message_handler(
         validated_id(&id)?,
         &body.text,
         &body.context,
+    )
+    .await?;
+    Ok(Json(session_view(
+        &session,
+        state.assistant.limits().max_turns_per_session,
+    )))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DraftDecisionRequest {
+    /// `"file"` or `"dismiss"`. Anything else is a bad request rather than
+    /// a guess — the two actions are not interchangeable.
+    pub action: String,
+}
+
+/// Her decision about the drafted issue on screen.
+///
+/// The ONLY route that creates a GitHub issue, and it does so because she
+/// pressed a button — which is what makes the confirmation real rather than
+/// something the model could talk itself out of.
+pub async fn draft_decision_handler(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<DraftDecisionRequest>,
+) -> Result<Json<Value>, AppError> {
+    let decision = match body.action.as_str() {
+        "file" => DraftDecision::File,
+        "dismiss" => DraftDecision::Dismiss,
+        _ => {
+            return Err(AppError::BadRequest(
+                "That is not something to do with a draft",
+            ))
+        }
+    };
+    let session = decide_on_draft(
+        &state.assistant,
+        state.s3_service.as_ref(),
+        validated_id(&id)?,
+        decision,
     )
     .await?;
     Ok(Json(session_view(

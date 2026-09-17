@@ -93,6 +93,10 @@ pub fn create_router(state: AppState) -> Router {
             "/assistant/sessions/{id}/messages",
             post(assistant::send_message_handler),
         )
+        .route(
+            "/assistant/sessions/{id}/issue",
+            post(assistant::draft_decision_handler),
+        )
         .layer(DefaultBodyLimit::disable())
         .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024 /* 10mb */))
         // Applied to the merged router so auth still covers the upload
