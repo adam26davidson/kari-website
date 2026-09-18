@@ -249,10 +249,12 @@ async fn a_half_written_draft_is_sent_back_to_the_model() {
 #[tokio::test]
 async fn an_unknown_tool_is_still_refused() {
     let _trace = capture_tracing();
-    // Reading the repo is a later slice. A call for it must be answered, not
-    // dropped — an unanswered `tool_use` breaks the next request.
+    // A tool the helper has never had, and is not going to be given. The
+    // call must be answered, not dropped — an unanswered `tool_use` breaks
+    // the next request. (A repo tool on a host with no snapshot is a
+    // different answer; `repo_tools_tests.rs` covers that one.)
     let anthropic = spawn_stub(vec![
-        tool_reply("search_repo"),
+        tool_reply("send_an_email"),
         text_reply("I can't look yet."),
     ])
     .await;
@@ -282,7 +284,7 @@ async fn an_unknown_tool_is_still_refused() {
 async fn an_unknown_tool_on_a_host_that_cannot_file_still_says_filing_is_coming() {
     let _trace = capture_tracing();
     let anthropic = spawn_stub(vec![
-        tool_reply("search_repo"),
+        tool_reply("send_an_email"),
         text_reply("I can't look yet."),
     ])
     .await;

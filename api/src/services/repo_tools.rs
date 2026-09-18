@@ -64,7 +64,14 @@ const MAX_SEARCH_FILES: usize = 8_000;
 /// dependencies say nothing about how the site behaves, and in development
 /// — where `REPO_DIR` points at a live clone rather than a snapshot —
 /// `node_modules` alone would swamp every search.
-const SKIPPED_DIRS: [&str; 6] = [".git", "node_modules", "target", "dist", "coverage", "dist-ssr"];
+const SKIPPED_DIRS: [&str; 6] = [
+    ".git",
+    "node_modules",
+    "target",
+    "dist",
+    "coverage",
+    "dist-ssr",
+];
 
 /// Answered when a repo tool is called on a host with no snapshot. A plain
 /// sentence rather than an error, because nothing is wrong: the helper just
@@ -94,21 +101,21 @@ pub fn tools() -> Vec<Value> {
         json!({
             "name": SEARCH_TOOL,
             "description": "Search the site's source code for a literal piece \
-of text — a phrase she saw on screen, a component name, a setting. Case \
-insensitive. This is usually the fastest way in: search for the wording, then \
-read the file it points at.",
+        of text — a phrase she saw on screen, a component name, a setting. Case \
+        insensitive. This is usually the fastest way in: search for the wording, then \
+        read the file it points at.",
             "input_schema": {
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
                         "description": "The text to look for. Literal, not a \
-regular expression or a glob.",
+        regular expression or a glob.",
                     },
                     "path_prefix": {
                         "type": "string",
                         "description": "Optional folder to search within, \
-relative to the repository root, e.g. \"ui/apps/admin/src\".",
+        relative to the repository root, e.g. \"ui/apps/admin/src\".",
                     },
                 },
                 "required": ["query"],
@@ -118,14 +125,14 @@ relative to the repository root, e.g. \"ui/apps/admin/src\".",
         json!({
             "name": LIST_TOOL,
             "description": "List the files and folders at a path in the site's \
-source code. Use \"\" for the repository root.",
+        source code. Use \"\" for the repository root.",
             "input_schema": {
                 "type": "object",
                 "properties": {
                     "path": {
                         "type": "string",
                         "description": "Folder relative to the repository \
-root, e.g. \"ui/apps/admin/src\". Empty for the root itself.",
+        root, e.g. \"ui/apps/admin/src\". Empty for the root itself.",
                     },
                 },
                 "required": ["path"],
@@ -135,24 +142,24 @@ root, e.g. \"ui/apps/admin/src\". Empty for the root itself.",
         json!({
             "name": READ_TOOL,
             "description": "Read a text file from the site's source code. Long \
-files come back trimmed; ask for a line range to see more.",
+        files come back trimmed; ask for a line range to see more.",
             "input_schema": {
                 "type": "object",
                 "properties": {
                     "path": {
                         "type": "string",
                         "description": "File relative to the repository root, \
-e.g. \"ui/apps/admin/src/admin-haiku-page/admin-haiku-page.tsx\".",
+        e.g. \"ui/apps/admin/src/admin-haiku-page/admin-haiku-page.tsx\".",
                     },
                     "start_line": {
                         "type": "integer",
                         "description": "First line to return, counting from 1. \
-Defaults to the start of the file.",
+        Defaults to the start of the file.",
                     },
                     "end_line": {
                         "type": "integer",
                         "description": "Last line to return. Defaults to the \
-end of the file.",
+        end of the file.",
                     },
                 },
                 "required": ["path"],
