@@ -35,6 +35,13 @@ Conventions the pipeline assumes (must match `scripts/deploy/env.sh` and
 | API port | 3000 | 3001 |
 | Content bucket | `karidavidson.com` | `test.karidavidson.com` |
 | Hostname | `karidavidson.com` | `test.karidavidson.com` |
+| Source snapshot | `/home/ubuntu/kari-api/repo` | `/home/ubuntu/kari-api-test/repo` |
+
+The source snapshot is `git archive` of the deployed commit, shipped in the
+bundle and installed beside the API binary — the admin helper reads it to
+answer questions about the site (`api/src/services/repo_tools.rs`). It needs
+no instance-side setup: the appspec creates it, and the API finds it next to
+its own executable unless `REPO_DIR` says otherwise.
 
 General instruction: several steps say "mirror prod". Inspect the prod
 resource first and copy its shape rather than trusting this doc's guesses —
