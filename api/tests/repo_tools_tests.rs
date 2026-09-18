@@ -1,100 +1,32 @@
 //! Tests for the helper's read-only eyes on the codebase.
 //!
 //! Two halves. The first drives `RepoAccess` directly against a small
-//! fixture tree — what the three tools return, and (much more to the point)
-//! what they refuse: anything reaching outside the snapshot root.
+//! fixture tree (`common/repo.rs`) — what the three tools return, and (much
+//! more to the point) what they refuse: anything reaching outside the
+//! snapshot root, and anything inside the directories the tools pretend do
+//! not exist.
 //!
 //! The second runs the real router with the shared helper harness
 //! (`common/assistant.rs`), so the tool-result round trip is exercised as it
 //! actually ships: a stub Anthropic asks for a repo tool, and the
 //! continuation request has to carry both the answer and the `tools` array.
+//!
+//! Nothing here touches an environment variable — the snapshot root is
+//! injected. `REPO_DIR` is process-global, so how it is read is tested in
+//! its own binary, `repo_dir_tests.rs`.
 
 mod common;
-
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use axum::http::StatusCode;
 use common::assistant::{
     app_from, configured, new_session, say, spawn_stub, text_reply, tool_call_reply,
 };
+use common::repo::Fixture;
 use kari_website_api::services::assistant::AssistantLimits;
 use kari_website_api::services::repo_tools::{
     is_repo_tool, tools, RepoAccess, LIST_TOOL, READ_TOOL, REPO_UNAVAILABLE, SEARCH_TOOL,
 };
 use serde_json::json;
-
-// ------------------------------------------------------------- the fixture
-
-/// A throwaway directory tree standing in for the deploy bundle's snapshot.
-///
-/// Built by hand rather than with a temp-directory crate: this is the only
-/// place in the API that needs one, and a new dependency to save fifteen
-/// lines is a poor trade (`docs/dependency-management.md`). Names are
-/// unique per process and per fixture so the parallel test threads cannot
-/// collide, and `Drop` clears up even when an assertion panics.
-struct Fixture {
-    root: PathBuf,
-}
-
-static FIXTURE_COUNT: AtomicUsize = AtomicUsize::new(0);
-
-impl Fixture {
-    fn new() -> Self {
-        let n = FIXTURE_COUNT.fetch_add(1, Ordering::SeqCst);
-        let root = std::env::temp_dir().join(format!("kari-repo-tools-{}-{n}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).expect("create fixture root");
-        Self { root }
-    }
-
-    /// A tree shaped like this repository's, small enough to assert on.
-    fn repo() -> Self {
-        let fixture = Self::new();
-        fixture.write(
-            "README.md",
-            "# Kari's site\n\nA poetry and photography site.\n",
-        );
-        fixture.write(
-            "ui/apps/admin/src/admin-haiku-page/admin-haiku-page.tsx",
-            "export function AdminHaikuPage() {\n  // The editor is URL-driven.\n  return null;\n}\n",
-        );
-        fixture.write(
-            "ui/apps/admin/src/components/editor-page/editor-page.tsx",
-            "export function EditorPage() {\n  return <Card>Save</Card>;\n}\n",
-        );
-        fixture.write(
-            "api/src/services/assistant.rs",
-            "//! The admin helper.\npub const RESTING_MESSAGE: &str = \"resting\";\n",
-        );
-        // Ignored everywhere: build output and dependencies say nothing
-        // about how the site behaves.
-        fixture.write("node_modules/left-pad/index.js", "// haiku editor\n");
-        fixture.write("ui/dist/assets/bundle.js", "// haiku editor\n");
-        fixture
-    }
-
-    fn write(&self, relative: &str, contents: &str) -> PathBuf {
-        let path = self.root.join(relative);
-        std::fs::create_dir_all(path.parent().expect("a parent")).expect("create fixture dirs");
-        std::fs::write(&path, contents).expect("write fixture file");
-        path
-    }
-
-    fn access(&self) -> RepoAccess {
-        RepoAccess::open(&self.root).expect("open the fixture as a snapshot")
-    }
-
-    fn path(&self) -> &Path {
-        &self.root
-    }
-}
-
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.root);
-    }
-}
 
 /// `run` answers `(is_error, content)`; most assertions want the content
 /// and a claim about which of the two it was.
@@ -123,40 +55,6 @@ fn a_missing_directory_is_simply_no_snapshot() {
 fn a_file_is_not_a_snapshot() {
     let fixture = Fixture::repo();
     assert!(RepoAccess::open(fixture.path().join("README.md")).is_none());
-}
-
-#[test]
-fn repo_dir_points_the_helper_at_a_snapshot() {
-    // `REPO_DIR` is read from the process environment, which the tests share
-    // — so this case sets it, reads it back through `from_env`, and restores
-    // it rather than leaving it set for whatever runs next.
-    let fixture = Fixture::repo();
-    let before = std::env::var("REPO_DIR").ok();
-    std::env::set_var("REPO_DIR", fixture.path());
-    let opened = RepoAccess::from_env();
-    match before {
-        Some(value) => std::env::set_var("REPO_DIR", value),
-        None => std::env::remove_var("REPO_DIR"),
-    }
-
-    let opened = opened.expect("REPO_DIR should have been opened");
-    // Canonicalised, so the comparison is against the real path either way.
-    assert_eq!(
-        opened.root(),
-        std::fs::canonicalize(fixture.path()).unwrap()
-    );
-}
-
-#[test]
-fn a_repo_dir_that_is_not_there_leaves_the_helper_without_code() {
-    let before = std::env::var("REPO_DIR").ok();
-    std::env::set_var("REPO_DIR", "/nonexistent/kari-website-snapshot");
-    let opened = RepoAccess::from_env();
-    match before {
-        Some(value) => std::env::set_var("REPO_DIR", value),
-        None => std::env::remove_var("REPO_DIR"),
-    }
-    assert!(opened.is_none());
 }
 
 // ------------------------------------------------------------------ listing
@@ -189,6 +87,45 @@ fn build_output_and_dependencies_are_invisible() {
     let found = ok(&repo, SEARCH_TOOL, json!({"query": "haiku editor"}));
     assert!(!found.contains("node_modules"), "{found}");
     assert!(!found.contains("dist/"), "{found}");
+    assert!(!found.contains(".git/"), "{found}");
+}
+
+#[test]
+fn naming_an_invisible_directory_outright_does_not_get_into_it() {
+    // Skipping them only while walking would leave the front door open: a
+    // model that already knows the name could ask for the path directly.
+    // `.git/config` is the one that matters — on a development host
+    // `REPO_DIR` is a live clone, so that file is real and holds the remote.
+    let fixture = Fixture::repo();
+    let repo = fixture.access();
+
+    for path in [
+        ".git",
+        ".git/config",
+        "node_modules",
+        "node_modules/left-pad/index.js",
+        "ui/dist",
+        "./node_modules",
+    ] {
+        for tool in [READ_TOOL, LIST_TOOL] {
+            let message = refused(&repo, tool, json!({"path": path}));
+            assert!(
+                message.contains("is no"),
+                "{tool} did not hide {path}: {message}"
+            );
+        }
+        // ...including as the folder a search is pointed at, which would
+        // otherwise start its walk below the skip check entirely.
+        let message = refused(
+            &repo,
+            SEARCH_TOOL,
+            json!({"query": "haiku editor", "path_prefix": path}),
+        );
+        assert!(
+            message.contains("is no"),
+            "a search into {path} was not refused: {message}"
+        );
+    }
 }
 
 #[test]

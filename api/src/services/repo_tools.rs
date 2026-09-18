@@ -60,10 +60,12 @@ const MAX_SEARCH_FILE_BYTES: u64 = 512_000;
 /// walk of the disk.
 const MAX_SEARCH_FILES: usize = 8_000;
 
-/// Directories never listed, read into, or searched. Build output and
-/// dependencies say nothing about how the site behaves, and in development
-/// — where `REPO_DIR` points at a live clone rather than a snapshot —
-/// `node_modules` alone would swamp every search.
+/// Directories never listed, read into, or searched — whether a walk
+/// arrives at one or the model names it outright (`resolve` enforces the
+/// second). Build output and dependencies say nothing about how the site
+/// behaves, and in development — where `REPO_DIR` points at a live clone
+/// rather than a snapshot — `node_modules` alone would swamp every search
+/// and `.git` holds the whole history in packed form.
 const SKIPPED_DIRS: [&str; 6] = [
     ".git",
     "node_modules",
@@ -267,10 +269,12 @@ impl RepoAccess {
 
     /// Turn a model-supplied path into a real one inside the snapshot.
     ///
-    /// Two independent checks, because each covers what the other cannot:
-    /// the component scan rejects `..` and absolute paths before the
-    /// filesystem is touched at all, and the canonicalised prefix check
-    /// catches anything a symlink could do afterwards.
+    /// Three checks, because each covers what the others cannot: the
+    /// component scan rejects `..` and absolute paths before the filesystem
+    /// is touched at all, the skip scan closes the front door on the
+    /// directories the walks already pretend are not there, and the
+    /// canonicalised prefix check catches anything a symlink could do
+    /// afterwards.
     fn resolve(&self, raw: &str) -> Result<PathBuf, String> {
         let raw = raw.trim().trim_start_matches("./");
         if raw.is_empty() || raw == "." {
@@ -282,6 +286,17 @@ impl RepoAccess {
             .all(|part| matches!(part, Component::Normal(_) | Component::CurDir));
         if !plain {
             return Err(OUTSIDE_ROOT.to_string());
+        }
+        // Filtering entries during a walk hides these from a model that is
+        // looking around, but not from one that already knows the name and
+        // asks for it outright — and on a development host `REPO_DIR` is a
+        // live clone, so `.git` and `node_modules` are really there. Answered
+        // as "not there", which is what the rest of the module says they are.
+        let hidden = relative.components().any(
+            |part| matches!(part, Component::Normal(name) if skipped(&name.to_string_lossy())),
+        );
+        if hidden {
+            return Err(self.missing(raw));
         }
         let resolved =
             std::fs::canonicalize(self.root.join(relative)).map_err(|_| self.missing(raw))?;
