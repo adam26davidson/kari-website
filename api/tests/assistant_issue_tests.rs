@@ -581,14 +581,114 @@ async fn a_filing_the_store_could_not_record_is_never_offered_for_a_retry() {
     );
     assert_eq!(body["draft"], Value::Null, "the card must not survive");
 
-    // What was lost is durability, not the filing: the stored copy is the one
-    // from before the decision, which is why the code logs an error here.
+    // What was lost is durability alone: the STORED copy is the one from
+    // before the decision, which is why the code logs an error here. Every
+    // reader of the conversation goes through the process's own record of
+    // the filing instead — the two tests below are about that.
     let stored: Value =
         serde_json::from_slice(&store.get(&session_key(&id)).expect("session").data).unwrap();
     assert_eq!(
         stored["pendingDraft"]["title"],
         "Photographs come out sideways"
     );
+}
+
+#[tokio::test]
+async fn her_next_message_after_an_unsaved_filing_does_not_bring_the_card_back() {
+    // The ordinary way the stale stored copy would reach her — no reload
+    // needed. She is shown the filed line, says "thank you", and
+    // `send_message` loads the conversation from the store: the copy that
+    // still holds the draft and has never heard of the issue. Sent back as
+    // it is, the panel repaints the card over an issue that exists and the
+    // filed line vanishes from the transcript she just read.
+    let _trace = capture_tracing();
+    let anthropic = spawn_stub(vec![
+        draft_reply(),
+        text_reply("Have a look."),
+        text_reply("You're welcome."),
+    ])
+    .await;
+    let github = spawn_stub(vec![created_issue(404), created_issue(405)]).await;
+    let (store, app) = app_that_can_file(&anthropic, &github);
+    let id = session_with_a_draft(&app).await;
+
+    store.set_failing_puts(true);
+    let (status, body) = decide(&app, &id, "file").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(last_message(&body), FILED_MESSAGE);
+
+    // The store comes back — the failure was one write, not the bucket.
+    store.set_failing_puts(false);
+    let (status, body) = say(&app, &id, "Thank you").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    assert_eq!(body["draft"], Value::Null, "the card came back: {body}");
+    let lines = texts(&body);
+    assert!(
+        lines.iter().any(|t| t == FILED_MESSAGE),
+        "the filed line vanished from the transcript she was shown: {lines:?}"
+    );
+    let filed = body["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["issue"].is_object())
+        .expect("the filed line keeps its link");
+    assert_eq!(filed["issue"]["number"], 404);
+
+    // The model is told about #404 on this very turn, so it can never offer
+    // to write the same thing down again.
+    let latest = anthropic.requests()[2]["messages"]
+        .as_array()
+        .unwrap()
+        .last()
+        .unwrap()["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(latest.contains("#404"), "{latest}");
+
+    // And the turn's own save healed the stored copy, so the draft is gone
+    // for good and a second press cannot create issue #405.
+    let stored: Value =
+        serde_json::from_slice(&store.get(&session_key(&id)).expect("session").data).unwrap();
+    assert_eq!(stored["pendingDraft"], Value::Null, "{stored}");
+    let (again, again_body) = decide(&app, &id, "file").await;
+    assert_eq!(again, StatusCode::BAD_REQUEST, "{again_body}");
+    assert_eq!(github.call_count(), 1, "filed {:?}", github.paths());
+}
+
+#[tokio::test]
+async fn a_reload_after_an_unsaved_filing_shows_the_filing_not_the_card() {
+    // The other road to the same stale copy: she reloads the panel. The
+    // reload is a read, so nothing heals the store here — what it must not
+    // do is offer her a button that files issue #405 for the thing that is
+    // already issue #404.
+    let _trace = capture_tracing();
+    let anthropic = spawn_stub(vec![draft_reply(), text_reply("Have a look.")]).await;
+    let github = spawn_stub(vec![created_issue(404), created_issue(405)]).await;
+    let (store, app) = app_that_can_file(&anthropic, &github);
+    let id = session_with_a_draft(&app).await;
+
+    store.set_failing_puts(true);
+    let (status, body) = decide(&app, &id, "file").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, body) = send(&app, get_auth(&format!("/assistant/sessions/{id}"))).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["draft"], Value::Null, "the card came back: {body}");
+    assert_eq!(last_message(&body), FILED_MESSAGE);
+    assert_eq!(
+        body["messages"].as_array().unwrap().last().unwrap()["issue"]["number"],
+        404
+    );
+
+    // A stale panel pressing the button anyway gets the 400 that means
+    // "the server has settled it", not a second issue.
+    let (again, again_body) = decide(&app, &id, "file").await;
+    assert_eq!(again, StatusCode::BAD_REQUEST, "{again_body}");
+    assert_eq!(again_body, json!({"error": NOTHING_TO_FILE_MESSAGE}));
+    assert_eq!(github.call_count(), 1, "filed {:?}", github.paths());
 }
 
 #[tokio::test]

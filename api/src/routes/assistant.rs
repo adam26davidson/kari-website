@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::error::AppError;
 use crate::services::assistant::{
-    create_session, decide_on_draft, load_session, send_message, AssistantSession, DraftDecision,
+    create_session, decide_on_draft, send_message, view_session, AssistantSession, DraftDecision,
     PageContext,
 };
 use crate::AppState;
@@ -82,6 +82,10 @@ pub async fn create_session_handler(
 
 /// Reload a conversation — what the widget calls after a page reload, with
 /// the id it kept in local storage.
+///
+/// `view_session` rather than `load_session`: the stored copy is not the
+/// whole truth after a filing whose write failed, and a reload that showed
+/// it would put the card back over an issue that already exists.
 pub async fn get_session_handler(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -91,7 +95,12 @@ pub async fn get_session_handler(
             crate::services::assistant::RESTING_MESSAGE,
         ));
     }
-    let session = load_session(state.s3_service.as_ref(), validated_id(&id)?).await?;
+    let session = view_session(
+        &state.assistant,
+        state.s3_service.as_ref(),
+        validated_id(&id)?,
+    )
+    .await?;
     Ok(Json(session_view(
         &session,
         state.assistant.limits().max_turns_per_session,

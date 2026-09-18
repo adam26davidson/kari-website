@@ -121,10 +121,11 @@ pub const FILING_FAILED_MESSAGE: &str =
 
 /// What a `file` with no draft on the session gets. Only reachable from a
 /// stale panel: two windows deciding on one conversation, a reload
-/// mid-decision, or a filing that landed with its answer lost on the way
-/// back. The admin reads this 400 as "the server has settled it" and
-/// re-reads the conversation rather than offering a retry that cannot
-/// succeed (`use-assistant-session.ts`).
+/// mid-decision, a filing that landed with its answer lost on the way back,
+/// or a press against a filing this process knows about and the store does
+/// not (`recover_unsaved_filings`). The admin reads this 400 as "the server
+/// has settled it" and re-reads the conversation rather than offering a
+/// retry that cannot succeed (`use-assistant-session.ts`).
 pub const NOTHING_TO_FILE_MESSAGE: &str = "There is nothing to file just now.";
 
 /// The S3 prefix sessions live under.
@@ -226,6 +227,32 @@ pub struct AssistantState {
     daily: Mutex<DailyTurns>,
     /// One write lock per conversation — see `session_lock`.
     session_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
+    /// Filings GitHub accepted whose conversation could not be written
+    /// back, by session id — see `remember_unsaved_filing`.
+    unsaved_filings: Mutex<HashMap<String, Vec<UnsavedFiling>>>,
+}
+
+/// An issue that exists on GitHub which the stored conversation does not
+/// know about, because the write that would have recorded it failed.
+///
+/// Kept in the process so that what she is shown next — her following
+/// message, or a reload — is the conversation as it truly is rather than
+/// the stale stored copy, which still holds the draft she already filed.
+/// Without this, the next read puts the card back over an issue that
+/// exists, the filed line and its link disappear from the transcript she
+/// just read, and pressing the re-offered button files a SECOND public
+/// issue for the same thing (#891).
+///
+/// In-process is the whole answer here for the same reason the one-writer
+/// lock is: there is exactly one API process per environment. A restart
+/// loses the correction, which is no worse than not having it — and the
+/// `error!` beside it names the issue number either way.
+#[derive(Clone, Debug)]
+struct UnsavedFiling {
+    issue: FiledIssue,
+    /// What the model has to hear on her next message, composed where the
+    /// filing happened so this carries the same words the saved path would.
+    note: String,
 }
 
 impl AssistantState {
@@ -248,6 +275,7 @@ impl AssistantState {
             gate: Semaphore::new(1),
             daily: Mutex::new(DailyTurns::default()),
             session_locks: Mutex::new(HashMap::new()),
+            unsaved_filings: Mutex::new(HashMap::new()),
         }
     }
 
@@ -324,6 +352,74 @@ impl AssistantState {
         // holding the `Arc` this returns.
         locks.retain(|_, lock| Arc::strong_count(lock) > 1);
         locks.entry(id.to_string()).or_default().clone()
+    }
+
+    /// Remember a filing whose conversation could not be saved, so the
+    /// stale stored copy never becomes what she is shown.
+    ///
+    /// Only reached from `decide_on_draft` after GitHub has created the
+    /// issue, so an entry appears only when a write has actually failed —
+    /// which needs a store outage outliving the AWS SDK's own retries, and
+    /// then a button press. Cleared by `forget_unsaved_filings` as soon as
+    /// any write carrying it lands, which is why this does not grow.
+    async fn remember_unsaved_filing(&self, session_id: &str, issue: FiledIssue, note: String) {
+        self.unsaved_filings
+            .lock()
+            .await
+            .entry(session_id.to_string())
+            .or_default()
+            .push(UnsavedFiling { issue, note });
+    }
+
+    /// Put back everything a failed write lost, on a conversation freshly
+    /// read from the store.
+    ///
+    /// Every reader goes through this — `send_message`, `decide_on_draft`
+    /// and the reload (`view_session`) — because the stale copy is equally
+    /// wrong to all three. A no-op for every conversation with nothing
+    /// recorded, which is all of them normally.
+    ///
+    /// Idempotent: a filing already present in `filed_issues` is skipped,
+    /// so a copy the store did eventually record is never doubled.
+    async fn recover_unsaved_filings(&self, session: &mut AssistantSession) {
+        let filings = self.unsaved_filings.lock().await;
+        let Some(unsaved) = filings.get(&session.id) else {
+            return;
+        };
+        for filing in unsaved {
+            // Belt and braces rather than a path anything reaches today:
+            // the record is dropped the moment a write carrying it lands,
+            // so a stored copy that already has the filing should have no
+            // record left. Keeping the check here makes that this
+            // function's property instead of every caller's.
+            if session
+                .filed_issues
+                .iter()
+                .any(|filed| filed.number == filing.issue.number)
+            {
+                continue;
+            }
+            // The draft the stale copy is still holding is the one this
+            // filing was made from, so the card goes with it. Anything
+            // newer would have needed a save to land, and a landed save
+            // means no record left to apply.
+            session.pending_draft = None;
+            session.pending_notes.push(filing.note.clone());
+            session.filed_issues.push(filing.issue.clone());
+            session
+                .display
+                .push(DisplayMessage::filed(filing.issue.clone()));
+        }
+    }
+
+    /// Forget a conversation's unsaved filings, because a write carrying
+    /// them has landed and the store is now the truth again.
+    ///
+    /// Called only after a successful `save_session` on a path that applied
+    /// `recover_unsaved_filings` to the copy it wrote, which is what makes
+    /// "carrying them" true.
+    async fn forget_unsaved_filings(&self, session_id: &str) {
+        self.unsaved_filings.lock().await.remove(session_id);
     }
 
     /// Count one turn against today's allowance, resetting when the date
@@ -560,6 +656,12 @@ pub async fn create_session(store: &dyn ObjectStore) -> Result<AssistantSession,
     Ok(session)
 }
 
+/// Read a conversation from the store, and nothing more.
+///
+/// The store is not always the whole truth: a filing whose write failed
+/// exists on GitHub while the stored copy still holds the draft. Callers
+/// that hand a conversation to her — or write one back — must go through
+/// `view_session` or apply `recover_unsaved_filings` themselves.
 pub async fn load_session(store: &dyn ObjectStore, id: &str) -> Result<AssistantSession, AppError> {
     match store.get_object(&session_key(id)).await {
         // Corrupt stored JSON is a hard error, not an empty conversation:
@@ -570,6 +672,24 @@ pub async fn load_session(store: &dyn ObjectStore, id: &str) -> Result<Assistant
         Err(S3Error::NotFound) => Err(AppError::NotFound("That conversation has ended")),
         Err(e) => Err(AppError::internal("Failed to fetch the conversation", e)),
     }
+}
+
+/// A conversation as it should be READ: the stored copy plus anything a
+/// failed write is still holding in this process.
+///
+/// What the reload route calls. Deliberately takes no write lock and saves
+/// nothing — a GET that healed the store would be a surprising thing for a
+/// GET to do, and the healing happens on her next message anyway. What
+/// matters here is that a reload after a failed filing shows the filed
+/// line and its link, and no button that could file the same thing twice.
+pub async fn view_session(
+    state: &Arc<AssistantState>,
+    store: &dyn ObjectStore,
+    id: &str,
+) -> Result<AssistantSession, AppError> {
+    let mut session = load_session(store, id).await?;
+    state.recover_unsaved_filings(&mut session).await;
+    Ok(session)
 }
 
 /// Write the session back.
@@ -776,6 +896,11 @@ pub async fn send_message(
     let _write = lock.lock().await;
 
     let mut session = load_session(store, session_id).await?;
+    // Before anything reads this copy: a filing whose write failed is not
+    // in it, and sending the stale version back would repaint the card over
+    // an issue that exists. Applied under the lock, so the turn's own save
+    // at the end is what makes the correction durable.
+    state.recover_unsaved_filings(&mut session).await;
     if session.turns >= limits.max_turns_per_session
         || session.tokens_used >= limits.max_session_tokens
     {
@@ -918,6 +1043,9 @@ pub async fn send_message(
     session.display.push(DisplayMessage::assistant(reply));
     session.turns += 1;
     save_session(store, &session).await?;
+    // The copy just written carries any recovered filing, so the store is
+    // the truth again and the in-process record has done its job.
+    state.forget_unsaved_filings(session_id).await;
     Ok(session)
 }
 
@@ -965,6 +1093,11 @@ pub async fn decide_on_draft(
     let _write = lock.lock().await;
 
     let mut session = load_session(store, session_id).await?;
+    // A filing whose write failed left the stored copy holding the draft it
+    // was made from. Putting that filing back clears the draft, so a press
+    // from the stale panel that still shows the card gets the "nothing to
+    // file" 400 below rather than a duplicate issue.
+    state.recover_unsaved_filings(&mut session).await;
     // Taken, not borrowed: whichever way this goes the card leaves her
     // screen. The one exception is a failed filing, which returns before
     // the session is written, so the stored draft survives for a retry.
@@ -1017,15 +1150,16 @@ Do not draft it again unless she asks. Carry on as normal.",
     };
     let number = issue.number;
     tracing::info!("filed issue #{number} from the admin helper");
-    session.pending_notes.push(format!(
+    let note = format!(
         "She filed the {} you drafted as issue #{}. She has already been \
 shown a line saying it is filed, with a link, so there is no need to \
 mention it again unless she does.",
         draft.described(),
         number
-    ));
+    );
+    session.pending_notes.push(note.clone());
     session.filed_issues.push(issue.clone());
-    session.display.push(DisplayMessage::filed(issue));
+    session.display.push(DisplayMessage::filed(issue.clone()));
     // The issue exists whether or not this write lands, so a failed write
     // must NOT be reported as a failed filing. Every failure this route
     // returns is read by the panel as "the draft is still here, press again
@@ -1037,17 +1171,34 @@ mention it again unless she does.",
     //
     // So the answer is the conversation as it truly now is: the card gone,
     // the filed line and its link in the transcript, and no button left
-    // that could duplicate the issue. What is lost is durability alone —
-    // the stored copy is the one from before the decision, so a reload can
-    // bring the card back — which is why this is an `error!` the maintainer
-    // can act on, with the issue number in it.
+    // that could duplicate the issue.
+    //
+    // That answer is only true of the reply she is holding, though. The
+    // STORED copy is still the one from before the decision, and every
+    // later read starts there — her next message reloads it just as a
+    // reload of the page does, so without more than a log line the card
+    // would reappear, the filed line would vanish from the transcript she
+    // had just read, and pressing the re-offered button would file a
+    // SECOND public issue. So the filing is recorded in the process as
+    // well (`remember_unsaved_filing`), which every reader of a
+    // conversation applies. What is left over is durability across a
+    // restart alone, which is why this stays an `error!` the maintainer can
+    // act on, with the issue number in it.
     if save_session(store, &session).await.is_err() {
         // `save_session` has already logged why; this line is the part that
         // needs the issue number beside it.
         tracing::error!(
-            "issue #{number} was filed but the conversation could not be saved: the stored \
-copy still holds the draft, so a reload will show the card again"
+            "issue #{number} was filed but the conversation could not be saved: this process \
+will correct what it hands back, but a restart before the next write loses that and the \
+stored copy still holds the draft"
         );
+        state
+            .remember_unsaved_filing(&session.id, issue, note)
+            .await;
+    } else {
+        // A write carrying this one landed, so any earlier correction this
+        // conversation was owed is in the store too.
+        state.forget_unsaved_filings(&session.id).await;
     }
     Ok(session)
 }
