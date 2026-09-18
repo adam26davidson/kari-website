@@ -158,9 +158,12 @@ export const RESTORE_FAILED_MESSAGE =
 /**
  * Shown on the card when filing did not land.
  *
- * Word for word the API's `FILING_FAILED_MESSAGE`, and true because the
- * server keeps the draft on any failure: the card is still there, so
- * pressing the button again is a real remedy rather than a platitude.
+ * Word for word the API's `FILING_FAILED_MESSAGE`, and true because every
+ * failure the server reports happened before GitHub created anything — the
+ * draft is still there, so pressing the button again is a real remedy
+ * rather than a platitude. A filing that DID reach GitHub and could not
+ * then be saved comes back as an ordinary answer with the filed line in it,
+ * precisely so this message is never shown over an issue that exists.
  */
 export const FILING_FAILED_MESSAGE =
   "Couldn't write that down just now — it's still here, so you can try again in a moment.";
@@ -472,9 +475,9 @@ export function useAssistantSession(
           await resettle(id, mine);
           return;
         }
-        // Anything else leaves the draft where it is — the server keeps it
-        // on every failure — so the card stays and the button she just
-        // pressed is still the right one to press.
+        // Anything else leaves the draft where it is — the server only
+        // reports a failure when nothing was created — so the card stays and
+        // the button she just pressed is still the right one to press.
         setDraftError(FILING_FAILED_MESSAGE);
       } finally {
         if (turn.current === mine) setDeciding(false);

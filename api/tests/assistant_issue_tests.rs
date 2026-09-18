@@ -554,6 +554,44 @@ async fn a_rejected_filing_is_reported_calmly_too() {
 }
 
 #[tokio::test]
+async fn a_filing_the_store_could_not_record_is_never_offered_for_a_retry() {
+    // The one failure that happens AFTER the issue exists: GitHub created it
+    // and the write that records it did not land. Reporting that as an error
+    // would be the two-issues-from-one-press bug by another road — the panel
+    // reads every non-400 as "the draft is still here, try again in a
+    // moment", and the stored session would still be holding the draft, so
+    // the second press would file a second issue.
+    let _trace = capture_tracing();
+    let anthropic = spawn_stub(vec![draft_reply(), text_reply("Have a look.")]).await;
+    let github = spawn_stub(vec![created_issue(404), created_issue(405)]).await;
+    let (store, app) = app_that_can_file(&anthropic, &github);
+    let id = session_with_a_draft(&app).await;
+
+    store.set_failing_puts(true);
+    let (status, body) = decide(&app, &id, "file").await;
+
+    // What she gets is the conversation as it truly is: filed, with a link,
+    // and no card left to press.
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(github.call_count(), 1);
+    assert_eq!(last_message(&body), FILED_MESSAGE);
+    assert_eq!(
+        body["messages"].as_array().unwrap().last().unwrap()["issue"]["number"],
+        404
+    );
+    assert_eq!(body["draft"], Value::Null, "the card must not survive");
+
+    // What was lost is durability, not the filing: the stored copy is the one
+    // from before the decision, which is why the code logs an error here.
+    let stored: Value =
+        serde_json::from_slice(&store.get(&session_key(&id)).expect("session").data).unwrap();
+    assert_eq!(
+        stored["pendingDraft"]["title"],
+        "Photographs come out sideways"
+    );
+}
+
+#[tokio::test]
 async fn filing_with_nothing_drafted_is_a_bad_request() {
     let anthropic = spawn_stub(vec![text_reply("Of course.")]).await;
     let github = spawn_stub(vec![created_issue(1)]).await;

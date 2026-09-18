@@ -631,8 +631,9 @@ describe("useAssistantSession", () => {
 
     await act(async () => await result.current.fileIssue());
 
-    // The server keeps the draft on every failure, so the card has to stay:
-    // pressing the button again is the remedy the message promises.
+    // The server only reports a failure when nothing reached GitHub, and it
+    // keeps the draft then, so the card has to stay: pressing the button
+    // again is the remedy the message promises.
     expect(result.current.draftError).toBe(FILING_FAILED_MESSAGE);
     expect(result.current.draft).toEqual(DRAFT);
     expect(result.current.deciding).toBe(false);

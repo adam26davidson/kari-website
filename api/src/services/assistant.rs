@@ -110,6 +110,12 @@ pub const FILING_OFF_MESSAGE: &str =
 
 /// Shown when filing was attempted and did not land. The draft is kept, so
 /// trying again is worth doing — and the words say so.
+///
+/// Only ever sent for a failure that happened BEFORE GitHub created
+/// anything, which is what makes the promise true. A filing that reached
+/// GitHub and could not then be saved answers with the finished
+/// conversation instead (`decide_on_draft`): this message there would
+/// invite a press that filed the issue a second time.
 pub const FILING_FAILED_MESSAGE: &str =
     "Couldn't write that down just now — it's still here, so you can try again in a moment.";
 
@@ -1009,21 +1015,40 @@ Do not draft it again unless she asks. Carry on as normal.",
         url: created.html_url,
         title: draft.title.clone(),
     };
-    tracing::info!("filed issue #{} from the admin helper", issue.number);
+    let number = issue.number;
+    tracing::info!("filed issue #{number} from the admin helper");
     session.pending_notes.push(format!(
         "She filed the {} you drafted as issue #{}. She has already been \
 shown a line saying it is filed, with a link, so there is no need to \
 mention it again unless she does.",
         draft.described(),
-        issue.number
+        number
     ));
     session.filed_issues.push(issue.clone());
     session.display.push(DisplayMessage::filed(issue));
-    // The issue exists whether or not this write lands. A failure here
-    // means she sees an error over a filing that happened — which is why it
-    // is the last thing this function does, and why the log line above
-    // records the number before the write is attempted.
-    save_session(store, &session).await?;
+    // The issue exists whether or not this write lands, so a failed write
+    // must NOT be reported as a failed filing. Every failure this route
+    // returns is read by the panel as "the draft is still here, press again
+    // in a moment" — true of the GitHub failures above, which return before
+    // anything is created, and actively harmful here: the stored session
+    // still holds the draft, so the second press would file a SECOND issue.
+    // That is the outcome the one-writer lock exists to prevent, reached by
+    // the other road.
+    //
+    // So the answer is the conversation as it truly now is: the card gone,
+    // the filed line and its link in the transcript, and no button left
+    // that could duplicate the issue. What is lost is durability alone —
+    // the stored copy is the one from before the decision, so a reload can
+    // bring the card back — which is why this is an `error!` the maintainer
+    // can act on, with the issue number in it.
+    if save_session(store, &session).await.is_err() {
+        // `save_session` has already logged why; this line is the part that
+        // needs the issue number beside it.
+        tracing::error!(
+            "issue #{number} was filed but the conversation could not be saved: the stored \
+copy still holds the draft, so a reload will show the card again"
+        );
+    }
     Ok(session)
 }
 
