@@ -607,11 +607,21 @@ impl PageContext {
         if let Some(route) = &self.route {
             lines.push(format!("She is on the admin page: {route}"));
         }
+        // Three shapes, because the admin has three kinds of page. An item
+        // out of a list has an id; an item she is part-way through adding
+        // has a name and no id yet; and the home page and the appearance
+        // settings are single pages with neither — "she is adding a new
+        // home page" would be nonsense, and the model would repeat it.
         if let Some(what) = &self.what {
-            let title = self.title.as_deref().unwrap_or("(untitled)");
-            match &self.id {
-                Some(id) => lines.push(format!("She has this {what} open: \"{title}\" (id {id})")),
-                None => lines.push(format!("She is adding a new {what}: \"{title}\"")),
+            match (&self.id, &self.title) {
+                (Some(id), title) => {
+                    let title = title.as_deref().unwrap_or("(untitled)");
+                    lines.push(format!("She has this {what} open: \"{title}\" (id {id})"));
+                }
+                (None, Some(title)) => {
+                    lines.push(format!("She is adding a new {what}: \"{title}\""));
+                }
+                (None, None) => lines.push(format!("She is working on the {what}.")),
             }
         }
         if self.dirty == Some(true) {

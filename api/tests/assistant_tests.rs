@@ -243,6 +243,37 @@ async fn what_she_is_looking_at_reaches_the_model() {
 }
 
 #[tokio::test]
+async fn a_single_page_is_described_as_one_rather_than_as_a_new_item() {
+    // The home page and the appearance settings are not items out of a
+    // list: they have no id and no name. "She is adding a new home page"
+    // would be nonsense, and the model would repeat it back to her.
+    let stub = spawn_stub(vec![text_reply("Save it with the button below.")]).await;
+    let (_, app) = app_with(&stub, AssistantLimits::default());
+    let id = new_session(&app).await;
+
+    send(
+        &app,
+        post_auth(
+            &format!("/assistant/sessions/{id}/messages"),
+            json!({
+                "text": "How do I change this?",
+                "context": {"route": "/home", "what": "home page", "dirty": false},
+            }),
+        ),
+    )
+    .await;
+
+    let sent = stub.requests()[0]["messages"][0]["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(sent.contains("She is working on the home page."), "{sent}");
+    assert!(!sent.contains("adding a new"), "{sent}");
+    // Nothing unsaved was reported, so nothing is said about it.
+    assert!(!sent.contains("unsaved changes"), "{sent}");
+}
+
+#[tokio::test]
 async fn the_transcript_she_reads_holds_only_her_words() {
     let stub = spawn_stub(vec![text_reply("Sure.")]).await;
     let (_, app) = app_with(&stub, AssistantLimits::default());
@@ -266,7 +297,7 @@ async fn the_transcript_she_reads_holds_only_her_words() {
 async fn a_tool_request_is_answered_and_the_turn_carries_on() {
     let _trace = capture_tracing();
     let stub = spawn_stub(vec![
-        tool_reply("search_repo"),
+        tool_reply("send_an_email"),
         text_reply("I can't look that up yet, but here's what I know."),
     ])
     .await;
@@ -288,8 +319,9 @@ async fn a_tool_request_is_answered_and_the_turn_carries_on() {
         "I can't look that up yet, but here's what I know."
     );
 
-    // The second call carried a tool_result answering the first call's id —
-    // the plumbing later slices hang real tools on.
+    // The second call carried a tool_result answering the first call's id.
+    // This is the plumbing every tool hangs on: an unanswered `tool_use`
+    // makes the next request a 400, whatever was asked for.
     let second = stub.requests()[1]["messages"].as_array().unwrap().clone();
     let result = &second[second.len() - 1]["content"][0];
     assert_eq!(result["type"], "tool_result");

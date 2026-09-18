@@ -319,6 +319,41 @@ describe("AdminHaikuPage editing", () => {
   });
 });
 
+describe("AdminHaikuPage assistant context", () => {
+  it("tells the helper which haiku is open and whether it is unsaved", async () => {
+    const { subject } = renderPage();
+    // Nothing of hers is open while the list is showing.
+    expect(subject.current).toEqual({});
+
+    const textarea = await openFirstHaiku();
+    // A haiku has no title, so its first written line names it — the same
+    // answer the delete confirmation gives.
+    expect(subject.current).toEqual({
+      what: "haiku",
+      id: "h1",
+      title: "old pond",
+      dirty: false,
+    });
+
+    fireEvent.change(textarea, { target: { value: "new pond\nstill water" } });
+    expect(subject.current).toEqual({
+      what: "haiku",
+      id: "h1",
+      title: "new pond",
+      dirty: true,
+    });
+  });
+
+  it("stops describing the haiku once the editor closes", async () => {
+    const { subject } = renderPage();
+    await openFirstHaiku();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+    await waitFor(() => expect(subject.current).toEqual({}));
+  });
+});
+
 describe("AdminHaikuPage routing", () => {
   it("opens the editor at /admin/haiku/:id when editing", async () => {
     const { router } = renderPage();

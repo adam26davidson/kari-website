@@ -158,6 +158,12 @@ echo "  Admin:  a second vite on 5174 by default, at /admin/ — logging in"
 echo "          needs that exact origin allowlisted in Auth0"
 echo
 
+# What the admin helper reads code from. In production this is a snapshot
+# installed beside the binary; here it is this clone, so the helper sees
+# exactly what you are editing. Harmless with no ANTHROPIC_API_KEY set —
+# nothing reads it until there is a conversation.
+export REPO_DIR="$PWD"
+
 # Run the API from the repo root on purpose: dotenv only finds api/.env when
 # the cwd is api/, so the exports above are the API's entire configuration.
 cargo run --manifest-path api/Cargo.toml &

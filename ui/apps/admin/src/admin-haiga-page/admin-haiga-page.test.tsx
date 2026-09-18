@@ -453,6 +453,39 @@ describe("AdminHaigaPage load failure", () => {
   });
 });
 
+describe("AdminHaigaPage assistant context", () => {
+  beforeEach(() => {
+    savedHaiga = {
+      id: "h1",
+      lines: ["first light"],
+      publisher: "kari",
+      image: "old.png",
+    };
+    vi.mocked(HaigaService.getListFromApi).mockResolvedValue([savedHaiga]);
+    vi.spyOn(window.URL, "createObjectURL").mockReturnValue("blob:preview");
+  });
+
+  it("tells the helper which haiga is open, and that a new picture is unsaved", async () => {
+    const { subject, container } = renderPage();
+    expect(subject.current).toEqual({});
+
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    await screen.findByRole("button", { name: "Save" });
+    expect(subject.current).toEqual({
+      what: "haiga",
+      id: "h1",
+      title: "first light",
+      dirty: false,
+    });
+
+    // A picked-but-unuploaded picture is an unsaved change like any other.
+    fireEvent.change(container.querySelector('input[type="file"]')!, {
+      target: { files: [new File(["img"], "next.png", { type: "image/png" })] },
+    });
+    expect(subject.current.dirty).toBe(true);
+  });
+});
+
 describe("AdminHaigaPage routing", () => {
   beforeEach(() => {
     savedHaiga = {

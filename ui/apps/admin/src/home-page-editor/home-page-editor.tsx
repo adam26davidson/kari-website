@@ -14,6 +14,7 @@ import { HomePageService } from "@kari/shared/services/home-page";
 import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { useAdminUi } from "../admin-ui-context";
 import { useUnsavedChanges } from "../use-unsaved-changes";
+import { useAssistantSubject } from "../assistant/use-assistant-subject";
 import { SitePreview } from "../components/site-preview/site-preview";
 import { PreviewOverrides } from "@kari/shared/utils/preview-channel";
 
@@ -38,10 +39,13 @@ export function HomePageEditor() {
   // The form is dirty when its fields differ from the loaded data or a
   // replacement photo is pending; navigating away then requires
   // confirmation.
-  useUnsavedChanges(
+  const dirty =
     !!imageFile ||
-      JSON.stringify(homePageData) !== JSON.stringify(savedHomePageData),
-  );
+    JSON.stringify(homePageData) !== JSON.stringify(savedHomePageData);
+  useUnsavedChanges(dirty);
+  // No id and no title: this is the one home page, not an item out of a
+  // list, and the helper's page context has a shape for that.
+  useAssistantSubject({ what: "home page", dirty });
 
   // What the preview pane below the form is asked to render: the form as it
   // stands, including a photo she has picked but not uploaded (#239).

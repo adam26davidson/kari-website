@@ -11,6 +11,9 @@ files:
     destination: /home/ubuntu/static-sites/kari-website-test
   - source: kari-website-api
     destination: /home/ubuntu/kari-api-test
+  # The admin helper's read-only copy of the deployed commit; see appspec.yml.
+  - source: repo
+    destination: /home/ubuntu/kari-api-test/repo
 
 hooks:
   # Stop the API before overwriting its binary (avoids "text file busy").

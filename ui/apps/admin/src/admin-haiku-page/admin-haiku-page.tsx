@@ -11,6 +11,8 @@ import { HaikuEditor } from "./components/haiku-editor/haiku-editor";
 import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { ItemList } from "../components/item-list/item-list";
 import { deleteConfirmationMessage } from "../delete-confirmation";
+import { itemName } from "../item-name";
+import { useAssistantSubject } from "../assistant/use-assistant-subject";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
 import { useListUrls } from "../use-list-urls";
@@ -58,8 +60,22 @@ export function AdminHaikuPage() {
   const savedHaiku = openHaiku
     ? haikuList.find((haiku) => haiku.id === openHaiku.id)
     : undefined;
-  useUnsavedChanges(
-    !!openHaiku && JSON.stringify(openHaiku) !== JSON.stringify(savedHaiku),
+  const dirty =
+    !!openHaiku && JSON.stringify(openHaiku) !== JSON.stringify(savedHaiku);
+  useUnsavedChanges(dirty);
+  // ...and the same fact tells the helper what is on her screen, so its
+  // answers are about the haiku she is actually looking at. A haiku has no
+  // title, so its first written line names it — as it does in the delete
+  // confirmation.
+  useAssistantSubject(
+    openHaiku
+      ? {
+          what: "haiku",
+          id: openHaiku.id,
+          title: itemName(...openHaiku.lines),
+          dirty,
+        }
+      : {},
   );
 
   const deleteHaiku = async (id: string) => {

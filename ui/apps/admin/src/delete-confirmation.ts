@@ -1,3 +1,5 @@
+import { itemName } from "./item-name";
+
 /**
  * How much of an item's name the dialog will show. Long enough for a
  * haiku's first line or a post title, short enough that the 440px dialog
@@ -21,11 +23,7 @@ export function deleteConfirmationMessage(
   noun: string,
   ...candidateNames: Array<string | undefined>
 ): string {
-  const name = candidateNames
-    // Names come from free-text fields, so a "name" may carry newlines or
-    // runs of spaces that would wrap the dialog into a paragraph.
-    .map((candidate) => candidate?.replace(/\s+/g, " ").trim() ?? "")
-    .find((candidate) => candidate.length > 0);
+  const name = itemName(...candidateNames);
   if (!name) return `Delete this untitled ${noun}?`;
   const shortened =
     name.length > MAX_NAME_LENGTH

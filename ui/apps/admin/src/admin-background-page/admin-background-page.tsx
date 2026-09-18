@@ -10,6 +10,7 @@ import { AdminButton } from "../components/admin-button/admin-button";
 import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { useAdminUi } from "../admin-ui-context";
 import { useUnsavedChanges } from "../use-unsaved-changes";
+import { useAssistantSubject } from "../assistant/use-assistant-subject";
 import { apiImageUrl } from "@kari/shared/utils/image-management-helpers";
 import {
   BackgroundImageError,
@@ -81,7 +82,11 @@ export function AdminBackgroundPage() {
   const [loadFailed, setLoadFailed] = useState(false);
   const getAccessTokenSilently = useAdminToken();
 
-  useUnsavedChanges(!!imageFile || !sameSettings(settings, savedSettings));
+  const dirty = !!imageFile || !sameSettings(settings, savedSettings);
+  useUnsavedChanges(dirty);
+  // Her word for this section is what the menu says — "Appearance" — and
+  // the helper's own page map uses the same one.
+  useAssistantSubject({ what: "appearance", dirty });
 
   const fetchData = async () => {
     showLoading("Loading the site's appearance...");
