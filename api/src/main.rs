@@ -63,7 +63,7 @@ async fn main() {
     // unavailable, and the admin carries on without it.
     let assistant = Arc::new(AssistantState::from_env());
     tracing::info!(
-        "admin assistant {}, filing {}",
+        "admin assistant {}, filing {}, code {}",
         if assistant.is_available() {
             "configured"
         } else {
@@ -73,6 +73,14 @@ async fn main() {
             "configured"
         } else {
             "off (no GITHUB_ISSUES_TOKEN)"
+        },
+        // The snapshot ships in the deploy bundle rather than being
+        // configured, so "unreadable" here means the bundle is wrong — worth
+        // saying out loud at startup.
+        if assistant.can_read_repo() {
+            "readable"
+        } else {
+            "unavailable (no repo snapshot)"
         }
     );
 

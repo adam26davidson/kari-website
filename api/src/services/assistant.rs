@@ -28,6 +28,7 @@ use crate::services::anthropic::{
 };
 use crate::services::github_issues::{self, GithubError, GithubIssuesConfig};
 use crate::services::object_store::ObjectStore;
+use crate::services::repo_tools::{self, RepoAccess};
 use crate::services::s3::S3Error;
 
 /// Shown whenever the helper cannot run: unconfigured, or upstream is down.
@@ -53,17 +54,17 @@ pub const TANGLED_MESSAGE: &str =
     "I got a bit tangled trying to answer that. Could you ask me again, maybe in different words?";
 
 /// Told to the model when it asks for a tool it does not have on a host
-/// with NO GitHub token. Reading the repo arrives in later work, and
-/// `propose_issue` is undeclared here too — so filing really is still to
-/// come, which is what `system_prompt`'s no-filing half says as well.
+/// with NO GitHub token. `propose_issue` is undeclared there, so filing
+/// really is still to come — which is what `system_prompt`'s no-filing half
+/// says as well.
 pub const NO_TOOLS_YET: &str =
     "That isn't something I can do yet. Answer in words instead, and if she wants something logged, say the filing feature is coming soon.";
 
 /// The same, on a host that CAN file. `propose_issue` is declared here and
 /// the button behind it works, so a call that lands here is for something
-/// else — reading the repo, say — and telling the model to promise filing
-/// "soon" would contradict both its own instructions and the card she can
-/// already be looking at.
+/// else entirely, and telling the model to promise filing "soon" would
+/// contradict both its own instructions and the card she can already be
+/// looking at.
 pub const NO_OTHER_TOOLS_YET: &str =
     "That isn't something I can do yet. Answer in words instead, and if she wants something written down, use propose_issue as usual.";
 
@@ -219,6 +220,10 @@ pub struct AssistantState {
     /// waiting on, and it must not inherit the three-minute timeout an
     /// Opus turn needs.
     github_http: reqwest::Client,
+    /// The snapshot of this codebase shipped in the deploy bundle, or
+    /// `None` on a host without one — independent of both configurations
+    /// above, because reading code needs no secret at all.
+    repo: Option<RepoAccess>,
     limits: AssistantLimits,
     /// One Anthropic call in flight at a time. The host is a ~1 GiB micro
     /// EC2 running two copies of this API; more importantly, serialising
@@ -271,6 +276,7 @@ impl AssistantState {
                 .timeout(github_issues::REQUEST_TIMEOUT)
                 .build()
                 .unwrap_or_default(),
+            repo: None,
             limits,
             gate: Semaphore::new(1),
             daily: Mutex::new(DailyTurns::default()),
@@ -287,12 +293,21 @@ impl AssistantState {
         self
     }
 
+    /// Give the helper something to read. Chainable and separate for the
+    /// same reason as `with_github`: the three capabilities are provisioned
+    /// independently, and a test wants to build exactly one of them.
+    pub fn with_repo(mut self, repo: Option<RepoAccess>) -> Self {
+        self.repo = repo;
+        self
+    }
+
     /// Read configuration from the environment. Every variable is optional,
     /// so this never fails and never panics — an unconfigured host simply
     /// gets a resting helper.
     pub fn from_env() -> Self {
         Self::new(AnthropicConfig::from_env(), AssistantLimits::from_env())
             .with_github(GithubIssuesConfig::from_env())
+            .with_repo(RepoAccess::from_env())
     }
 
     /// Is there an API key? This is all `GET /assistant/status` reports; the
@@ -308,6 +323,14 @@ impl AssistantState {
     /// something the button behind it cannot do.
     pub fn can_file(&self) -> bool {
         self.github.is_some()
+    }
+
+    /// Is there a snapshot of the codebase to read? Decides whether the
+    /// three repo tools are declared at all — a tool that could only ever
+    /// answer "unavailable" is worse than no tool, for the same reason
+    /// `propose_issue` is withheld from a host that cannot file.
+    pub fn can_read_repo(&self) -> bool {
+        self.repo.is_some()
     }
 
     pub fn limits(&self) -> AssistantLimits {
@@ -719,14 +742,20 @@ pub async fn save_session(
 /// is absent, so a loop that dropped them after the first call would break
 /// the moment a tool was ever used.
 ///
-/// Empty when the host cannot file, which is also what keeps the helper
-/// honest there: with no tool to call it cannot offer to write anything
-/// down, and `system_prompt` tells it so in words as well.
-pub fn tools(can_file: bool) -> Vec<Value> {
+/// Each capability is withheld when the host lacks it, which is what keeps
+/// the helper honest: with no `propose_issue` it cannot offer to write
+/// anything down, and with no snapshot it cannot claim to have checked.
+/// `system_prompt` says the same thing in words.
+pub fn tools(can_file: bool, can_read_repo: bool) -> Vec<Value> {
+    let mut tools = if can_read_repo {
+        repo_tools::tools()
+    } else {
+        vec![]
+    };
     if !can_file {
-        return vec![];
+        return tools;
     }
-    vec![json!({
+    tools.push(json!({
         "name": PROPOSE_ISSUE_TOOL,
         "description": "Write up a problem she has reported, or an idea she \
     has described, as a draft issue for the site's developer. This does NOT file \
@@ -765,7 +794,8 @@ pub fn tools(can_file: bool) -> Vec<Value> {
             "required": ["kind", "title", "summary", "body"],
             "additionalProperties": false,
         },
-    })]
+    }));
+    tools
 }
 
 /// The helper's standing instructions.
@@ -775,7 +805,7 @@ pub fn tools(can_file: bool) -> Vec<Value> {
 /// this prefix is the part that never changes. It differs between HOSTS (one
 /// that can file says so), which costs nothing — a cache entry belongs to
 /// one process anyway.
-pub fn system_prompt(can_file: bool) -> String {
+pub fn system_prompt(can_file: bool, can_read_repo: bool) -> String {
     // The page map is written the way the admin menu reads, so the helper
     // names sections the way Kari sees them rather than the way the routes
     // are spelled.
@@ -813,6 +843,28 @@ logging it is coming soon, and suggest she mention it to Adam in the \
 meantime. Do not pretend to have filed anything."
     };
 
+    // The codebase is the ground truth about what the workshop actually
+    // does, and guessing at it is the one failure she cannot check. The
+    // budget sentence is load-bearing: a turn has only
+    // `max_tool_iterations_per_turn` round trips to share with drafting an
+    // issue, so a model that browses cheerfully runs out mid-answer.
+    let reading = if can_read_repo {
+        "\n\nYou can read the site's own source code, which is what it \
+really does rather than what anyone remembers it doing. Use search_repo \
+for a phrase she quoted or a name you need, list_repo_files to find your \
+way around, and read_repo_file when you need the detail. Look when you are \
+not sure how something behaves, and when you are writing a problem or an \
+idea down — naming the part of the site it concerns saves whoever picks it \
+up an afternoon.
+
+Keep it to a few reads. Two or three focused searches are plenty for one \
+answer; if that has not settled it, tell her what you do know and say what \
+you are unsure of. Never quote code or file names to her — read it, then \
+say what it means in her words.\n"
+    } else {
+        ""
+    };
+
     format!(
         "You are the helper inside Kari Davidson's admin workshop — the \
 private part of her website where she publishes her own writing and \
@@ -838,7 +890,7 @@ expected to happen, but only as much as you genuinely need.
 3. Hearing an idea for the site. Ask enough to understand the outcome she \
 wants.
 
-{filing}
+{filing}{reading}
 
 How to talk:
 
@@ -924,8 +976,9 @@ pub async fn send_message(
     session.display.push(DisplayMessage::user(text));
 
     let can_file = state.can_file();
-    let system = system_prompt(can_file);
-    let tools = tools(can_file);
+    let can_read_repo = state.can_read_repo();
+    let system = system_prompt(can_file, can_read_repo);
+    let tools = tools(can_file, can_read_repo);
     let mut reply: Option<String> = None;
 
     for _ in 0..limits.max_tool_iterations_per_turn {
@@ -996,24 +1049,36 @@ pub async fn send_message(
 
         // Every call is answered, in the same user message, whether or not
         // the tool exists — an unanswered `tool_use` is a 400 on the next
-        // request, and reading the repo is still a later slice.
+        // request.
         let mut results: Vec<Value> = vec![];
         for tool in &tool_uses {
-            let answer = if tool.name == PROPOSE_ISSUE_TOOL {
+            let answer: (bool, String) = if tool.name == PROPOSE_ISSUE_TOOL {
                 match IssueDraft::from_input(&tool.input, context) {
                     Some(draft) => {
                         tracing::info!("assistant drafted an issue: {}", draft.title);
                         session.pending_draft = Some(draft);
-                        (false, DRAFT_ON_SCREEN)
+                        (false, DRAFT_ON_SCREEN.to_string())
                     }
                     None => {
                         tracing::warn!("assistant sent an incomplete issue draft");
-                        (true, DRAFT_INCOMPLETE)
+                        (true, DRAFT_INCOMPLETE.to_string())
                     }
+                }
+            } else if repo_tools::is_repo_tool(&tool.name) {
+                // Answered even on a host with no snapshot, where these are
+                // undeclared: a conversation that started on a host with one
+                // can be replayed on a host without, and "the code isn't
+                // available" is the true thing to say either way.
+                match &state.repo {
+                    Some(repo) => {
+                        tracing::info!("assistant read the repo: {} {}", tool.name, tool.input);
+                        repo.run(&tool.name, &tool.input)
+                    }
+                    None => (true, repo_tools::REPO_UNAVAILABLE.to_string()),
                 }
             } else {
                 tracing::info!("assistant asked for an unavailable tool: {}", tool.name);
-                (true, no_such_tool(can_file))
+                (true, no_such_tool(can_file).to_string())
             };
             results.push(json!({
                 "type": "tool_result",
