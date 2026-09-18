@@ -870,7 +870,7 @@ up an afternoon.
 Keep it to a few reads. Two or three focused searches are plenty for one \
 answer; if that has not settled it, tell her what you do know and say what \
 you are unsure of. Never quote code or file names to her — read it, then \
-say what it means in her words.\n"
+say what it means in her words."
     } else {
         ""
     };
