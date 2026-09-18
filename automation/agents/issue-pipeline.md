@@ -426,10 +426,13 @@ hands over the kept branch and/or patch.
    drops issues carrying `in progress`, `has-dependencies`,
    `needs-clarification`, `idea`, `blocked`, `needs-human` (an ask
    waiting on the maintainer is not work) or `duplicate`, and emits
-   five slices:
+   six slices:
    - `priority` — everything labelled `priority`: the maintainer
-     saying "this one next", and the only label here a human owns
-     outright;
+     saying "this one next", and one of the two labels here a human
+     owns outright;
+   - `user_feedback` — everything labelled `user-feedback`: filed by
+     the site's author herself, through the helper in her admin
+     (#214). The API adds that label; no agent ever does;
    - `bugs` — everything labelled `bug`, whatever else it carries;
    - `maintainer` — product work with no `automation` label: filed by
      a human, not the fleet;
@@ -503,7 +506,19 @@ hands over the kept branch and/or patch.
       never second-guess one that is set. It is rare by construction;
       if the slice is ever large, say so in the run summary rather
       than quietly re-ranking it.
-   1. **Blocking bugs** — the `bugs` slice, but only where the body
+   1. **What Kari asked for** — the `user_feedback` slice. She filed it
+      herself, in her own words, through the helper in her admin, and
+      the whole site exists for her to publish from: her asks come
+      before the fleet's own backlog and before bugs the fleet found.
+      The issue body carries the conversation she had, so read that
+      before deciding what the work is. Treat it as product work with
+      its readiness already settled by a human asking — but still
+      judge scope, and still ask (one comment, `needs-clarification`)
+      if what she wants genuinely cannot be told from the transcript.
+      Never add or remove `user-feedback`: like `priority` it is a
+      channel a human owns, and an agent putting it on its own issue
+      would be the fleet promoting itself into her queue.
+   2. **Blocking bugs** — the `bugs` slice, but only where the body
       shows something actually broken or blocked for a visitor or the
       admin: a broken flow, an unusable control, content that cannot
       be read, lost data. Judge that from the body at read time, not
@@ -513,12 +528,12 @@ hands over the kept branch and/or patch.
       provenance slice, note the mislabel in the run summary, and
       leave the label alone (the groomer audits it; you never add or
       remove `bug` on an existing issue yourself).
-   2. **Maintainer-filed product work** — the `maintainer` slice. No
+   3. **Maintainer-filed product work** — the `maintainer` slice. No
       `automation` label means a human filed it, and the fleet exists
       to build what its maintainer asks for, ahead of the polish it
       files for itself.
-   3. **Agent-filed product work** — the `product` slice.
-   4. **Tooling** — the `tooling` slice, under the bar below.
+   4. **Agent-filed product work** — the `product` slice.
+   5. **Tooling** — the `tooling` slice, under the bar below.
 
    Issues labelled `tooling` are about the machinery — the pipeline,
    CI and workflows, the lint and dev scripts, the test harnesses —
@@ -628,12 +643,14 @@ hands over the kept branch and/or patch.
    record the ask, label, send via `telegram.sh send --issue`. The
    worker already wrote the what/where/what-to-check; your job is the
    dedupe, the labels and the one send.
-   Three labels, three questions — and one you never touch:
-   `priority` is the maintainer's alone. Never add it to an issue you
-   file, never add or remove it on an existing one, however
-   important the work looks to you. Its whole value is that a human
-   set it, so a fleet that can apply it turns the one channel the
-   maintainer has into more of the fleet talking to itself.
+   Three labels, three questions — and two you never touch:
+   `priority` is the maintainer's alone, and `user-feedback` is Kari's,
+   applied by the API when she files something through the admin helper
+   (#214). Never add either to an issue you file, never add or remove
+   either on an existing one, however important the work looks to you.
+   Their whole value is that a human's own ask put them there, so a
+   fleet that can apply them turns the two channels the humans have into
+   more of the fleet talking to itself.
    - **Is something broken → `bug`.** Add it ONLY when the issue
      describes something a visitor or the admin cannot do, or can
      barely do: a broken flow, an unusable control, content that

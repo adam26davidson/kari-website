@@ -9,6 +9,7 @@ const session = {
   id: "abc",
   messages: [{ role: "assistant" as const, text: "Hello" }],
   turnsRemaining: 39,
+  draft: null,
 };
 
 setupServiceTestHooks();
@@ -125,5 +126,57 @@ describe("AssistantService.sendMessage", () => {
     await expect(
       AssistantService.sendMessage("abc", "Hi", {}, getToken),
     ).rejects.toMatchObject({ status: 429 });
+  });
+});
+
+describe("AssistantService.fileIssue", () => {
+  it("POSTs her decision to file and returns the conversation", async () => {
+    const filed = {
+      ...session,
+      messages: [
+        {
+          role: "assistant" as const,
+          text: "Filed",
+          issue: { number: 7, url: "https://example.test/7", title: "Sideways" },
+        },
+      ],
+    };
+    const fetchMock = mockFetchOnce({ ok: true, json: async () => filed });
+
+    const result = await AssistantService.fileIssue("abc", getToken);
+
+    expect(result).toEqual(filed);
+    expect(fetchMock).toHaveBeenCalledWith(`${SESSIONS_URL}/abc/issue`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer test-token",
+      },
+      body: JSON.stringify({ action: "file" }),
+    });
+  });
+
+  it("throws with the status when the helper has nowhere to file", async () => {
+    mockFetchOnce({ ok: false, status: 503, json: async () => ({}) });
+    await expect(
+      AssistantService.fileIssue("abc", getToken),
+    ).rejects.toMatchObject({ status: 503 });
+  });
+});
+
+describe("AssistantService.dismissDraft", () => {
+  it("POSTs the dismissal", async () => {
+    const fetchMock = mockFetchOnce({ ok: true, json: async () => session });
+
+    const result = await AssistantService.dismissDraft("abc", getToken);
+
+    expect(result).toEqual(session);
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${SESSIONS_URL}/abc/issue`,
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ action: "dismiss" }),
+      }),
+    );
   });
 });

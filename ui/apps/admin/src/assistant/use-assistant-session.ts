@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AssistantContext,
+  AssistantDraft,
   AssistantMessage,
   AssistantService,
+  AssistantSession,
 } from "@kari/shared/services/assistant";
 import { HttpError } from "@kari/shared/services/http-error";
 import { TokenGetter } from "@kari/shared/services/http";
@@ -82,6 +84,26 @@ export interface AssistantSessionState {
   sending: boolean;
   /** A plain-language problem to show under the transcript, if any. */
   error: string | null;
+  /** The draft awaiting her decision, if the helper has written one. */
+  draft: AssistantDraft | null;
+  /**
+   * Whether the helper has anywhere to file. False on a host with no
+   * GitHub token, where a restored draft can still be on screen — so the
+   * card offers only to let it go rather than a button that cannot work.
+   */
+  canFile: boolean;
+  /** True while her decision about the draft is in flight. */
+  deciding: boolean;
+  /** A plain-language problem to show on the draft card, if any. */
+  draftError: string | null;
+  /**
+   * File the draft. Keeps the card when it does not land, so pressing
+   * again is a real remedy — unless the server has already settled this
+   * draft, in which case the card goes and the transcript is refetched.
+   */
+  fileIssue: () => Promise<void>;
+  /** Let the draft go. */
+  dismissDraft: () => Promise<void>;
   /** Start talking to the API. Called every time the panel opens. */
   begin: () => void;
   /**
@@ -134,6 +156,42 @@ export const RESTORE_FAILED_MESSAGE =
   "Couldn't bring your last conversation back — you can start a new one here.";
 
 /**
+ * Shown on the card when filing did not land.
+ *
+ * Word for word the API's `FILING_FAILED_MESSAGE`, and true because every
+ * failure the server reports happened before GitHub created anything — the
+ * draft is still there, so pressing the button again is a real remedy
+ * rather than a platitude. A filing that DID reach GitHub and could not
+ * then be saved comes back as an ordinary answer with the filed line in it,
+ * precisely so this message is never shown over an issue that exists.
+ */
+export const FILING_FAILED_MESSAGE =
+  "Couldn't write that down just now — it's still here, so you can try again in a moment.";
+
+/**
+ * Shown under the transcript when a decision arrives about a draft the
+ * server has already settled — it answers 400 ("there is nothing to file")
+ * from then on.
+ *
+ * Reachable without anyone doing anything odd: the filing lands and its
+ * answer is lost on the way back (a dropped connection), or a second window
+ * on the same conversation decides first. Both buttons would go on getting
+ * that 400 forever, so the card cannot stay and the words cannot promise a
+ * retry — they say what happened and leave the conversation open, which is
+ * the one thing that still works.
+ */
+export const DRAFT_SETTLED_MESSAGE =
+  "That one's already been settled — written down, or let go. Ask me again if there's something else you'd like written down.";
+
+/**
+ * Shown on the card when this host has nowhere to file — the API's
+ * `FILING_OFF_MESSAGE`. Not a fault and not something waiting will fix, so
+ * the words point her at the one thing that helps.
+ */
+export const FILING_OFF_MESSAGE =
+  "I can't write things down just yet. Tell Adam what you need and he'll get it noted.";
+
+/**
  * Owns the conversation: whether the helper is available, the transcript,
  * and the id that lets a reload pick the same conversation back up.
  *
@@ -157,6 +215,10 @@ export function useAssistantSession(
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<AssistantDraft | null>(null);
+  const [canFile, setCanFile] = useState(false);
+  const [deciding, setDeciding] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
   // The id is a ref, not state: nothing renders from it, and a send that
   // has just created a session must see it immediately rather than on the
   // next render.
@@ -223,6 +285,7 @@ export function useAssistantSession(
       try {
         const status = await AssistantService.getStatus(getToken);
         if (cancelled) return;
+        setCanFile(status.canFile);
         if (!status.available) {
           rest();
           return;
@@ -235,6 +298,8 @@ export function useAssistantSession(
             if (cancelled) return;
             sessionId.current = session.id;
             setMessages(session.messages);
+            // A decision she was partway through survives the reload too.
+            setDraft(session.draft ?? null);
           } catch (restoreError) {
             if (cancelled) return;
             // A conversation the server no longer has is not a failure —
@@ -310,6 +375,11 @@ export function useAssistantSession(
         );
         if (turn.current !== mine) return true;
         setMessages(session.messages);
+        // A reply may arrive with a draft attached, or with the card gone
+        // because the helper rewrote it — either way the server's copy is
+        // the truth.
+        setDraft(session.draft ?? null);
+        setDraftError(null);
         return true;
       } catch (sendError) {
         if (turn.current !== mine) return true;
@@ -336,6 +406,89 @@ export function useAssistantSession(
     [getToken, sending, storage],
   );
 
+  /**
+   * Her decision about the draft: file it, or let it go.
+   *
+   * Both answers come back as the whole updated conversation, so the panel
+   * stays a mirror of the server — the filed confirmation and its link
+   * arrive as an ordinary line of the transcript rather than as something
+   * this hook has to assemble.
+   *
+   * Nothing is decided while a message is in flight. The card's buttons are
+   * already disabled then (`AssistantDraftCard`); this is the same rule
+   * where it cannot be got round by a click that beat the re-render, and it
+   * is what keeps one conversation to one question at a time.
+   */
+  /**
+   * Take the server's copy of the conversation as the truth again.
+   *
+   * Called when the panel and the server disagree about the draft. The card
+   * goes either way — the 400 that brought us here is proof the server has
+   * none — and the transcript that comes back carries the filed line, and
+   * its link, if that is what became of it.
+   */
+  const resettle = useCallback(
+    async (id: string, mine: number): Promise<void> => {
+      try {
+        const session = await AssistantService.getSession(id, getToken);
+        if (turn.current !== mine) return;
+        setMessages(session.messages);
+        setDraft(session.draft ?? null);
+      } catch {
+        // A refetch that fails changes nothing about the draft: it is gone
+        // on the server, so leaving the card would be an offer nothing can
+        // accept. The transcript on screen is simply a little behind, and
+        // her next message brings it back up to date.
+        if (turn.current !== mine) return;
+        setDraft(null);
+      }
+      setDraftError(null);
+      setError(DRAFT_SETTLED_MESSAGE);
+    },
+    [getToken],
+  );
+
+  const decide = useCallback(
+    async (action: "file" | "dismiss"): Promise<void> => {
+      const id = sessionId.current;
+      if (!id || deciding || sending) return;
+      const mine = turn.current;
+      setDeciding(true);
+      setDraftError(null);
+      try {
+        const session: AssistantSession =
+          action === "file"
+            ? await AssistantService.fileIssue(id, getToken)
+            : await AssistantService.dismissDraft(id, getToken);
+        if (turn.current !== mine) return;
+        setMessages(session.messages);
+        setDraft(session.draft ?? null);
+      } catch (decideError) {
+        if (turn.current !== mine) return;
+        const status =
+          decideError instanceof HttpError ? decideError.status : undefined;
+        if (status === 400) {
+          // The server has no draft to decide about any more, so both
+          // buttons would go on getting this same 400 until the page was
+          // reloaded. Keeping the card and promising a retry would be a
+          // dead end; the remedy is to stop disagreeing with the server.
+          await resettle(id, mine);
+          return;
+        }
+        // Anything else leaves the draft where it is — the server only
+        // reports a failure when nothing was created — so the card stays and
+        // the button she just pressed is still the right one to press.
+        setDraftError(FILING_FAILED_MESSAGE);
+      } finally {
+        if (turn.current === mine) setDeciding(false);
+      }
+    },
+    [deciding, sending, getToken, resettle],
+  );
+
+  const fileIssue = useCallback(() => decide("file"), [decide]);
+  const dismissDraft = useCallback(() => decide("dismiss"), [decide]);
+
   const startOver = useCallback(() => {
     // Everything in flight now belongs to the previous conversation.
     turn.current += 1;
@@ -343,10 +496,30 @@ export function useAssistantSession(
     clearId(storage);
     setMessages([]);
     setError(null);
+    // The card belonged to the conversation she has just cleared. The draft
+    // itself is unfiled and stays on the abandoned session in the bucket;
+    // nothing was created, so there is nothing to tidy up.
+    setDraft(null);
+    setDraftError(null);
+    setDeciding(false);
     // Stop waiting on the abandoned reply, so she can type at once instead
     // of sitting out the rest of a turn she has just walked away from.
     setSending(false);
   }, [storage]);
 
-  return { phase, messages, sending, error, begin, send, startOver };
+  return {
+    phase,
+    messages,
+    sending,
+    error,
+    draft,
+    canFile,
+    deciding,
+    draftError,
+    begin,
+    send,
+    fileIssue,
+    dismissDraft,
+    startOver,
+  };
 }

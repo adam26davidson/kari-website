@@ -10,6 +10,7 @@
 //! under test — hence the file-level allow, as in `store.rs`.
 #![allow(dead_code)]
 
+pub mod assistant;
 pub mod store;
 
 use std::sync::Arc;

@@ -44,9 +44,11 @@ Design and decisions:
   paginates the whole open backlog through the REST API (no `--limit`
   truncation, no lagging search index), filters out claimed/blocked
   issues, and prints bounded JSON slices — `priority` (the
-  maintainer's own, ahead of everything), `bugs`, `maintainer` (no
-  `automation` label — human-filed), `product` (agent-filed),
-  `tooling` — with `*_omitted` counts so a capped view is visible.
+  maintainer's own, ahead of everything), `user_feedback` (what Kari
+  filed herself through the admin helper, #214 — ahead of the fleet's
+  own backlog and of bugs), `bugs`, `maintainer` (no `automation`
+  label — human-filed), `product` (agent-filed), `tooling` — with
+  `*_omitted` counts so a capped view is visible.
   Every slice is ranked by `unblocks` (how many open issues name that
   issue as their blocker, read out of the `has-dependencies` issues'
   bodies and comments) and then oldest-first, so a foundation issue

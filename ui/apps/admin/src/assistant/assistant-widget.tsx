@@ -5,7 +5,9 @@ import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import { useAdminToken } from "../hooks/use-admin-token";
 import { useAssistantContext } from "./assistant-context";
+import { AssistantDraftCard } from "./assistant-draft-card";
 import {
+  FILING_OFF_MESSAGE,
   RESTING_MESSAGE,
   useAssistantSession,
   type StorageLike,
@@ -41,13 +43,28 @@ export function AssistantWidget({
   const location = useLocation();
   const getToken = useAdminToken();
   const pageContext = useAssistantContext();
-  const { phase, messages, sending, error, begin, send, startOver } =
-    useAssistantSession(getToken, storage);
+  const {
+    phase,
+    messages,
+    sending,
+    error,
+    draft,
+    canFile,
+    deciding,
+    draftError,
+    begin,
+    send,
+    fileIssue,
+    dismissDraft,
+    startOver,
+  } = useAssistantSession(getToken, storage);
 
   const [open, setOpen] = useState(
     () => new URLSearchParams(location.search).get(OPEN_PARAM) === "open",
   );
-  const [draft, setDraft] = useState("");
+  // What she has typed but not yet sent. Named for the box rather than
+  // for a draft issue, which `draft` above now means.
+  const [typed, setTyped] = useState("");
   const transcriptEnd = useRef<HTMLDivElement>(null);
 
   // Nothing is asked of the API until she opens the panel, so an admin page
@@ -56,22 +73,24 @@ export function AssistantWidget({
     if (open) begin();
   }, [open, begin]);
 
-  // Keep the newest line in view as the conversation grows.
+  // Keep the newest line in view as the conversation grows — the draft
+  // card included, since a card she cannot see is a question she never
+  // gets asked.
   useEffect(() => {
     transcriptEnd.current?.scrollIntoView({ block: "end" });
-  }, [messages, sending]);
+  }, [messages, sending, draft]);
 
   const submit = async () => {
-    const text = draft;
+    const text = typed;
     // Cleared optimistically so the box is empty while she waits; put back
     // verbatim on failure, because losing what she wrote is the one thing a
     // failed send must never do.
-    setDraft("");
+    setTyped("");
     const sent = await send(text, {
       route: location.pathname,
       ...pageContext?.subject,
     });
-    if (!sent) setDraft(text);
+    if (!sent) setTyped(text);
   };
 
   // The corner button is the way IN; the panel's own header is the way out.
@@ -126,7 +145,7 @@ export function AssistantWidget({
               size="sm"
               onClick={() => {
                 startOver();
-                setDraft("");
+                setTyped("");
               }}
             >
               Start again
@@ -182,8 +201,33 @@ export function AssistantWidget({
                 {line}
               </p>
             ))}
+            {message.issue && (
+              // The quiet half of "Filed": somewhere to look, in case she
+              // wants to, and nothing louder than the sentence above it.
+              <a
+                className="mt-1 inline-block font-sans text-sm text-muted-foreground underline"
+                href={message.issue.url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                See what I wrote down
+              </a>
+            )}
           </div>
         ))}
+
+        {draft && (
+          <AssistantDraftCard
+            draft={draft}
+            canFile={canFile}
+            deciding={deciding}
+            sending={sending}
+            error={draftError}
+            unavailableMessage={FILING_OFF_MESSAGE}
+            onFile={() => void fileIssue()}
+            onDismiss={() => void dismissDraft()}
+          />
+        )}
 
         {sending && (
           <p className="mr-8 font-sans text-sm italic text-muted-foreground">
@@ -204,11 +248,11 @@ export function AssistantWidget({
         <div className="border-t border-border px-5 py-4">
           <Textarea
             className="min-h-[44px] max-h-32"
-            value={draft}
+            value={typed}
             placeholder="Ask me anything about your site"
             aria-label="Your message"
             disabled={sending}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(event) => setTyped(event.target.value)}
             onKeyDown={(event) => {
               // Enter sends, Shift+Enter starts a new line — what a chat
               // box is expected to do.
@@ -220,7 +264,7 @@ export function AssistantWidget({
           />
           <div className="mt-3 flex justify-end">
             <Button
-              disabled={sending || draft.trim().length === 0}
+              disabled={sending || typed.trim().length === 0}
               onClick={() => void submit()}
             >
               Send
