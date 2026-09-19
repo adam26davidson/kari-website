@@ -229,9 +229,9 @@ test.describe("admin: what's on test", () => {
     await expect(shas).toContainText(E2E_COMMIT_SHA.slice(0, 7));
     await expect(shas).toContainText(PROD_SHA.slice(0, 7));
     // No truncation warning: the range's total matches what was listed.
-    // The warning is the page's only red banner, so the shared
-    // .admin-danger-banner class names it unambiguously within the section.
-    await expect(section(page).locator(".admin-danger-banner")).toHaveCount(0);
+    // The warning is the section's only `role="alert"` — the load error
+    // below is a plain notice — so that role names it unambiguously here.
+    await expect(section(page).getByRole("alert")).toHaveCount(0);
   });
 
   test("says so when test and live are the same", async ({ page }) => {

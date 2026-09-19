@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { readFileSync } from "node:fs";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AdminWhatsOnTestPage } from "./admin-whats-on-test-page";
@@ -59,14 +58,58 @@ describe("AdminWhatsOnTestPage", () => {
     expect(
       screen.getByRole("heading", { level: 2, name: "What's on test" }),
     ).toBeInTheDocument();
-    // The card is the shared .admin-page-card, not a block of its own: this
-    // page and image cleanup had each written the same translucent card out
-    // in full, so one tweak was two edits (#547). Its own class stays for
-    // the one thing that differs, the width.
+    // The section hook the e2e spec scopes its locators to, and no longer
+    // the legacy translucent slab (#841).
     expect(container.firstElementChild).toHaveClass(
-      "admin-page-card",
       "admin-whats-on-test-page",
     );
+    expect(container.firstElementChild).not.toHaveClass("admin-page-card");
+
+    // Once the lookup settles, the result sits on the shadcn Card.
+    await screen.findByText("Change background photo");
+    const card = container.querySelector('[data-slot="card"]');
+    expect(card).not.toBeNull();
+    expect(card?.querySelector(".whats-on-test-shas")).not.toBeNull();
+  });
+
+  // These classes are how ui/e2e/admin-whats-on-test.spec.ts finds the
+  // section's parts in a real browser; nothing styles them, so only a test
+  // keeps them from being tidied away (cf. app-shell.test.tsx).
+  it("keeps the class hooks the e2e spec locates by", async () => {
+    const { container } = render(<AdminWhatsOnTestPage />);
+
+    await screen.findByText("Change background photo");
+    expect(container.querySelectorAll(".whats-on-test-commit")).toHaveLength(
+      2,
+    );
+    expect(container.querySelectorAll(".whats-on-test-pr-link")).toHaveLength(
+      1,
+    );
+    expect(container.querySelector(".whats-on-test-shas")).not.toBeNull();
+  });
+
+  it("keeps the note hook the e2e spec locates the quiet states by", async () => {
+    vi.mocked(DeployStatusService.getLatestProdDeploy).mockResolvedValue({
+      kind: "found",
+      sha: HEAD_SHA,
+    });
+
+    const { container } = render(<AdminWhatsOnTestPage />);
+
+    await screen.findByText(/nothing is waiting to go live/i);
+    expect(container.querySelector(".whats-on-test-note")).not.toBeNull();
+  });
+
+  it("shows a quiet loading line before the lookup settles", () => {
+    vi.mocked(DeployStatusService.getLatestProdDeploy).mockReturnValue(
+      new Promise(() => {}),
+    );
+
+    const { container } = render(<AdminWhatsOnTestPage />);
+
+    expect(screen.getByText("Loading...")).toBeInTheDocument();
+    // No empty card waiting behind the line.
+    expect(container.querySelector('[data-slot="card"]')).toBeNull();
   });
 
   // The standing explanation used to render unconditionally above this
@@ -86,11 +129,14 @@ describe("AdminWhatsOnTestPage", () => {
   it("explains the page in one paragraph when the build sha is absent", async () => {
     vi.unstubAllEnvs();
 
-    render(<AdminWhatsOnTestPage />);
+    const { container } = render(<AdminWhatsOnTestPage />);
 
     expect(await screen.findByText(OFF_TEST)).toBeInTheDocument();
     // Not alongside a paragraph promising the list it just said is empty.
     expect(screen.queryByText(STANDING)).toBeNull();
+    // Title and one line — not an empty card with nothing to put on it.
+    // This is the state CI's test-mode capture shows (#622).
+    expect(container.querySelector('[data-slot="card"]')).toBeNull();
     expect(DeployStatusService.getLatestProdDeploy).not.toHaveBeenCalled();
     expect(DeployStatusService.getPendingCommits).not.toHaveBeenCalled();
   });
@@ -214,9 +260,13 @@ describe("AdminWhatsOnTestPage", () => {
       /715 changes are waiting to go live, but only the oldest 2 could be listed/i,
     );
     expect(warning).toHaveTextContent(/most recent ones are missing/i);
-    // Red, in the admin's one danger treatment — the same rule image
-    // cleanup's error wears (#547).
-    expect(warning).toHaveClass("admin-danger-banner");
+    // Red, in the admin's one danger treatment — the same filled pair
+    // image cleanup's error block wears, and announced as an alert.
+    expect(warning).toHaveAttribute("role", "alert");
+    expect(warning).toHaveClass(
+      "bg-destructive",
+      "text-destructive-foreground",
+    );
     // The (incomplete) list still renders below the warning.
     expect(screen.getByText("Change background photo")).toBeInTheDocument();
   });
@@ -243,36 +293,5 @@ describe("AdminWhatsOnTestPage", () => {
     expect(
       await screen.findByText("Change background photo"),
     ).toBeInTheDocument();
-  });
-
-  // jsdom applies no stylesheet, so the shape of the page is read from the
-  // CSS. The panel's explanation line was capped at 60ch of 15px text while
-  // the notes beneath it ran uncapped at 16px, so two paragraphs on one
-  // card broke at visibly different widths — tidy panel, ragged block.
-  describe("the panel's prose", () => {
-    const css = (path: string) =>
-      readFileSync(path, "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
-    const pageCss = css(
-      "apps/admin/src/admin-whats-on-test-page/admin-whats-on-test-page.css",
-    );
-
-    it.each([["font-size"], ["max-width"]])(
-      "sets the notes' %s from the shared admin prose token",
-      (property) => {
-        const block = pageCss.match(/\.whats-on-test-note\s*\{([^}]*)\}/)?.[1];
-        expect(block).toMatch(
-          new RegExp(`${property}\\s*:\\s*var\\(--admin-prose-`),
-        );
-      },
-    );
-
-    it("gives the explanation line above them the very same tokens", () => {
-      const adminCss = css("apps/admin/src/admin.css");
-      const block = adminCss.match(
-        /\.admin-section-explanation\s*\{([^}]*)\}/,
-      )?.[1];
-      expect(block).toMatch(/font-size\s*:\s*var\(--admin-prose-size\)/);
-      expect(block).toMatch(/max-width\s*:\s*var\(--admin-prose-measure\)/);
-    });
   });
 });

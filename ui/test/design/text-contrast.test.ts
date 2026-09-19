@@ -334,11 +334,10 @@ const ADMIN_PANELS: ReadonlyArray<[string, string, string]> = [
     '.admin-data-list-item:where(:not([data-slot="list-row"]))',
   ],
   ["list header panel", adminItemListCss, ".admin-data-list-header"],
-  // The one-card sections (image cleanup, what's on test). Each page used
-  // to spell this backing out in its own stylesheet, so neither was under
-  // any shared contract and the two copies could drift apart; since #547
-  // they wear one class and this checks it (#210, #307).
-  ["standalone page card", adminCss, ".admin-page-card"],
+  // "standalone page card" (.admin-page-card) went with what's on test,
+  // its last holder — #841 moved that page to the shadcn Card, whose
+  // --card backing on flat paper is pinned by "the admin's warm studio
+  // palette" below rather than by this translucent-over-photo contract.
 ];
 
 describe("secondary text in the admin panels", () => {
@@ -413,9 +412,11 @@ const adminCardOver = (photo: Rgb): Rgb =>
 
 describe("the admin section headings", () => {
   it("finds the heading of every admin section", () => {
-    // The shared PageTitle (the migrated pages' heading), site background,
-    // image cleanup, what's on test. A drop below that means the scan
-    // stopped seeing what it is meant to check.
+    // The shared PageTitle (every migrated page's heading), the helper
+    // panel's "Helper", and the two components still on the legacy fork:
+    // the item list and the data editor. A drop below that means the scan
+    // stopped seeing what it is meant to check. #898 re-derives the floor
+    // once the legacy pair goes.
     expect(ADMIN_HEADINGS.length).toBeGreaterThanOrEqual(4);
   });
 
@@ -443,7 +444,11 @@ describe("the admin section headings", () => {
     },
   );
 
-  it.each([[".admin-section-heading"], [".admin-section-explanation"]])(
+  // ".admin-section-explanation" went with what's on test, its last
+  // holder — #841 moved that page's explanation line to Tailwind's
+  // `text-muted-foreground` on flat paper, which the palette checks below
+  // cover; the test that kept it secondary to the heading went with it.
+  it.each([[".admin-section-heading"]])(
     "%s stays legible on the card whatever photo is behind it",
     (selector) => {
       const color = colorOf(declaration(adminCss, selector, "color"));
@@ -454,19 +459,6 @@ describe("the admin section headings", () => {
       }
     },
   );
-
-  it("keeps the explanation line secondary to the heading above it", () => {
-    const card = adminCardOver(MID_GREY);
-    const heading = colorOf(
-      declaration(adminCss, ".admin-section-heading", "color"),
-    );
-    const explanation = colorOf(
-      declaration(adminCss, ".admin-section-explanation", "color"),
-    );
-    expect(contrastRatio(explanation, card)).toBeLessThan(
-      contrastRatio(heading, card),
-    );
-  });
 });
 
 // The glyph on an icon control is only legible because of the colour
@@ -514,29 +506,11 @@ describe("the admin icon buttons", () => {
   });
 });
 
-// The danger red in its third shape, after the filled button and the
-// outlined one: the block of white text a page puts above its content when
-// something failed or is missing (image cleanup's error, what's on test's
-// truncation warning). Each page had spelled the pair out in its own
-// stylesheet, which is exactly how a colour and the text on it drift apart;
-// since #547 it is one rule, and it gets the filled button's numbers.
-describe("the admin's danger banner", () => {
-  const banner = (property: string) =>
-    declaration(adminCss, ".admin-danger-banner", property);
-
-  it("spends the one danger token rather than a red of its own", () => {
-    expect(banner("background-color")).toContain("--admin-danger");
-  });
-
-  it("keeps its text legible on that fill", () => {
-    expect(
-      contrastRatio(
-        colorOf(banner("color")),
-        colorOf(banner("background-color")),
-      ),
-    ).toBeGreaterThanOrEqual(4.5);
-  });
-});
+// ".admin-danger-banner" and the describe that pinned it went with what's
+// on test, its last holder — #841 moved that page's truncation warning to
+// Tailwind's `bg-destructive text-destructive-foreground`, the same pair
+// image cleanup's error block wears, whose contrast "the destructive's
+// label on its fill" already pins in the palette it.each above.
 
 // The admin's own palette (#592), which is a different problem from every
 // other block in this file: the admin dropped the background photo, so its
