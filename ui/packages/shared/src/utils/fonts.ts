@@ -147,13 +147,104 @@ export function fontStylesheetUrl(pairing: FontPairing): string | undefined {
  * costs a fresh swap interval if the same pairing is applied again.
  */
 export function ensureFontStylesheet(pairing: FontPairing): void {
+  ensureFontStylesheetLink(pairing);
+}
+
+/**
+ * The same thing, handing back the `<link>` so a caller can wait on it.
+ * Undefined for the built-in pairing, which has no stylesheet of its own.
+ */
+function ensureFontStylesheetLink(
+  pairing: FontPairing,
+): HTMLLinkElement | undefined {
   const href = fontStylesheetUrl(pairing);
-  if (href === undefined) return;
+  if (href === undefined) return undefined;
   const selector = `link[${PAIRING_ATTRIBUTE}="${pairing.id}"]`;
-  if (document.head.querySelector(selector)) return;
+  const existing = document.head.querySelector<HTMLLinkElement>(selector);
+  if (existing) return existing;
   const link = document.createElement("link");
   link.rel = "stylesheet";
   link.href = href;
   link.setAttribute(PAIRING_ATTRIBUTE, pairing.id);
   document.head.append(link);
+  return link;
+}
+
+/**
+ * Resolves once a stylesheet link has been parsed; rejects if it cannot be
+ * fetched at all.
+ *
+ * A link that already has a `sheet` has been parsed already, and its `load`
+ * event is in the past — waiting for another one would wait forever. That
+ * is the ordinary case for a pairing whose link `ensureFontStylesheet` put
+ * in the head earlier.
+ */
+function stylesheetParsed(link: HTMLLinkElement): Promise<void> {
+  if (link.sheet) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    link.addEventListener("load", () => resolve(), { once: true });
+    link.addEventListener(
+      "error",
+      () => reject(new Error(`Could not load the stylesheet at ${link.href}`)),
+      { once: true },
+    );
+  });
+}
+
+/** One promise per pairing-and-text, so asking twice costs one load. */
+const pairingFontLoads = new Map<string, Promise<void>>();
+
+/**
+ * Resolves once a pairing's two faces are actually ready to paint `text`,
+ * and rejects if they cannot be fetched.
+ *
+ * `ensureFontStylesheet` alone guarantees nothing about completion: a
+ * sample rendered in a face the browser has not downloaded yet paints in
+ * the fallback, which for these pairings is the same face for all of them
+ * (see the note on FontPairing). Without this, the admin's font picker can
+ * show four options that look identical and give no sign that anything is
+ * still coming (#816).
+ *
+ * The order matters. `document.fonts.load()` can only match a family the
+ * document has HEARD of, and a family is only registered once the
+ * stylesheet naming it has been parsed — asked before that, it resolves
+ * with an empty list and reports success for a face that has not been
+ * requested at all. So the link's own load comes first.
+ *
+ * `text` is the words that will actually be shown. Google serves these
+ * families split by `unicode-range`, so a sample carrying Japanese needs
+ * its subsets asked for by name; the default probe string is Latin-only
+ * and would report ready while the Japanese line still paints in the
+ * fallback.
+ */
+export function loadPairingFonts(
+  pairing: FontPairing,
+  text: string,
+): Promise<void> {
+  const key = `${pairing.id} ${text}`;
+  const started = pairingFontLoads.get(key);
+  if (started) return started;
+  const loading = loadPairingFontFaces(pairing, text);
+  pairingFontLoads.set(key, loading);
+  return loading;
+}
+
+async function loadPairingFontFaces(
+  pairing: FontPairing,
+  text: string,
+): Promise<void> {
+  const link = ensureFontStylesheetLink(pairing);
+  // The built-in pairing: both index.html files link its families, so
+  // there is nothing of its own to wait for.
+  if (link === undefined) return;
+  // No Font Loading API (jsdom, and browsers old enough not to matter):
+  // the stylesheet is in the head and the page behaves exactly as it did
+  // before this function existed. Claiming "still loading" forever would
+  // be worse than the race it replaces.
+  if (!document.fonts) return;
+  await stylesheetParsed(link);
+  await Promise.all([
+    document.fonts.load(`${pairing.displayWeight} 1em ${pairing.bodyFamily}`, text),
+    document.fonts.load(`1em ${pairing.uiFamily}`, text),
+  ]);
 }

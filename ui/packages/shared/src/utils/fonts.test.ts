@@ -1,10 +1,11 @@
-import { describe, expect, it, afterEach } from "vitest";
+import { describe, expect, it, afterEach, vi } from "vitest";
 import {
   DEFAULT_FONT_PAIRING,
   FONT_PAIRINGS,
   ensureFontStylesheet,
   fontStylesheetUrl,
   getFontPairing,
+  loadPairingFonts,
   resolveFontPairing,
 } from "./fonts";
 
@@ -143,5 +144,116 @@ describe("ensureFontStylesheet", () => {
     ensureFontStylesheet(DEFAULT_FONT_PAIRING);
 
     expect(injectedLinks()).toHaveLength(0);
+  });
+});
+
+describe("loadPairingFonts", () => {
+  const PAIRING = FONT_PAIRINGS[1];
+
+  /**
+   * Stands in for the Font Loading API jsdom does not implement, and hands
+   * back the spy so a test can see what was asked for.
+   *
+   * Every test passes its OWN sample text: the module caches one promise
+   * per pairing-and-text, deliberately and for the whole session, so tests
+   * sharing a string would share its result too.
+   */
+  function stubFontFaceSet() {
+    const load = vi.fn().mockResolvedValue([]);
+    Object.defineProperty(document, "fonts", {
+      configurable: true,
+      value: { load },
+    });
+    return load;
+  }
+
+  afterEach(() => {
+    // `document.fonts` is absent in jsdom, so the stub is removed rather
+    // than restored — leaving it would make the "no Font Loading API" case
+    // below depend on which tests ran first.
+    delete (document as { fonts?: unknown }).fonts;
+  });
+
+  it("resolves at once for the built-in pairing", async () => {
+    // Both its families are linked from index.html, so there is nothing to
+    // wait for — and nothing to add to the head either.
+    stubFontFaceSet();
+
+    await expect(
+      loadPairingFonts(DEFAULT_FONT_PAIRING, "built-in"),
+    ).resolves.toBeUndefined();
+    expect(injectedLinks()).toHaveLength(0);
+  });
+
+  it("resolves without a Font Loading API rather than waiting forever", async () => {
+    // jsdom, and browsers old enough not to matter: the stylesheet is in
+    // the head and the page behaves as it did before this existed.
+    expect(document.fonts).toBeUndefined();
+
+    await expect(
+      loadPairingFonts(PAIRING, "no font loading api"),
+    ).resolves.toBeUndefined();
+    expect(injectedLinks()).toHaveLength(1);
+  });
+
+  it("waits for the stylesheet before asking for its faces", async () => {
+    // Load-bearing order: document.fonts.load() can only match a family the
+    // document has heard of, and it hears of it when the stylesheet is
+    // parsed. Asked earlier it resolves empty and reports success.
+    const load = stubFontFaceSet();
+    const text = "waits for the stylesheet";
+
+    const loading = loadPairingFonts(PAIRING, text);
+    await Promise.resolve();
+    expect(load).not.toHaveBeenCalled();
+
+    injectedLinks()[0].dispatchEvent(new Event("load"));
+    await expect(loading).resolves.toBeUndefined();
+
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(load).toHaveBeenCalledWith(
+      `${PAIRING.displayWeight} 1em ${PAIRING.bodyFamily}`,
+      text,
+    );
+    expect(load).toHaveBeenCalledWith(`1em ${PAIRING.uiFamily}`, text);
+  });
+
+  it("asks for the faces straight away when the stylesheet is already parsed", async () => {
+    // A link put in the head earlier has fired its load event already; a
+    // second wait for it would never end.
+    const load = stubFontFaceSet();
+    ensureFontStylesheet(PAIRING);
+    Object.defineProperty(injectedLinks()[0], "sheet", { value: {} });
+
+    await expect(
+      loadPairingFonts(PAIRING, "already parsed"),
+    ).resolves.toBeUndefined();
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it("fails when the stylesheet cannot be fetched", async () => {
+    const load = stubFontFaceSet();
+
+    const loading = loadPairingFonts(PAIRING, "stylesheet fails");
+    await Promise.resolve();
+    injectedLinks()[0].dispatchEvent(new Event("error"));
+
+    await expect(loading).rejects.toThrow(/Could not load the stylesheet/);
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it("loads a pairing once however often it is asked for", async () => {
+    const load = stubFontFaceSet();
+    const text = "asked twice";
+
+    const first = loadPairingFonts(PAIRING, text);
+    const second = loadPairingFonts(PAIRING, text);
+    await Promise.resolve();
+    injectedLinks()[0].dispatchEvent(new Event("load"));
+    await Promise.all([first, second]);
+
+    expect(first).toBe(second);
+    expect(injectedLinks()).toHaveLength(1);
+    expect(load).toHaveBeenCalledTimes(2);
   });
 });
