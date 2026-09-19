@@ -346,6 +346,68 @@ fn a_symlink_out_of_the_snapshot_is_refused() {
     assert!(message.contains("outside the site's code"), "{message}");
 }
 
+#[cfg(unix)]
+#[test]
+fn a_search_does_not_follow_a_symlink_out_of_the_snapshot() {
+    // The front door is shut (the test above) — this is the back one. A walk
+    // that followed links would hand back the very bytes `read_repo_file`
+    // refuses, because both `is_dir()` and `fs::read` follow them. Two shapes,
+    // and the directory is the worse of the pair: one link and the whole tree
+    // on the other end gets walked and searched.
+    let outside = Fixture::new();
+    let secret = "ANTHROPIC_API_KEY=sk-should-never-be-read\n";
+    outside.write("secrets.env", secret);
+    outside.write("private/notes.md", secret);
+    let fixture = Fixture::repo();
+    std::os::unix::fs::symlink(
+        outside.path().join("secrets.env"),
+        fixture.path().join("escape.env"),
+    )
+    .expect("create the file symlink");
+    std::os::unix::fs::symlink(
+        outside.path().join("private"),
+        fixture.path().join("ui/escape-dir"),
+    )
+    .expect("create the directory symlink");
+    let repo = fixture.access();
+
+    let found = ok(&repo, SEARCH_TOOL, json!({"query": "anthropic_api_key"}));
+    assert!(
+        found.contains("Nothing in the site's code"),
+        "the search read outside the snapshot: {found}"
+    );
+
+    // ...and neither does pointing the search straight at the linked folder.
+    let message = refused(
+        &repo,
+        SEARCH_TOOL,
+        json!({"query": "anthropic_api_key", "path_prefix": "ui/escape-dir"}),
+    );
+    assert!(message.contains("outside the site's code"), "{message}");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlink_inside_the_snapshot_costs_the_search_nothing() {
+    // The walk skips links rather than deciding per link where each one
+    // lands, so this is what "skipped" is worth: anything a link inside the
+    // snapshot points at is still reached by its real path, and reported once
+    // under that path rather than twice.
+    let fixture = Fixture::repo();
+    std::os::unix::fs::symlink(
+        fixture.path().join("api/src/services/assistant.rs"),
+        fixture.path().join("ui/assistant-link.rs"),
+    )
+    .expect("create the symlink");
+
+    let found = ok(&fixture.access(), SEARCH_TOOL, json!({"query": "resting"}));
+    assert!(
+        found.contains("api/src/services/assistant.rs:2:"),
+        "{found}"
+    );
+    assert!(!found.contains("assistant-link.rs"), "{found}");
+}
+
 // ------------------------------------------------------------- declarations
 
 #[test]

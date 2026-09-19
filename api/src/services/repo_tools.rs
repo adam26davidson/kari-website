@@ -13,9 +13,11 @@
 //! component rather than guess from the prompt's page map.
 //!
 //! Everything here is READ-ONLY and bounded. Nothing writes, nothing
-//! executes, every path is canonicalised and checked back against the root
-//! before it is opened, and every answer is capped so one tool call cannot
-//! pour a megabyte into the next request's token count.
+//! executes, every path the model supplies is canonicalised and checked back
+//! against the root before it is opened, the search walk steps over symlinks
+//! rather than following one out of the snapshot, and every answer is capped
+//! so one tool call cannot pour a megabyte into the next request's token
+//! count.
 //!
 //! Like the rest of the helper this is optional: a host with no snapshot
 //! simply has no repo tools declared, and a call that arrives anyway is
@@ -175,9 +177,12 @@ pub fn tools() -> Vec<Value> {
 ///
 /// Construction canonicalises the root once; every path the model supplies
 /// is then canonicalised and checked back against it, so neither `..` nor a
-/// symlink inside the snapshot can reach a byte outside. (`git archive`
-/// does not follow symlinks, but the check is what makes that a property of
-/// this code rather than of how the bundle happened to be built.)
+/// symlink inside the snapshot can reach a byte outside. The search walk,
+/// the one place a path is opened that the model did not name, steps over
+/// symlinks instead (`links_elsewhere`). (`git archive` does not follow
+/// symlinks, so nothing should put one here in the first place — but the
+/// checks are what make staying inside a property of this code rather than
+/// of how the bundle happened to be built.)
 #[derive(Clone, Debug)]
 pub struct RepoAccess {
     root: PathBuf,
@@ -466,6 +471,7 @@ there, or {SEARCH_TOOL} to find it."
             let mut children: Vec<PathBuf> = entries
                 .flatten()
                 .filter(|entry| !skipped(&entry.file_name().to_string_lossy()))
+                .filter(|entry| !links_elsewhere(entry))
                 .map(|entry| entry.path())
                 .collect();
             children.sort();
@@ -549,4 +555,27 @@ exact wording she saw on screen."
 /// Directories and files the tools pretend do not exist.
 fn skipped(name: &str) -> bool {
     SKIPPED_DIRS.contains(&name)
+}
+
+/// Is this entry a symlink, which the search walk steps over rather than
+/// follows?
+///
+/// The walk is the one place that opens a path it was not given, so it is the
+/// one place `resolve`'s canonicalised prefix check cannot cover: both
+/// `Path::is_dir` and `fs::read` follow links, so a link to a file outside
+/// the snapshot would be read and a link to a directory would have its whole
+/// target tree walked — precisely the bytes `read_repo_file` refuses.
+///
+/// Skipped rather than resolved-and-checked because nothing is lost by it:
+/// whatever a link inside the snapshot points at is still reached by its real
+/// path (and reported once, under that path), while a link out of it has
+/// nothing to offer and a link to a directory could otherwise make the walk a
+/// cycle. `file_type` here is the entry's own type — it does NOT follow the
+/// link — and an entry whose type cannot be read is treated as one, because
+/// the safe answer to "I don't know what this is" is to leave it alone.
+fn links_elsewhere(entry: &std::fs::DirEntry) -> bool {
+    entry
+        .file_type()
+        .map(|kind| kind.is_symlink())
+        .unwrap_or(true)
 }
