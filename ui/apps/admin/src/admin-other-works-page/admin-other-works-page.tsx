@@ -14,6 +14,8 @@ import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { BlogPostRow } from "./components/blog-post-row/blog-post-row";
 import { ItemList } from "../components/item-list/item-list";
 import { deleteConfirmationMessage } from "../delete-confirmation";
+import { itemName } from "../item-name";
+import { useAssistantSubject } from "../assistant/use-assistant-subject";
 import { useAdminToken } from "../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
@@ -130,11 +132,22 @@ export function AdminOtherWorksPage() {
   const savedPost = openPost
     ? postList.find((post) => post.id === openPost.id)
     : undefined;
-  const navigateWithoutGuard = useUnsavedChanges(
+  const dirty =
     !!openPost &&
-      (pendingImageFiles.size > 0 ||
-        openPostContent !== originalOpenPostContent ||
-        JSON.stringify(openPost) !== JSON.stringify(savedPost)),
+    (pendingImageFiles.size > 0 ||
+      openPostContent !== originalOpenPostContent ||
+      JSON.stringify(openPost) !== JSON.stringify(savedPost));
+  const navigateWithoutGuard = useUnsavedChanges(dirty);
+  // The same fact, told to the helper, so it knows which piece is open.
+  useAssistantSubject(
+    openPost
+      ? {
+          what: "other works item",
+          id: openPost.id,
+          title: itemName(openPost.title),
+          dirty,
+        }
+      : {},
   );
 
   const deletePost = async (id: string) => {

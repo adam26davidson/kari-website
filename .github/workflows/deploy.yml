@@ -76,14 +76,24 @@ jobs:
           KARI_COMMIT_SHA: ${{ github.sha }}
         run: cross build --release --target aarch64-unknown-linux-gnu
 
-      # The API binary and lifecycle scripts are identical in both bundles;
-      # only the appspec (file destinations) and the frontend build differ.
+      # The API binary, lifecycle scripts and source snapshot are identical
+      # in both bundles; only the appspec (file destinations) and the
+      # frontend build differ.
       - name: Assemble deploy bundles
         run: |
           for env in test prod; do
-            rm -rf "bundle-$env" && mkdir -p "bundle-$env/scripts"
+            rm -rf "bundle-$env" && mkdir -p "bundle-$env/scripts" "bundle-$env/repo"
             cp -r scripts/deploy "bundle-$env/scripts/deploy"
             cp api/target/aarch64-unknown-linux-gnu/release/kari-website-api "bundle-$env/kari-website-api"
+            # The admin helper's read-only view of the codebase
+            # (api/src/services/repo_tools.rs). HEAD is the commit this run
+            # checked out — the exact one being deployed — so the snapshot
+            # cannot drift from the binary beside it. Images are dropped:
+            # the tools only ever return text, and they are most of the
+            # archive's weight.
+            git archive HEAD | tar -x -C "bundle-$env/repo" \
+              --exclude='*.png' --exclude='*.jpg' --exclude='*.jpeg' \
+              --exclude='*.webp' --exclude='*.gif' --exclude='*.ico'
           done
           cp appspec.test.yml bundle-test/appspec.yml
           cp -r ui/dist-staging bundle-test/dist

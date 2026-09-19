@@ -5,6 +5,8 @@ os: linux
 #   appspec.yml
 #   dist/                 -> built frontend (Vite)
 #   kari-website-api      -> cross-compiled aarch64 API binary
+#   repo/                 -> `git archive HEAD` of the deployed commit, which
+#                            the admin helper reads (services/repo_tools.rs)
 #   scripts/deploy/*.sh   -> lifecycle hooks
 #
 # This is the PROD appspec (deployment group kari-website-cd). The test
@@ -15,6 +17,12 @@ files:
     destination: /home/ubuntu/static-sites/kari-website
   - source: kari-website-api
     destination: /home/ubuntu/kari-api
+  # Lands beside the binary, which is where RepoAccess::from_env looks when
+  # the host sets no REPO_DIR. The agent deletes the previous revision's
+  # files before installing this one, so a source file renamed or deleted
+  # upstream does not linger here as a stale copy the helper could read.
+  - source: repo
+    destination: /home/ubuntu/kari-api/repo
 
 hooks:
   # Stop the API before overwriting its binary (avoids "text file busy").

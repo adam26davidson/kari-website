@@ -16,6 +16,8 @@ import {
 import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { ItemList } from "../components/item-list/item-list";
 import { deleteConfirmationMessage } from "../delete-confirmation";
+import { itemName } from "../item-name";
+import { useAssistantSubject } from "../assistant/use-assistant-subject";
 import { useAdminToken } from "../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
@@ -68,10 +70,22 @@ export function AdminHaigaPage() {
   const savedHaiga = openHaiga
     ? haigaList.find((haiga) => haiga.id === openHaiga.id)
     : undefined;
-  useUnsavedChanges(
+  const dirty =
     !!openHaiga &&
-      (imageFile !== null ||
-        JSON.stringify(openHaiga) !== JSON.stringify(savedHaiga)),
+    (imageFile !== null ||
+      JSON.stringify(openHaiga) !== JSON.stringify(savedHaiga));
+  useUnsavedChanges(dirty);
+  // The same fact, told to the helper: which haiga is open and whether it
+  // has been changed since it was saved.
+  useAssistantSubject(
+    openHaiga
+      ? {
+          what: "haiga",
+          id: openHaiga.id,
+          title: itemName(...openHaiga.lines),
+          dirty,
+        }
+      : {},
   );
 
   const deleteHaiga = async (id: string) => {

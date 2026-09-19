@@ -245,6 +245,19 @@ describe("HomePageEditor's site preview", () => {
   });
 });
 
+describe("HomePageEditor assistant context", () => {
+  it("tells the helper she is on the home page, and when it is unsaved", async () => {
+    const { subject } = renderPage();
+    const blurb = await screen.findByDisplayValue("hello");
+    // No id and no title: this is the one home page, not an item out of a
+    // list, and the API's page context has a shape for exactly that.
+    expect(subject.current).toEqual({ what: "home page", dirty: false });
+
+    fireEvent.change(blurb, { target: { value: "hello again" } });
+    expect(subject.current).toEqual({ what: "home page", dirty: true });
+  });
+});
+
 describe("HomePageEditor unsaved-changes guard", () => {
   it("navigates away without confirmation while clean", async () => {
     const { adminUi, router } = renderPage();

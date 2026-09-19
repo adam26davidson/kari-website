@@ -436,6 +436,17 @@ describe("AdminBackgroundPage fonts", () => {
   });
 });
 
+describe("AdminBackgroundPage assistant context", () => {
+  it("tells the helper she is on the appearance page, unsaved and not", async () => {
+    const { subject } = await renderLoaded();
+    expect(subject.current).toEqual({ what: "appearance", dirty: false });
+
+    fireEvent.click(screen.getByLabelText("Use other.jpg as the background"));
+
+    expect(subject.current).toEqual({ what: "appearance", dirty: true });
+  });
+});
+
 describe("AdminBackgroundPage unsaved-changes guard", () => {
   it("navigates away without confirmation while clean", async () => {
     const { adminUi, router } = await renderLoaded();

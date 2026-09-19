@@ -1,4 +1,5 @@
 import { Mock, vi } from "vitest";
+import { useContext } from "react";
 import { act, render } from "@testing-library/react";
 import {
   createMemoryRouter,
@@ -7,6 +8,12 @@ import {
   To,
 } from "react-router";
 import { AdminUi, AdminUiContext } from "./admin-ui-context";
+import {
+  AssistantContext,
+  AssistantContextValue,
+  AssistantSubject,
+} from "./assistant/assistant-context";
+import { AssistantProvider } from "./assistant/assistant-provider";
 
 /** AdminUi with every function mocked, for asserting page behavior. */
 export interface AdminUiMock extends AdminUi {
@@ -40,8 +47,10 @@ export function renderWithAdminUi(
 /**
  * Renders an admin page the way the admin shell mounts it: on a data
  * router (required by useBlocker) at its /admin/<section>/:id? route,
- * inside a mocked AdminUiContext. Returns the router for URL assertions
- * and history navigation (router.navigate(-1) is the browser back button).
+ * inside a mocked AdminUiContext and the assistant provider the shell wraps
+ * `<Routes>` in. Returns the router for URL assertions and history
+ * navigation (router.navigate(-1) is the browser back button), and
+ * `subject` — what the page has told the helper is on her screen.
  */
 export function renderAdminPage(
   ui: React.ReactElement,
@@ -49,13 +58,27 @@ export function renderAdminPage(
   initialEntry: string = path.replace("/:id?", ""),
   adminUi: AdminUiMock = mockAdminUi(),
 ) {
+  // Mutated by the probe below on every render, so a test reads what the
+  // page is publishing NOW rather than what it published when it mounted.
+  const subject: { current: AssistantSubject } = { current: {} };
+  function AssistantSubjectProbe() {
+    // The provider below is mounted right here, so the context is never
+    // null — asserted rather than branched on, because a fallback no test
+    // can reach would be an untestable branch against the coverage ratchet.
+    const context = useContext(AssistantContext) as AssistantContextValue;
+    subject.current = context.subject;
+    return null;
+  }
   const router = createMemoryRouter(
     [
       {
         path,
         element: (
           <AdminUiContext.Provider value={adminUi}>
-            {ui}
+            <AssistantProvider>
+              {ui}
+              <AssistantSubjectProbe />
+            </AssistantProvider>
           </AdminUiContext.Provider>
         ),
       },
@@ -63,7 +86,7 @@ export function renderAdminPage(
     { initialEntries: [initialEntry] },
   );
   const utils = render(<RouterProvider router={router} />);
-  return { ...utils, adminUi, router };
+  return { ...utils, adminUi, router, subject };
 }
 
 /**

@@ -17,6 +17,8 @@ import { PhotographyPostSummary } from "./components/photography-post-summary/ph
 import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { ItemList } from "../components/item-list/item-list";
 import { deleteConfirmationMessage } from "../delete-confirmation";
+import { itemName } from "../item-name";
+import { useAssistantSubject } from "../assistant/use-assistant-subject";
 import { useAdminToken } from "../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
@@ -91,10 +93,22 @@ export function AdminPhotographyPage() {
       JSON.stringify(
         editorImages.map(({ image, blurb }) => ({ image, blurb })),
       ) !== JSON.stringify(savedPost?.images));
-  const navigateWithoutGuard = useUnsavedChanges(
+  const dirty =
     !!openPost &&
-      (editorImagesDirty ||
-        JSON.stringify(openPost) !== JSON.stringify(savedPost)),
+    (editorImagesDirty ||
+      JSON.stringify(openPost) !== JSON.stringify(savedPost));
+  const navigateWithoutGuard = useUnsavedChanges(dirty);
+  // The same fact, told to the helper, so it can answer about the post she
+  // actually has open rather than photography in general.
+  useAssistantSubject(
+    openPost
+      ? {
+          what: "photography post",
+          id: openPost.id,
+          title: itemName(openPost.title, openPost.subtitle),
+          dirty,
+        }
+      : {},
   );
 
   const deletePost = async (id: string) => {

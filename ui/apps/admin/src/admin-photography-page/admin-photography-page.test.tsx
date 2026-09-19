@@ -62,14 +62,14 @@ function saveButton(container: HTMLElement): HTMLElement {
 let savedPost: PhotographyPost;
 
 async function renderPage(initialEntry?: string) {
-  const { container, adminUi, router } = renderAdminPage(
+  const { container, adminUi, router, subject } = renderAdminPage(
     <AdminPhotographyPage />,
     "/photography/:id?",
     initialEntry,
   );
   const notify = adminUi.notify;
   await waitFor(() => iconButton(container, "pencil"));
-  return { container, notify, adminUi, router };
+  return { container, notify, adminUi, router, subject };
 }
 
 // Renders the page, opens the only post in the editor, and picks a
@@ -490,6 +490,30 @@ describe("AdminPhotographyPage closing the editor", () => {
     expect(adminUi.confirm).not.toHaveBeenCalled();
     // Back on the list view.
     iconButton(container, "pencil");
+  });
+});
+
+describe("AdminPhotographyPage assistant context", () => {
+  it("tells the helper which post is open and whether it is unsaved", async () => {
+    const { container, subject } = await renderPage();
+    expect(subject.current).toEqual({});
+
+    fireEvent.click(iconButton(container, "pencil"));
+    const title = await screen.findByLabelText("Title");
+    expect(subject.current).toEqual({
+      what: "photography post",
+      id: "p1",
+      title: "A Post",
+      dirty: false,
+    });
+
+    fireEvent.change(title, { target: { value: "A Better Post" } });
+    expect(subject.current).toEqual({
+      what: "photography post",
+      id: "p1",
+      title: "A Better Post",
+      dirty: true,
+    });
   });
 });
 

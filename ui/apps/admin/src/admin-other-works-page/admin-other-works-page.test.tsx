@@ -94,14 +94,14 @@ const savedContent =
   '<p>hello</p><img src="https://api.test.local/images/old.png">';
 
 async function renderPage(initialEntry?: string) {
-  const { adminUi, router } = renderAdminPage(
+  const { adminUi, router, subject } = renderAdminPage(
     <AdminOtherWorksPage />,
     "/other-works/:id?",
     initialEntry,
   );
   const notify = adminUi.notify;
   await listRendered();
-  return { notify, adminUi, router };
+  return { notify, adminUi, router, subject };
 }
 
 // Renders the page, opens the only post in the editor, and removes the
@@ -1051,6 +1051,27 @@ describe("AdminOtherWorksPage opening the editor", () => {
     // Never open the editor with missing content — saving it would
     // overwrite the real content.
     expect(screen.queryByPlaceholderText("post content")).toBeNull();
+  });
+});
+
+describe("AdminOtherWorksPage assistant context", () => {
+  it("tells the helper which piece is open and whether it is unsaved", async () => {
+    const { subject } = await renderPage();
+    expect(subject.current).toEqual({});
+
+    fireEvent.click(rowButton("Edit"));
+    const content = await screen.findByPlaceholderText("post content");
+    expect(subject.current).toEqual({
+      what: "other works item",
+      id: "b1",
+      title: "A Post",
+      dirty: false,
+    });
+
+    // The written content counts as an unsaved change, not just the fields
+    // around it.
+    fireEvent.change(content, { target: { value: "<p>hello again</p>" } });
+    expect(subject.current.dirty).toBe(true);
   });
 });
 

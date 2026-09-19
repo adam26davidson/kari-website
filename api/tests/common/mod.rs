@@ -11,6 +11,7 @@
 #![allow(dead_code)]
 
 pub mod assistant;
+pub mod repo;
 pub mod store;
 
 use std::sync::Arc;
