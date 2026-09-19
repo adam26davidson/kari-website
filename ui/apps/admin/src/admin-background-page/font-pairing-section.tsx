@@ -69,6 +69,19 @@ function useSampleStates(): Record<string, SampleState> {
     const timers: Array<number> = [];
     const settle = (id: string, state: SampleState) =>
       setStates((previous) => ({ ...previous, [id]: state }));
+    /**
+     * The wait is up — but only a sample STILL waiting has anything to
+     * admit to. A face that arrived first has already settled to "ready",
+     * and flipping that to "failed" would hang the admission line under a
+     * sample showing its own lettering perfectly well: a worry about
+     * nothing, on the ordinary path where everything worked.
+     */
+    const giveUpWaiting = (id: string) =>
+      setStates((previous) =>
+        previous[id] === "loading"
+          ? { ...previous, [id]: "failed" }
+          : previous,
+      );
 
     for (const pairing of FONT_PAIRINGS) {
       if (pairing.googleFamilies.length === 0) continue;
@@ -76,10 +89,7 @@ function useSampleStates(): Record<string, SampleState> {
       // it: a face that arrives after the wait is up still swaps in, and
       // the resolve below then puts the sample's own note away.
       timers.push(
-        window.setTimeout(
-          () => settle(pairing.id, "failed"),
-          GIVE_UP_WAITING_MS,
-        ),
+        window.setTimeout(() => giveUpWaiting(pairing.id), GIVE_UP_WAITING_MS),
       );
       loadPairingFonts(pairing, SAMPLE_TEXT).then(
         () => settle(pairing.id, "ready"),

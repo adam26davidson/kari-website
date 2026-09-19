@@ -228,6 +228,72 @@ describe("FontPairingSection while the lettering is still coming", () => {
       vi.useRealTimers();
     }
   });
+
+  it("leaves a sample that arrived in time alone when the wait is up", async () => {
+    // The wait running out says nothing about a face that already landed:
+    // admitting to a sample that IS showing its own lettering would be a
+    // worry about nothing, on the ordinary path where everything worked.
+    vi.useFakeTimers();
+    try {
+      render(
+        <FontPairingSection
+          settings={{ backgroundPhoto: "" }}
+          onChange={vi.fn()}
+        />,
+      );
+      await act(async () => {});
+      expect(loadingLines()).toHaveLength(0);
+
+      await act(async () => {
+        vi.advanceTimersByTime(6000);
+      });
+
+      expect(
+        screen.queryAllByText(/This lettering is still on its way/),
+      ).toHaveLength(0);
+      expect(sampleOf(CUSTOM)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("puts the note away when the lettering turns up after the wait", async () => {
+    // `display=swap` means a late face still swaps into the sample, so the
+    // admission line has to go with it — leaving it there would describe a
+    // sample that is now showing exactly what it says it might not be.
+    vi.useFakeTimers();
+    const arrivals: Array<() => void> = [];
+    everyPairing(
+      () => new Promise<void>((resolve) => arrivals.push(resolve)),
+    );
+    try {
+      render(
+        <FontPairingSection
+          settings={{ backgroundPhoto: "" }}
+          onChange={vi.fn()}
+        />,
+      );
+      await act(async () => {});
+
+      await act(async () => {
+        vi.advanceTimersByTime(6000);
+      });
+      expect(
+        screen.getAllByText(/This lettering is still on its way/),
+      ).toHaveLength(FETCHED.length);
+
+      await act(async () => {
+        for (const arrive of arrivals) arrive();
+      });
+
+      expect(
+        screen.queryAllByText(/This lettering is still on its way/),
+      ).toHaveLength(0);
+      expect(sampleOf(CUSTOM)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 afterEach(() => {
