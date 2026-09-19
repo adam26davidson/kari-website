@@ -32,7 +32,14 @@ const uiRoot = fileURLToPath(new URL("../..", import.meta.url));
 //   took it to 808.8 kB: the widget, its session hook and one more lucide
 //   glyph. It is deliberately NOT lazy — it is a button in the corner of
 //   every admin screen, so a separate chunk would be fetched on every page
-//   anyway, for a round trip and no saving.
+//   anyway, for a round trip and no saving. #816 took it to 835.3 kB:
+//   Radix's Slider, vendored for the Appearance page's see-through
+//   control, is 18.3 kB of that (the primitive plus the collection,
+//   direction, use-size and use-previous helpers the rest of the Radix
+//   already here does not pull in). Same bargain as #592's: a maintainer's
+//   bytes, fetched once behind a login, for a control that is a real
+//   slider — role, value, arrow keys, Home/End — rather than a native
+//   range input re-skinned per browser engine.
 // - "blog-post-editor" is the lazy chunk holding the editor, tiptap,
 //   prosemirror and their CSS (499 kB), fetched only when a post is
 //   opened. It was 445 kB until #427 added the link bubble menu, which
@@ -97,6 +104,6 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    bundleBudget({ index: 835, "blog-post-editor": 525 }),
+    bundleBudget({ index: 860, "blog-post-editor": 525 }),
   ],
 });

@@ -1,4 +1,3 @@
-import "./header-colors-section.css";
 import { SiteSettings } from "@kari/shared/models";
 import {
   composeHexAlpha,
@@ -7,10 +6,45 @@ import {
   resolveHeaderColors,
   splitHexAlpha,
 } from "@kari/shared/utils/color";
-import { AdminButton } from "../components/admin-button/admin-button";
+import { Button } from "../components/ui/button";
+import { Slider } from "../components/ui/slider";
+import { FieldLabel } from "../components/field-label/field-label";
+import { cn } from "../components/ui/cn";
 
 /** Stand-ins for the real nav, so the links are judged as words in a row. */
 const PREVIEW_LINKS = ["Home", "Haiku", "Photography"];
+
+/**
+ * A mount around the colour, not a form field around a value (#640).
+ *
+ * The admin's surfaces are white and near-white, so a white or near-white
+ * choice — which "Site title" and "Page links" both are by default — inside
+ * a hairline box read as an EMPTY input rather than as the colour currently
+ * set, while the dark green "Bar" beside it read correctly. A mid warm grey
+ * the fill contrasts with at BOTH ends of the range fixes that once for
+ * every choice rather than only for the light end.
+ *
+ * The two pseudo-element rules are the other half of it: both engines draw
+ * the fill in a pseudo-element with a UA border of their own, and stating
+ * it keeps the mount's inner edge one deliberate hairline everywhere
+ * instead of a per-engine default. That hairline is what makes a white
+ * fill a chip in its own right even where the mount is not visible.
+ *
+ * Arbitrary values throughout because none of this is in the palette: the
+ * mount is a neutral backing for whatever colour she picks, deliberately
+ * outside the theme so a palette change cannot make it match a swatch.
+ */
+const SWATCH_CLASSES = cn(
+  // Comfortable to hit on a phone, and tall enough that the colour itself
+  // is the control rather than a stripe beside a label.
+  "h-9 w-[52px] shrink-0 cursor-pointer rounded p-[3px]",
+  "border border-[#6f675d] bg-[#8f877c]",
+  "[&::-webkit-color-swatch-wrapper]:p-0",
+  "[&::-webkit-color-swatch]:rounded-[2px]",
+  "[&::-webkit-color-swatch]:border [&::-webkit-color-swatch]:border-black/40",
+  "[&::-moz-color-swatch]:rounded-[2px]",
+  "[&::-moz-color-swatch]:border [&::-moz-color-swatch]:border-black/40",
+);
 
 /** A swatch and its label, with the reset that only appears once it is needed. */
 function ColorControl({
@@ -31,22 +65,28 @@ function ColorControl({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="header-colors-control">
-      <label className="header-colors-label" htmlFor={id}>
+    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+      {/* The three rows read as one group of settings, so their swatches
+          line up in a column instead of each starting wherever its own
+          label happened to end ("Bar" vs "Page links" put them ~50px
+          apart). A min-width rather than a fixed one: a longer label is
+          still allowed to push its own row wider rather than being
+          clipped, and at 390px the row simply wraps. */}
+      <FieldLabel htmlFor={id} className="min-w-[92px]">
         {label}
-      </label>
+      </FieldLabel>
       <input
         id={id}
         type="color"
-        className="header-colors-swatch"
+        className={SWATCH_CLASSES}
         value={value}
         onChange={(event) => onPick(event.target.value)}
       />
       {children}
       {!isDefault && (
-        <AdminButton variant="secondary" onClick={onUseDefault}>
+        <Button variant="secondary" size="sm" onClick={onUseDefault}>
           Use default
-        </AdminButton>
+        </Button>
       )}
     </div>
   );
@@ -77,6 +117,13 @@ const NOTES = {
  * decided, not something the reader can act on — "contrast 9.1 to 1" is the
  * code's vocabulary in a page otherwise written in hers (design brief §3),
  * and the sentence beside it already carries the whole message.
+ *
+ * The warning wears the admin's maroon, which is what
+ * `docs/design/admin-redesign/Appearance.png` draws it in. That is a
+ * change from the lone warm brown this note carried before the page
+ * migrated: the maroon is the admin's one "look at this" colour and is
+ * already the softer, non-shouting red the brief asks for, so spending a
+ * seventh colour here bought nothing but drift.
  */
 function ContrastNote({
   messages,
@@ -88,17 +135,21 @@ function ContrastNote({
   const readable = ratio >= CONTRAST_AA;
   return (
     <p
-      className={
-        readable ? "header-colors-note" : "header-colors-note hard-to-read"
-      }
+      className={cn(
+        "max-w-[60ch] font-sans text-sm leading-relaxed",
+        readable ? "text-muted-foreground" : "text-destructive",
+      )}
     >
       {readable ? messages[0] : messages[1] + ADVICE}
     </p>
   );
 }
 
+/** Names the slider, which has no <input> for a `for` to point at. */
+const SEE_THROUGH_LABEL_ID = "header-bar-see-through-label";
+
 /**
- * The header-colour half of the Background page: the bar, the site title
+ * The header-colour half of the Appearance page: the bar, the site title
  * and the page links, previewed together because they are only ever seen
  * together (#482). Every control is a swatch rather than a hex field — the
  * one person who uses this is not a developer — and every setting can be
@@ -131,26 +182,41 @@ export function HeaderColorsSection({
     !settings.headerNavColor;
 
   return (
-    <div className="header-colors">
-      <h3 className="header-colors-heading">Header colours</h3>
-      <p className="admin-section-explanation">
+    <div className="flex min-w-0 flex-col items-start gap-4">
+      <h3 className="text-foreground font-serif text-xl italic">
+        Header colours
+      </h3>
+      <p className="text-muted-foreground max-w-[60ch] font-sans text-sm leading-relaxed">
         The bar across the top of every page. The preview shows your three
         colours together, the way a visitor sees them; the bar can be left
         part see-through so the photograph shows behind it.
       </p>
 
-      <div className="header-colors-preview">
+      {/* A stand-in for the photograph behind the real bar: light at one
+          end and dark at the other, because that variation along the bar's
+          own length is what a see-through tint has to survive (#392). */}
+      <div className="w-full overflow-hidden rounded-lg bg-[linear-gradient(90deg,#efe9dd_0%,#8d8a72_55%,#34382a_100%)]">
+        {/* `header-colors-preview-bar` is not styling — it is how this
+            section's test finds the bar to read the composed colour off
+            (header-colors-section.test.tsx). */}
         <div
-          className="header-colors-preview-bar"
+          className="header-colors-preview-bar flex flex-wrap items-baseline gap-x-5 gap-y-1.5 px-3.5 py-3 font-sans"
           style={{ backgroundColor: barColor }}
         >
+          {/* The weight comes from the site's own token, so the preview
+              follows whatever the Fonts card below is set to. Inline
+              because it is a variable reference, which Tailwind's
+              arbitrary `font-[…]` cannot tell from a family name. */}
           <span
-            className="header-colors-preview-title"
-            style={{ color: colors.title }}
+            className="text-[22px] whitespace-nowrap"
+            style={{
+              color: colors.title,
+              fontWeight: "var(--display-weight)",
+            }}
           >
             Kari Davidson
           </span>
-          <span className="header-colors-preview-links">
+          <span className="flex flex-wrap gap-x-4 gap-y-1 text-[15px]">
             {PREVIEW_LINKS.map((link) => (
               <span key={link} style={{ color: colors.nav }}>
                 {link}
@@ -161,12 +227,12 @@ export function HeaderColorsSection({
       </div>
 
       {usingDefaults && (
-        <p className="header-colors-note">
+        <p className="text-muted-foreground font-sans text-sm">
           These are the site&apos;s built-in colours.
         </p>
       )}
 
-      <div className="header-colors-controls">
+      <div className="flex w-full min-w-0 flex-col gap-3">
         <ColorControl
           id="header-bar-color"
           label="Bar"
@@ -177,25 +243,32 @@ export function HeaderColorsSection({
         >
           {/* One group, so a narrow screen wraps the whole slider onto the
               next line rather than stranding its label on this one. */}
-          <span className="header-colors-see-through">
-            <label
-              className="header-colors-label see-through"
-              htmlFor="header-bar-see-through"
+          <span className="flex min-w-0 flex-1 basis-[220px] items-center gap-2">
+            {/* A span, not a label: the slider's role sits on a Radix thumb
+                rather than on an <input>, so the words reach it through
+                `aria-labelledby` instead of `for`. Quieter than the row's
+                own label because it is an aside INSIDE the bar's setting,
+                not a setting of its own. */}
+            <FieldLabel
+              id={SEE_THROUGH_LABEL_ID}
+              className="text-muted-foreground shrink-0 font-normal"
             >
               See-through
-            </label>
-            <input
-              id="header-bar-see-through"
-              type="range"
-              min="0"
-              max="100"
-              className="header-colors-slider"
-              value={seeThrough}
-              onChange={(event) =>
-                setBar(colors.background, 1 - Number(event.target.value) / 100)
+            </FieldLabel>
+            <Slider
+              aria-labelledby={SEE_THROUGH_LABEL_ID}
+              className="min-w-[90px] max-w-[200px] flex-1"
+              min={0}
+              max={100}
+              value={[seeThrough]}
+              onValueChange={([value]) =>
+                setBar(colors.background, 1 - value / 100)
               }
             />
-            <span className="header-colors-percent">{seeThrough}%</span>
+            {/* Fixed width so the row does not shuffle as the number does. */}
+            <span className="text-muted-foreground w-10 shrink-0 font-sans text-sm tabular-nums">
+              {seeThrough}%
+            </span>
           </span>
         </ColorControl>
 

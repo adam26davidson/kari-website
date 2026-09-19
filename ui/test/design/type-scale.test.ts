@@ -215,12 +215,14 @@ const FROZEN_ADMIN_SIZES = new Set([
   // line and the bubble's address — which #237 restyled in Tailwind when
   // the other-works page moved.
   "14px",
-  "15px",
-  "17px",
+  // "15px", "17px" and "22px" went with the Appearance page's three
+  // sheets — admin-background-page.css, header-colors-section.css and
+  // font-pairing-section.css — which #816 deleted when that page moved to
+  // Tailwind. They were that page's option names, its two section
+  // headings and its preview title.
   // "16px" and "18px" went with admin-haiku-page.css, which #234 deleted
   // when that page moved to Tailwind — the shrink this set is for.
   "20px",
-  "22px",
   "0.85rem",
   "0.9rem",
 ]);

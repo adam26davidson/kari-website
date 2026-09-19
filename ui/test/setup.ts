@@ -15,6 +15,22 @@ if (typeof window.URL.revokeObjectURL !== "function") {
   window.URL.revokeObjectURL = () => {};
 }
 
+// jsdom implements no ResizeObserver, and Radix measures a control's parts
+// through one (`@radix-ui/react-use-size`, reached by the Slider behind
+// components/ui/slider.tsx). Without this the slider throws on mount rather
+// than failing a test. jsdom does no layout, so the honest answer is no
+// measurement at all: observing is a no-op and the hook keeps its undefined
+// size, which Radix already handles (it is the state before the first
+// observation in a real browser too). Keyboard interaction — the only kind
+// these tests drive — needs no size at all.
+if (typeof globalThis.ResizeObserver !== "function") {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+}
+
 // jsdom implements no geometry on Range at all, and ProseMirror's
 // scrollToSelection measures the caret through one (prosemirror-view's
 // coordsAtPos -> singleRect(textRange(...))). Every editor command that ends

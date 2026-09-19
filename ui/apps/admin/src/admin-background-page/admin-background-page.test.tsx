@@ -100,6 +100,24 @@ beforeEach(() => {
 });
 
 describe("AdminBackgroundPage initial load", () => {
+  it("shows an Appearance page title over the three sections", async () => {
+    // The sidebar item says "Appearance" and the page holds three settings,
+    // so the first heading on screen has to name the page rather than one
+    // of its cards — it said "Site background" until #816. The wordmark
+    // owns the <h1> (#504), so the page title is level 2 and the cards
+    // are its peers below it.
+    await renderLoaded();
+
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Appearance" }),
+    ).toBeInTheDocument();
+    for (const section of ["Site background", "Header colours", "Fonts"]) {
+      expect(
+        screen.getByRole("heading", { level: 3, name: section }),
+      ).toBeInTheDocument();
+    }
+  });
+
   it("shows a load error instead of an empty editor when the load fails", async () => {
     vi.mocked(SiteSettingsService.getFromApi).mockRejectedValueOnce(
       new Error("network down"),
@@ -134,7 +152,7 @@ describe("AdminBackgroundPage initial load", () => {
 
     expect(screen.getByText("Default background")).toBeInTheDocument();
     expect(
-      screen.queryByText("Use default background"),
+      screen.queryByText("Use the default background"),
     ).not.toBeInTheDocument();
   });
 
@@ -161,6 +179,28 @@ describe("AdminBackgroundPage initial load", () => {
     );
     expect(thumb).toHaveAttribute("loading", "lazy");
     expect(thumb).toHaveAttribute("decoding", "async");
+  });
+
+  it("marks the picked image as the one in use, in the markup too", async () => {
+    // The green ring says "this is the one" to anyone looking at it; this
+    // is the same thing said to anyone listening to it.
+    await renderLoaded();
+
+    expect(
+      screen.getByLabelText("Use current.webp as the background"),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByLabelText("Use other.jpg as the background"),
+    ).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(screen.getByLabelText("Use other.jpg as the background"));
+
+    expect(
+      screen.getByLabelText("Use other.jpg as the background"),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByLabelText("Use current.webp as the background"),
+    ).toHaveAttribute("aria-pressed", "false");
   });
 });
 
@@ -232,7 +272,7 @@ describe("AdminBackgroundPage saving", () => {
   it("saves the default (no photo) without touching any image", async () => {
     const { notify } = await renderLoaded();
 
-    fireEvent.click(screen.getByText("Use default background"));
+    fireEvent.click(screen.getByText("Use the default background"));
     fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() =>

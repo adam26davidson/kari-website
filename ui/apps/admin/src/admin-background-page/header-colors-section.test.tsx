@@ -19,6 +19,18 @@ function renderSection(settings: Partial<SiteSettings> = {}) {
 const swatch = (label: string) =>
   screen.getByLabelText(label) as HTMLInputElement;
 
+/**
+ * The see-through control. A Radix slider rather than a native range since
+ * #816, so it is reached by role: the thing that carries `role="slider"`
+ * and the value is a thumb, not an `<input>` a label could point at.
+ */
+const seeThroughSlider = () =>
+  screen.getByRole("slider", { name: "See-through" });
+
+/** Drives the slider the only way jsdom can: from the keyboard. */
+const pressOnSlider = (key: string) =>
+  fireEvent.keyDown(seeThroughSlider(), { key });
+
 const bar = () =>
   document.querySelector(".header-colors-preview-bar") as HTMLElement;
 
@@ -38,7 +50,7 @@ describe("HeaderColorsSection defaults", () => {
     // The default tint is 86% opaque, which is 14% see-through.
     renderSection();
 
-    expect(swatch("See-through")).toHaveValue("14");
+    expect(seeThroughSlider()).toHaveAttribute("aria-valuenow", "14");
     expect(screen.getByText("14%")).toBeInTheDocument();
   });
 
@@ -56,7 +68,7 @@ describe("HeaderColorsSection defaults", () => {
     });
 
     expect(swatch("Bar").value).toBe("#102030");
-    expect(swatch("See-through")).toHaveValue("50");
+    expect(seeThroughSlider()).toHaveAttribute("aria-valuenow", "50");
     expect(swatch("Site title").value).toBe("#ffee00");
     expect(swatch("Page links").value).toBe("#00ff00");
     expect(
@@ -105,7 +117,8 @@ describe("HeaderColorsSection editing", () => {
   it("keeps the bar's colour when only the slider is moved", () => {
     const { onChange } = renderSection({ headerBackgroundColor: "#10203080" });
 
-    fireEvent.change(swatch("See-through"), { target: { value: "0" } });
+    // Home is "not see-through at all", i.e. fully opaque.
+    pressOnSlider("Home");
 
     expect(onChange).toHaveBeenCalledWith({
       headerBackgroundColor: "#102030ff",
@@ -115,10 +128,24 @@ describe("HeaderColorsSection editing", () => {
   it("composes the slider onto the built-in bar colour", () => {
     const { onChange } = renderSection();
 
-    fireEvent.change(swatch("See-through"), { target: { value: "100" } });
+    // End is "all the way see-through", i.e. fully transparent.
+    pressOnSlider("End");
 
     expect(onChange).toHaveBeenCalledWith({
       headerBackgroundColor: `${HEADER_COLOR_DEFAULTS.background}00`,
+    });
+  });
+
+  it("nudges the bar one step more see-through at a time", () => {
+    // The arrows are the whole keyboard story for a slider; without them
+    // this control is only reachable by dragging it.
+    const { onChange } = renderSection({ headerBackgroundColor: "#10203080" });
+
+    pressOnSlider("ArrowRight");
+
+    // 50% see-through becomes 51%, i.e. alpha 0.49 → 0x7d.
+    expect(onChange).toHaveBeenCalledWith({
+      headerBackgroundColor: "#1020307d",
     });
   });
 
