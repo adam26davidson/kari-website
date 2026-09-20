@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
 
-// The config builds its Auth0-gated projects only when the credentials are
-// in the environment, so without this the three admin patterns would not
-// exist to check on the machines that matter most — CI's unit job and any
-// developer's laptop. Set before the import because the config reads them
-// as it is evaluated, and only fills a blank: a real value stays, and
+// The admin projects need no credentials since #266, but the config still
+// builds ONE Auth0-gated project — the real-login smoke — only when the
+// credentials are in the environment, so without this its pattern would
+// not exist to check on the machines that matter most: CI's unit job and
+// any developer's laptop. Set before the import because the config reads
+// them as it is evaluated, and only fills a blank: a real value stays, and
 // nothing here ever tries to log in.
 process.env.E2E_AUTH0_USERNAME ||= "e2e-spec-patterns";
 process.env.E2E_AUTH0_PASSWORD ||= "e2e-spec-patterns";
@@ -35,7 +36,7 @@ function project(name: string) {
 }
 
 /**
- * A repo checked out at `root`, with the four spec paths that exist. The
+ * A repo checked out at `root`, with the spec paths that exist. The
  * directory name is the whole point: these tests ask what happens when it
  * is hostile.
  */
@@ -45,6 +46,10 @@ function specsUnder(root: string) {
     smoke: `${root}/ui/e2e/smoke.spec.ts`,
     journeys: `${root}/ui/e2e/admin-journeys.spec.ts`,
     status: `${root}/ui/e2e/admin-whats-on-test.spec.ts`,
+    // The real-Auth0 login smoke (#266). Its `admin-` prefix is what keeps
+    // it out of the credential-free visitor project, where it would fail
+    // on a login form it has no password for.
+    auth0Login: `${root}/ui/e2e/admin-auth0-login.spec.ts`,
   };
 }
 
@@ -75,6 +80,7 @@ describe("e2e spec patterns", () => {
     expect(ignore.test(specs.smoke), specs.smoke).toBe(false);
     expect(ignore.test(specs.journeys), specs.journeys).toBe(true);
     expect(ignore.test(specs.status), specs.status).toBe(true);
+    expect(ignore.test(specs.auth0Login), specs.auth0Login).toBe(true);
   });
 
   // The rule that makes the above hold, stated once so a pattern added

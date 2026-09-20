@@ -15,7 +15,7 @@ use std::time::{Duration, SystemTime};
 use async_trait::async_trait;
 use bytes::Bytes;
 use jsonwebtoken::jwk::JwkSet;
-use kari_website_api::middleware::auth::JwksCache;
+use kari_website_api::middleware::auth::{DevAuth, JwksCache};
 use kari_website_api::routes::health::HealthCache;
 use kari_website_api::services::assistant::AssistantState;
 use kari_website_api::services::object_store::{ObjectMeta, ObjectStore};
@@ -303,5 +303,8 @@ pub fn state_with_store_and_assistant(
         s3_service: store,
         health: Arc::new(HealthCache::default()),
         assistant: Arc::new(assistant),
+        // Dev auth off, like every deployed build: handler tests drive the
+        // real token path.
+        dev_auth: DevAuth::default(),
     }
 }

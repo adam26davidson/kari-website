@@ -14,14 +14,17 @@ import { defineConfig, devices } from "@playwright/test";
 //                                 API
 // - admin-whats-on-test.spec.ts   the read-only deployment-status page, with
 //                                 its two external endpoints intercepted
+// - admin-assistant.spec.ts       the helper panel's resting state
+// - admin-auth0-login.spec.ts     the one REAL Auth0 login journey
 //
-// Admin specs log in through Auth0 once in a setup project and reuse the
-// captured storageState. They only run when E2E_AUTH0_USERNAME and
-// E2E_AUTH0_PASSWORD are set (they are in CI); without credentials the
-// visitor/smoke suites still run and the admin projects are skipped.
+// The test-mode bundle signs itself in (#266: ui/.env.test sets
+// VITE_AUTH_MODE=fake, and the API accepts the matching dev token), so
+// every admin journey below runs with NO Auth0 credentials, locally and in
+// CI. The single exception is admin-auth0-login.spec.ts, which drives the
+// real Universal Login so the actual Auth0 integration cannot rot
+// unnoticed; its project is built only when E2E_AUTH0_USERNAME and
+// E2E_AUTH0_PASSWORD are set (they are in CI).
 export const PORT = 4173;
-
-export const ADMIN_STORAGE_STATE = "e2e/.auth/admin.json";
 
 /**
  * The commit sha baked into the bundle these tests run against — a made-up
@@ -70,8 +73,8 @@ const hasAuthCredentials = Boolean(
 if (!hasAuthCredentials) {
   console.warn(
     "[playwright] E2E_AUTH0_USERNAME / E2E_AUTH0_PASSWORD not set — " +
-      "skipping the Auth0 setup and admin journey projects. " +
-      "Visitor and smoke tests will still run.",
+      "skipping the real-Auth0 login smoke. Everything else, the admin " +
+      "journeys included, runs on the test bundle's fake auth.",
   );
 }
 
@@ -91,53 +94,62 @@ export default defineConfig({
     ...devices["Desktop Chrome"],
   },
   projects: [
+    {
+      // Not a login any more (the bundle signs itself in): just the
+      // fail-fast check that the local API and its seeded MinIO are up,
+      // so a missing stack says so once instead of timing out a dozen
+      // content assertions. Every admin project depends on it.
+      name: "setup",
+      testMatch: SPEC(/stack\.setup\.ts/),
+      timeout: 300_000,
+    },
+    {
+      name: "admin",
+      testMatch: SPEC(/admin-journeys\.spec\.ts/),
+      dependencies: ["setup"],
+      // Admin journeys mutate shared test-bucket lists with whole-list
+      // PUTs; all of them live in one file and fullyParallel: false
+      // keeps that file's tests in a single worker, run one at a time,
+      // so they can't clobber each other.
+      fullyParallel: false,
+      timeout: 240_000,
+    },
+    {
+      // The whats-on-test page reads and never writes, and both
+      // endpoints it reads are intercepted by the spec — so it needs
+      // neither the serial execution the mutating journeys above
+      // require nor their long timeouts, and gets its own project
+      // rather than slowing that file down.
+      name: "admin-status",
+      testMatch: SPEC(/admin-whats-on-test\.spec\.ts/),
+      dependencies: ["setup"],
+    },
+    {
+      // The helper (#214) only reads: opening the panel creates no
+      // conversation, and with no ANTHROPIC_API_KEY on the e2e stack
+      // it never reaches a model at all. So, like the status page
+      // above, it needs neither serial execution nor a long timeout.
+      name: "admin-assistant",
+      testMatch: SPEC(/admin-assistant\.spec\.ts/),
+      dependencies: ["setup"],
+    },
     ...(hasAuthCredentials
       ? [
           {
-            // Logs in through Auth0 once and saves storageState for the
-            // admin project; first checks the local API is up and healthy.
-            name: "setup",
-            testMatch: SPEC(/auth\.setup\.ts/),
+            // The only credential-gated project left: a real Universal
+            // Login round trip against the real tenant. Its long timeout
+            // is Auth0's, not ours.
+            name: "auth0-login",
+            testMatch: SPEC(/admin-auth0-login\.spec\.ts/),
+            dependencies: ["setup"],
             timeout: 300_000,
-          },
-          {
-            name: "admin",
-            testMatch: SPEC(/admin-journeys\.spec\.ts/),
-            dependencies: ["setup"],
-            // Admin journeys mutate shared test-bucket lists with whole-list
-            // PUTs; all of them live in one file and fullyParallel: false
-            // keeps that file's tests in a single worker, run one at a time,
-            // so they can't clobber each other.
-            fullyParallel: false,
-            timeout: 240_000,
-            use: { storageState: ADMIN_STORAGE_STATE },
-          },
-          {
-            // The whats-on-test page reads and never writes, and both
-            // endpoints it reads are intercepted by the spec — so it needs
-            // neither the serial execution the mutating journeys above
-            // require nor their long timeouts, and gets its own project
-            // rather than slowing that file down.
-            name: "admin-status",
-            testMatch: SPEC(/admin-whats-on-test\.spec\.ts/),
-            dependencies: ["setup"],
-            use: { storageState: ADMIN_STORAGE_STATE },
-          },
-          {
-            // The helper (#214) only reads: opening the panel creates no
-            // conversation, and with no ANTHROPIC_API_KEY on the e2e stack
-            // it never reaches a model at all. So, like the status page
-            // above, it needs neither serial execution nor a long timeout.
-            name: "admin-assistant",
-            testMatch: SPEC(/admin-assistant\.spec\.ts/),
-            dependencies: ["setup"],
-            use: { storageState: ADMIN_STORAGE_STATE },
           },
         ]
       : []),
     {
-      // Every admin-*.spec.ts needs the login the setup project captures,
-      // so none of them belong to this credential-free project.
+      // The admin specs belong to the projects above (which wait on the
+      // stack check, and one of which needs credentials), so none of them
+      // belong to this one.
       name: "visitor",
       testIgnore: SPEC(/admin-[^\\/]*\.spec\.ts/),
     },

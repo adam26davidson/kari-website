@@ -20,7 +20,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region};
 use aws_sdk_s3::Client;
 use jsonwebtoken::{encode, jwk::JwkSet, Algorithm, EncodingKey, Header};
-use kari_website_api::middleware::auth::JwksCache;
+use kari_website_api::middleware::auth::{DevAuth, JwksCache};
 use kari_website_api::routes::health::HealthCache;
 use kari_website_api::services::assistant::AssistantState;
 use kari_website_api::services::object_store::ObjectStore;
@@ -184,6 +184,9 @@ pub fn test_state_with_jwks_url(jwks: JwkSet, jwks_url: String) -> AppState {
         // configuration is injected, never read from the environment, so
         // tests stay parallel-safe.
         assistant: Arc::new(AssistantState::default()),
+        // Dev auth off (#266), like every deployed build — the tests that
+        // exercise it build their own state in dev_auth_tests.rs.
+        dev_auth: DevAuth::default(),
     }
 }
 

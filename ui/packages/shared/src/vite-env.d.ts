@@ -18,6 +18,16 @@ interface ImportMetaEnv {
    * prod bundle never registers its route or menu entry.
    */
   readonly VITE_SHOW_TEST_STATUS?: string;
+  /**
+   * "fake" only in dev/test builds (.env.development, .env.test): makes
+   * the admin app mount its fake Auth0 session instead of the real one
+   * (#266), so local dev, the e2e admin journeys and the screenshot
+   * capture need no Auth0 credentials. NEVER set in .env, .env.staging or
+   * .env.production, so the deployed bundles fold the branch away and drop
+   * the fake entirely. Set it to "auth0" in the environment to opt a dev
+   * build back into a real login.
+   */
+  readonly VITE_AUTH_MODE?: string;
 }
 
 interface ImportMeta {

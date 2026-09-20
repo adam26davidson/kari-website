@@ -36,6 +36,13 @@ const shared = {
   env: {
     VITE_API_URL: "https://api.test.local",
     VITE_S3_URL: "https://s3.test.local",
+    // Vitest runs in mode "test", so vite loads ui/.env.test — where
+    // VITE_AUTH_MODE=fake makes the e2e bundle sign itself in (#266).
+    // That is a property of the BUNDLE, not of unit tests: left to leak
+    // in here it would silently rewrite what AdminAuthProvider does under
+    // test, so unit tests default to the deployed behaviour (real Auth0)
+    // and the cases that care about the fake stub it explicitly.
+    VITE_AUTH_MODE: "auth0",
   },
 };
 

@@ -21,7 +21,8 @@ import {
 
 // Admin journeys: real create/edit/delete flows against the local e2e stack
 // (the API on localhost:3000 backed by the seeded local MinIO),
-// authenticated via the storageState captured in auth.setup.ts.
+// signed in by the test bundle's fake auth (#266) — no Auth0 credentials
+// needed.
 //
 // These tests mutate shared state, so:
 // - every created item carries a unique marker so parallel/retried runs

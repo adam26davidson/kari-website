@@ -27,8 +27,11 @@ UI:
 - `npm run test:e2e` — Playwright e2e against a local seeded stack
 
 API:
-- `cargo watch -x 'run dev'` — run in watch mode; `cargo build`
-- `cargo test` — integration tests
+- `cargo watch -x 'run --features dev-auth'` — run in watch mode (that
+  feature is the local auth bypass, #266); `cargo build`
+- `cargo test` — integration tests; CI also runs
+  `cargo test --features dev-auth`, since `dev_auth_tests.rs` asserts a
+  different half of its contract in each feature configuration
 - `cargo clippy --all-targets -- -D warnings` — CI enforces no warnings
 - `cargo fmt --check`
 - `cargo llvm-cov --summary-only` — coverage (needs cargo-llvm-cov)
@@ -145,9 +148,10 @@ reviewer's notes: address them or file issues, but the job never blocks a
 merge.
 
 `docs/visual-checks.md` covers the rest: script flags, what CI's review
-job needs, how to download the exact images it saw, and how much local
-capture is worth when the change is admin-only and you have no
-`E2E_AUTH0_*` credentials (read it before deciding to skip a capture).
+job needs, and how to download the exact images it saw. Admin pages are
+captured locally with no Auth0 credentials since #266 — the dev and test
+bundles sign themselves in — so an admin-only change has no excuse to skip
+the capture.
 
 Admin UI changes also have a design brief, `docs/ui-design-brief.md`: the
 admin should feel friendly and welcoming to its one non-technical user,

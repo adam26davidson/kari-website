@@ -6,6 +6,24 @@ is what you read before adding tests or when a coverage floor fails.
 
 For the e2e stack's prerequisites, see `docs/local-development.md`.
 
+## Two feature configurations, one credential-gated spec
+
+The dev auth bypass (#266) is behind the `dev-auth` cargo feature, so the
+API suite runs in BOTH configurations in CI: `cargo test` (the feature set
+`cross build --release` deploys, where `dev_auth_tests.rs` proves the
+static dev token is rejected) and `cargo test --features dev-auth` (where
+it proves the bypass works and that real Auth0 JWTs still do). Clippy runs
+twice for the same reason — feature-gated code is invisible to the default
+run. Run both before pushing an API change.
+
+On the UI side the same change made every e2e admin journey
+credential-free: the test bundle signs itself in. Exactly one spec is still
+gated on `E2E_AUTH0_USERNAME` / `E2E_AUTH0_PASSWORD` —
+`e2e/admin-auth0-login.spec.ts`, the real Universal Login smoke — and its
+Playwright project simply is not built without them. If you are adding an
+admin journey, it belongs in the credential-free projects; add to the smoke
+only if you are testing Auth0 itself.
+
 ## Vitest project layout
 
 `npm run test:coverage` runs `npm run typecheck` first. That is deliberate:

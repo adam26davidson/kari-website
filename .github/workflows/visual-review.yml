@@ -2,8 +2,9 @@ name: Visual review
 
 # AI visual check on PRs that touch the UI: stands up the same hermetic
 # stack as the e2e job (MinIO + seed + API + test-mode preview), captures
-# screenshots of the public pages and — via the same Auth0 test user the
-# admin e2e journeys use — the admin pages (ui/e2e/screenshots.mjs), and
+# screenshots of the public pages and the admin pages
+# (ui/e2e/screenshots.mjs — the test bundle signs itself in since #266, so
+# no Auth0 credentials are involved), and
 # has Claude review them for visual defects — overflow, clipped images, illegible
 # text, broken mobile layout — that behavioral tests can't catch. Findings
 # are posted as an advisory sticky PR comment; this job never blocks a
@@ -98,15 +99,12 @@ jobs:
           cat preview.log >&2
           exit 1
 
+      # No Auth0 secrets: the test-mode bundle signs itself in (#266), so
+      # the admin pages are captured on every run — including on forks,
+      # where repo secrets were never available.
       - name: Capture screenshots
         if: steps.check.outputs.enabled == 'true'
         working-directory: ui
-        env:
-          # Same admin test user as the e2e admin journeys; with these set
-          # the script logs in through Auth0 and captures the admin pages
-          # too. Absent (e.g. on forks), it captures public pages only.
-          E2E_AUTH0_USERNAME: ${{ secrets.E2E_AUTH0_USERNAME }}
-          E2E_AUTH0_PASSWORD: ${{ secrets.E2E_AUTH0_PASSWORD }}
         run: node e2e/screenshots.mjs --base-url http://localhost:4173
 
       - name: Upload screenshots
@@ -142,7 +140,7 @@ jobs:
             top of the page first, with ~100px of overlap between
             consecutive tiles, so review a tiled page by reading its
             tiles in order as one page. They cover the public pages
-            and, when captured, the
+            and the
             admin pages (files named admin-*: list pages, editors opened
             on a fixture item, and image cleanup). For the admin pages
             also read docs/ui-design-brief.md and judge them against its

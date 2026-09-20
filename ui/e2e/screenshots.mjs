@@ -11,15 +11,19 @@
 //     test-mode preview and has Claude review the PNGs on each UI PR.
 //
 // Admin pages (lists, editors deep-linked to seeded fixture items, image
-// cleanup) are captured through a real Auth0 login and therefore need
-// E2E_AUTH0_USERNAME / E2E_AUTH0_PASSWORD (the same credentials the admin
-// e2e journeys use). Without them the script captures the public pages only
-// and says so — it never fails just because credentials are absent, unless
-// admin routes were requested explicitly via --routes.
+// cleanup) are captured too, and need no credentials: the dev and test
+// bundles sign themselves in (#266). They are still captured in their own
+// browser context, so the public pages are photographed exactly as a
+// visitor sees them.
 //
 // Usage:
-//   node e2e/screenshots.mjs [--base-url http://localhost:5173] [--routes /,/haiku]
+//   node e2e/screenshots.mjs [--base-url http://localhost:5174] [--routes /,/haiku]
 //   SCREENSHOT_BASE_URL also sets the base URL (flag wins).
+//
+// The default base URL is the ADMIN dev server (5174), which proxies
+// everything outside /admin to the public one — so one origin serves both
+// apps, the way the deployed site and the preview build do. Point --base-url
+// at the preview (4173) or at a dev.sh stack on other ports as needed.
 //
 // Each route is captured at desktop (1280px), tablet (834px), and mobile
 // (390px) widths. Animations are disabled and images awaited, so captures
@@ -51,7 +55,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
-import { loginAsAdmin } from "./auth0-login.mjs";
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
 const OUTPUT_DIR = path.join(E2E_DIR, "screenshots");
@@ -135,7 +138,7 @@ function argValue(flag) {
 const baseUrl = (
   argValue("--base-url") ??
   process.env.SCREENSHOT_BASE_URL ??
-  "http://localhost:5173"
+  "http://localhost:5174"
 ).replace(/\/$/, "");
 
 /** @param {string} route */
@@ -430,31 +433,12 @@ async function captureRoutes(page, entries, failures, overflows) {
 }
 
 async function main() {
-  const username = process.env.E2E_AUTH0_USERNAME;
-  const password = process.env.E2E_AUTH0_PASSWORD;
-  const hasAuthCredentials = Boolean(username && password);
-
   const publicEntries = routes.filter(
     (entry) => !entry.route.startsWith("/admin"),
   );
-  let adminEntries = routes.filter((entry) =>
+  const adminEntries = routes.filter((entry) =>
     entry.route.startsWith("/admin"),
   );
-
-  if (adminEntries.length > 0 && !hasAuthCredentials) {
-    if (explicitRoutes) {
-      console.error(
-        "Admin routes were requested via --routes but " +
-          "E2E_AUTH0_USERNAME / E2E_AUTH0_PASSWORD are not set.",
-      );
-      process.exit(1);
-    }
-    console.warn(
-      "E2E_AUTH0_USERNAME / E2E_AUTH0_PASSWORD not set — capturing the " +
-        "public pages only and skipping the admin pages.",
-    );
-    adminEntries = [];
-  }
 
   fs.rmSync(OUTPUT_DIR, { recursive: true, force: true });
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
@@ -471,12 +455,12 @@ async function main() {
       await captureRoutes(page, publicEntries, failures, overflows);
       await context.close();
     }
-    if (adminEntries.length > 0 && username && password) {
-      // A separate context so the public pages are captured exactly as a
-      // visitor sees them, never with logged-in admin state.
+    if (adminEntries.length > 0) {
+      // A separate context so the public pages above are captured exactly
+      // as a visitor sees them, never with signed-in admin state. No login
+      // step: the bundle these run against signs itself in (#266).
       const context = await browser.newContext({ reducedMotion: "reduce" });
       const page = await context.newPage();
-      await loginAsAdmin(page, { baseUrl, username, password });
       await captureRoutes(page, adminEntries, failures, overflows);
       await context.close();
     }

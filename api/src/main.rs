@@ -2,7 +2,7 @@
 // `AppState`, the router, and the middleware are defined once and tests cover
 // exactly what ships (rather than a second, separately-compiled copy).
 use aws_sdk_s3::Client;
-use kari_website_api::middleware::auth::{fetch_jwks, JwksCache, AUTH0_JWKS_URL};
+use kari_website_api::middleware::auth::{fetch_jwks, DevAuth, JwksCache, AUTH0_JWKS_URL};
 use kari_website_api::migrate::run_migrate_images_command;
 use kari_website_api::routes::create_router;
 use kari_website_api::routes::health::HealthCache;
@@ -84,11 +84,23 @@ async fn main() {
         }
     );
 
+    // The local development auth bypass (#266). Off unless the binary was
+    // built with the `dev-auth` feature AND KARI_DEV_AUTH=1 is set; the
+    // deploy build enables neither, so this is a no-op there.
+    let dev_auth = DevAuth::from_env();
+    if dev_auth.is_enabled() {
+        tracing::warn!(
+            "dev auth ON: the static local token is accepted as admin — \
+             never a production build"
+        );
+    }
+
     let state = AppState {
         jwks: Arc::new(JwksCache::new(jwks, AUTH0_JWKS_URL.to_string())),
         s3_service,
         health: Arc::new(HealthCache::default()),
         assistant,
+        dev_auth,
     };
 
     // Create router with routes
