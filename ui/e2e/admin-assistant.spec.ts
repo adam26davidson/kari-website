@@ -1,7 +1,8 @@
 import { test, expect } from "@playwright/test";
 
 // The admin helper (#214), driven in a real browser against the local e2e
-// stack, authenticated via the storageState captured in auth.setup.ts.
+// stack, signed in by the test bundle's fake auth (#266) — no Auth0
+// credentials needed.
 //
 // The local API has no ANTHROPIC_API_KEY — and neither does the deployed
 // test environment until the maintainer adds one — so what this proves is

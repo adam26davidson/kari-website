@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, renderHook, screen, waitFor } from "@testing-library/react";
 import { useAuth0 } from "@auth0/auth0-react";
 import {
   DEV_AUTH_TOKEN,
@@ -23,19 +23,10 @@ function Probe() {
   );
 }
 
-/** Hands the live context object back to the test. */
+/** The live context object, as any admin screen would receive it. */
 function contextFromProvider() {
-  let captured: ReturnType<typeof useAuth0> | undefined;
-  function Capture() {
-    captured = useAuth0();
-    return null;
-  }
-  render(
-    <FakeAuthProvider>
-      <Capture />
-    </FakeAuthProvider>,
-  );
-  return captured!;
+  return renderHook(() => useAuth0(), { wrapper: FakeAuthProvider }).result
+    .current;
 }
 
 describe("FakeAuthProvider", () => {

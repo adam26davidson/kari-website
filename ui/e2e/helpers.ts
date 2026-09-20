@@ -85,8 +85,9 @@ const SECTION_LIST_ENDPOINT: Record<AdminSection, string> = {
 };
 
 /**
- * Open /admin (already authenticated via storageState) and switch to the
- * given section, waiting for its list to finish loading.
+ * Open /admin (already signed in — the test bundle's fake auth, or a real
+ * Auth0 session in the login smoke) and switch to the given section,
+ * waiting for its list to finish loading.
  */
 export async function openAdminSection(page: Page, section: AdminSection) {
   const listUrl = TEST_API_URL + SECTION_LIST_ENDPOINT[section];

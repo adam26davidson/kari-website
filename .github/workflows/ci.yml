@@ -127,6 +127,28 @@ jobs:
       - name: Build
         run: npm run build
 
+      # #266: the admin app's fake Auth0 session exists only in dev/test
+      # builds. Its two constants are the whole of it, so their absence
+      # from the production bundle is the proof that the branch folded and
+      # the module was tree-shaken. `grep -a` is load-bearing: without it
+      # grep treats a minified chunk with odd bytes as binary and can miss
+      # a match, which would make this check quietly vacuous.
+      - name: Production bundle carries no fake auth
+        run: |
+          if grep -rqaE "kari-dev-auth-token|kari-auth-mode" dist; then
+            echo "::error::fake auth reached the production bundle"
+            grep -rlaE "kari-dev-auth-token|kari-auth-mode" dist >&2
+            exit 1
+          fi
+          # Positive control: the test bundle DOES carry it, so a typo in
+          # the pattern above cannot pass this job by matching nothing.
+          npm run build:test
+          if ! grep -rqaE "kari-dev-auth-token|kari-auth-mode" dist; then
+            echo "::error::the fake-auth grep matches nothing even in the" \
+              "test bundle — this check is not proving anything"
+            exit 1
+          fi
+
   frontend-e2e:
     name: Frontend (Playwright e2e)
     runs-on: ubuntu-latest
@@ -161,8 +183,10 @@ jobs:
       - name: Run e2e tests
         run: npm run test:e2e
         env:
-          # Test-tenant Auth0 credentials enable the admin journey specs;
-          # without them only the visitor/smoke suites run.
+          # Since #266 the admin journeys run credential-free on the test
+          # bundle's fake auth. These enable exactly one more project:
+          # admin-auth0-login.spec.ts, the real Universal Login smoke that
+          # keeps the actual Auth0 integration from rotting unnoticed.
           E2E_AUTH0_USERNAME: ${{ secrets.E2E_AUTH0_USERNAME }}
           E2E_AUTH0_PASSWORD: ${{ secrets.E2E_AUTH0_PASSWORD }}
 
@@ -308,5 +332,39 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
 
+      # The dev-auth bypass (#266) is behind a cargo feature, so the
+      # feature-on code is invisible to the default clippy run above.
+      - name: Clippy (dev-auth)
+        run: cargo clippy --all-targets --features dev-auth -- -D warnings
+
+      # Default features: the exact feature set `cross build --release`
+      # deploys. dev_auth_tests.rs asserts here that the static dev token
+      # is rejected.
       - name: Tests
         run: cargo test
+
+      # ...and this is the other half of that proof: the bypass is not just
+      # inert in a deployed build, it is not in the binary at all. Must run
+      # BEFORE the dev-auth test pass below, which overwrites this binary
+      # with one that legitimately does contain the token.
+      #
+      # `grep -a` is load-bearing: plain grep treats the binary as binary
+      # and misses the match even when the string is there (verified), so
+      # without it this check would silently prove nothing. The positive
+      # control makes that impossible to reintroduce unnoticed.
+      - name: Release feature set carries no dev auth
+        run: |
+          cargo build
+          if grep -qa kari-dev-auth-token target/debug/kari-website-api; then
+            echo "::error::the dev auth token is in the default-features binary"
+            exit 1
+          fi
+          cargo build --features dev-auth
+          if ! grep -qa kari-dev-auth-token target/debug/kari-website-api; then
+            echo "::error::the dev-auth binary does not contain the token" \
+              "either — this check is not proving anything"
+            exit 1
+          fi
+
+      - name: Tests (dev-auth)
+        run: cargo test --features dev-auth

@@ -1,8 +1,9 @@
-// The Auth0 Universal Login dance, shared by auth.setup.ts (which captures
-// storageState for the admin e2e project) and screenshots.mjs (which
-// authenticates a context to capture the admin pages). One implementation on
-// purpose: the selectors below track Auth0's rendered login form, and when
-// Auth0 changes it, this is the only place to fix.
+// The Auth0 Universal Login dance. Since #266 the admin e2e journeys and
+// the screenshot capture sign themselves in instead, so this has exactly one
+// caller left: admin-auth0-login.spec.ts, the smoke journey that keeps the
+// real Auth0 integration honest. It stays a module of its own because the
+// selectors below track Auth0's rendered login form, and when Auth0 changes
+// it, this is the one place to fix.
 //
 // Plain ESM JavaScript (with JSDoc types) like config.mjs, and plain
 // Playwright page APIs (no @playwright/test fixtures), so it works both

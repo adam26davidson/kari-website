@@ -154,8 +154,9 @@ echo "  API:    http://localhost:$KARI_API_PORT"
 echo "  S3:     $VITE_S3_URL"
 echo "  UI:     vite picks a free port and prints its URL below (5173 by"
 echo "          default)"
-echo "  Admin:  a second vite on 5174 by default, at /admin/ — logging in"
-echo "          needs that exact origin allowlisted in Auth0"
+echo "  Admin:  a second vite on 5174 by default, at /admin/ — you are"
+echo "          signed in automatically (no Auth0 login, no credentials);"
+echo "          run VITE_AUTH_MODE=auth0 scripts/dev.sh for a real one"
 echo
 
 # What the admin helper reads code from. In production this is a snapshot
@@ -164,9 +165,17 @@ echo
 # nothing reads it until there is a conversation.
 export REPO_DIR="$PWD"
 
+# The local auth bypass (#266): the API additionally accepts a static dev
+# token as an admin, so the admin UI signs itself in with no Auth0 round
+# trip. Both gates are needed and neither is in a deployed build — the
+# feature is not default, and deploy.yml's `cross build --release` does not
+# ask for it. Real Auth0 tokens keep working, so VITE_AUTH_MODE=auth0 still
+# gives you the real login against this same stack.
+export KARI_DEV_AUTH=1
+
 # Run the API from the repo root on purpose: dotenv only finds api/.env when
 # the cwd is api/, so the exports above are the API's entire configuration.
-cargo run --manifest-path api/Cargo.toml &
+cargo run --manifest-path api/Cargo.toml --features dev-auth &
 pids+=($!)
 
 # No --mode flag: .env.development targets local MinIO too (issue #246),
