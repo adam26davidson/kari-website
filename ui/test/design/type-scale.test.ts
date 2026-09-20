@@ -223,7 +223,9 @@ const FROZEN_ADMIN_SIZES = new Set([
   // "16px" and "18px" went with admin-haiku-page.css, which #234 deleted
   // when that page moved to Tailwind — the shrink this set is for.
   "20px",
-  "0.85rem",
+  // "0.85rem" went with admin-whats-on-test-page.css — the commit rows'
+  // date/sha line and the version footer were its only holders — which
+  // #841 deleted when that page moved to Tailwind.
   "0.9rem",
 ]);
 
@@ -258,13 +260,15 @@ describe("the size axis of the type scale", () => {
     },
   );
 
+  // The `--admin-prose-size` allowance went with the token itself: #841
+  // deleted it from admin.css along with `.admin-section-explanation`, the
+  // one rule outside what's on test that ever spent it, so admin text is
+  // now a step of the scale or a frozen literal and nothing else (#752 is
+  // moot).
   it.each(sizesDeclared(true))(
-    "%s sizes admin text with a step, the prose token, or a frozen literal",
+    "%s sizes admin text with a step or a frozen literal",
     (_label, value) => {
-      const allowed =
-        isStep(value) ||
-        value === "var(--admin-prose-size)" ||
-        FROZEN_ADMIN_SIZES.has(value);
+      const allowed = isStep(value) || FROZEN_ADMIN_SIZES.has(value);
       expect(allowed).toBe(true);
     },
   );
