@@ -57,6 +57,12 @@ derived variant and rewrites the S3 URLs in published blog HTML. Dry-run by
 default, and idempotent, so run it, deploy, then run it again to catch
 uploads in between.
 
+Both halves work from the same rule: an image is an id the bucket holds an
+`original.<ext>` for. An id without one (already swept, or a stray object
+at the bare pre-#273 key `images/<id>`) gets no renditions AND no URL
+rewrite — rewriting it would replace a reference that may still resolve
+with one that certainly 404s.
+
 Because it writes only what is absent, re-running it is also how a NEWLY
 added variant reaches images uploaded before it existed — deploy first,
 then re-run with `--apply`. Until that run, the public site's fallback

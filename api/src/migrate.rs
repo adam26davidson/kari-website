@@ -7,7 +7,9 @@
 //!    visibility as its original;
 //! 2. rewrite the S3 URLs embedded in PUBLISHED blog HTML from
 //!    `/images/<id>` to `/images/<id>/original.<ext>` — the only stored
-//!    references that name an object rather than an id.
+//!    references that name an object rather than an id. Only ids the bucket
+//!    holds an original for are rewritten, so a reference the migration
+//!    cannot point at a real object keeps the URL it has.
 //!
 //! It is **idempotent**: a rendition that already exists is not regenerated,
 //! and HTML already pointing at `/images/<id>/…` is left alone — so it is
@@ -108,9 +110,11 @@ async fn survey(store: &dyn ObjectStore) -> Result<BTreeMap<String, ImageState>,
 /// path segment into `/images/<id>/original<ext>`, for the ids in
 /// `known_ids`. Returns `None` when nothing changed.
 ///
-/// Unknown ids are left exactly as they are: an id with no object in the
-/// bucket (already swept, or hand-edited content) would only be rewritten
-/// into a key that certainly does not exist.
+/// Ids outside `known_ids` are left exactly as they are: an id the bucket
+/// holds no original for — already swept, hand-edited content, or a stray
+/// object at the bare pre-#273 key `images/<id>` — would only be rewritten
+/// into a key that certainly does not exist, turning a reference that may
+/// still resolve into a 404.
 fn rewrite_image_urls(html: &str, known_ids: &BTreeSet<&str>) -> Option<String> {
     const MARKER: &str = "/images/";
     let mut out = String::with_capacity(html.len());
@@ -242,7 +246,15 @@ pub async fn migrate_images(
     }
 
     // 2. Rewrite the S3 URLs in published blog content.
-    let known_ids: BTreeSet<&str> = images.keys().map(String::as_str).collect();
+    // Only ids the bucket actually holds an `original.<ext>` for: the
+    // rewrite points at that object, so an id without one (a stray bare
+    // `images/<id>`, or an image whose original has been swept) must keep
+    // whatever URL it has rather than gain one that 404s.
+    let known_ids: BTreeSet<&str> = images
+        .iter()
+        .filter(|(_, state)| state.has_original)
+        .map(|(id, _)| id.as_str())
+        .collect();
     for post_id in published_post_ids(store).await? {
         let key = format!("blog/{post_id}.html");
         let data = match store.get_object(&key).await {

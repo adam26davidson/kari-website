@@ -375,6 +375,29 @@ async fn a_bare_legacy_key_is_left_alone_and_gets_no_renditions() {
     );
 }
 
+#[tokio::test]
+async fn a_reference_to_a_bare_legacy_key_is_left_untouched() {
+    // An id whose ONLY object is the bare pre-#273 key has no
+    // `original.<ext>` and never gets one, so rewriting a published
+    // reference to it would turn a URL that still resolves into a 404.
+    let store = Arc::new(
+        unmigrated_variants_store()
+            .with_object_tagged("images/stray.png", png_bytes(90, 90), true, old())
+            .with_object(
+                "blog/post-pub.html",
+                r#"<img src="https://s3/images/stray.png"><img src="https://s3/images/pub.png">"#,
+            ),
+    );
+    migrate_images(store.as_ref(), false)
+        .await
+        .expect("migration should succeed");
+
+    assert_eq!(
+        String::from_utf8(store.get("blog/post-pub.html").unwrap().data).unwrap(),
+        r#"<img src="https://s3/images/stray.png"><img src="https://s3/images/pub.png/original.png">"#
+    );
+}
+
 // ------------------------------------------------- the CLI entry point
 
 /// Run the subcommand as `main` would, with the given `AWS_ENDPOINT_URL`
