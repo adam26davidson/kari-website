@@ -9,6 +9,14 @@ CI or reviews; the orchestrator handles everything after the PR exists.
 
 {{ISSUE_LIST}}
 
+If the assignment includes a private transcript (the conversation behind a
+`user-feedback` issue), read it before building — it is what she actually
+asked for. It is private: the issue lives on a public repository and her
+conversation deliberately does not (#888), so never quote or paraphrase it
+into the code you write, an issue comment, a PR body or a commit message. If it says
+`Transcript unavailable`, work from the issue body alone and say so in
+your PR body.
+
 {{MODEL_NOTE}}
 
 ## Implementation plan

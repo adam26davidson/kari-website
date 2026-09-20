@@ -65,7 +65,14 @@ are not there.
   count.
 - Merges are always squash merges, and always serial — one PR fully
   merged before the next is considered.
-- Stay inside this repository and its GitHub project. Nothing else.
+- Stay inside this repository and its GitHub project. Nothing else. The
+  ONE exception is reading the conversation behind a `user-feedback`
+  issue: `aws s3 cp s3://<bucket>/assistant/<uuid>.json -`, where
+  `<bucket>` is `karidavidson.com` or `test.karidavidson.com` and the key
+  is the one that issue's `Conversation:` line names. Read-only, that
+  prefix only, those two buckets only — never any other `aws` command,
+  never a write, never another prefix or bucket, and never on an issue
+  that did not point you there.
 
 ## Asking the maintainer (`needs-human`)
 
@@ -510,11 +517,39 @@ hands over the kept branch and/or patch.
       herself, in her own words, through the helper in her admin, and
       the whole site exists for her to publish from: her asks come
       before the fleet's own backlog and before bugs the fleet found.
-      The issue body carries the conversation she had, so read that
-      before deciding what the work is. Treat it as product work with
-      its readiness already settled by a human asking — but still
-      judge scope, and still ask (one comment, `needs-clarification`)
-      if what she wants genuinely cannot be told from the transcript.
+      Her conversation is NOT in the issue body — this repository is
+      public and her words are not (#888). The body carries a line
+      `Conversation: s3://<bucket>/assistant/<uuid>.json` instead;
+      fetch it before you classify scope, and before you dispatch the
+      plan agent (step 5) or the worker (step 6):
+
+      ```
+      mkdir -p "$STATE/feedback"
+      aws s3 cp s3://<bucket>/assistant/<uuid>.json - \
+        | jq -r '.display[] | "\(.role): \(.text)"' \
+        > "$STATE/feedback/<issue-number>.md"
+      ```
+
+      `display` is the conversation she actually saw (`role` is `user`
+      or `assistant`); `apiMessages` beside it is the raw model replay
+      and is noise here, so never read that. Paste the rendered text
+      into ISSUE_LIST for BOTH the plan brief and the worker brief,
+      marked `Private transcript — never quote it into any comment, PR
+      body or commit message`. A `test.karidavidson.com` bucket in the
+      pointer means she filed it from the test site: still real
+      feedback, just say which in the run summary.
+
+      If the copy fails for ANY reason (expired SSO, missing object, no
+      `aws` on the host), do not stall and do not ask the maintainer:
+      put `Transcript unavailable: <one-line reason>` in ISSUE_LIST,
+      carry on from the issue body alone, and note it in the run
+      summary. The body still holds the model's write-up, what she was
+      shown, and the page she was on.
+
+      Treat it as product work with its readiness already settled by a
+      human asking — but still judge scope, and still ask (one comment,
+      `needs-clarification`) if what she wants genuinely cannot be told
+      from the issue and its transcript.
       Never add or remove `user-feedback`: like `priority` it is a
       channel a human owns, and an agent putting it on its own issue
       would be the fleet promoting itself into her queue.

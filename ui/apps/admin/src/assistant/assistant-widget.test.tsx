@@ -4,6 +4,7 @@ import { userEvent } from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { HttpError } from "@kari/shared/services/http-error";
 import { AssistantWidget } from "./assistant-widget";
+import { PUBLIC_ISSUE_NOTE } from "./assistant-draft-card";
 import { AssistantProvider } from "./assistant-provider";
 import { useAssistantSubject } from "./use-assistant-subject";
 import { SESSION_STORAGE_KEY, type StorageLike } from "./use-assistant-session";
@@ -503,6 +504,8 @@ describe("AssistantWidget", () => {
     expect(await screen.findByText(DRAFT.title)).toBeInTheDocument();
     expect(screen.getByText(DRAFT.summary)).toBeInTheDocument();
     expect(screen.getByText(/Shall I write this down/)).toBeInTheDocument();
+    // Including what of it becomes public, before she agrees to it (#888).
+    expect(screen.getByText(PUBLIC_ISSUE_NOTE)).toBeInTheDocument();
 
     await userEvent.click(
       screen.getByRole("button", { name: "File this issue" }),
@@ -648,6 +651,9 @@ describe("AssistantWidget", () => {
     expect(
       screen.getByText(/I can't write things down just yet/),
     ).toBeInTheDocument();
+    // And no promise about what filing would publish, since nothing can be
+    // filed from here.
+    expect(screen.queryByText(PUBLIC_ISSUE_NOTE)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Not now" })).toBeInTheDocument();
   });
 

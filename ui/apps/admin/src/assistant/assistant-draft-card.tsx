@@ -2,13 +2,28 @@ import { Button } from "../components/ui/button";
 import type { AssistantDraft } from "@kari/shared/services/assistant";
 
 /**
+ * What she is told before she presses the button.
+ *
+ * The issue goes to a public repository, so she has to know that before
+ * she agrees to it — and she has to know the rest is not public, or she
+ * has no way to tell what she has just published. The two things named
+ * here are the two things the card is already showing her, which is what
+ * makes this checkable rather than a promise: what is on the card is what
+ * becomes public, and her conversation stays in her own workshop.
+ */
+export const PUBLIC_ISSUE_NOTE =
+  "The title and sentence above are what gets filed, and anyone can read " +
+  "them; the rest of our conversation stays private.";
+
+/**
  * The card that asks her permission.
  *
  * Nothing is written down until she presses the button here: the helper's
  * tool can only put this on screen (see `services/assistant.rs`). What she
  * is shown is what she needs to judge it by — the title it would get, and
  * one plain sentence — not the issue body underneath, which is written for
- * whoever picks the work up.
+ * whoever picks the work up. It also says what of that becomes public, so
+ * that the judgement is an informed one (#888).
  *
  * One primary action per state, per `docs/ui-design-brief.md` §2: filing,
  * or — where this host has nowhere to file — simply letting it go.
@@ -73,11 +88,15 @@ export function AssistantDraftCard({
         {draft.summary}
       </p>
 
-      {!canFile && (
-        <p className="mt-3 font-sans text-sm leading-relaxed text-foreground">
-          {unavailableMessage}
-        </p>
-      )}
+      {/*
+        One slot, two things to say: where filing is possible, what will be
+        public; where it is not, why there is no button. Never both — a
+        note about what gets filed would be a promise about a button that
+        is not there.
+      */}
+      <p className="mt-3 font-sans text-sm leading-relaxed text-muted-foreground">
+        {canFile ? PUBLIC_ISSUE_NOTE : unavailableMessage}
+      </p>
       {error && (
         <p className="mt-3 font-sans text-sm leading-relaxed text-foreground">
           {error}
