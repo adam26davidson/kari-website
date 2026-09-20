@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use aws_sdk_s3::error::SdkError;
-use aws_sdk_s3::{primitives::ByteStream, types::MetadataDirective, Client};
-use aws_smithy_http::label::{fmt_string, EncodingStrategy};
+use aws_sdk_s3::{primitives::ByteStream, Client};
 use bytes::Bytes;
 use std::error::Error;
 use std::fmt;
@@ -168,38 +167,6 @@ impl ObjectStore for S3Service {
             .tag_set()
             .iter()
             .any(|tag| tag.key() == "public" && tag.value() == "true"))
-    }
-
-    async fn copy_object(&self, from: &str, to: &str) -> Result<(), S3Error> {
-        // `MetadataDirective::Replace` is what lets the copy gain a real
-        // content type (S3 otherwise carries the source's over, and legacy
-        // image objects were written without one). The tagging directive is
-        // deliberately left at its default of COPY so the `public=` tag —
-        // which is what the bucket policy exposes objects on — comes along.
-        self.client
-            .copy_object()
-            .bucket(&self.bucket_name)
-            .key(to)
-            // S3 requires `x-amz-copy-source` URL-encoded and the SDK does
-            // not encode it for us. Legacy `images/<name>` keys are raw
-            // client filenames, so they can hold anything S3 allows in a key:
-            // left raw, `%`/`+` are decoded by S3 into a *different* key
-            // (NoSuchKey), non-ASCII goes out as raw obs-text bytes S3 will
-            // not accept, and a control character fails header construction
-            // outright. `Greedy` percent-encodes each path segment while
-            // leaving `/` literal, which is what S3 wants for `<bucket>/<key>`.
-            .copy_source(format!(
-                "{}/{}",
-                self.bucket_name,
-                fmt_string(from, EncodingStrategy::Greedy)
-            ))
-            .metadata_directive(MetadataDirective::Replace)
-            .set_cache_control(cache_control_for(to).map(String::from))
-            .set_content_type(content_type_for(to))
-            .send()
-            .await?;
-
-        Ok(())
     }
 
     async fn delete_object(&self, key: &str) -> Result<(), S3Error> {

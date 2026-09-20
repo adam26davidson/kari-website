@@ -9,7 +9,7 @@ use image::{
     codecs::jpeg::JpegEncoder, ColorType, DynamicImage, ImageEncoder, RgbImage, RgbaImage,
 };
 use kari_website_api::services::image_keys::{
-    id_from_key, legacy_key, original_key, prefix, sanitized_extension, variant_key, ImageVariant,
+    id_from_key, original_key, prefix, sanitized_extension, variant_key, ImageVariant,
     BACKGROUND_FILE, THUMB_FILE,
 };
 use kari_website_api::services::thumbnail::{
@@ -74,15 +74,11 @@ fn every_variant_has_a_distinct_file_name() {
 }
 
 #[test]
-fn legacy_key_is_the_pre_migration_single_object() {
-    assert_eq!(legacy_key("abc.jpg"), "images/abc.jpg");
-}
-
-#[test]
 fn id_from_key_takes_the_first_segment_under_images() {
     assert_eq!(id_from_key("images/abc.jpg/thumb.jpg"), Some("abc.jpg"));
     assert_eq!(id_from_key("images/abc.jpg/original.jpg"), Some("abc.jpg"));
-    // A legacy single-object key is its own id.
+    // A bare key with no further segment is its own id, so a stray object
+    // beside an image's prefix is swept with that image.
     assert_eq!(id_from_key("images/abc.jpg"), Some("abc.jpg"));
 }
 

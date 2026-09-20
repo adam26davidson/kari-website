@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::error::AppError;
 use crate::services::image_gc::collect_referenced_images;
 use crate::services::image_keys::{
-    id_from_key, legacy_key, original_key, prefix, sanitized_extension, variant_key, ImageVariant,
+    id_from_key, original_key, prefix, sanitized_extension, variant_key, ImageVariant,
 };
 use crate::services::object_store::ObjectMeta;
 use crate::services::s3::S3Error;
@@ -90,17 +90,15 @@ fn unique_image_name(original: Option<&str>) -> String {
 
 /// The keys to try, in order, when serving image `id` at `size`.
 ///
-/// A requested variant that does not exist falls back to the original, and
-/// the original falls back to the pre-#273 single-object key — so an image
-/// whose renditions failed to generate, and a bucket that has not been
-/// migrated yet, both still render (just at full size).
+/// A requested variant that does not exist falls back to the original, so an
+/// image whose renditions failed to generate still renders (just at full
+/// size).
 fn serving_candidates(id: &str, size: Option<ImageVariant>) -> Vec<String> {
-    let mut keys = Vec::with_capacity(3);
+    let mut keys = Vec::with_capacity(2);
     if let Some(variant) = size {
         keys.push(variant_key(id, variant));
     }
     keys.push(original_key(id));
-    keys.push(legacy_key(id));
     keys
 }
 
@@ -240,8 +238,7 @@ async fn store_renditions(state: &AppState, id: &str, data: Bytes, is_published:
 }
 
 /// Group listed `images/` objects by the image id they belong to, in id
-/// order. Both layouts land in the same group: a legacy `images/<id>` object
-/// and every object under `images/<id>/` describe one image.
+/// order.
 fn group_by_image_id(objects: Vec<ObjectMeta>) -> BTreeMap<String, Vec<ObjectMeta>> {
     let mut groups: BTreeMap<String, Vec<ObjectMeta>> = BTreeMap::new();
     for object in objects {
@@ -291,8 +288,7 @@ pub async fn list_images_handler(
 /// belonging to the image.
 ///
 /// A public reference to a variant needs that variant's own object tagged,
-/// so the whole directory flips together; the pre-#273 single object is
-/// flipped too, so a bucket mid-migration never ends up half-visible.
+/// so the whole directory flips together.
 pub async fn set_image_published_handler(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -320,18 +316,6 @@ pub async fn set_image_published_handler(
             .await
             .map_err(failed)?;
         tagged += 1;
-    }
-
-    // The legacy object is not under the prefix, so it is listed separately;
-    // its absence is the normal case for anything uploaded after migration.
-    match state
-        .s3_service
-        .set_object_tagging(&legacy_key(&id), query.is_published)
-        .await
-    {
-        Ok(()) => tagged += 1,
-        Err(S3Error::NotFound) => {}
-        Err(e) => return Err(failed(e)),
     }
 
     if tagged == 0 {

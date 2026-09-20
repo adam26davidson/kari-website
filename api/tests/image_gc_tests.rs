@@ -304,26 +304,21 @@ fn store_with_migrated_orphan() -> InMemoryStore {
 
 #[tokio::test]
 async fn gc_keeps_every_rendition_of_a_referenced_image() {
-    let (store, app) = setup_with(store_with_migrated_orphan().with_object(
-        // A half-migrated image: the legacy object is referenced too.
-        "images/haiga.jpg",
-        "legacy",
-    ));
+    let (store, app) = setup_with(store_with_migrated_orphan());
     let (status, body) = send(app, gc_request(Some(false), true)).await;
 
     assert_eq!(status, StatusCode::OK);
-    // A half-migrated image is ONE image, whichever layouts it stores.
+    // Every object under the prefix is ONE image, however many renditions
+    // it stores.
     assert_eq!(ids(&body, "referenced"), vec!["haiga.jpg"]);
     assert_eq!(
         flat_keys(&body, "referenced"),
         vec![
-            "images/haiga.jpg",
             "images/haiga.jpg/original.jpg",
             "images/haiga.jpg/thumb.jpg",
         ]
     );
     for key in [
-        "images/haiga.jpg",
         "images/haiga.jpg/original.jpg",
         "images/haiga.jpg/thumb.jpg",
     ] {

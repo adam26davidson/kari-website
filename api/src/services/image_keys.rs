@@ -15,10 +15,6 @@
 //! working untouched and only URL *construction* changed. The cosmetic
 //! `<uuid>.jpg/original.jpg` doubling is the price of that zero-rewrite
 //! migration.
-//!
-//! `legacy_key` is the pre-migration single-object layout. It is deliberately
-//! temporary: reads fall back to it so a bucket can be migrated after the
-//! code ships, and a follow-up removes it once no bucket holds one.
 
 use serde::Deserialize;
 
@@ -82,13 +78,10 @@ pub fn variant_key(id: &str, variant: ImageVariant) -> String {
     format!("images/{id}/{}", variant.file_name())
 }
 
-/// Key of the single object the pre-#273 layout stored an image as.
-pub fn legacy_key(id: &str) -> String {
-    format!("images/{id}")
-}
-
 /// The image id a listed key belongs to: the first path segment under
-/// `images/`, whichever layout the key is in. `None` for keys outside the
+/// `images/`. A bare `images/<id>` key with no further segment is treated as
+/// that id, so a stray object beside an image's prefix is swept with the
+/// image rather than surviving on its own. `None` for keys outside the
 /// prefix and for the bare `images/` folder marker some S3 tools create.
 pub fn id_from_key(key: &str) -> Option<&str> {
     let rest = key.strip_prefix("images/")?;
