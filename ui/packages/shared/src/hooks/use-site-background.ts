@@ -4,7 +4,6 @@ import { SiteSettingsService } from "../services/site-settings";
 import { isHexColor } from "../utils/color";
 import { ensureFontStylesheet, getFontPairing } from "../utils/fonts";
 import {
-  legacyS3ImageUrl,
   s3ImageUrl,
   s3VariantImageUrl,
 } from "../utils/image-management-helpers";
@@ -19,8 +18,7 @@ const applyBackground = (url: string) => {
  *
  * 1. the server-derived, page-sized rendition every upload generates (#453);
  * 2. the untouched original, for an image uploaded before that variant
- *    existed in a bucket the migration has not been re-run against;
- * 3. the pre-#273 single object, for a bucket never migrated at all (#452).
+ *    existed in a bucket the migration has not been re-run against.
  *
  * The public site reads S3 directly, so it gets a bare 404 rather than the
  * API's own fallback — the chain has to live here.
@@ -28,7 +26,6 @@ const applyBackground = (url: string) => {
 const backgroundCandidates = (photo: string) => [
   s3VariantImageUrl(photo, "background"),
   s3ImageUrl(photo),
-  legacyS3ImageUrl(photo),
 ];
 
 /**

@@ -5,10 +5,7 @@ import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { HomePageService } from "@kari/shared/services/home-page";
 import { useS3Load } from "@kari/shared/hooks/use-s3-load";
 import { useObjectUrl } from "@kari/shared/hooks/use-object-url";
-import {
-  onS3ImageError,
-  s3ImageUrl,
-} from "@kari/shared/utils/image-management-helpers";
+import { s3ImageUrl } from "@kari/shared/utils/image-management-helpers";
 import { usePreviewOverrides } from "../../preview/preview-overrides-context";
 
 const EMPTY_HOME_PAGE: HomePageData = {
@@ -54,9 +51,6 @@ export function Home() {
               <img
                 className="home-page-photo"
                 src={photoSrc}
-                // A blob: URL has no S3 key behind it, so the legacy-layout
-                // fallback would only rewrite it into a 404.
-                onError={draftPhotoUrl ? undefined : onS3ImageError}
                 alt="Kari Davidson"
               />
             )}

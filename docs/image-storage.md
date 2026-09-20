@@ -52,8 +52,7 @@ code that understands it.
 
 ## Bucket migration (`migrate-images`)
 
-`migrate-images`, a subcommand of the API binary, copies legacy
-`images/<name>` objects into the new layout, backfills every missing
+`migrate-images`, a subcommand of the API binary, backfills every missing
 derived variant and rewrites the S3 URLs in published blog HTML. Dry-run by
 default, and idempotent, so run it, deploy, then run it again to catch
 uploads in between.
@@ -61,7 +60,7 @@ uploads in between.
 Because it writes only what is absent, re-running it is also how a NEWLY
 added variant reaches images uploaded before it existed — deploy first,
 then re-run with `--apply`. Until that run, the public site's fallback
-chain (variant → original → legacy key) covers the gap.
+chain (background → original) covers the gap.
 
 Run it from the REPO ROOT (not from `api/`):
 
@@ -86,26 +85,3 @@ to find, so the SSO credential chain and profile region are in charge.
 
 `--allow-local` is only for a deliberate rehearsal against the dev stack
 (run it from `api/`, where `api/.env` supplies MinIO's endpoint and keys).
-
-### Migrate before deploying
-
-The migration is copy-only — the legacy objects stay — but it is not
-optional before a deploy of the code that reads the new layout: the API
-falls back to the legacy key, yet the PUBLIC site reads S3 directly, and S3
-has no fallback of its own.
-
-The UI therefore retries a failed public image at `images/<id>`
-(`fallBackToLegacyS3Image` in `image-management-helpers.ts`, wired into
-every public `<img>` and the injected blog HTML), so an unmigrated bucket
-costs one wasted request per image rather than a broken page. The
-site-background hook has its own longer chain for the same reason
-(`use-site-background.ts`): `background.jpg` → `original.<ext>` →
-`images/<id>`. Migrate anyway, promptly — the fallback is a safety net, not
-the intended path, and it retires with the legacy layout (#452).
-
-### Caveat for local rehearsals
-
-MinIO is filesystem-backed and will not LIST `images/<id>/…` while an
-object exists at the exact key `images/<id>`, so a rehearsal there cannot
-exercise the both-layouts-coexist paths (real S3, which the deployed
-buckets are, lists both).

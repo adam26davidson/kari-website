@@ -1,8 +1,5 @@
 import { PhotographyPost } from "@kari/shared/models";
-import {
-  onS3ImageError,
-  s3ImageUrl,
-} from "@kari/shared/utils/image-management-helpers";
+import { s3ImageUrl } from "@kari/shared/utils/image-management-helpers";
 import "./photography-post-content.css";
 
 export function PhotographyPostContent({ post }: { post: PhotographyPost }) {
@@ -18,7 +15,6 @@ export function PhotographyPostContent({ post }: { post: PhotographyPost }) {
           <div key={idx} className="photography-post-image-container">
             <img
               src={s3ImageUrl(image.image)}
-              onError={onS3ImageError}
               alt={image.blurb}
               className="photography-post-image"
             />
