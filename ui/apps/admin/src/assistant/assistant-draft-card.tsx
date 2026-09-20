@@ -94,7 +94,15 @@ export function AssistantDraftCard({
         note about what gets filed would be a promise about a button that
         is not there.
       */}
-      <p className="mt-3 font-sans text-sm leading-relaxed text-muted-foreground">
+      <p
+        className={
+          "mt-3 font-sans text-sm leading-relaxed " +
+          // The note is a quiet aside about what happens next; the
+          // unavailable message is something she has to act on, and keeps
+          // the weight it always had.
+          (canFile ? "text-muted-foreground" : "text-foreground")
+        }
+      >
         {canFile ? PUBLIC_ISSUE_NOTE : unavailableMessage}
       </p>
       {error && (
