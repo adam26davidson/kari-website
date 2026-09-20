@@ -5,7 +5,7 @@ pub mod models;
 pub mod routes;
 pub mod services;
 
-use middleware::auth::JwksCache;
+use middleware::auth::{DevAuth, JwksCache};
 use routes::health::HealthCache;
 use services::assistant::AssistantState;
 use services::object_store::ObjectStore;
@@ -20,4 +20,10 @@ pub struct AppState {
     /// `ANTHROPIC_API_KEY` it simply reports itself unavailable, and nothing
     /// else in the API is affected.
     pub assistant: Arc<AssistantState>,
+    /// The local development auth bypass (#266). Injected rather than read
+    /// from the environment where it is used, so tests stay parallel-safe;
+    /// `DevAuth::default()` (what every test builds) accepts nothing, and a
+    /// build without the `dev-auth` cargo feature cannot accept anything at
+    /// all.
+    pub dev_auth: DevAuth,
 }

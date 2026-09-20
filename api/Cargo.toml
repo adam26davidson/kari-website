@@ -5,6 +5,14 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+# Compile-time gate for the local development auth bypass (#266). NOT a
+# default feature: `cargo build` / `cross build --release` (what deploy.yml
+# runs) leave every line of the bypass out of the binary entirely. Only the
+# dev stack, the e2e stack and CI's second test pass turn it on, and even
+# then it stays inert unless KARI_DEV_AUTH=1 is in the environment.
+[features]
+dev-auth = []
+
 [dependencies]
 axum = { version="0.8.9", features = ["multipart", "macros"] }
 bytes = "1.12.1"

@@ -9,9 +9,15 @@ own).
 
 ```bash
 cargo test              # run all (non-ignored) tests
+cargo test --features dev-auth # the same suite with the dev-auth bypass compiled in
 cargo test --test auth_tests   # run one test binary
 cargo test -- --ignored        # run the opt-in live AWS test (needs credentials)
 ```
+
+CI runs `cargo test` TWICE — once with default features (the feature set
+`cross build --release` deploys) and once with `--features dev-auth` — plus
+both clippy configurations, because `dev_auth_tests.rs` asserts a different
+half of its contract in each.
 
 Before committing, also run (CI enforces both):
 
@@ -36,6 +42,13 @@ cargo clippy --all-targets -- -D warnings
   against a real `AppState`. Signs tokens with the test key and asserts that
   valid tokens pass and that missing / malformed / expired / wrong-kid /
   wrong-audience / wrong-issuer tokens are rejected with 401.
+- `dev_auth_tests.rs` — the local development auth bypass (#266). Compiled in
+  both feature configurations: without `dev-auth` it proves the deployed
+  feature set rejects the static dev token and that `KARI_DEV_AUTH=1` buys a
+  default build nothing; with it, that the exact token is accepted only when
+  `DevAuth` is enabled, that near-miss tokens are not, and that real Auth0
+  JWTs still pass. Its environment-reading cases live in one sequential test
+  function, since `set_var` is process-global.
 - `route_tests.rs` — builds the **real** router from `routes::create_router` and
   verifies the secure/public split and the auth layer wiring.
 - `model_tests.rs` — serde (de)serialization of the `models` types, guarding the
