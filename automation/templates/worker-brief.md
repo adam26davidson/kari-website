@@ -146,10 +146,11 @@ the exception in the doc.
   proceeding. Stop the stack when you are done with it (SIGTERM the
   `dev.sh` process you started — its trap tears down the API, vite and
   the MinIO container); the dispatcher reaps whatever survives your
-  session, but a stack left running wastes RAM for the rest of it. Without `E2E_AUTH0_*` env vars you can only
-  capture public pages — note in the PR that admin pages rely on CI's
-  visual review, and read `docs/visual-checks.md` for how much local
-  capture is worth when the change is admin-only.
+  session, but a stack left running wastes RAM for the rest of it. Admin
+  pages are captured too and need no Auth0 credentials (#266: the dev and
+  test bundles sign themselves in), so an admin-only change gets the same
+  local check as any other — read the `admin-*.png` files, don't defer to
+  CI's visual review.
 - Admin UI changes (anything that changes what `/admin` shows,
   including copy and empty/error/success states): read
   `docs/ui-design-brief.md` first and self-check against its reviewer

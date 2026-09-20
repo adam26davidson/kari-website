@@ -74,17 +74,36 @@ site rather than redirecting to `/admin/`. Go to
 `http://localhost:5174/admin/` for the admin app (`/admin` without the
 trailing slash 404s on the dev server, with or without this proxy).
 
-### Auth0 callbacks and the admin port
+### Signing in locally
 
-The admin app's Auth0 callback is `<origin>/admin`, so logging in locally
-needs the port it comes up on allowlisted in the Auth0 application. The
-default 5174 IS allowlisted (#633: callback `http://localhost:5174/admin`,
-logout URL and web origin `http://localhost:5174`), so a stack on the
-default port completes a real login round-trip — local admin verification
-works, don't skip it. A parallel stack that vite bumps to 5175 is NOT, and
-fails there with a callback mismatch until someone adds that origin too
-(#630). A fixed default port is what makes that one-time allowlisting
-possible at all.
+You don't. Since #266 a local dev stack signs you into the admin
+automatically: `ui/.env.development` sets `VITE_AUTH_MODE=fake`, so the
+admin app mounts a fake Auth0 session (`apps/admin/src/auth/fake-auth.tsx`)
+that hands out a static dev token, and `./scripts/dev.sh` runs the API with
+`--features dev-auth` and `KARI_DEV_AUTH=1` so it accepts that token as an
+admin. No Auth0 credentials, no login round trip, no redirect.
+
+Both halves are compile-time gated and neither reaches a deployed
+artifact: the cargo feature is not a default and `deploy.yml`'s
+`cross build --release` never asks for it, and vite folds the fake branch
+away when `VITE_AUTH_MODE` is unset (it is unset in `.env`, `.env.staging`
+and `.env.production`). CI greps both the release feature set's binary and
+the production bundle to keep that true.
+
+To exercise the REAL Auth0 login against the same stack — dev auth is
+additive, so the API validates real JWTs exactly as before:
+
+```
+VITE_AUTH_MODE=auth0 ./scripts/dev.sh
+```
+
+The admin app's Auth0 callback is `<origin>/admin`, so a real login needs
+the port it comes up on allowlisted in the Auth0 application. The default
+5174 IS allowlisted (#633: callback `http://localhost:5174/admin`, logout
+URL and web origin `http://localhost:5174`). A parallel stack that vite
+bumps to 5175 is NOT, and fails there with a callback mismatch until
+someone adds that origin too (#630). A fixed default port is what makes
+that one-time allowlisting possible at all.
 
 ## `npm run preview`
 
@@ -100,17 +119,22 @@ change the rule in `serve.mjs` and the vhost needs the matching change.
 ## e2e prerequisites
 
 `npm run test:e2e` seeds a local S3, builds the test-mode bundle, previews
-it, and runs smoke + visitor journeys; admin journeys additionally run when
-`E2E_AUTH0_USERNAME` / `E2E_AUTH0_PASSWORD` are set, as they are in CI. The
-stack is fully local and hermetic — no AWS account or shared bucket.
+it, and runs smoke, visitor AND admin journeys — all of them credential-free
+since #266, because the test bundle signs itself in. The one exception is
+`admin-auth0-login.spec.ts`, a single real-Auth0 login smoke that runs only
+when `E2E_AUTH0_USERNAME` / `E2E_AUTH0_PASSWORD` are set, as they are in CI.
+The stack is fully local and hermetic — no AWS account or shared bucket.
 
 Two things must be running:
 
 1. a throwaway MinIO standing in for S3, on host port 9000 (the default):
    `docker compose up -d --wait minio` (defined in `docker-compose.yml`)
-2. the API on localhost:3000: `cargo run` in `api/` (its `.env` already
-   targets the local MinIO; run `node e2e/seed.mjs` in `ui/` first so the
-   bucket exists for the API's health probe)
+2. the API on localhost:3000: `cargo run --features dev-auth` in `api/`
+   (its `.env` already targets the local MinIO and already sets
+   `KARI_DEV_AUTH=1`; run `node e2e/seed.mjs` in `ui/` first so the bucket
+   exists for the API's health probe). Without `--features dev-auth` the
+   API rejects the bundle's dev token and every admin journey fails on an
+   unauthorized list fetch.
 
 A dev stack started by `./scripts/dev.sh` satisfies both prerequisites when
 it got the default ports (it prints which ports it chose). Against a stack
