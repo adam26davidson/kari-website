@@ -23,9 +23,9 @@ use common::assistant::{
 use common::capture_tracing;
 use common::store::InMemoryStore;
 use kari_website_api::services::assistant::{
-    session_key, AssistantLimits, FILED_MESSAGE, FILING_FAILED_MESSAGE, FILING_OFF_MESSAGE,
-    NOTHING_TO_FILE_MESSAGE, NO_OTHER_TOOLS_YET, NO_TOOLS_YET, PROPOSE_ISSUE_TOOL,
-    USER_FEEDBACK_LABEL,
+    session_key, AssistantLimits, CONVERSATION_LINE_PREFIX, FILED_MESSAGE, FILING_FAILED_MESSAGE,
+    FILING_OFF_MESSAGE, NOTHING_TO_FILE_MESSAGE, NO_OTHER_TOOLS_YET, NO_TOOLS_YET,
+    PROPOSE_ISSUE_TOOL, USER_FEEDBACK_LABEL,
 };
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -50,9 +50,14 @@ fn draft_reply() -> (StatusCode, Value) {
 fn app_that_can_file(anthropic: &Stub, github: &Stub) -> (Arc<InMemoryStore>, axum::Router) {
     app_from(
         configured(&anthropic.base_url, AssistantLimits::default())
-            .with_github(Some(github_config(&github.base_url))),
+            .with_github(Some(github_config(&github.base_url)))
+            .with_sessions_bucket(Some(TEST_BUCKET.to_string())),
     )
 }
+
+/// The content bucket the test app's conversations live in — the name the
+/// filed issue has to point at.
+const TEST_BUCKET: &str = "test-bucket";
 
 /// A GitHub reply for a created issue.
 fn created_issue(number: u64) -> (StatusCode, Value) {
@@ -306,7 +311,7 @@ async fn an_unknown_tool_on_a_host_that_cannot_file_still_says_filing_is_coming(
 // -------------------------------------------------------------- her decision
 
 #[tokio::test]
-async fn filing_sends_the_draft_the_transcript_and_the_context_to_github() {
+async fn filing_points_at_the_private_conversation_instead_of_pasting_it() {
     let anthropic = spawn_stub(vec![draft_reply(), text_reply("Have a look.")]).await;
     let github = spawn_stub(vec![created_issue(912)]).await;
     let (store, app) = app_that_can_file(&anthropic, &github);
@@ -360,16 +365,28 @@ async fn filing_sends_the_draft_the_transcript_and_the_context_to_github() {
     assert!(filed_body.contains("/photography"), "{filed_body}");
     assert!(filed_body.contains("Low tide"), "{filed_body}");
     assert!(filed_body.contains("Site version:"), "{filed_body}");
-    // And the whole conversation — composed HERE rather than asked of the
-    // model, so it cannot be left out.
+    // And a pointer to the conversation, which stays in the private
+    // bucket: this repository is public, so pasting her words in would
+    // publish everything she said to the helper (#888).
     assert!(
-        filed_body.contains("**Kari:** My photographs come out sideways"),
+        filed_body.contains(&format!(
+            "{CONVERSATION_LINE_PREFIX}{TEST_BUCKET}/{}",
+            session_key(&id)
+        )),
         "{filed_body}"
     );
-    assert!(
-        filed_body.contains("**Helper:** Have a look."),
-        "{filed_body}"
-    );
+    assert!(filed_body.contains("private"), "{filed_body}");
+    for leak in [
+        "## Conversation",
+        "**Kari:**",
+        "**Helper:**",
+        "My photographs come out sideways",
+    ] {
+        assert!(
+            !filed_body.contains(leak),
+            "{leak:?} reached the public issue: {filed_body}"
+        );
+    }
     assert!(filed_body.contains(USER_FEEDBACK_LABEL), "{filed_body}");
 
     // What she is told: one warm line with somewhere to click.
@@ -738,24 +755,51 @@ async fn a_conversation_that_never_existed_cannot_file() {
 }
 
 #[tokio::test]
-async fn a_very_long_conversation_still_fits_in_an_issue() {
-    // GitHub rejects a body over 65,536 bytes, and a long conversation can
-    // get there. Losing the filing to a long chat would be the wrong trade,
-    // so the transcript is trimmed from the front and says that it was.
+async fn filing_names_the_key_alone_when_no_bucket_is_configured() {
+    // A host that somehow never told the helper which bucket it writes to
+    // still has to say WHERE the conversation is — the key is the half of
+    // the pointer this process always knows.
+    let anthropic = spawn_stub(vec![draft_reply()]).await;
+    let github = spawn_stub(vec![created_issue(5)]).await;
+    let (_, app) = app_from(
+        configured(&anthropic.base_url, AssistantLimits::default())
+            .with_github(Some(github_config(&github.base_url))),
+    );
+
+    let id = new_session(&app).await;
+    say(&app, &id, "My photographs come out sideways").await;
+    let (status, body) = decide(&app, &id, "file").await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let filed_body = github.requests()[0]["body"].as_str().unwrap().to_string();
+    assert!(
+        filed_body.contains(&format!(
+            "Conversation: {} in this environment's content bucket",
+            session_key(&id)
+        )),
+        "{filed_body}"
+    );
+    assert!(!filed_body.contains("s3://"), "{filed_body}");
+}
+
+#[tokio::test]
+async fn a_long_conversation_leaves_no_trace_in_the_issue() {
+    // The old body grew with the conversation and had to be trimmed to fit
+    // GitHub's 65,536-byte limit. Now it does not grow at all, because none
+    // of what she typed goes in it.
     let long = "x".repeat(4_000);
     let mut replies = vec![];
-    for _ in 0..30 {
+    for _ in 0..5 {
         replies.push(text_reply(&long));
     }
     replies.push(draft_reply());
-    replies.push(text_reply("Have a look."));
     let anthropic = spawn_stub(replies).await;
     let github = spawn_stub(vec![created_issue(3)]).await;
     let (_, app) = app_that_can_file(&anthropic, &github);
 
     let id = new_session(&app).await;
-    for _ in 0..30 {
-        say(&app, &id, "Tell me more").await;
+    for _ in 0..5 {
+        say(&app, &id, &long).await;
     }
     say(&app, &id, "My photographs come out sideways").await;
     let (status, body) = decide(&app, &id, "file").await;
@@ -763,20 +807,12 @@ async fn a_very_long_conversation_still_fits_in_an_issue() {
 
     let filed_body = github.requests()[0]["body"].as_str().unwrap().to_string();
     assert!(
-        filed_body.len() < 65_536,
-        "the issue body must fit: {} bytes",
+        filed_body.len() < 10_000,
+        "the body must not grow with the conversation: {} bytes",
         filed_body.len()
     );
-    assert!(
-        filed_body.contains("too long to include"),
-        "a trimmed transcript must say so"
-    );
-    // The end of the conversation — the part that led to the draft — is
-    // what survives the trim.
-    assert!(
-        filed_body.contains("**Helper:** Have a look."),
-        "kept the tail"
-    );
+    assert!(!filed_body.contains("**Kari:**"), "{filed_body}");
+    assert!(!filed_body.contains(&long), "{filed_body}");
 }
 
 // ------------------------------------------------- two writers, one session
