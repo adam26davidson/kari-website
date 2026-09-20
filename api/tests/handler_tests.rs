@@ -485,12 +485,11 @@ async fn list_images_returns_ids_newest_first_without_folder_marker() {
 }
 
 #[tokio::test]
-async fn list_images_reports_each_id_once_across_both_layouts() {
+async fn list_images_reports_each_id_once_however_many_renditions_it_stores() {
     use std::time::{Duration, SystemTime};
     let now = SystemTime::now();
-    // A migrated image (prefix with two objects), plus one that has not been
-    // migrated yet — each must appear exactly once, and a prefix is as new as
-    // its newest object.
+    // An image storing two renditions and one storing a single object must
+    // each appear exactly once, and a prefix is as new as its newest object.
     let store = InMemoryStore::default()
         .with_object_modified_at(
             "images/a.jpg/original.jpg",
@@ -498,7 +497,11 @@ async fn list_images_reports_each_id_once_across_both_layouts() {
             now - Duration::from_secs(600),
         )
         .with_object_modified_at("images/a.jpg/thumb.jpg", "x", now)
-        .with_object_modified_at("images/b.png", "x", now - Duration::from_secs(300));
+        .with_object_modified_at(
+            "images/b.png/original.png",
+            "x",
+            now - Duration::from_secs(300),
+        );
     let (_, app) = setup_with(store);
 
     assert_eq!(
@@ -841,16 +844,19 @@ async fn get_image_size_thumb_falls_back_to_the_original_when_no_thumbnail_exist
 }
 
 #[tokio::test]
-async fn get_image_falls_back_to_the_legacy_single_object_layout() {
-    // Pre-migration buckets still store one object per image; both the
-    // default and the thumbnail request must serve it.
+async fn get_image_is_404_when_only_a_bare_legacy_object_exists() {
+    // The pre-#273 single-object layout is gone (#452): a stray object left
+    // at `images/<id>` is no longer a serving candidate, for any size.
     for uri in ["/images/photo.png", "/images/photo.png?size=thumb"] {
         let (_, app) =
             setup_with(InMemoryStore::default().with_object("images/photo.png", "LEGACY"));
-        let (status, content_type, bytes) = get_bytes(app, uri).await;
-        assert_eq!(status, StatusCode::OK, "for {uri}");
-        assert_eq!(content_type, "image/png", "for {uri}");
-        assert_eq!(bytes, b"LEGACY", "for {uri}");
+        let (status, _, _) = get_bytes(app.clone(), uri).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "for {uri}");
+        assert_eq!(
+            send(app, get(uri)).await,
+            (StatusCode::NOT_FOUND, json!({"error": "Image not found"})),
+            "for {uri}"
+        );
     }
 }
 
@@ -1439,8 +1445,14 @@ async fn set_image_published_updates_every_object_under_the_prefix() {
 }
 
 #[tokio::test]
-async fn set_image_published_updates_a_legacy_single_object() {
-    let (store, app) = setup_with(InMemoryStore::default().with_object("images/photo.png", "PNG"));
+async fn set_image_published_ignores_a_bare_legacy_object() {
+    // Only the image's own prefix is tagged now (#452): a stray object at
+    // `images/<id>` is not part of the image and is left exactly as it was.
+    let (store, app) = setup_with(
+        InMemoryStore::default()
+            .with_object("images/photo.png", "PNG")
+            .with_object("images/photo.png/original.png", "PNG"),
+    );
     let (status, body) = send(
         app,
         put_auth("/images/photo.png/set-published?isPublished=false"),
@@ -1448,32 +1460,26 @@ async fn set_image_published_updates_a_legacy_single_object() {
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body, json!({"message": "Image published status updated"}));
-    assert!(!store.get("images/photo.png").expect("stored").public);
+    assert!(!store.get("images/photo.png/original.png").unwrap().public);
+    assert!(
+        store.get("images/photo.png").expect("stored").public,
+        "the bare object is not touched"
+    );
 }
 
 #[tokio::test]
-async fn set_image_published_updates_both_layouts_when_both_exist() {
-    // Mid-migration: the copy exists and the legacy object has not been
-    // cleaned up yet. Neither may be left behind with the wrong visibility.
-    let (store, app) = setup_with(
-        InMemoryStore::default()
-            .with_object("images/photo.png", "PNG")
-            .with_object("images/photo.png/original.png", "PNG")
-            .with_object("images/photo.png/thumb.jpg", "JPG"),
-    );
-    let (status, _) = send(
+async fn set_image_published_is_404_when_only_a_bare_legacy_object_exists() {
+    // Nothing under the prefix means nothing to tag: with the legacy step
+    // gone, `tagged == 0` is now reachable whenever the prefix is empty.
+    let (store, app) = setup_with(InMemoryStore::default().with_object("images/photo.png", "PNG"));
+    let (status, body) = send(
         app,
         put_auth("/images/photo.png/set-published?isPublished=false"),
     )
     .await;
-    assert_eq!(status, StatusCode::OK);
-    for key in [
-        "images/photo.png",
-        "images/photo.png/original.png",
-        "images/photo.png/thumb.jpg",
-    ] {
-        assert!(!store.get(key).unwrap().public, "{key} should be private");
-    }
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body, json!({"error": "Image not found"}));
+    assert!(store.get("images/photo.png").expect("stored").public);
 }
 
 #[tokio::test]

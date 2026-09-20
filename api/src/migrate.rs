@@ -2,36 +2,23 @@
 //! layout (#273): `migrate-images`, a subcommand of the API binary.
 //!
 //! What it does, in order:
-//! 1. copy every legacy `images/<id>` object to `images/<id>/original.<ext>`
-//!    (server-side, so the bytes never travel), preserving its `public=` tag;
-//! 2. generate every missing derived rendition (`images/<id>/thumb.jpg`,
-//!    `images/<id>/background.jpg`) for every image, in either layout, with
-//!    the same visibility as its original;
-//! 3. rewrite the S3 URLs embedded in PUBLISHED blog HTML from
+//! 1. generate every missing derived rendition (`images/<id>/thumb.jpg`,
+//!    `images/<id>/background.jpg`) for every image, with the same
+//!    visibility as its original;
+//! 2. rewrite the S3 URLs embedded in PUBLISHED blog HTML from
 //!    `/images/<id>` to `/images/<id>/original.<ext>` — the only stored
-//!    references that name an object rather than an id.
+//!    references that name an object rather than an id. Only ids the bucket
+//!    holds an original for are rewritten, so a reference the migration
+//!    cannot point at a real object keeps the URL it has.
 //!
-//! It is **copy-only**: the legacy objects stay, so code deployed before the
-//! migration keeps working against a migrated bucket and the deploy order is
-//! not load-bearing. Deleting them is a separate, later cleanup.
+//! It is **idempotent**: a rendition that already exists is not regenerated,
+//! and HTML already pointing at `/images/<id>/…` is left alone — so it is
+//! safe (and expected) to run again after a deploy, to catch anything
+//! uploaded in between. That also makes it the way a NEW variant reaches
+//! images uploaded before it existed: re-running the migration backfills
+//! only what is missing.
 //!
-//! It is **idempotent**: an original that already exists is not re-copied, a
-//! rendition that already exists is not regenerated, and HTML already
-//! pointing at `/images/<id>/…` is left alone — so it is safe (and expected)
-//! to run again after the deploy, to catch anything uploaded in between.
-//! That also makes it the way a NEW variant reaches images uploaded before
-//! it existed: re-running the migration backfills only what is missing.
-//!
-//! MinIO caveat: the local dev/e2e stack is MinIO, which is filesystem-backed
-//! and will not LIST `images/<id>/…` while an object exists at the exact key
-//! `images/<id>` (the objects are stored and readable — `HeadObject` finds
-//! them — they just do not appear in a listing). Real S3 has a flat keyspace
-//! and lists both, which is what the deployed buckets are. So a `--allow-local`
-//! rehearsal against MinIO cannot exercise the both-layouts-coexist paths, and
-//! re-running it there looks non-idempotent for exactly those images. The
-//! in-memory store in the tests models S3, not MinIO.
-//!
-//! Failure model, deliberately asymmetric: a failed list, copy, put, or an
+//! Failure model, deliberately asymmetric: a failed list, put, or an
 //! unreadable/corrupt blog manifest ABORTS, because carrying on would write
 //! into a bucket whose state we no longer know. A rendition that cannot be
 //! produced for one image (an unsupported format, a corrupt upload) is only
@@ -44,7 +31,7 @@ use std::fmt;
 
 use crate::models::BlogPost;
 use crate::services::image_keys::{
-    id_from_key, legacy_key, original_key, sanitized_extension, variant_key, ImageVariant,
+    id_from_key, original_key, sanitized_extension, variant_key, ImageVariant,
 };
 use crate::services::object_store::ObjectStore;
 use crate::services::s3::S3Error;
@@ -65,8 +52,6 @@ impl Error for MigrationError {}
 /// What the migration did (or, for a dry run, would do).
 #[derive(Debug, Default)]
 pub struct MigrationReport {
-    /// Keys of originals copied out of the legacy layout.
-    pub copied: Vec<String>,
     /// Keys of derived renditions generated.
     pub variants_written: Vec<String>,
     /// Keys of blog HTML documents whose image URLs were rewritten.
@@ -77,7 +62,6 @@ pub struct MigrationReport {
 
 impl fmt::Display for MigrationReport {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "originals copied:    {}", self.copied.len())?;
         writeln!(f, "renditions written:  {}", self.variants_written.len())?;
         writeln!(f, "blog posts rewritten: {}", self.rewritten.len())?;
         for line in &self.failed_variants {
@@ -90,7 +74,6 @@ impl fmt::Display for MigrationReport {
 /// What the bucket already holds for one image id.
 #[derive(Default)]
 struct ImageState {
-    has_legacy: bool,
     has_original: bool,
     /// File names of the derived renditions already stored, so a variant
     /// added after an image was uploaded is simply one this set lacks.
@@ -111,9 +94,7 @@ async fn survey(store: &dyn ObjectStore) -> Result<BTreeMap<String, ImageState>,
             continue;
         };
         let state = images.entry(id.to_string()).or_default();
-        if object.key == legacy_key(id) {
-            state.has_legacy = true;
-        } else if object.key == original_key(id) {
+        if object.key == original_key(id) {
             state.has_original = true;
         } else if let Some(variant) = ImageVariant::ALL
             .into_iter()
@@ -129,9 +110,11 @@ async fn survey(store: &dyn ObjectStore) -> Result<BTreeMap<String, ImageState>,
 /// path segment into `/images/<id>/original<ext>`, for the ids in
 /// `known_ids`. Returns `None` when nothing changed.
 ///
-/// Unknown ids are left exactly as they are: an id with no object in the
-/// bucket (already swept, or hand-edited content) would only be rewritten
-/// into a key that certainly does not exist.
+/// Ids outside `known_ids` are left exactly as they are: an id the bucket
+/// holds no original for — already swept, hand-edited content, or a stray
+/// object at the bare pre-#273 key `images/<id>` — would only be rewritten
+/// into a key that certainly does not exist, turning a reference that may
+/// still resolve into a 404.
 fn rewrite_image_urls(html: &str, known_ids: &BTreeSet<&str>) -> Option<String> {
     const MARKER: &str = "/images/";
     let mut out = String::with_capacity(html.len());
@@ -222,9 +205,8 @@ async fn backfill_variant(
 /// Run the migration described in the module docs.
 ///
 /// With `dry_run` nothing is written: the report lists what a real run would
-/// copy, generate and rewrite. A dry run does not decode any image, so it
-/// cannot predict which renditions would fail — only a real run reports
-/// those.
+/// generate and rewrite. A dry run does not decode any image, so it cannot
+/// predict which renditions would fail — only a real run reports those.
 pub async fn migrate_images(
     store: &dyn ObjectStore,
     dry_run: bool,
@@ -232,26 +214,16 @@ pub async fn migrate_images(
     let mut report = MigrationReport::default();
     let images = survey(store).await?;
 
-    // 1. Copy legacy objects under their new prefix.
+    // 1. Backfill missing renditions from the stored original.
     for (id, state) in &images {
-        if state.has_original || !state.has_legacy {
+        // An id with no original stores nothing a rendition can be derived
+        // from — a stray object left beside the prefix, or an image whose
+        // original has been swept. The check is out here rather than beside
+        // the write so a dry run reports exactly what an apply would do.
+        if !state.has_original {
             continue;
         }
-        let to = original_key(id);
-        report.copied.push(to.clone());
-        if dry_run {
-            continue;
-        }
-        store
-            .copy_object(&legacy_key(id), &to)
-            .await
-            .map_err(|e| MigrationError(format!("failed to copy {id} to {to}: {e}")))?;
-        tracing::info!("copied {} -> {}", legacy_key(id), to);
-    }
-
-    // 2. Backfill missing renditions, from whichever copy of the original
-    //    the bucket now holds.
-    for (id, state) in &images {
+        let source = original_key(id);
         for variant in ImageVariant::ALL {
             if state.variants.contains(variant.file_name()) {
                 continue;
@@ -260,14 +232,6 @@ pub async fn migrate_images(
                 report.variants_written.push(variant_key(id, variant));
                 continue;
             }
-            // After step 1 the new-layout original exists for every image
-            // that had a legacy object; anything else is already in the new
-            // layout.
-            let source = if state.has_original || state.has_legacy {
-                original_key(id)
-            } else {
-                continue;
-            };
             match backfill_variant(store, id, &source, variant).await {
                 Ok(key) => {
                     tracing::info!("generated {}", key);
@@ -281,8 +245,16 @@ pub async fn migrate_images(
         }
     }
 
-    // 3. Rewrite the S3 URLs in published blog content.
-    let known_ids: BTreeSet<&str> = images.keys().map(String::as_str).collect();
+    // 2. Rewrite the S3 URLs in published blog content.
+    // Only ids the bucket actually holds an `original.<ext>` for: the
+    // rewrite points at that object, so an id without one (a stray bare
+    // `images/<id>`, or an image whose original has been swept) must keep
+    // whatever URL it has rather than gain one that 404s.
+    let known_ids: BTreeSet<&str> = images
+        .iter()
+        .filter(|(_, state)| state.has_original)
+        .map(|(id, _)| id.as_str())
+        .collect();
     for post_id in published_post_ids(store).await? {
         let key = format!("blog/{post_id}.html");
         let data = match store.get_object(&key).await {

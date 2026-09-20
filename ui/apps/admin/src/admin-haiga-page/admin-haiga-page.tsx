@@ -9,10 +9,7 @@ import {
   moveItemByIdByOne,
   removeItemById,
 } from "@kari/shared/utils/data-list-helpers";
-import {
-  onS3ImageError,
-  s3ImageUrl,
-} from "@kari/shared/utils/image-management-helpers";
+import { s3ImageUrl } from "@kari/shared/utils/image-management-helpers";
 import { LoadError } from "@kari/shared/components/load-error/load-error";
 import { ItemList } from "../components/item-list/item-list";
 import { deleteConfirmationMessage } from "../delete-confirmation";
@@ -223,7 +220,6 @@ export function AdminHaigaPage() {
         <div className="flex flex-row items-center gap-4">
           <img
             src={s3ImageUrl(haiga.image)}
-            onError={onS3ImageError}
             // The haiku lines are part of the artwork itself and are never
             // rendered as text here, so they only describe the picture —
             // and most haiga carry none, hence the plain fallback.

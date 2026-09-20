@@ -53,9 +53,9 @@ const linkedPairings = () =>
   );
 
 /**
- * Stand-in for the probe image the hook loads to find out whether this
- * bucket has the directory layout. jsdom never fetches, so the test decides
- * when the load fails.
+ * Stand-in for the probe image the hook loads to find out whether the
+ * background rendition exists. jsdom never fetches, so the test decides when
+ * the load fails.
  */
 class ProbeImage {
   static instances: ProbeImage[] = [];
@@ -119,32 +119,9 @@ describe("useSiteBackground", () => {
       "https://s3.test.local/images/bg.webp/original.webp",
     );
     expect(document.body.dataset.customBackground).toBe("true");
-  });
-
-  it("falls back to the legacy key when the directory layout 404s too", async () => {
-    // A bucket that migrate-images has not been run against at all: the
-    // background image only exists at images/<id>. CSS cannot retry on its
-    // own, so the hook probes each candidate and rewrites the variable.
-    const probe = stubProbeImage();
-    vi.mocked(SiteSettingsService.getFromS3).mockResolvedValue({
-      backgroundPhoto: "bg.webp",
-    });
-
-    renderHook(() => useSiteBackground());
-
-    await waitFor(() => expect(probe.instances).toHaveLength(1));
-    probe.instances[0].onerror?.();
-    expect(probe.instances).toHaveLength(2);
-    expect(probe.instances[1].src).toBe(
-      "https://s3.test.local/images/bg.webp/original.webp",
-    );
-
-    probe.instances[1].onerror?.();
-
-    expect(backgroundUrl()).toBe("https://s3.test.local/images/bg.webp");
-    expect(document.body.dataset.customBackground).toBe("true");
-    // Nothing is left to fall back to, so the last candidate is not probed.
-    expect(probe.instances).toHaveLength(2);
+    // The original is the last candidate, so nothing is left to fall back
+    // to and it is applied without a probe of its own.
+    expect(probe.instances).toHaveLength(1);
   });
 
   it("ignores a probe failure that lands after unmount", async () => {

@@ -2,10 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   changeImageUrlToS3,
   changeImageUrlToApi,
-  fallBackToLegacyS3Image,
   getImageFileName,
-  legacyS3ImageUrl,
-  onS3ImageError,
   s3ImageUrl,
   s3VariantImageUrl,
   apiImageUrl,
@@ -95,7 +92,7 @@ describe("image-management-helpers", () => {
       );
     });
 
-    it("reads the id out of a legacy single-object url", () => {
+    it("reads the id out of a bare images/<id> url", () => {
       expect(getImageFileName(`${S3}/images/photo.jpg`)).toBe("photo.jpg");
     });
 
@@ -106,41 +103,6 @@ describe("image-management-helpers", () => {
     it("returns an empty id for a bare images url", () => {
       expect(getImageFileName(`${S3}/images/`)).toBe("");
       expect(getImageFileName(`${S3}/images`)).toBe("");
-    });
-  });
-
-  describe("legacyS3ImageUrl", () => {
-    it("points at the pre-migration single object, with no variant", () => {
-      expect(legacyS3ImageUrl("photo.jpg")).toBe(`${S3}/images/photo.jpg`);
-    });
-  });
-
-  describe("fallBackToLegacyS3Image", () => {
-    const imageWithSrc = (src: string) => {
-      const image = document.createElement("img");
-      image.src = src;
-      return image;
-    };
-
-    it("retries a directory-layout src at the legacy key", () => {
-      // The failure this exists for: the bucket has not been migrated, so
-      // images/<id>/original.<ext> 404s while images/<id> is right there.
-      const image = imageWithSrc(`${S3}/images/photo.jpg/original.jpg`);
-      fallBackToLegacyS3Image(image);
-      expect(image.src).toBe(`${S3}/images/photo.jpg`);
-    });
-
-    it("gives up after one retry rather than looping", () => {
-      const image = imageWithSrc(`${S3}/images/photo.jpg/original.jpg`);
-      fallBackToLegacyS3Image(image);
-      fallBackToLegacyS3Image(image);
-      expect(image.src).toBe(`${S3}/images/photo.jpg`);
-    });
-
-    it("is driven by the onError handler the public pages pass", () => {
-      const image = imageWithSrc(`${S3}/images/photo.jpg/original.jpg`);
-      onS3ImageError({ currentTarget: image });
-      expect(image.src).toBe(`${S3}/images/photo.jpg`);
     });
   });
 

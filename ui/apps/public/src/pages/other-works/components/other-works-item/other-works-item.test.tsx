@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { OtherWorksItem } from "./other-works-item";
@@ -50,31 +50,6 @@ describe("OtherWorksItem", () => {
     expect(await screen.findByText("Post body")).toBeInTheDocument();
     expect(BlogService.getSanitizedContentFromS3).toHaveBeenCalledWith(
       "post-1",
-    );
-  });
-
-  it("retries a post image at the legacy key when its S3 load fails", async () => {
-    // The post's HTML is injected, so React never sees these <img>s. On a
-    // bucket that migrate-images has not touched, the directory-layout src
-    // written at publish time 404s and the object is at images/<id>.
-    vi.mocked(BlogService.getSanitizedContentFromS3).mockResolvedValue(
-      '<p>Post body</p><img alt="in post" ' +
-        'src="https://s3.test.local/images/photo.jpg/original.jpg">',
-    );
-    renderItem();
-
-    const image = await screen.findByAltText("in post");
-    // The <img> is in the DOM as soon as the injected HTML commits, but the
-    // listener below is attached by a PASSIVE effect and can still be one
-    // flush behind. A browser fires this event off the network stack long
-    // afterwards; let the effect run so the test does too.
-    await act(async () => {});
-    // `error` does not bubble; the component listens in the capture phase.
-    image.dispatchEvent(new Event("error"));
-
-    expect(image).toHaveAttribute(
-      "src",
-      "https://s3.test.local/images/photo.jpg",
     );
   });
 

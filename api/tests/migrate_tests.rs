@@ -1,10 +1,10 @@
-//! Tests for `migrate_images`, the one-shot backfill that moves an existing
-//! bucket to the directory-per-image layout (#273).
+//! Tests for `migrate_images`, the backfill that gives every image in a
+//! bucket the derived renditions the current code expects (#273, #453).
 //!
 //! Everything runs against the in-memory store, so the same code path the
 //! `migrate-images` subcommand runs against a real bucket is exercised here
 //! — including the two things that make the migration safe to run twice:
-//! it never copies over an existing original, and it never rewrites HTML
+//! it never regenerates an existing rendition, and it never rewrites HTML
 //! that is already rewritten.
 
 mod common;
@@ -33,12 +33,17 @@ fn old() -> SystemTime {
     SystemTime::now() - Duration::from_secs(24 * 60 * 60)
 }
 
-/// A bucket in the pre-migration layout: one legacy image object, a
-/// published post whose HTML points at it through S3, and a draft post whose
-/// HTML points at it through the API.
-fn legacy_store() -> InMemoryStore {
+/// A bucket whose images predate the derived renditions: one image storing
+/// only its original, a published post whose HTML points at it through S3,
+/// and a draft post whose HTML points at it through the API.
+fn unmigrated_variants_store() -> InMemoryStore {
     InMemoryStore::default()
-        .with_object_tagged("images/pub.png", png_bytes(1200, 800), true, old())
+        .with_object_tagged(
+            "images/pub.png/original.png",
+            png_bytes(1200, 800),
+            true,
+            old(),
+        )
         .with_object(
             "blog-posts-all.json",
             json!([
@@ -59,12 +64,11 @@ fn legacy_store() -> InMemoryStore {
 
 #[tokio::test]
 async fn dry_run_changes_nothing_but_reports_the_work() {
-    let store = Arc::new(legacy_store());
+    let store = Arc::new(unmigrated_variants_store());
     let report = migrate_images(store.as_ref(), true)
         .await
         .expect("migration should succeed");
 
-    assert_eq!(report.copied, vec!["images/pub.png/original.png"]);
     assert_eq!(
         report.variants_written,
         vec!["images/pub.png/thumb.jpg", "images/pub.png/background.jpg"]
@@ -72,7 +76,6 @@ async fn dry_run_changes_nothing_but_reports_the_work() {
     assert_eq!(report.rewritten, vec!["blog/post-pub.html"]);
     assert!(report.failed_variants.is_empty());
     // Nothing was written.
-    assert!(!store.contains("images/pub.png/original.png"));
     assert!(!store.contains("images/pub.png/thumb.jpg"));
     assert!(!store.contains("images/pub.png/background.jpg"));
     assert_eq!(
@@ -82,9 +85,9 @@ async fn dry_run_changes_nothing_but_reports_the_work() {
 }
 
 #[tokio::test]
-async fn apply_copies_the_original_preserving_visibility() {
-    let store = Arc::new(legacy_store().with_object_tagged(
-        "images/priv.png",
+async fn apply_leaves_every_original_exactly_as_it_was() {
+    let store = Arc::new(unmigrated_variants_store().with_object_tagged(
+        "images/priv.png/original.png",
         png_bytes(60, 40),
         false,
         old(),
@@ -93,20 +96,21 @@ async fn apply_copies_the_original_preserving_visibility() {
         .await
         .expect("migration should succeed");
 
-    let public = store.get("images/pub.png/original.png").expect("copied");
+    let public = store.get("images/pub.png/original.png").expect("original");
     assert_eq!(public.data, png_bytes(1200, 800));
     assert!(public.public);
-    // A private image's copy — and its renditions — stay private.
-    assert!(!store.get("images/priv.png/original.png").unwrap().public);
+    // A private image's renditions stay private, and its original keeps
+    // both its bytes and its visibility.
+    let private = store.get("images/priv.png/original.png").expect("original");
+    assert_eq!(private.data, png_bytes(60, 40));
+    assert!(!private.public);
     assert!(!store.get("images/priv.png/thumb.jpg").unwrap().public);
     assert!(!store.get("images/priv.png/background.jpg").unwrap().public);
-    // Copy-only: the legacy object stays so the pre-deploy code keeps working.
-    assert!(store.contains("images/pub.png"));
 }
 
 #[tokio::test]
 async fn apply_generates_a_thumbnail_for_every_image() {
-    let store = Arc::new(legacy_store());
+    let store = Arc::new(unmigrated_variants_store());
     migrate_images(store.as_ref(), false)
         .await
         .expect("migration should succeed");
@@ -118,7 +122,7 @@ async fn apply_generates_a_thumbnail_for_every_image() {
 
 #[tokio::test]
 async fn apply_generates_a_background_rendition_for_every_image() {
-    let store = Arc::new(legacy_store());
+    let store = Arc::new(unmigrated_variants_store());
     migrate_images(store.as_ref(), false)
         .await
         .expect("migration should succeed");
@@ -151,7 +155,6 @@ async fn apply_backfills_a_thumbnail_for_an_already_copied_image() {
         .await
         .expect("migration should succeed");
 
-    assert!(report.copied.is_empty(), "nothing to copy");
     assert_eq!(
         report.variants_written,
         vec![
@@ -198,7 +201,7 @@ async fn apply_backfills_only_the_variant_a_migrated_image_is_missing() {
 
 #[tokio::test]
 async fn apply_rewrites_published_html_and_leaves_drafts_alone() {
-    let store = Arc::new(legacy_store());
+    let store = Arc::new(unmigrated_variants_store());
     migrate_images(store.as_ref(), false)
         .await
         .expect("migration should succeed");
@@ -218,7 +221,7 @@ async fn apply_rewrites_published_html_and_leaves_drafts_alone() {
 async fn apply_leaves_an_unknown_image_reference_untouched() {
     // An id with no object in the bucket (already GC'd, or hand-edited HTML)
     // must not be rewritten into a key that certainly does not exist.
-    let store = Arc::new(legacy_store().with_object(
+    let store = Arc::new(unmigrated_variants_store().with_object(
         "blog/post-pub.html",
         r#"<img src="https://s3/images/gone.png"><img src="https://s3/images/pub.png">"#,
     ));
@@ -234,13 +237,12 @@ async fn apply_leaves_an_unknown_image_reference_untouched() {
 
 #[tokio::test]
 async fn running_twice_is_the_same_as_running_once() {
-    let store = Arc::new(legacy_store());
+    let store = Arc::new(unmigrated_variants_store());
     migrate_images(store.as_ref(), false).await.expect("first");
     let after_first = store.get("images/pub.png/thumb.jpg").unwrap().data;
 
     let report = migrate_images(store.as_ref(), false).await.expect("second");
 
-    assert!(report.copied.is_empty(), "nothing left to copy");
     assert!(
         report.variants_written.is_empty(),
         "nothing left to generate"
@@ -259,8 +261,8 @@ async fn running_twice_is_the_same_as_running_once() {
 #[tokio::test]
 async fn an_undecodable_original_is_reported_and_does_not_abort() {
     let _tracing = common::capture_tracing();
-    let store = Arc::new(legacy_store().with_object_tagged(
-        "images/broken.png",
+    let store = Arc::new(unmigrated_variants_store().with_object_tagged(
+        "images/broken.png/original.png",
         "NOT AN IMAGE",
         true,
         old(),
@@ -279,33 +281,9 @@ async fn an_undecodable_original_is_reported_and_does_not_abort() {
         "got: {:?}",
         report.failed_variants
     );
-    // Its original was still copied, and the healthy image is untouched by
-    // the failure.
-    assert!(store.contains("images/broken.png/original.png"));
+    // The healthy image is untouched by the failure.
     assert!(store.contains("images/pub.png/thumb.jpg"));
     assert!(store.contains("images/pub.png/background.jpg"));
-}
-
-#[tokio::test]
-async fn a_failed_copy_aborts_the_migration() {
-    let store = Arc::new(legacy_store().with_object_tagged(
-        "images/second.png",
-        png_bytes(80, 80),
-        true,
-        old(),
-    ));
-    store.set_failing_copies_after(0);
-
-    let err = migrate_images(store.as_ref(), false)
-        .await
-        .expect_err("a failed copy must abort");
-
-    assert!(err.to_string().contains("copy"), "got: {err}");
-    // Aborted before any HTML was rewritten.
-    assert_eq!(
-        String::from_utf8(store.get("blog/post-pub.html").unwrap().data).unwrap(),
-        r#"<img src="https://s3.example.com/images/pub.png">"#
-    );
 }
 
 #[tokio::test]
@@ -313,7 +291,7 @@ async fn a_missing_blog_list_is_not_an_error() {
     // A fresh site has no posts at all; the image half of the migration must
     // still run.
     let store = Arc::new(InMemoryStore::default().with_object_tagged(
-        "images/a.png",
+        "images/a.png/original.png",
         png_bytes(50, 50),
         true,
         old(),
@@ -322,13 +300,16 @@ async fn a_missing_blog_list_is_not_an_error() {
         .await
         .expect("migration should succeed");
 
-    assert_eq!(report.copied, vec!["images/a.png/original.png"]);
+    assert_eq!(
+        report.variants_written,
+        vec!["images/a.png/thumb.jpg", "images/a.png/background.jpg"]
+    );
     assert!(report.rewritten.is_empty());
 }
 
 #[tokio::test]
 async fn an_unreadable_blog_list_aborts_the_migration() {
-    let store = Arc::new(legacy_store());
+    let store = Arc::new(unmigrated_variants_store());
     store.set_failing_get_for("blog-posts-all.json");
 
     let err = migrate_images(store.as_ref(), false)
@@ -348,12 +329,72 @@ async fn the_bare_images_folder_marker_is_ignored() {
         .await
         .expect("migration should succeed");
 
-    assert!(report.copied.is_empty());
     assert!(report.variants_written.is_empty());
     assert_eq!(
         store.list_objects("images/").await.unwrap().len(),
         1,
         "the marker itself is left alone"
+    );
+}
+
+#[tokio::test]
+async fn a_bare_legacy_key_is_left_alone_and_gets_no_renditions() {
+    // The pre-#273 single-object layout is retired (#452): a stray object
+    // sitting at `images/<id>` is neither a rendition source nor something
+    // the migration copies, moves or deletes.
+    let store = Arc::new(
+        InMemoryStore::default()
+            .with_object_tagged("images/stray.png", png_bytes(90, 90), true, old())
+            .with_object_tagged(
+                "images/pub.png/original.png",
+                png_bytes(300, 200),
+                true,
+                old(),
+            ),
+    );
+    let report = migrate_images(store.as_ref(), false)
+        .await
+        .expect("migration should succeed");
+
+    assert_eq!(
+        report.variants_written,
+        vec!["images/pub.png/thumb.jpg", "images/pub.png/background.jpg"]
+    );
+    assert!(report.failed_variants.is_empty());
+    assert!(store.contains("images/stray.png"), "left exactly as it was");
+    assert_eq!(
+        store
+            .list_objects("images/stray.png/")
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|object| object.key)
+            .collect::<Vec<_>>(),
+        Vec::<String>::new(),
+        "nothing was written under the stray key"
+    );
+}
+
+#[tokio::test]
+async fn a_reference_to_a_bare_legacy_key_is_left_untouched() {
+    // An id whose ONLY object is the bare pre-#273 key has no
+    // `original.<ext>` and never gets one, so rewriting a published
+    // reference to it would turn a URL that still resolves into a 404.
+    let store = Arc::new(
+        unmigrated_variants_store()
+            .with_object_tagged("images/stray.png", png_bytes(90, 90), true, old())
+            .with_object(
+                "blog/post-pub.html",
+                r#"<img src="https://s3/images/stray.png"><img src="https://s3/images/pub.png">"#,
+            ),
+    );
+    migrate_images(store.as_ref(), false)
+        .await
+        .expect("migration should succeed");
+
+    assert_eq!(
+        String::from_utf8(store.get("blog/post-pub.html").unwrap().data).unwrap(),
+        r#"<img src="https://s3/images/stray.png"><img src="https://s3/images/pub.png/original.png">"#
     );
 }
 
@@ -370,19 +411,19 @@ async fn run_command(store: &InMemoryStore, args: &[&str], endpoint: &str) -> i3
 
 #[tokio::test]
 async fn the_command_defaults_to_a_dry_run() {
-    let store = legacy_store();
+    let store = unmigrated_variants_store();
     assert_eq!(run_command(&store, &[], "").await, 0);
     assert!(
-        !store.contains("images/pub.png/original.png"),
+        !store.contains("images/pub.png/thumb.jpg"),
         "a dry run must not write"
     );
 }
 
 #[tokio::test]
 async fn the_command_writes_only_with_apply() {
-    let store = legacy_store();
+    let store = unmigrated_variants_store();
     assert_eq!(run_command(&store, &["--apply"], "").await, 0);
-    assert!(store.contains("images/pub.png/original.png"));
+    assert!(store.contains("images/pub.png/thumb.jpg"));
 }
 
 #[tokio::test]
@@ -390,17 +431,17 @@ async fn the_command_refuses_a_local_endpoint_without_allow_local() {
     // api/.env points at the dev stack's MinIO, and dotenv loads it before
     // the subcommand runs — migrating a dev stack while believing you are
     // migrating a real bucket must not be one typo away.
-    let store = legacy_store();
+    let store = unmigrated_variants_store();
     assert_eq!(
         run_command(&store, &["--apply"], "http://localhost:9000").await,
         2
     );
-    assert!(!store.contains("images/pub.png/original.png"));
+    assert!(!store.contains("images/pub.png/thumb.jpg"));
 }
 
 #[tokio::test]
 async fn the_command_rehearses_against_a_local_endpoint_when_allowed() {
-    let store = legacy_store();
+    let store = unmigrated_variants_store();
     assert_eq!(
         run_command(
             &store,
@@ -410,12 +451,12 @@ async fn the_command_rehearses_against_a_local_endpoint_when_allowed() {
         .await,
         0
     );
-    assert!(store.contains("images/pub.png/original.png"));
+    assert!(store.contains("images/pub.png/thumb.jpg"));
 }
 
 #[tokio::test]
 async fn the_command_reports_a_failed_migration_as_a_nonzero_exit() {
-    let store = legacy_store();
+    let store = unmigrated_variants_store();
     store.set_failing(true);
     assert_eq!(run_command(&store, &["--apply"], "").await, 1);
 }

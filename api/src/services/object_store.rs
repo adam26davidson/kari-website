@@ -53,12 +53,6 @@ pub trait ObjectStore: Send + Sync {
     /// anonymous readers actually see.
     async fn get_object_public(&self, key: &str) -> Result<bool, S3Error>;
 
-    /// Server-side copy within the bucket, preserving the `public=` tag;
-    /// `NotFound` if `from` does not exist. Used by the image migration to
-    /// move a legacy `images/<id>` object under its new `images/<id>/`
-    /// prefix without downloading and re-uploading the bytes.
-    async fn copy_object(&self, from: &str, to: &str) -> Result<(), S3Error>;
-
     /// Delete an object. Like S3, deleting a missing key is not an error.
     async fn delete_object(&self, key: &str) -> Result<(), S3Error>;
 
