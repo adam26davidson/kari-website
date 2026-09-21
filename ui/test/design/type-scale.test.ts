@@ -175,22 +175,20 @@ describe("the weight axis of the type scale", () => {
 // as `--text-*` tokens (mirroring `--display-weight`), and every rule
 // reaches a size through one of them.
 //
-// Two documented exceptions, both narrow and both pinned by an exact-match
-// allowlist rather than a loophole:
+// One documented exception, narrow and pinned by an exact-match allowlist
+// rather than a loophole: the header's two fluid sizes stay literal
+// `clamp()`s. Their endpoints were tuned against the 768-948px overflow
+// band (#221); snapping them to steps would move that tuning for no gain,
+// since a clamp is not a step in any case.
 //
-//  - The header's two fluid sizes stay literal `clamp()`s. Their endpoints
-//    were tuned against the 768-948px overflow band (#221); snapping them to
-//    steps would move that tuning for no gain, since a clamp is not a step
-//    in any case.
-//  - The admin app's literals are FROZEN, not migrated. The shadcn migration
-//    (#592, per-page #233-238, legacy-CSS removal #240) replaces admin CSS
-//    wholesale, so tokenizing ~40 declarations now is churn destined for
-//    deletion. Pinning the existing set shrink-only still stops NEW ad-hoc
-//    sizes landing there meanwhile: a new admin rule must use a step, and
-//    every value dropped from admin CSS should be dropped from this set too.
-
-/** Stylesheets under this directory are the admin app's. */
-const ADMIN_DIR = "apps/admin/";
+// There was a second exception until #240. The admin app's ~40 literals
+// were FROZEN rather than migrated — pinned shrink-only in a
+// `FROZEN_ADMIN_SIZES` set — because the shadcn migration was going to
+// replace those stylesheets wholesale and tokenizing them would have been
+// churn destined for deletion. It did, and the set emptied as it went
+// (#233-#238, #816, #841); the last two entries went with admin.css's
+// legacy rules. Every font-size in every workspace is now a step or a
+// fluid header size, so the two halves of this check are one.
 
 /**
  * The two header sizes allowed to stay fluid literals, spelled exactly as
@@ -202,44 +200,9 @@ const FLUID_SIZES = new Set([
   "clamp(17px, 2.2vw, 20px)",
 ]);
 
-/**
- * The literal sizes the admin app declared when the scale was introduced.
- * Frozen: nothing may be added, and entries should go as the shadcn
- * migration deletes the rules that use them.
- */
-const FROZEN_ADMIN_SIZES = new Set([
-  // "12px" went with admin-image-gc-page.css, whose missing-picture tile
-  // was its last holder — #238 deleted that sheet when the image-cleanup
-  // page moved to Tailwind.
-  // "13px" went with the tiptap editor's chrome — the link panel's error
-  // line and the bubble's address — which #237 restyled in Tailwind when
-  // the other-works page moved.
-  "14px",
-  // "15px", "17px" and "22px" went with the Appearance page's three
-  // sheets — admin-background-page.css, header-colors-section.css and
-  // font-pairing-section.css — which #816 deleted when that page moved to
-  // Tailwind. They were that page's option names, its two section
-  // headings and its preview title.
-  // "16px" and "18px" went with admin-haiku-page.css, which #234 deleted
-  // when that page moved to Tailwind — the shrink this set is for.
-  "20px",
-  // "0.85rem" went with admin-whats-on-test-page.css — the commit rows'
-  // date/sha line and the version footer were its only holders — which
-  // #841 deleted when that page moved to Tailwind.
-  "0.9rem",
-]);
-
 /** Whether a value is exactly one step token, spelled as a `var()`. */
 const isStep = (value: string): boolean =>
   Object.keys(STEPS).some((token) => value === `var(${token})`);
-
-/** Every `font-size` declared inside (or outside) the admin app. */
-const sizesDeclared = (inAdmin: boolean): Array<[string, string]> =>
-  RULES.flatMap((rule) => {
-    if (rule.file.startsWith(ADMIN_DIR) !== inAdmin) return [];
-    const value = declaration(rule.block, "font-size");
-    return value ? [[label(rule), value] satisfies [string, string]] : [];
-  });
 
 describe("the size axis of the type scale", () => {
   it("declares exactly the documented steps, and no others", () => {
@@ -253,45 +216,20 @@ describe("the size axis of the type scale", () => {
     expect(declared).toEqual(STEPS);
   });
 
-  it.each(sizesDeclared(false))(
-    "%s sizes public text with a step of the scale",
+  // One case over every workspace, public and admin alike: the admin's
+  // frozen-literal allowance went with the stylesheets that held them
+  // (#240), so there is one rule for the whole site again.
+  it.each(declaring("font-size"))(
+    "%s sizes text with a step of the scale",
     (_label, value) => {
       expect(isStep(value) || FLUID_SIZES.has(value)).toBe(true);
     },
   );
 
-  // The `--admin-prose-size` allowance went with the token itself: #841
-  // deleted it from admin.css along with `.admin-section-explanation`, the
-  // one rule outside what's on test that ever spent it, so admin text is
-  // now a step of the scale or a frozen literal and nothing else (#752 is
-  // moot).
-  it.each(sizesDeclared(true))(
-    "%s sizes admin text with a step or a frozen literal",
-    (_label, value) => {
-      const allowed = isStep(value) || FROZEN_ADMIN_SIZES.has(value);
-      expect(allowed).toBe(true);
-    },
-  );
-
-  it("keeps the frozen admin set shrinking, never stale", () => {
-    // "Frozen" has to mean shrink-only to be worth anything: an entry left
-    // behind after the rule using it is deleted quietly re-opens that size
-    // for the next admin rule that wants it. So the set may only list sizes
-    // the admin app still declares, and the shadcn migration prunes it as
-    // it goes.
-    const declared = new Set(sizesDeclared(true).map(([, value]) => value));
-    const stale = [...FROZEN_ADMIN_SIZES].filter((size) => !declared.has(size));
-    expect(stale).toEqual([]);
-  });
-
   it("spends every step on something", () => {
     // A step nothing uses is a step nobody chose; it would drift out of the
     // set the rest of the site is actually built from.
-    const used = new Set(
-      sizesDeclared(false)
-        .concat(sizesDeclared(true))
-        .map(([, value]) => value),
-    );
+    const used = new Set(declaring("font-size").map(([, value]) => value));
     const unused = Object.keys(STEPS).filter(
       (token) => !used.has(`var(${token})`),
     );

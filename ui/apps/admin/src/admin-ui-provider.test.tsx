@@ -106,6 +106,20 @@ describe("AdminUiProvider confirmation dialog", () => {
     expect(onYes).not.toHaveBeenCalled();
   });
 
+  // `.admin-button` on both answers is what `confirmDialog` in
+  // e2e/helpers.ts clicks them by; it styles nothing, so no other
+  // assertion here would notice it going.
+  it("marks both answers with the class the e2e helper clicks", async () => {
+    const { press } = renderProvider();
+    await press("ask");
+
+    for (const label of ["Yes", "No"]) {
+      expect(screen.getByRole("button", { name: label })).toHaveClass(
+        "admin-button",
+      );
+    }
+  });
+
   it("does not run onNo on Yes", async () => {
     const { user, press } = renderProvider();
     await press("ask-with-no");

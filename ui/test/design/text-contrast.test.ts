@@ -16,8 +16,9 @@ import { fileURLToPath } from "node:url";
 // even at a nominally passing ratio — now lives in the body default and the
 // --display-weight token, pinned by type-scale.test.ts (#356).
 //
-// The admin side reuses the same token on the same translucent backing
-// (#354), and the file also pins foregrounds that must not be left to
+// The admin is a different problem since #592: its surfaces are flat, so
+// its pairs are checked as one foreground on one opaque fill rather than
+// across a range. The file also pins foregrounds that must not be left to
 // inheritance to come out legible (#347) and the keyboard focus ring, whose
 // job is to read on every one of these surfaces at once (#501).
 
@@ -141,13 +142,10 @@ const photographyCss = read(
 );
 const adminCss = read("apps/admin/src/admin.css");
 const themeCss = read("apps/admin/src/styles/theme.css");
-const adminCardCss = read("apps/admin/src/components/card/card.css");
-const adminItemListCss = read(
-  "apps/admin/src/components/admin-item-list/admin-item-list.css",
-);
+const backgroundCss = read("packages/shared/src/styles/background.css");
 // Since #480 almost nothing in these stylesheets is a literal any more: the
 // surfaces and the palette live as custom properties in the shared `:root`,
-// the admin's `:root` re-exports two of them under its own names, and an
+// the admin's theme re-points three of them for its own build, and an
 // alpha variant is written as a `color-mix` on its base rather than as a
 // second hex. So a declaration has to be RESOLVED before it can be
 // composited, and the resolver below is what every assertion in this file
@@ -163,6 +161,8 @@ const adminItemListCss = read(
  *
  * The public assertions are unaffected: nothing on that side resolves
  * either of those two tokens, and the public build never loads theme.css.
+ * `adminCss` is last and holds only `--admin-helper-reserve` now (#240),
+ * but it stays in the chain so a token added there is still resolvable.
  */
 const ROOT_SHEETS = [themeCss, indexCss, adminCss];
 
@@ -186,7 +186,7 @@ interface Surface {
 /**
  * A colour value with its indirections resolved: `var(--token)` followed to
  * whichever `:root` declares it, through as many aliases as it takes
- * (`--admin-primary` is `var(--primary)`), and
+ * (`--destructive` is `var(--maroon)`), and
  * `color-mix(in srgb, <colour> N%, transparent)` collapsed to that colour
  * at N% opacity — which is exactly what a browser paints for it, and what
  * the alpha-suffixed hexes these replaced used to say directly.
@@ -207,7 +207,7 @@ function resolveSurface(value: string, depth = 0): Surface {
 
 /**
  * The one colour in a declaration, resolved. The value may be a shorthand
- * that carries other things too — `1px solid var(--admin-danger)`,
+ * that carries other things too — `1px solid var(--destructive)`,
  * `0 0 0 4px var(--header-surface)`, `2px solid #ffffff`.
  */
 function colorOf(value: string): Rgb {
@@ -242,12 +242,16 @@ const MID_GREY: Rgb = [128, 128, 128];
 
 /** What every translucent surface sits on: the photo at partial opacity
     over the white page. Admins choose the photo, so this spans the full
-    range from `backgroundLayerOver(BLACK)` to `backgroundLayerOver(WHITE)`. */
+    range from `backgroundLayerOver(BLACK)` to `backgroundLayerOver(WHITE)`.
+
+    Read from background.css, the public-only stylesheet #240 split the
+    photo out of index.css into — every surface composited in this file is
+    a PUBLIC one, since the admin's are flat paper. */
 const backgroundLayerOver = (photo: Rgb): Rgb =>
   composite(
     photo,
     WHITE,
-    Number(declaration(indexCss, "body::before", "opacity")),
+    Number(declaration(backgroundCss, "body::before", "opacity")),
   );
 
 /** A translucent surface as it actually renders over a given photo. */
@@ -302,84 +306,22 @@ describe("secondary text on the public cards", () => {
   });
 });
 
-// The admin panels are the same translucent grey over the same background
-// photo as the public cards, so the same token — and the contrast argument
-// above — applies to their secondary text (#354).
-const ADMIN_SECONDARY_TEXT_RULES: ReadonlyArray<[string, string, string]> = [
-  ["empty-result notice", adminItemListCss, ".admin-data-list-empty"],
-  ["search match count", adminItemListCss, ".admin-data-list-count"],
-  // The admin haiku list's publisher line was here until #234 migrated
-  // that page: its row is now Tailwind on the admin's own flat palette
-  // (`text-muted-foreground`, the same Stone this token resolves to), and
-  // the stylesheet that declared it is gone. The palette pairs it has to
-  // clear are pinned in "the admin's warm studio palette" below.
-  // The other-works "Published" line was here until #237 migrated that
-  // page: it only ever rendered on the ADMIN list (the public page passed
-  // showPublished={false}), so the admin's own row took it over as a
-  // Tailwind badge on the flat palette, and both the prop and the rule
-  // that styled it are gone.
-];
+// The admin's secondary text and panel surfaces were pinned here too: the
+// legacy `admin-item-list` fork tinted its rows, header and empty notice
+// from the same translucent grey as the public card and set their small
+// text in the same `--muted-text` (#354). Both that fork and the `card`
+// fork are gone (#240) — the admin is flat paper now and shares no
+// surface with the public site, so its pairs are checked as opaque
+// foreground-on-fill in "the admin's warm studio palette" below.
 
-/** Every admin surface the rules above render their text on. */
-const ADMIN_PANELS: ReadonlyArray<[string, string, string]> = [
-  ["empty-result notice", adminItemListCss, ".admin-data-list-empty"],
-  ["search match count", adminItemListCss, ".admin-data-list-count"],
-  // Spelled with its #234 opt-out: a MIGRATED list's row wears the same
-  // class (the e2e journeys locate rows by it) and is styled by Tailwind
-  // on the admin's flat paper, so this rule — and this assertion — is
-  // about the rows still on the legacy fork.
-  [
-    "list row",
-    adminItemListCss,
-    '.admin-data-list-item:where(:not([data-slot="list-row"]))',
-  ],
-  ["list header panel", adminItemListCss, ".admin-data-list-header"],
-  // "standalone page card" (.admin-page-card) went with what's on test,
-  // its last holder — #841 moved that page to the shadcn Card, whose
-  // --card backing on flat paper is pinned by "the admin's warm studio
-  // palette" below rather than by this translucent-over-photo contract.
-];
-
-describe("secondary text in the admin panels", () => {
-  it.each(ADMIN_SECONDARY_TEXT_RULES)(
-    "%s uses the shared --muted-text token",
-    (_name, css, selector) => {
-      expect(declaration(css, selector, "color")).toBe("var(--muted-text)");
-    },
-  );
-
-  it.each(ADMIN_PANELS)(
-    "%s is the same translucent backing as the public card",
-    (_name, css, selector) => {
-      expect(declaration(css, selector, "background-color")).toBe(
-        declaration(dataListCss, ".data-list", "background-color"),
-      );
-    },
-  );
-
-  // The tint is only half of it. At 80% the photograph still reads through,
-  // and it is the small grey secondary line that loses — a publisher or a
-  // date landing on blurred petals. The blur is what turns the backing into
-  // a calm, even surface, so it is part of the contract rather than a
-  // flourish one panel happens to have: the list rows shipped without it
-  // while the sidebar, .card and .data-editor-content all had it (#307).
-  it.each(ADMIN_PANELS)(
-    "%s blurs the photo behind it instead of letting it read through",
-    (_name, css, selector) => {
-      expect(declaration(css, selector, "backdrop-filter")).toMatch(/blur\(/);
-    },
-  );
-});
-
-// Every admin section opens with an <h2> and one line saying what the page
-// is for, both sitting on the pale translucent panel. The body's default
-// colour is --light-text — correct over the background photo, invisible on
-// that panel — so a section that leaves either to inheritance renders
-// near-white on grey. That is not hypothetical: the home-page editor
-// shipped exactly that way while its four siblings each re-declared a dark
-// colour of their own. The colour therefore lives in ONE shared pair of
-// classes and every admin heading has to wear them, so the next section
-// added cannot re-acquire the bug by omission (#457).
+// Every admin section opens with an <h2> saying what the page is for. The
+// body's default colour is --light-text, chosen for the public site's
+// background photo and invisible on a pale surface, so a heading that
+// leaves its colour to inheritance renders near-white. That is not
+// hypothetical: the home-page editor shipped exactly that way while its
+// four siblings each re-declared a dark colour of their own (#457). Every
+// admin heading therefore has to STATE its colour, so the next section
+// added cannot re-acquire the bug by omission.
 const ADMIN_DIR = "apps/admin/src";
 
 /** Every non-test `.tsx` in the admin app, as `read()` paths. */
@@ -406,41 +348,31 @@ const ADMIN_HEADINGS: ReadonlyArray<[string, string]> = adminComponents(
   ),
 );
 
-/** The admin card as it actually renders over a given photo. */
-const adminCardOver = (photo: Rgb): Rgb =>
-  surfaceOver(photo, declaration(adminCardCss, ".card", "background-color"));
-
 describe("the admin section headings", () => {
   it("finds the heading of every admin section", () => {
-    // The shared PageTitle (every migrated page's heading), the helper
-    // panel's "Helper", and the two components still on the legacy fork:
-    // the item list and the data editor. A drop below that means the scan
-    // stopped seeing what it is meant to check. #898 re-derives the floor
-    // once the legacy pair goes.
-    expect(ADMIN_HEADINGS.length).toBeGreaterThanOrEqual(4);
+    // Two, and exactly two components render one: the shared PageTitle
+    // that every page's heading goes through, and the helper panel's
+    // "Helper". The floor was 4 while the pre-shadcn item list and data
+    // editor each carried their own; #240 deleted that pair and this is
+    // the re-derivation (#898). A drop below this means the scan stopped
+    // seeing what it is meant to check.
+    expect(ADMIN_HEADINGS.length).toBeGreaterThanOrEqual(2);
   });
 
   it.each(ADMIN_HEADINGS)(
     "%s states its heading colour rather than inheriting one",
     (_path, tag) => {
-      // Two ways to satisfy the invariant, and it is the invariant — no
-      // heading left to inherit --light-text — that is pinned here, not
-      // either spelling of it.
-      //
-      // A legacy page wears the shared class, alongside a page's own class
-      // where one is needed (the editor titles add a size), so that half is
-      // a token check rather than equality. A page migrated to Tailwind
-      // (#233 onwards) has no stylesheet to put a shared class in: it
-      // states the colour in the markup as `text-foreground`, which is the
-      // same Ink the shared class spends. The class list is read from the
-      // whole tag because a migrated heading composes its classes through
-      // `cn(...)` rather than a plain string literal.
+      // It is the invariant — no heading left to inherit --light-text —
+      // that is pinned here, and since #240 there is one spelling of it:
+      // every admin page is Tailwind and has no stylesheet to put a shared
+      // class in, so it states the colour in the markup as
+      // `text-foreground`, the Ink the deleted `.admin-section-heading`
+      // used to spend. (That class was the other accepted spelling until
+      // the stylesheet declaring it went.) The class list is read from the
+      // whole tag because a heading composes its classes through `cn(...)`
+      // rather than a plain string literal.
       const className = tag.match(/className="([^"]*)"/)?.[1] ?? tag;
-      const statesItsOwnColour = /\btext-foreground\b/.test(className);
-      expect(
-        className.split(/[\s"]+/).includes("admin-section-heading") ||
-          statesItsOwnColour,
-      ).toBe(true);
+      expect(/\btext-foreground\b/.test(className)).toBe(true);
     },
   );
 
@@ -448,63 +380,18 @@ describe("the admin section headings", () => {
   // holder — #841 moved that page's explanation line to Tailwind's
   // `text-muted-foreground` on flat paper, which the palette checks below
   // cover; the test that kept it secondary to the heading went with it.
-  it.each([[".admin-section-heading"]])(
-    "%s stays legible on the card whatever photo is behind it",
-    (selector) => {
-      const color = colorOf(declaration(adminCss, selector, "color"));
-      for (const photo of [BLACK, MID_GREY, WHITE]) {
-        expect(
-          contrastRatio(color, adminCardOver(photo)),
-        ).toBeGreaterThanOrEqual(4.5);
-      }
-    },
-  );
+  // The heading's own legibility floor moved there too: Ink on the admin's
+  // opaque card is "ink on a card" in the palette block, which is a
+  // stronger claim (AAA) than the translucent-over-photo one this used to
+  // make.
 });
 
-// The glyph on an icon control is only legible because of the colour
-// declared on the control. `color: inherit` made that lightness an accident
-// of whichever ancestor last set a colour — one dark-text ancestor away from
-// an invisible icon (#347). Since #457 the icon circles are the move arrows
-// and nothing else, and they are outlined rather than filled, so the brown
-// now has to carry the GLYPH and the RING against the button's own pale
-// fill rather than sit behind a white glyph.
-describe("the admin icon buttons", () => {
-  const declared = (property: string) =>
-    declaration(adminCss, ".admin-icon-button", property);
-
-  it("declare their own foreground rather than inheriting one", () => {
-    expect(declared("color")).not.toBe("inherit");
-  });
-
-  // Resolved rather than parsed: since #565 the glyph is
-  // `var(--admin-primary)`, which since #480 is itself an alias for the
-  // shared `--primary` — two hops from anything a regex could composite.
-  it("put a glyph on their fill that meets WCAG AA", () => {
-    expect(
-      contrastRatio(
-        colorOf(declared("color")),
-        colorOf(declared("background-color")),
-      ),
-    ).toBeGreaterThanOrEqual(4.5);
-  });
-
-  // The ring is the whole edge of the control — an outlined button with an
-  // invisible border is not a button (WCAG 1.4.11 non-text contrast).
-  it("draw a ring that reads as a shape on their own fill", () => {
-    expect(
-      contrastRatio(
-        colorOf(declared("border")),
-        colorOf(declared("background-color")),
-      ),
-    ).toBeGreaterThanOrEqual(3);
-  });
-
-  // A bordered circle on a fixed 30/44px control has to be border-box, or
-  // the ring grows it past the size it declares.
-  it("size the circles so a ring cannot grow them", () => {
-    expect(declared("box-sizing")).toBe("border-box");
-  });
-});
+// "the admin icon buttons" was pinned here — the move arrows' glyph and
+// ring against their own pale fill (#347, #457). Their rule was the last
+// thing in admin.css that painted anything, and #240 deleted it with the
+// rest of the legacy CSS: the arrows are shadcn `Button`s on the `icon`
+// size now, drawing their maroon or Fir from the palette whose pairs the
+// it.each below covers.
 
 // ".admin-danger-banner" and the describe that pinned it went with what's
 // on test, its last holder — #841 moved that page's truncation warning to
@@ -579,13 +466,14 @@ describe("the admin's warm studio palette", () => {
     ).toBeGreaterThanOrEqual(4.5);
   });
 
-  // What makes every number above a whole answer rather than a best case.
-  // The admin imports the shared index.css for its tokens and its shell
-  // frame, and that stylesheet paints the site's background photograph in
-  // `body::before`; left on, every "opaque fill" here would be sitting on
-  // an admin-chosen image and none of these ratios would mean anything.
-  it("turns the shared background photo off", () => {
-    expect(declaration(themeCss, "body::before", "content")).toBe("none");
+  // What makes every number above a whole answer rather than a best case:
+  // the admin's page really is an opaque fill. The other half — that the
+  // shared background photograph never reaches this app at all — is the
+  // import boundary, pinned in test/config/app-boundaries.test.ts since
+  // #240 moved `body::before` into its own public-only stylesheet. (Until
+  // then theme.css cancelled it with `content: none`, and this case
+  // checked that.)
+  it("paints its page an opaque fill of its own", () => {
     expect(declaration(themeCss, "body", "background-color")).toBe(
       "var(--background)",
     );

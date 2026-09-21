@@ -91,6 +91,18 @@ describe("Admin authentication gating", () => {
     expect(screen.queryByRole("navigation")).toBeNull();
   });
 
+  // `.admin-button` is the hook e2e/auth0-login.mjs clicks Log In by, and
+  // it styles nothing — the same contract as the `.admin-loading` case in
+  // admin-ui-provider.test.tsx.
+  it("marks Log In with the class the login smoke clicks it by", () => {
+    mockAuth({ isAuthenticated: false });
+    renderAdmin();
+
+    expect(screen.getByRole("button", { name: "Log In" })).toHaveClass(
+      "admin-button",
+    );
+  });
+
   it("shows neither login nor menu while auth is loading", () => {
     mockAuth({ isAuthenticated: false, isLoading: true });
     renderAdmin();

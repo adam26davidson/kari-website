@@ -60,6 +60,21 @@ function imageBlurbs(): Array<HTMLElement> {
   return screen.getAllByRole("textbox", { name: "Caption (optional)" });
 }
 
+/**
+ * The per-image pickers' hidden file inputs, in list order. Located the way
+ * the e2e journeys locate them (`.photo-picker input[type="file"]`) rather
+ * than by an accessible name: the input is `hidden` and carries none — the
+ * button beside it is what is announced, and it opens the input through a
+ * ref (#240 replaced the <label role="button"> that used to name it).
+ */
+function imageFileInputs(container: HTMLElement): Array<HTMLInputElement> {
+  return [
+    ...container.querySelectorAll<HTMLInputElement>(
+      '.photo-picker input[type="file"]',
+    ),
+  ];
+}
+
 describe("PhotographyPostEditor", () => {
   it("says what it is editing and labels every field", () => {
     renderEditor();
@@ -235,10 +250,10 @@ describe("PhotographyPostEditor", () => {
   });
 
   it("stores a chosen file on its entry and clears the stored name", () => {
-    const { setImages } = renderEditor();
+    const { container, setImages } = renderEditor();
     const file = new File(["img"], "new.png", { type: "image/png" });
 
-    fireEvent.change(screen.getAllByLabelText("Select an image")[0], {
+    fireEvent.change(imageFileInputs(container)[0], {
       target: { files: [file] },
     });
 
@@ -255,9 +270,9 @@ describe("PhotographyPostEditor", () => {
   it("clears only the pending file when the selection is emptied", () => {
     const images = makeImages();
     images[0].file = new File(["img"], "pending.png", { type: "image/png" });
-    const { setImages } = renderEditor({ images });
+    const { container, setImages } = renderEditor({ images });
 
-    fireEvent.change(screen.getAllByLabelText("Select a different image")[0], {
+    fireEvent.change(imageFileInputs(container)[0], {
       target: { files: [] },
     });
 

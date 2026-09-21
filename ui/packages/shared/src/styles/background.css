@@ -1,0 +1,48 @@
+/* The public site's background photograph.
+
+   Split out of index.css in #240. Both apps import index.css — for the
+   tokens, the `body` and `.whole-page` frame and the focus ring — but only
+   the public site draws the photo: the admin has its own flat paper
+   background (apps/admin/src/styles/theme.css) and never wanted it. While
+   these rules sat in the shared stylesheet the admin build emitted BOTH
+   webps (~196 kB, the full one and the 960px variant) into
+   dist/admin/assets to satisfy the `url()`s, and then hid the
+   pseudo-element with `content: none`.
+
+   The paths stay relative to this file, so the assets keep living beside
+   the components that import them — apps/admin/src/admin-background-page
+   imports the full-size webp by name for its "Default background"
+   thumbnail, which is a legitimate admin dependency and unaffected by
+   this. Who may import this stylesheet is pinned by
+   test/config/app-boundaries.test.ts. */
+
+body::before {
+  content: "";
+  position: fixed; /* Stay put while the page scrolls */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url("../assets/petals_on_ground.webp");
+  background-size: cover; /* Scale to fill any viewport, no tiling seam */
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.7; /* Adjust this value to control the transparency */
+  z-index: -1; /* Ensure the pseudo-element is behind the content */
+  pointer-events: none; /* Allows interaction with underlying elements */
+}
+
+/* Smaller variant (~51 kB vs ~146 kB) for narrow viewports */
+@media (max-width: 960px) {
+  body::before {
+    background-image: url("../assets/petals_on_ground_960.webp");
+  }
+}
+
+/* Admin-selected background: useSiteBackground sets the attribute and the
+   --site-background variable when site-settings.json names a custom photo.
+   The attribute selector outweighs both default rules above (media query
+   included), so this single rule overrides desktop and mobile alike. */
+body[data-custom-background]::before {
+  background-image: var(--site-background);
+}

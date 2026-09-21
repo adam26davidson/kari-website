@@ -10,11 +10,10 @@
    site, so the reset needs no `important` selector, no prefix and no
    scoping tricks. Everything Tailwind emits sits inside
    `@layer theme, base, components, utilities`, and layered rules lose to
-   unlayered ones, so the admin's remaining hand-written CSS (admin.css
-   and the seven not-yet-migrated pages) still wins wherever it declares
-   something. Where it does not — a property those sheets never declared
-   and took from the browser's default — the compat rules at the end of
-   admin.css state it.
+   unlayered ones, so the admin's two remaining hand-written stylesheets
+   (admin.css's scroller, tiptap.css's post content) still win wherever
+   they declare something. The compat rules that restored what preflight
+   took from the pre-shadcn pages went with those pages (#240).
 
    The palette is docs/design/admin-redesign/README.md's, exported from
    the maintainer's design canvas: a warm paper/cream studio theme with a
@@ -89,38 +88,31 @@
   --radius: 10px;
 
   /* --- The bridge --------------------------------------------------
-     Seven admin pages still wear the pre-shadcn stylesheets, and will
-     until #233-#238 migrate them one at a time. Rather than leave them
-     brown-on-grey beside a green-on-paper shell, they are re-pointed at
-     this theme through the tokens they already spend.
+     Not everything the admin renders is the admin's own. It imports the
+     shared index.css for the tokens and the `.whole-page` frame, and with
+     them come components written for the public site: the `LoadError` and
+     `ErrorBoundary` notices, the `SiteButton` inside them, and the
+     `.loading` line. Those reach their colour and their face through the
+     shared tokens, so the tokens are re-pointed here rather than the
+     components being forked.
 
-     admin.css's `--admin-primary: var(--primary)` alias was written for
-     exactly this (#565): re-declaring the shared `--primary` here moves
-     every filled control, ring, glyph and tick in the legacy CSS to Fir
-     in ONE edit, with no churn in the pinned token tests and — because
-     the admin is its own build — no effect on the public site, which
-     keeps its brown. `--primary-hover` follows it for the same reason.
-
-     `--admin-danger` follows for the same reason and one more: the
-     shadcn recipe's outlined Delete is already maroon on every list row,
-     so leaving the legacy token at its old red would give the admin TWO
-     destructive colours — a maroon Delete above a red "couldn't do that"
-     banner about the very action it started. One red, as it has always
-     been (#457); it just moved.
-
-     `--primary` itself needs no line of its own down here: the shadcn
-     alias above IS the re-declaration, which is the point — one token,
-     two worlds. */
+     `--primary-hover` is the darker green a filled control answers the
+     pointer with — `--primary` itself needs no line of its own, because
+     the shadcn alias above IS the re-declaration, which is the point: one
+     token, two worlds. This was written in #592 for the pre-shadcn pages'
+     filled controls and outlived them (#240); the shared components are
+     what spend it now, along with `.site-button` at the foot of this
+     file. */
   --primary-hover: #24462f;
-  --admin-danger: var(--maroon);
 
   /* The face axis, likewise (#483). Every rule in every workspace
      reaches a typeface through one of these two tokens, so re-pointing
-     them is how the legacy admin pages become Geist without touching
-     twenty-six rules. Both point at the interface face: Newsreader is
-     for greetings, page titles and item titles, which are the shell's
-     and the migrated pages' business and are asked for with the
-     `font-serif` utility rather than taken by inheritance. */
+     them is how the shared components above are set in Geist rather than
+     in the public site's Noto Serif JP / Roboto pairing. Both point at
+     the interface face: Newsreader is for greetings, page titles and item
+     titles, which are the shell's and the pages' business and are asked
+     for with the `font-serif` utility rather than taken by
+     inheritance. */
   --font-ui: var(--font-sans);
   --font-body: var(--font-sans);
 }
@@ -173,18 +165,18 @@
 
 /* The admin has its own fixed look and drops the public site's
    background photo and header colours entirely — the settled direction
-   of #642, and why `useSiteBackground` is no longer called here. The
-   photo is drawn by `body::before` in the SHARED index.css, which this
-   app still imports for the tokens and the `.whole-page` frame, so it is
-   turned off rather than removed. `content: none` removes the
-   pseudo-element; `display: none` would leave it generated. */
+   of #642, and why `useSiteBackground` is no longer called here.
+
+   There is nothing to switch off: the photo is drawn by `body::before` in
+   packages/shared/src/styles/background.css, which ONLY the public app
+   imports (#240). It used to live in the shared index.css, which this app
+   also imports, so this file carried a `body::before { content: none }`
+   that hid the pseudo-element while vite still emitted both webps into
+   dist/admin/assets. Splitting the stylesheet is what finally keeps them
+   out; test/config/app-boundaries.test.ts pins the import side of it. */
 body {
   background-color: var(--background);
   color: var(--foreground);
-}
-
-body::before {
-  content: none;
 }
 
 /* The shared SiteButton, which in the admin is only ever an error card's

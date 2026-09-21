@@ -3,6 +3,10 @@ import ReactDOM from "react-dom/client";
 import { App } from "./app.tsx";
 import { BrowserRouter } from "react-router";
 import "@kari/shared/styles/index.css";
+// The background photograph, public-only: the admin imports the shared
+// stylesheet above but has a flat paper background of its own, and while
+// these rules lived in it the admin bundle emitted both webps (#240).
+import "@kari/shared/styles/background.css";
 
 // The DECLARATIVE router, deliberately -- not createBrowserRouter +
 // RouterProvider. A data router drags ~56 kB of extra machinery (loaders,

@@ -9,7 +9,8 @@ interface ImportMetaEnv {
   /**
    * Sha the bundle was built from, exported by deploy.yml's build job.
    * Absent in local dev and test-mode builds, so consumers must handle
-   * undefined (the whats-on-test page shows an "unknown build" fallback).
+   * undefined (the whats-on-test page renders one paragraph explaining
+   * that there is nothing to list rather than a version comparison).
    */
   readonly VITE_COMMIT_SHA?: string;
   /**

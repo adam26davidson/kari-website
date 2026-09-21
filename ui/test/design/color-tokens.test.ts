@@ -26,17 +26,21 @@ import { RULES, declaration, label } from "./css-rules";
 // will silently miss — and one the contrast floors will go on vouching for
 // while it quietly says something else.
 
-/** The shared stylesheet both apps import, and the admin's two. */
+/** The shared stylesheet both apps import. */
 const SHARED_ROOT = "packages/shared/src/styles/index.css";
-const ADMIN_ROOT = "apps/admin/src/admin.css";
 /**
  * The admin's shadcn/Tailwind theme (#592). It is a definition site like
- * the other two rather than a consumer of them, and it is also the one
+ * the shared root rather than a consumer of it, and it is also the one
  * place a colour is deliberately declared TWICE on this site: it re-points
  * `--primary` (and `--primary-hover`) at the design boards' Fir green for
- * the admin build alone, which is how the seven pages still wearing their
- * pre-shadcn stylesheets follow the new palette without being rewritten.
- * The public app never imports it, so its brown is untouched.
+ * the admin build alone, which is how the shared components the admin
+ * renders — the error notices, their SiteButton, the loading line — follow
+ * the new palette without being forked. The public app never imports it,
+ * so its brown is untouched.
+ *
+ * `apps/admin/src/admin.css` was a third definition site until #240: it
+ * declared the admin's own red and an `--admin-primary` alias for the
+ * pre-shadcn pages, and both went with the rules that spent them.
  */
 const THEME_ROOT = "apps/admin/src/styles/theme.css";
 
@@ -59,10 +63,6 @@ const TOKENS: ReadonlyArray<[string, string, string]> = [
   // notice's Reload spend it as surely as the admin's Save does.
   [SHARED_ROOT, "--primary", "#6d3513"],
   [SHARED_ROOT, "--primary-hover", "#552a0f"],
-  // The one red. Admin-only on purpose — the public site has no control
-  // that destroys anything, so a destructive colour there would be a
-  // colour with nothing to say.
-  [ADMIN_ROOT, "--admin-danger", "#a33327"],
   // The admin's warm studio palette, by the name the design boards call
   // each colour (docs/design/admin-redesign/README.md). Every shadcn
   // variable in that stylesheet aliases one of these rather than repeating
@@ -77,23 +77,6 @@ const TOKENS: ReadonlyArray<[string, string, string]> = [
 ];
 
 /**
- * The admin's semantic name for a shared colour. It stays a name — "the
- * admin's primary" is what the rules that spend it mean — but it aliases
- * rather than re-declares, or the hex would be back to living in two
- * places. That indirection is what #592 spent: re-pointing `--primary` in
- * theme.css moved every filled control, ring, glyph and tick in the legacy
- * admin CSS to the new green in one edit.
- *
- * `--admin-primary-hover` and `--admin-danger-hover` were here until #592
- * and went with the only rules that spent them (admin-button.css): the
- * shadcn recipe darkens a fill with an opacity step or with
- * `--primary-hover` directly.
- */
-const ADMIN_ALIASES: ReadonlyArray<[string, string]> = [
-  ["--admin-primary", "var(--primary)"],
-];
-
-/**
  * Spellings of a tokenised colour that a hex search cannot see. Each is how
  * one of the tokens above was actually written before it had a name, so
  * each is the exact shape of the regression this file exists to catch.
@@ -104,13 +87,13 @@ const BANNED_LITERALS: ReadonlyArray<[string, string]> = [
 ];
 
 const roots = new Map(
-  [SHARED_ROOT, ADMIN_ROOT, THEME_ROOT].map((file) => [
+  [SHARED_ROOT, THEME_ROOT].map((file) => [
     file,
     RULES.find((rule) => rule.file === file && rule.selector === ":root"),
   ]),
 );
 
-/** Every rule in every workspace except the two that define the tokens. */
+/** Every rule in every workspace except the two `:root`s defining them. */
 const consumers = RULES.filter(
   (rule) => !(rule.selector === ":root" && roots.has(rule.file)),
 );
@@ -142,13 +125,6 @@ describe("the site's semantic colour tokens", () => {
     expect(literals).toEqual([]);
   });
 
-  it.each(ADMIN_ALIASES)(
-    "%s aliases the shared token rather than repeating its hex",
-    (token, aliased) => {
-      expect(declaration(roots.get(ADMIN_ROOT)!.block, token)).toBe(aliased);
-    },
-  );
-
   // An unused token is a colour nobody can see and nobody will maintain —
   // and, worse, one whose contrast the tests in text-contrast.test.ts go on
   // vouching for.
@@ -160,10 +136,7 @@ describe("the site's semantic colour tokens", () => {
         ),
       ),
     );
-    const declared = [
-      ...TOKENS.map(([, token]) => token),
-      ...ADMIN_ALIASES.map(([token]) => token),
-    ];
+    const declared = TOKENS.map(([, token]) => token);
     expect(declared.filter((token) => !used.has(token))).toEqual([]);
   });
 });

@@ -13,8 +13,10 @@ install with a warning naming everything it skipped.
 Every dependency that ships one is recorded there as `false` — reviewed and
 denied, not overlooked:
 
-- the four `@fortawesome/*` scripts and `browser-tabs-lock`'s only
-  `console.log` a banner
+- the three `@fortawesome/*` scripts and `browser-tabs-lock`'s only
+  `console.log` a banner (there were four until #240 removed
+  `free-regular-svg-icons`, which nothing had imported since the admin
+  migration)
 - `@swc/core`'s quietly swaps in a `@swc/wasm` fallback we would rather
   fail loudly without
 

@@ -34,9 +34,45 @@ describe("PhotoPicker", () => {
 
   it("stays secondary to the editor's Save button", () => {
     render(<PhotoPicker imageFile={null} fileName="" setImageFile={() => {}} />);
-    expect(screen.getByRole("button", { name: /Select an image/ })).toHaveClass(
-      "secondary",
+    const picker = screen.getByRole("button", { name: /Select an image/ });
+    // A real <button>, not the <label role="button"> it was until #240 —
+    // which needed a keyboard shim to be operable at all.
+    expect(picker.tagName).toBe("BUTTON");
+    // `bg-primary` is the filled-green recipe's own marker, the same one
+    // photography-post-editor.test.tsx sorts the screen's one primary by.
+    expect(picker).not.toHaveClass("bg-primary");
+  });
+
+  it("opens the file chooser when pressed", async () => {
+    // jsdom has no file chooser, so what is asserted is the wiring: the
+    // button clicks the hidden input, which is what makes a real browser
+    // open one.
+    const { container } = render(
+      <PhotoPicker imageFile={null} fileName="" setImageFile={() => {}} />,
     );
+    const input = container.querySelector(
+      "input[type=file]",
+    ) as HTMLInputElement;
+    const click = vi.spyOn(input, "click").mockImplementation(() => {});
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /Select an image/ }),
+    );
+
+    expect(click).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers a different image once one is picked", () => {
+    render(
+      <PhotoPicker
+        imageFile={makeFile("chosen.png")}
+        fileName=""
+        setImageFile={() => {}}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: /Select a different image/ }),
+    ).toBeInTheDocument();
   });
 
   it("previews an already-uploaded image from its thumbnail", () => {

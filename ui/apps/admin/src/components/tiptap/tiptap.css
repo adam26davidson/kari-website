@@ -100,7 +100,7 @@
    and the editor is allowed to diverge from the public rendering as long as
    the SHAPE of the post is faithful — which underlined-and-coloured is. */
 .tiptap a {
-  color: var(--admin-danger);
+  color: var(--destructive);
   text-decoration: underline;
 }
 
