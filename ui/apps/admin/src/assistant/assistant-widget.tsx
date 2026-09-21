@@ -68,6 +68,7 @@ export function AssistantWidget({
   const [typed, setTyped] = useState("");
   const transcriptEnd = useRef<HTMLDivElement>(null);
   const draftTop = useRef<HTMLDivElement>(null);
+  const newestMessage = useRef<HTMLDivElement>(null);
 
   // Nothing is asked of the API until she opens the panel, so an admin page
   // she never asks for help on costs no requests at all.
@@ -75,13 +76,25 @@ export function AssistantWidget({
     if (open) begin();
   }, [open, begin]);
 
-  // Keep the newest line in view as the conversation grows — including
-  // while a card is waiting, since she can go on talking to the helper
-  // then, and "Thinking…" and anything that fails are printed below the
-  // card.
+  // Where a change in the conversation leaves her.
+  //
+  // The transcript is not simply oldest-to-newest: a waiting card is
+  // printed BELOW every message, including the answer that arrived with
+  // it, and "Thinking…" and a failed send are printed below the card in
+  // turn. So the foot of the transcript is the right place to land only
+  // while something down there is what changed — and a card can be taller
+  // than the panel, which would leave the answer she just asked for a full
+  // card-height above the fold (#888).
+  //
+  // Otherwise the newest message is what has to be on screen, by its first
+  // line: a long answer is read from its top, not its last sentence.
   useEffect(() => {
-    transcriptEnd.current?.scrollIntoView({ block: "end" });
-  }, [messages, sending]);
+    if (sending || error) {
+      transcriptEnd.current?.scrollIntoView({ block: "end" });
+    } else {
+      newestMessage.current?.scrollIntoView({ block: "start" });
+    }
+  }, [messages, sending, error]);
 
   // What is ON the card, rather than the object holding it: every reply
   // arrives with a freshly parsed draft, so an unchanged card is still a
@@ -208,6 +221,9 @@ export function AssistantWidget({
         {messages.map((message, index) => (
           <div
             key={index}
+            // The scroll target for an answer that lands with a card still
+            // waiting underneath it.
+            ref={index === messages.length - 1 ? newestMessage : null}
             className={
               message.role === "user"
                 ? "mb-3 ml-8 rounded-xl bg-muted px-4 py-2.5 font-sans text-sm leading-relaxed text-foreground"

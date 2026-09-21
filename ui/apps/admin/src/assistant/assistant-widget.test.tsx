@@ -63,6 +63,29 @@ const DRAFT = {
     "in the gallery.\n\nExpected: it keeps the way up it was taken.",
 };
 
+/**
+ * Where the panel last scrolled, and to WHAT.
+ *
+ * jsdom lays nothing out, so the options alone say almost nothing: "end"
+ * on the anchor under a waiting card and "end" on the anchor under the
+ * last message put her in two entirely different places. The element the
+ * call was made on is the part that decides what she sees.
+ */
+function lastScroll() {
+  const scrollIntoView = vi.mocked(Element.prototype.scrollIntoView);
+  return {
+    target: scrollIntoView.mock.instances.at(-1) as Element | undefined,
+    options: scrollIntoView.mock.calls.at(-1)?.[0],
+  };
+}
+
+/** Whether `target` is printed after `other` in the transcript. */
+function comesAfter(target: Element | undefined, other: Element) {
+  if (!target) return false;
+  const where = other.compareDocumentPosition(target);
+  return Boolean(where & Node.DOCUMENT_POSITION_FOLLOWING);
+}
+
 function renderWidget({
   route = "/haiku",
   storage = fakeStorage(),
@@ -549,14 +572,11 @@ describe("AssistantWidget", () => {
     // A card carrying a write-up can be taller than the panel, so where
     // the scroll lands decides what she reads first. It has to be the ask
     // and the words about to be published — not the buttons under them.
-    const scrollIntoView = vi.mocked(Element.prototype.scrollIntoView);
-    expect(scrollIntoView.mock.calls.at(-1)?.[0]).toEqual({ block: "start" });
-    expect(scrollIntoView.mock.instances.at(-1)).toContainElement(
-      screen.getByText(DRAFT.title),
-    );
+    expect(lastScroll().options).toEqual({ block: "start" });
+    expect(lastScroll().target).toContainElement(screen.getByText(DRAFT.title));
   });
 
-  it("goes back to the foot of the conversation when she sends with a card up", async () => {
+  it("shows her the answer itself when it lands with the card unchanged", async () => {
     filing();
     service.getSession.mockResolvedValue({
       id: "old",
@@ -564,40 +584,129 @@ describe("AssistantWidget", () => {
       turnsRemaining: 30,
       draft: DRAFT,
     });
-    // She can still talk to the helper while a card is waiting. Here the
-    // reply leaves the card exactly as it was — but the session hook parses
+    // She can go on talking to the helper while a card is waiting. Here the
+    // answer leaves the card exactly as it was — but the session hook parses
     // a FRESH draft object out of every response, so the card's identity
     // changes even when nothing she can see does.
-    service.sendMessage.mockResolvedValue({
-      id: "old",
-      messages: [
-        { role: "assistant", text: "Have a look at this." },
-        { role: "user", text: "What does that mean?" },
-        { role: "assistant", text: "It means photographs come out sideways." },
-      ],
-      turnsRemaining: 29,
-      draft: { ...DRAFT },
-    });
+    let answer!: (session: unknown) => void;
+    service.sendMessage.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
 
     renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
     await openPanel();
     await screen.findByText(DRAFT.title);
-
-    const scrollIntoView = vi.mocked(Element.prototype.scrollIntoView);
-    scrollIntoView.mockClear();
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
 
     await userEvent.type(
       screen.getByRole("textbox", { name: "Your message" }),
       "What does that mean?",
     );
     await userEvent.click(screen.getByRole("button", { name: "Send" }));
-    await screen.findByText("It means photographs come out sideways.");
+    const thinking = await screen.findByText("Thinking…");
 
-    // "Thinking…" and anything that goes wrong with the send are printed
-    // BELOW the card, which is taller than the panel — so a send has to end
-    // at the foot of the transcript. Snapping back to the card's first line
-    // would hide every sign that anything had happened at all.
-    expect(scrollIntoView.mock.calls.at(-1)?.[0]).toEqual({ block: "end" });
+    // "Thinking…" is printed BELOW the card, which is taller than the
+    // panel — so while it waits, the foot of the transcript is the only
+    // place that shows anything happened at all.
+    expect(lastScroll().options).toEqual({ block: "end" });
+    expect(comesAfter(lastScroll().target, thinking)).toBe(true);
+
+    await act(async () => {
+      answer({
+        id: "old",
+        messages: [
+          { role: "assistant", text: "Have a look at this." },
+          { role: "user", text: "What does that mean?" },
+          {
+            role: "assistant",
+            text: "It means photographs come out sideways.",
+          },
+        ],
+        turnsRemaining: 29,
+        draft: { ...DRAFT },
+      });
+    });
+    const reply = await screen.findByText(
+      "It means photographs come out sideways.",
+    );
+
+    // The answer is printed ABOVE the waiting card, so the foot of the
+    // transcript is now a whole card-height BELOW it: landing there would
+    // show her "Thinking…" disappear and nothing take its place. The answer
+    // she asked for is what has to be on screen, by its first line.
+    expect(lastScroll().options).toEqual({ block: "start" });
+    expect(lastScroll().target).toContainElement(reply);
+  });
+
+  it("goes back to the card when the answer rewrites it", async () => {
+    filing();
+    service.getSession.mockResolvedValue({
+      id: "old",
+      messages: [{ role: "assistant", text: "Have a look at this." }],
+      turnsRemaining: 30,
+      draft: DRAFT,
+    });
+    const rewritten = { ...DRAFT, title: "Photographs arrive on their side" };
+    service.sendMessage.mockResolvedValue({
+      id: "old",
+      messages: [
+        { role: "assistant", text: "Have a look at this." },
+        { role: "user", text: "Call it something clearer." },
+        { role: "assistant", text: "How about this instead?" },
+      ],
+      turnsRemaining: 29,
+      draft: rewritten,
+    });
+
+    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    await openPanel();
+    await screen.findByText(DRAFT.title);
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Your message" }),
+      "Call it something clearer.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    const title = await screen.findByText(rewritten.title);
+
+    // When the words that would be published have changed, THEY are what
+    // she has to read before deciding — the card wins over the line above
+    // it, first line first.
+    expect(lastScroll().options).toEqual({ block: "start" });
+    expect(lastScroll().target).toContainElement(title);
+  });
+
+  it("shows what went wrong when a send fails with a card up", async () => {
+    filing();
+    service.getSession.mockResolvedValue({
+      id: "old",
+      messages: [{ role: "assistant", text: "Have a look at this." }],
+      turnsRemaining: 30,
+      draft: DRAFT,
+    });
+    service.sendMessage.mockRejectedValue(new Error("offline"));
+
+    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    await openPanel();
+    await screen.findByText(DRAFT.title);
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Your message" }),
+      "What does that mean?",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    const failed = await screen.findByText(/your message is still here/);
+
+    // A failed send is printed below the card, like "Thinking…" before it,
+    // so the foot of the transcript is where the news is.
+    expect(lastScroll().options).toEqual({ block: "end" });
+    expect(comesAfter(lastScroll().target, failed)).toBe(true);
+    // And the card is still there, untouched, for her to decide on.
+    expect(screen.getByText(DRAFT.title)).toBeInTheDocument();
   });
 
   it("lets her say not now", async () => {
