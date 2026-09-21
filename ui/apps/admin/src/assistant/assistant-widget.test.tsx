@@ -556,6 +556,50 @@ describe("AssistantWidget", () => {
     );
   });
 
+  it("goes back to the foot of the conversation when she sends with a card up", async () => {
+    filing();
+    service.getSession.mockResolvedValue({
+      id: "old",
+      messages: [{ role: "assistant", text: "Have a look at this." }],
+      turnsRemaining: 30,
+      draft: DRAFT,
+    });
+    // She can still talk to the helper while a card is waiting. Here the
+    // reply leaves the card exactly as it was — but the session hook parses
+    // a FRESH draft object out of every response, so the card's identity
+    // changes even when nothing she can see does.
+    service.sendMessage.mockResolvedValue({
+      id: "old",
+      messages: [
+        { role: "assistant", text: "Have a look at this." },
+        { role: "user", text: "What does that mean?" },
+        { role: "assistant", text: "It means photographs come out sideways." },
+      ],
+      turnsRemaining: 29,
+      draft: { ...DRAFT },
+    });
+
+    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    await openPanel();
+    await screen.findByText(DRAFT.title);
+
+    const scrollIntoView = vi.mocked(Element.prototype.scrollIntoView);
+    scrollIntoView.mockClear();
+
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Your message" }),
+      "What does that mean?",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("It means photographs come out sideways.");
+
+    // "Thinking…" and anything that goes wrong with the send are printed
+    // BELOW the card, which is taller than the panel — so a send has to end
+    // at the foot of the transcript. Snapping back to the card's first line
+    // would hide every sign that anything had happened at all.
+    expect(scrollIntoView.mock.calls.at(-1)?.[0]).toEqual({ block: "end" });
+  });
+
   it("lets her say not now", async () => {
     filing();
     service.getSession.mockResolvedValue({

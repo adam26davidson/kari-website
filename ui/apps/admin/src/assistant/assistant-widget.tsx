@@ -75,21 +75,32 @@ export function AssistantWidget({
     if (open) begin();
   }, [open, begin]);
 
-  // Keep the newest line in view as the conversation grows.
+  // Keep the newest line in view as the conversation grows — including
+  // while a card is waiting, since she can go on talking to the helper
+  // then, and "Thinking…" and anything that fails are printed below the
+  // card.
   useEffect(() => {
-    if (!draft) transcriptEnd.current?.scrollIntoView({ block: "end" });
-  }, [messages, sending, draft]);
+    transcriptEnd.current?.scrollIntoView({ block: "end" });
+  }, [messages, sending]);
 
-  // A card, though, comes into view by its FIRST line rather than its
-  // last. Everything on it is published if she says yes, and a long
-  // write-up makes it taller than this panel — so scrolling to the end
-  // would hand her the buttons and leave the question, the title and half
-  // of what they would publish above the fold. Reading order and deciding
-  // order are the same thing here: the ask first, the buttons at the foot
-  // of what she has just read (#888).
+  // What is ON the card, rather than the object holding it: every reply
+  // arrives with a freshly parsed draft, so an unchanged card is still a
+  // new object each time. Keying on identity would re-scroll to the card
+  // on every send and put the answer she just asked for out of sight.
+  const draftKey = draft && `${draft.title}\n${draft.body}`;
+
+  // A card, when it ARRIVES or is rewritten, comes into view by its FIRST
+  // line rather than its last. Everything on it is published if she says
+  // yes, and a long write-up makes it taller than this panel — so
+  // scrolling to the end would hand her the buttons and leave the
+  // question, the title and half of what they would publish above the
+  // fold. Reading order and deciding order are the same thing here: the
+  // ask first, the buttons at the foot of what she has just read (#888).
+  // This effect is declared after the one above so that when a card and a
+  // message land together, the card's first line is where she ends up.
   useEffect(() => {
-    if (draft) draftTop.current?.scrollIntoView({ block: "start" });
-  }, [draft]);
+    if (draftKey) draftTop.current?.scrollIntoView({ block: "start" });
+  }, [draftKey]);
 
   const submit = async () => {
     const text = typed;
