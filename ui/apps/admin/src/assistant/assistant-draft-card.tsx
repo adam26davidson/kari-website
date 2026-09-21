@@ -1,29 +1,37 @@
 import { Button } from "../components/ui/button";
 import type { AssistantDraft } from "@kari/shared/services/assistant";
+import { AssistantPlainText } from "./assistant-plain-text";
+
+/** The heading over the write-up, naming it for what it is. */
+export const WRITE_UP_HEADING = "What will be written down";
 
 /**
  * What she is told before she presses the button.
  *
  * The issue goes to a public repository, so she has to know that before
  * she agrees to it — and she has to know the rest is not public, or she
- * has no way to tell what she has just published. The two things named
- * here are the two things the card is already showing her, which is what
- * makes this checkable rather than a promise: what is on the card is what
- * becomes public, and her conversation stays in her own workshop.
+ * has no way to tell what she has just published. It says "everything on
+ * this card" and means it: the card shows every word of the draft that
+ * reaches the issue, so this is checkable rather than a promise (#888).
+ * The page line is named too, because the issue carries it and she never
+ * typed it.
  */
 export const PUBLIC_ISSUE_NOTE =
-  "The title and sentence above are what gets filed, and anyone can read " +
-  "them; the rest of our conversation stays private.";
+  "Everything on this card is what gets written down, and anyone can read " +
+  "it — along with a note of which page you were on. The rest of our " +
+  "conversation stays private.";
 
 /**
  * The card that asks her permission.
  *
  * Nothing is written down until she presses the button here: the helper's
  * tool can only put this on screen (see `services/assistant.rs`). What she
- * is shown is what she needs to judge it by — the title it would get, and
- * one plain sentence — not the issue body underneath, which is written for
- * whoever picks the work up. It also says what of that becomes public, so
- * that the judgement is an informed one (#888).
+ * is shown is the whole of what she would be publishing — the title, the
+ * plain sentence, and the write-up the issue leads with — because the note
+ * underneath promises exactly that, and a promise about words she cannot
+ * see is not one she can check (#888). The write-up sits in a quieter
+ * register below the sentence, but on the card and not behind a
+ * disclosure: something she has to open is something she will not read.
  *
  * One primary action per state, per `docs/ui-design-brief.md` §2: filing,
  * or — where this host has nowhere to file — simply letting it go.
@@ -87,6 +95,21 @@ export function AssistantDraftCard({
       <p className="mt-1 font-sans text-sm leading-relaxed text-foreground">
         {draft.summary}
       </p>
+
+      {/*
+        The write-up, on its own quieter ground. `bg-card` is the panel's
+        own fill, so this reads as a sheet laid on the card rather than a
+        second card shouting for attention — and muted text on it is the
+        pairing the rest of the admin already uses.
+      */}
+      <div className="mt-3 rounded-lg border border-border bg-card px-3 py-2.5">
+        <p className="font-sans text-sm font-medium text-foreground">
+          {WRITE_UP_HEADING}
+        </p>
+        <div className="mt-1.5 font-sans text-sm leading-relaxed text-muted-foreground">
+          <AssistantPlainText text={draft.body} />
+        </div>
+      </div>
 
       {/*
         One slot, two things to say: where filing is possible, what will be

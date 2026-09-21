@@ -158,8 +158,9 @@ async fn a_drafted_issue_waits_on_her_and_nothing_reaches_github() {
     let (status, body) = say(&app, &id, "My photographs come out sideways").await;
 
     assert_eq!(status, StatusCode::OK);
-    // The card she sees: the title and the plain sentence, and nothing of
-    // the issue body written for whoever picks it up.
+    // The card she sees: everything of the draft that the filed issue
+    // carries, the write-up included — that is what makes the card's
+    // promise about what becomes public a checkable one (#888).
     assert_eq!(
         body["draft"],
         json!({
@@ -167,6 +168,9 @@ async fn a_drafted_issue_waits_on_her_and_nothing_reaches_github() {
             "title": "Photographs come out sideways",
             "summary": "Your upright photographs are showing on their side \
         once they are uploaded.",
+            "body": "Kari uploads a portrait photograph from her phone and \
+        it appears rotated in the gallery.\n\nExpected: the photograph keeps the \
+        orientation it had.",
         })
     );
     assert_eq!(

@@ -38,14 +38,19 @@ fn session_view(session: &AssistantSession, turns_allowed: u32) -> Value {
         "id": session.id,
         "messages": session.display,
         "turnsRemaining": turns_allowed.saturating_sub(session.turns),
-        // The draft awaiting her decision, if any — title and the plain
-        // sentence the card shows. The issue body the model wrote is
-        // deliberately NOT here: it is written for whoever picks the issue
-        // up, and showing it would turn a calm card into a form to read.
+        // The draft awaiting her decision, if any. Everything the model
+        // wrote goes out, `body` included: the repository is public, and
+        // the card is the only place she can see what is about to be
+        // published there before she agrees to it (#888). Holding the body
+        // back made the card's promise a false one — it leads the filed
+        // issue. The only other things the issue carries are added at
+        // filing time by `issue_body`: the page she was on and the pointer
+        // to the conversation, which the card's note names in one clause.
         "draft": session.pending_draft.as_ref().map(|draft| json!({
             "kind": draft.kind,
             "title": draft.title,
             "summary": draft.summary,
+            "body": draft.body,
         })),
     })
 }

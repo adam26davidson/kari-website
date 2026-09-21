@@ -26,14 +26,18 @@ export interface AssistantMessage {
 /**
  * A would-be issue, waiting on her decision.
  *
- * The title and the plain sentence only: the issue body the helper wrote is
- * for whoever picks the issue up, and is deliberately not sent here.
+ * Everything the helper wrote, because everything the helper wrote is
+ * published the moment she agrees — the card has to be able to show her
+ * all of it (#888).
  */
 export interface AssistantDraft {
   /** "bug" or "idea" — how the card introduces itself. */
   kind: string;
   title: string;
+  /** One plain sentence, for her: proof that the helper understood. */
   summary: string;
+  /** The write-up the issue leads with, for whoever picks the work up. */
+  body: string;
 }
 
 /** A conversation, as the API returns it. */

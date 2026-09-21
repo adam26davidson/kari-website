@@ -543,9 +543,10 @@ impl DisplayMessage {
 
 /// A would-be issue, waiting for her decision.
 ///
-/// `summary` is for her — the plain sentence the card shows. `body` is for
-/// whoever picks the issue up. The model writes both; nothing is filed
-/// until the confirm endpoint is called.
+/// `summary` is the plain sentence the card leads with; `body` is the
+/// write-up for whoever picks the issue up. Both are written by the model
+/// and both are shown to her, because both are published the moment she
+/// agrees (#888). Nothing is filed until the confirm endpoint is called.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IssueDraft {
@@ -812,10 +813,13 @@ pub fn tools(can_file: bool, can_read_repo: bool) -> Vec<Value> {
                 },
                 "body": {
                     "type": "string",
-                    "description": "The issue body, for whoever picks it up: \
+                    "description": "The write-up for whoever picks it up: \
     what she wants or what went wrong, what she expected instead, and which part \
-    of the site it concerns. Markdown is fine. Do not include the conversation \
-    or the page details — those are added for you.",
+    of the site it concerns. Kari is shown this on the card before she agrees to \
+    file it, and the repository is public, so write it in plain sentences she \
+    would recognise and put nothing in it she has not seen. Keep any markup \
+    light — it is read as plain text on the card. Do not include the \
+    conversation or the page details; those are added for you.",
                 },
             },
             "required": ["kind", "title", "summary", "body"],

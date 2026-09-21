@@ -4,7 +4,10 @@ import { userEvent } from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { HttpError } from "@kari/shared/services/http-error";
 import { AssistantWidget } from "./assistant-widget";
-import { PUBLIC_ISSUE_NOTE } from "./assistant-draft-card";
+import {
+  PUBLIC_ISSUE_NOTE,
+  WRITE_UP_HEADING,
+} from "./assistant-draft-card";
 import { AssistantProvider } from "./assistant-provider";
 import { useAssistantSubject } from "./use-assistant-subject";
 import { SESSION_STORAGE_KEY, type StorageLike } from "./use-assistant-session";
@@ -55,6 +58,9 @@ const DRAFT = {
   kind: "bug",
   title: "Photographs come out sideways",
   summary: "Your upright photographs are showing on their side.",
+  body:
+    "Kari uploads a photograph taken upright and it appears on its side " +
+    "in the gallery.\n\nExpected: it keeps the way up it was taken.",
 };
 
 function renderWidget({
@@ -504,7 +510,14 @@ describe("AssistantWidget", () => {
     expect(await screen.findByText(DRAFT.title)).toBeInTheDocument();
     expect(screen.getByText(DRAFT.summary)).toBeInTheDocument();
     expect(screen.getByText(/Shall I write this down/)).toBeInTheDocument();
-    // Including what of it becomes public, before she agrees to it (#888).
+    // The write-up the issue leads with is on the card too, paragraphs and
+    // all: the note below promises that everything on the card is what
+    // becomes public, and it can only promise that if it is all here (#888).
+    expect(screen.getByText(WRITE_UP_HEADING)).toBeInTheDocument();
+    for (const paragraph of DRAFT.body.split("\n\n")) {
+      expect(screen.getByText(paragraph)).toBeInTheDocument();
+    }
+    // And what of it becomes public, before she agrees to it.
     expect(screen.getByText(PUBLIC_ISSUE_NOTE)).toBeInTheDocument();
 
     await userEvent.click(
@@ -518,6 +531,29 @@ describe("AssistantWidget", () => {
       screen.getByRole("link", { name: "See what I wrote down" }),
     ).toHaveAttribute("href", "https://github.test/issues/7");
     expect(screen.queryByText(DRAFT.title)).not.toBeInTheDocument();
+  });
+
+  it("brings a new card into view by its first line, not its buttons", async () => {
+    filing();
+    service.getSession.mockResolvedValue({
+      id: "old",
+      messages: [{ role: "assistant", text: "Have a look at this." }],
+      turnsRemaining: 30,
+      draft: DRAFT,
+    });
+
+    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    await openPanel();
+    await screen.findByText(DRAFT.title);
+
+    // A card carrying a write-up can be taller than the panel, so where
+    // the scroll lands decides what she reads first. It has to be the ask
+    // and the words about to be published — not the buttons under them.
+    const scrollIntoView = vi.mocked(Element.prototype.scrollIntoView);
+    expect(scrollIntoView.mock.calls.at(-1)?.[0]).toEqual({ block: "start" });
+    expect(scrollIntoView.mock.instances.at(-1)).toContainElement(
+      screen.getByText(DRAFT.title),
+    );
   });
 
   it("lets her say not now", async () => {

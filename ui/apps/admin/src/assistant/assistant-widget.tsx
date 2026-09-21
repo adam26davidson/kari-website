@@ -6,6 +6,7 @@ import { Textarea } from "../components/ui/textarea";
 import { useAdminToken } from "../hooks/use-admin-token";
 import { useAssistantContext } from "./assistant-context";
 import { AssistantDraftCard } from "./assistant-draft-card";
+import { AssistantPlainText } from "./assistant-plain-text";
 import {
   FILING_OFF_MESSAGE,
   RESTING_MESSAGE,
@@ -66,6 +67,7 @@ export function AssistantWidget({
   // for a draft issue, which `draft` above now means.
   const [typed, setTyped] = useState("");
   const transcriptEnd = useRef<HTMLDivElement>(null);
+  const draftTop = useRef<HTMLDivElement>(null);
 
   // Nothing is asked of the API until she opens the panel, so an admin page
   // she never asks for help on costs no requests at all.
@@ -73,12 +75,21 @@ export function AssistantWidget({
     if (open) begin();
   }, [open, begin]);
 
-  // Keep the newest line in view as the conversation grows — the draft
-  // card included, since a card she cannot see is a question she never
-  // gets asked.
+  // Keep the newest line in view as the conversation grows.
   useEffect(() => {
-    transcriptEnd.current?.scrollIntoView({ block: "end" });
+    if (!draft) transcriptEnd.current?.scrollIntoView({ block: "end" });
   }, [messages, sending, draft]);
+
+  // A card, though, comes into view by its FIRST line rather than its
+  // last. Everything on it is published if she says yes, and a long
+  // write-up makes it taller than this panel — so scrolling to the end
+  // would hand her the buttons and leave the question, the title and half
+  // of what they would publish above the fold. Reading order and deciding
+  // order are the same thing here: the ask first, the buttons at the foot
+  // of what she has just read (#888).
+  useEffect(() => {
+    if (draft) draftTop.current?.scrollIntoView({ block: "start" });
+  }, [draft]);
 
   const submit = async () => {
     const text = typed;
@@ -192,15 +203,9 @@ export function AssistantWidget({
                 : "mb-3 mr-8 rounded-xl border border-border px-4 py-2.5 font-sans text-sm leading-relaxed text-foreground"
             }
           >
-            {/* Her words and the helper's both arrive as plain text and
-                  are rendered as plain text — nothing here interprets
-                  markup. Blank lines are kept so a step-by-step answer
-                  still reads as steps. */}
-            {message.text.split("\n").map((line, lineIndex) => (
-              <p key={lineIndex} className={line ? "" : "h-3"}>
-                {line}
-              </p>
-            ))}
+            {/* Her words and the helper's are both shown as written; see
+                  `assistant-plain-text.tsx`. */}
+            <AssistantPlainText text={message.text} />
             {message.issue && (
               // The quiet half of "Filed": somewhere to look, in case she
               // wants to, and nothing louder than the sentence above it.
@@ -217,16 +222,18 @@ export function AssistantWidget({
         ))}
 
         {draft && (
-          <AssistantDraftCard
-            draft={draft}
-            canFile={canFile}
-            deciding={deciding}
-            sending={sending}
-            error={draftError}
-            unavailableMessage={FILING_OFF_MESSAGE}
-            onFile={() => void fileIssue()}
-            onDismiss={() => void dismissDraft()}
-          />
+          <div ref={draftTop}>
+            <AssistantDraftCard
+              draft={draft}
+              canFile={canFile}
+              deciding={deciding}
+              sending={sending}
+              error={draftError}
+              unavailableMessage={FILING_OFF_MESSAGE}
+              onFile={() => void fileIssue()}
+              onDismiss={() => void dismissDraft()}
+            />
+          </div>
         )}
 
         {sending && (
