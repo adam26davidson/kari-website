@@ -46,7 +46,10 @@ Design and decisions:
   issues, and prints bounded JSON slices — `priority` (the
   maintainer's own, ahead of everything), `user_feedback` (what Kari
   filed herself through the admin helper, #214 — ahead of the fleet's
-  own backlog and of bugs), `bugs`, `maintainer` (no `automation`
+  own backlog and of bugs; her conversation is NOT in the issue body,
+  which names a private `assistant/<uuid>.json` object instead, and the
+  pipeline reads that with the AWS CLI before planning, falling back to
+  the body alone when it cannot, #888), `bugs`, `maintainer` (no `automation`
   label — human-filed), `product` (agent-filed), `tooling` — with
   `*_omitted` counts so a capped view is visible.
   Every slice is ranked by `unblocks` (how many open issues name that
@@ -143,7 +146,12 @@ message, crash) gets `usage: unavailable` in its log and no record;
 reading and summing those records needs `jq`, the dispatcher's one
 optional dependency — without it a tick still runs and still logs, the
 session output is kept verbatim, and both the log line and `--status`
-say so (`KARI_AUTOMATION_JQ_BIN` points at a different binary) —
+say so (`KARI_AUTOMATION_JQ_BIN` points at a different binary). The
+issue pipeline running inside a tick has one further optional
+dependency of its own, the AWS CLI, used read-only to fetch the private
+conversation a `user-feedback` issue points at; a host without `aws` (or
+with an expired SSO session) plans those issues from the issue body
+alone and says so in the run summary (#888) —
 `wip/<slug>-<timestamp>.patch` diffs rescued from dead
 workers' worktrees (see Usage limits), and the Telegram transport's own
 files — `telegram-offset` and `telegram-threads.json` (which alert a

@@ -15,6 +15,14 @@ report that and stop; this planning pass cannot substitute for it.
 
 {{ISSUE_LIST}}
 
+If the assignment includes a private transcript (the conversation behind a
+`user-feedback` issue), read it before planning — it is what she actually
+asked for. It is private: the issue lives on a public repository and her
+conversation deliberately does not (#888), so never quote or paraphrase it
+into the plan, an issue comment, a PR body or a commit message. If it says
+`Transcript unavailable`, work from the issue body alone and say so in
+your plan.
+
 ## Ground rules (non-negotiable)
 
 - Read-only: no worktrees, no branches, no commits, no file edits. It is

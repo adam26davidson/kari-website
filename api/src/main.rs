@@ -41,7 +41,7 @@ async fn main() {
     let bucket_name = std::env::var("BUCKET_NAME").expect("BUCKET_NAME not set");
 
     // Create S3 service
-    let s3_service: Arc<dyn ObjectStore> = Arc::new(S3Service::new(s3_client, bucket_name));
+    let s3_service: Arc<dyn ObjectStore> = Arc::new(S3Service::new(s3_client, bucket_name.clone()));
 
     // `migrate-images` is a one-shot maintenance command, not a server: it
     // needs the same S3 client and nothing else (no JWKS, no listener).
@@ -61,7 +61,10 @@ async fn main() {
     // Every assistant variable is optional, so this never fails: an
     // ANTHROPIC_API_KEY-less host gets a helper that politely reports itself
     // unavailable, and the admin carries on without it.
-    let assistant = Arc::new(AssistantState::from_env());
+    // The bucket name goes on too: a filed issue points at the private
+    // conversation in it rather than pasting her words into a public
+    // repository (#888).
+    let assistant = Arc::new(AssistantState::from_env().with_sessions_bucket(Some(bucket_name)));
     tracing::info!(
         "admin assistant {}, filing {}, code {}",
         if assistant.is_available() {

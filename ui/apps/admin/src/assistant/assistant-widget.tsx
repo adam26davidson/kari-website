@@ -6,6 +6,7 @@ import { Textarea } from "../components/ui/textarea";
 import { useAdminToken } from "../hooks/use-admin-token";
 import { useAssistantContext } from "./assistant-context";
 import { AssistantDraftCard } from "./assistant-draft-card";
+import { AssistantPlainText } from "./assistant-plain-text";
 import {
   FILING_OFF_MESSAGE,
   RESTING_MESSAGE,
@@ -66,6 +67,8 @@ export function AssistantWidget({
   // for a draft issue, which `draft` above now means.
   const [typed, setTyped] = useState("");
   const transcriptEnd = useRef<HTMLDivElement>(null);
+  const draftTop = useRef<HTMLDivElement>(null);
+  const newestMessage = useRef<HTMLDivElement>(null);
 
   // Nothing is asked of the API until she opens the panel, so an admin page
   // she never asks for help on costs no requests at all.
@@ -73,12 +76,44 @@ export function AssistantWidget({
     if (open) begin();
   }, [open, begin]);
 
-  // Keep the newest line in view as the conversation grows — the draft
-  // card included, since a card she cannot see is a question she never
-  // gets asked.
+  // Where a change in the conversation leaves her.
+  //
+  // The transcript is not simply oldest-to-newest: a waiting card is
+  // printed BELOW every message, including the answer that arrived with
+  // it, and "Thinking…" and a failed send are printed below the card in
+  // turn. So the foot of the transcript is the right place to land only
+  // while something down there is what changed — and a card can be taller
+  // than the panel, which would leave the answer she just asked for a full
+  // card-height above the fold (#888).
+  //
+  // Otherwise the newest message is what has to be on screen, by its first
+  // line: a long answer is read from its top, not its last sentence.
   useEffect(() => {
-    transcriptEnd.current?.scrollIntoView({ block: "end" });
-  }, [messages, sending, draft]);
+    if (sending || error) {
+      transcriptEnd.current?.scrollIntoView({ block: "end" });
+    } else {
+      newestMessage.current?.scrollIntoView({ block: "start" });
+    }
+  }, [messages, sending, error]);
+
+  // What is ON the card, rather than the object holding it: every reply
+  // arrives with a freshly parsed draft, so an unchanged card is still a
+  // new object each time. Keying on identity would re-scroll to the card
+  // on every send and put the answer she just asked for out of sight.
+  const draftKey = draft && `${draft.title}\n${draft.body}`;
+
+  // A card, when it ARRIVES or is rewritten, comes into view by its FIRST
+  // line rather than its last. Everything on it is published if she says
+  // yes, and a long write-up makes it taller than this panel — so
+  // scrolling to the end would hand her the buttons and leave the
+  // question, the title and half of what they would publish above the
+  // fold. Reading order and deciding order are the same thing here: the
+  // ask first, the buttons at the foot of what she has just read (#888).
+  // This effect is declared after the one above so that when a card and a
+  // message land together, the card's first line is where she ends up.
+  useEffect(() => {
+    if (draftKey) draftTop.current?.scrollIntoView({ block: "start" });
+  }, [draftKey]);
 
   const submit = async () => {
     const text = typed;
@@ -186,21 +221,18 @@ export function AssistantWidget({
         {messages.map((message, index) => (
           <div
             key={index}
+            // The scroll target for an answer that lands with a card still
+            // waiting underneath it.
+            ref={index === messages.length - 1 ? newestMessage : null}
             className={
               message.role === "user"
                 ? "mb-3 ml-8 rounded-xl bg-muted px-4 py-2.5 font-sans text-sm leading-relaxed text-foreground"
                 : "mb-3 mr-8 rounded-xl border border-border px-4 py-2.5 font-sans text-sm leading-relaxed text-foreground"
             }
           >
-            {/* Her words and the helper's both arrive as plain text and
-                  are rendered as plain text — nothing here interprets
-                  markup. Blank lines are kept so a step-by-step answer
-                  still reads as steps. */}
-            {message.text.split("\n").map((line, lineIndex) => (
-              <p key={lineIndex} className={line ? "" : "h-3"}>
-                {line}
-              </p>
-            ))}
+            {/* Her words and the helper's are both shown as written; see
+                  `assistant-plain-text.tsx`. */}
+            <AssistantPlainText text={message.text} />
             {message.issue && (
               // The quiet half of "Filed": somewhere to look, in case she
               // wants to, and nothing louder than the sentence above it.
@@ -217,16 +249,18 @@ export function AssistantWidget({
         ))}
 
         {draft && (
-          <AssistantDraftCard
-            draft={draft}
-            canFile={canFile}
-            deciding={deciding}
-            sending={sending}
-            error={draftError}
-            unavailableMessage={FILING_OFF_MESSAGE}
-            onFile={() => void fileIssue()}
-            onDismiss={() => void dismissDraft()}
-          />
+          <div ref={draftTop}>
+            <AssistantDraftCard
+              draft={draft}
+              canFile={canFile}
+              deciding={deciding}
+              sending={sending}
+              error={draftError}
+              unavailableMessage={FILING_OFF_MESSAGE}
+              onFile={() => void fileIssue()}
+              onDismiss={() => void dismissDraft()}
+            />
+          </div>
         )}
 
         {sending && (

@@ -4,6 +4,10 @@ import { userEvent } from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { HttpError } from "@kari/shared/services/http-error";
 import { AssistantWidget } from "./assistant-widget";
+import {
+  PUBLIC_ISSUE_NOTE,
+  WRITE_UP_HEADING,
+} from "./assistant-draft-card";
 import { AssistantProvider } from "./assistant-provider";
 import { useAssistantSubject } from "./use-assistant-subject";
 import { SESSION_STORAGE_KEY, type StorageLike } from "./use-assistant-session";
@@ -54,7 +58,33 @@ const DRAFT = {
   kind: "bug",
   title: "Photographs come out sideways",
   summary: "Your upright photographs are showing on their side.",
+  body:
+    "Kari uploads a photograph taken upright and it appears on its side " +
+    "in the gallery.\n\nExpected: it keeps the way up it was taken.",
 };
+
+/**
+ * Where the panel last scrolled, and to WHAT.
+ *
+ * jsdom lays nothing out, so the options alone say almost nothing: "end"
+ * on the anchor under a waiting card and "end" on the anchor under the
+ * last message put her in two entirely different places. The element the
+ * call was made on is the part that decides what she sees.
+ */
+function lastScroll() {
+  const scrollIntoView = vi.mocked(Element.prototype.scrollIntoView);
+  return {
+    target: scrollIntoView.mock.instances.at(-1) as Element | undefined,
+    options: scrollIntoView.mock.calls.at(-1)?.[0],
+  };
+}
+
+/** Whether `target` is printed after `other` in the transcript. */
+function comesAfter(target: Element | undefined, other: Element) {
+  if (!target) return false;
+  const where = other.compareDocumentPosition(target);
+  return Boolean(where & Node.DOCUMENT_POSITION_FOLLOWING);
+}
 
 function renderWidget({
   route = "/haiku",
@@ -503,6 +533,15 @@ describe("AssistantWidget", () => {
     expect(await screen.findByText(DRAFT.title)).toBeInTheDocument();
     expect(screen.getByText(DRAFT.summary)).toBeInTheDocument();
     expect(screen.getByText(/Shall I write this down/)).toBeInTheDocument();
+    // The write-up the issue leads with is on the card too, paragraphs and
+    // all: the note below promises that everything on the card is what
+    // becomes public, and it can only promise that if it is all here (#888).
+    expect(screen.getByText(WRITE_UP_HEADING)).toBeInTheDocument();
+    for (const paragraph of DRAFT.body.split("\n\n")) {
+      expect(screen.getByText(paragraph)).toBeInTheDocument();
+    }
+    // And what of it becomes public, before she agrees to it.
+    expect(screen.getByText(PUBLIC_ISSUE_NOTE)).toBeInTheDocument();
 
     await userEvent.click(
       screen.getByRole("button", { name: "File this issue" }),
@@ -515,6 +554,159 @@ describe("AssistantWidget", () => {
       screen.getByRole("link", { name: "See what I wrote down" }),
     ).toHaveAttribute("href", "https://github.test/issues/7");
     expect(screen.queryByText(DRAFT.title)).not.toBeInTheDocument();
+  });
+
+  it("brings a new card into view by its first line, not its buttons", async () => {
+    filing();
+    service.getSession.mockResolvedValue({
+      id: "old",
+      messages: [{ role: "assistant", text: "Have a look at this." }],
+      turnsRemaining: 30,
+      draft: DRAFT,
+    });
+
+    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    await openPanel();
+    await screen.findByText(DRAFT.title);
+
+    // A card carrying a write-up can be taller than the panel, so where
+    // the scroll lands decides what she reads first. It has to be the ask
+    // and the words about to be published — not the buttons under them.
+    expect(lastScroll().options).toEqual({ block: "start" });
+    expect(lastScroll().target).toContainElement(screen.getByText(DRAFT.title));
+  });
+
+  it("shows her the answer itself when it lands with the card unchanged", async () => {
+    filing();
+    service.getSession.mockResolvedValue({
+      id: "old",
+      messages: [{ role: "assistant", text: "Have a look at this." }],
+      turnsRemaining: 30,
+      draft: DRAFT,
+    });
+    // She can go on talking to the helper while a card is waiting. Here the
+    // answer leaves the card exactly as it was — but the session hook parses
+    // a FRESH draft object out of every response, so the card's identity
+    // changes even when nothing she can see does.
+    let answer!: (session: unknown) => void;
+    service.sendMessage.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+
+    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    await openPanel();
+    await screen.findByText(DRAFT.title);
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Your message" }),
+      "What does that mean?",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    const thinking = await screen.findByText("Thinking…");
+
+    // "Thinking…" is printed BELOW the card, which is taller than the
+    // panel — so while it waits, the foot of the transcript is the only
+    // place that shows anything happened at all.
+    expect(lastScroll().options).toEqual({ block: "end" });
+    expect(comesAfter(lastScroll().target, thinking)).toBe(true);
+
+    await act(async () => {
+      answer({
+        id: "old",
+        messages: [
+          { role: "assistant", text: "Have a look at this." },
+          { role: "user", text: "What does that mean?" },
+          {
+            role: "assistant",
+            text: "It means photographs come out sideways.",
+          },
+        ],
+        turnsRemaining: 29,
+        draft: { ...DRAFT },
+      });
+    });
+    const reply = await screen.findByText(
+      "It means photographs come out sideways.",
+    );
+
+    // The answer is printed ABOVE the waiting card, so the foot of the
+    // transcript is now a whole card-height BELOW it: landing there would
+    // show her "Thinking…" disappear and nothing take its place. The answer
+    // she asked for is what has to be on screen, by its first line.
+    expect(lastScroll().options).toEqual({ block: "start" });
+    expect(lastScroll().target).toContainElement(reply);
+  });
+
+  it("goes back to the card when the answer rewrites it", async () => {
+    filing();
+    service.getSession.mockResolvedValue({
+      id: "old",
+      messages: [{ role: "assistant", text: "Have a look at this." }],
+      turnsRemaining: 30,
+      draft: DRAFT,
+    });
+    const rewritten = { ...DRAFT, title: "Photographs arrive on their side" };
+    service.sendMessage.mockResolvedValue({
+      id: "old",
+      messages: [
+        { role: "assistant", text: "Have a look at this." },
+        { role: "user", text: "Call it something clearer." },
+        { role: "assistant", text: "How about this instead?" },
+      ],
+      turnsRemaining: 29,
+      draft: rewritten,
+    });
+
+    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    await openPanel();
+    await screen.findByText(DRAFT.title);
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Your message" }),
+      "Call it something clearer.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    const title = await screen.findByText(rewritten.title);
+
+    // When the words that would be published have changed, THEY are what
+    // she has to read before deciding — the card wins over the line above
+    // it, first line first.
+    expect(lastScroll().options).toEqual({ block: "start" });
+    expect(lastScroll().target).toContainElement(title);
+  });
+
+  it("shows what went wrong when a send fails with a card up", async () => {
+    filing();
+    service.getSession.mockResolvedValue({
+      id: "old",
+      messages: [{ role: "assistant", text: "Have a look at this." }],
+      turnsRemaining: 30,
+      draft: DRAFT,
+    });
+    service.sendMessage.mockRejectedValue(new Error("offline"));
+
+    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    await openPanel();
+    await screen.findByText(DRAFT.title);
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Your message" }),
+      "What does that mean?",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Send" }));
+    const failed = await screen.findByText(/your message is still here/);
+
+    // A failed send is printed below the card, like "Thinking…" before it,
+    // so the foot of the transcript is where the news is.
+    expect(lastScroll().options).toEqual({ block: "end" });
+    expect(comesAfter(lastScroll().target, failed)).toBe(true);
+    // And the card is still there, untouched, for her to decide on.
+    expect(screen.getByText(DRAFT.title)).toBeInTheDocument();
   });
 
   it("lets her say not now", async () => {
@@ -648,6 +840,9 @@ describe("AssistantWidget", () => {
     expect(
       screen.getByText(/I can't write things down just yet/),
     ).toBeInTheDocument();
+    // And no promise about what filing would publish, since nothing can be
+    // filed from here.
+    expect(screen.queryByText(PUBLIC_ISSUE_NOTE)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Not now" })).toBeInTheDocument();
   });
 

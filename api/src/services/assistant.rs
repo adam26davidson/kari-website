@@ -224,6 +224,12 @@ pub struct AssistantState {
     /// `None` on a host without one — independent of both configurations
     /// above, because reading code needs no secret at all.
     repo: Option<RepoAccess>,
+    /// The content bucket this environment's conversations are written to,
+    /// or `None` where nothing told us. Only ever read to say WHERE a
+    /// filed issue's conversation can be found privately (#888) — the
+    /// reading and writing itself goes through `ObjectStore`, which knows
+    /// its own bucket.
+    sessions_bucket: Option<String>,
     limits: AssistantLimits,
     /// One Anthropic call in flight at a time. The host is a ~1 GiB micro
     /// EC2 running two copies of this API; more importantly, serialising
@@ -277,6 +283,7 @@ impl AssistantState {
                 .build()
                 .unwrap_or_default(),
             repo: None,
+            sessions_bucket: None,
             limits,
             gate: Semaphore::new(1),
             daily: Mutex::new(DailyTurns::default()),
@@ -298,6 +305,16 @@ impl AssistantState {
     /// independently, and a test wants to build exactly one of them.
     pub fn with_repo(mut self, repo: Option<RepoAccess>) -> Self {
         self.repo = repo;
+        self
+    }
+
+    /// Tell the helper which bucket its conversations are stored in, so a
+    /// filed issue can point at the private copy instead of pasting it into
+    /// a public repository (#888). Chainable and separate for the same
+    /// reason as `with_github`: `main` reads `BUCKET_NAME` once, for the
+    /// object store, and hands the same value on from there.
+    pub fn with_sessions_bucket(mut self, bucket: Option<String>) -> Self {
+        self.sessions_bucket = bucket;
         self
     }
 
@@ -526,9 +543,10 @@ impl DisplayMessage {
 
 /// A would-be issue, waiting for her decision.
 ///
-/// `summary` is for her — the plain sentence the card shows. `body` is for
-/// whoever picks the issue up. The model writes both; nothing is filed
-/// until the confirm endpoint is called.
+/// `summary` is the plain sentence the card leads with; `body` is the
+/// write-up for whoever picks the issue up. Both are written by the model
+/// and both are shown to her, because both are published the moment she
+/// agrees (#888). Nothing is filed until the confirm endpoint is called.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IssueDraft {
@@ -795,10 +813,13 @@ pub fn tools(can_file: bool, can_read_repo: bool) -> Vec<Value> {
                 },
                 "body": {
                     "type": "string",
-                    "description": "The issue body, for whoever picks it up: \
+                    "description": "The write-up for whoever picks it up: \
     what she wants or what went wrong, what she expected instead, and which part \
-    of the site it concerns. Markdown is fine. Do not include the conversation \
-    or the page details — those are added for you.",
+    of the site it concerns. Kari is shown this on the card before she agrees to \
+    file it, and the repository is public, so write it in plain sentences she \
+    would recognise and put nothing in it she has not seen. Keep any markup \
+    light — it is read as plain text on the card. Do not include the \
+    conversation or the page details; those are added for you.",
                 },
             },
             "required": ["kind", "title", "summary", "body"],
@@ -1131,18 +1152,23 @@ pub enum DraftDecision {
     Dismiss,
 }
 
-/// GitHub rejects an issue body over 65,536 bytes. A 40-turn conversation
-/// can get there, and losing the whole filing to a long chat would be a
-/// poor trade — so the transcript is trimmed to fit under a margin instead.
-const MAX_ISSUE_BODY_BYTES: usize = 60_000;
+/// How the filed issue names the private conversation behind it.
+///
+/// This is a contract with the issue pipeline, which greps for this line
+/// and fetches the object with `aws s3 cp` before planning (see
+/// `automation/agents/issue-pipeline.md`). Change one side and the other
+/// stops finding the transcript, so the literal lives here and both the
+/// test and the playbook quote it.
+pub const CONVERSATION_LINE_PREFIX: &str = "Conversation: s3://";
 
 /// Act on the draft: file it, or let it go.
 ///
 /// This is the confirmation step, and it is structural rather than
 /// prompted. The model's tool only ever stores a draft; the GitHub issue is
 /// created HERE, from a request the admin makes when Kari presses the
-/// button. The transcript and the page context are composed in at this
-/// point too, so neither can be left out by a model that decided to.
+/// button. The pointer to the transcript and the page context are composed
+/// in at this point too, so neither can be left out by a model that decided
+/// to.
 pub async fn decide_on_draft(
     state: &Arc<AssistantState>,
     store: &dyn ObjectStore,
@@ -1192,7 +1218,7 @@ Do not draft it again unless she asks. Carry on as normal.",
         return Ok(session);
     };
 
-    let body = issue_body(&draft, &session);
+    let body = issue_body(&draft, &session, state.sessions_bucket.as_deref());
     let created = github_issues::create_issue(
         &state.github_http,
         github,
@@ -1283,8 +1309,15 @@ stored copy still holds the draft"
 /// The model's `body` leads, because it is the part written to be read
 /// first. Everything after it is added here rather than asked of the model:
 /// the sentence she approved, the page she was on, the commit the site is
-/// running, and the whole conversation.
-fn issue_body(draft: &IssueDraft, session: &AssistantSession) -> String {
+/// running, and where the whole conversation can be read, privately.
+///
+/// The conversation itself deliberately does NOT go in. This repository is
+/// public, so pasting the transcript published everything she had said to
+/// the helper the moment she pressed the button (#888). The session is
+/// already stored privately at `assistant/<id>.json` in this environment's
+/// content bucket, so the issue names that object instead and whoever picks
+/// the work up reads it with the AWS CLI.
+fn issue_body(draft: &IssueDraft, session: &AssistantSession, bucket: Option<&str>) -> String {
     let mut context = draft.context.lines();
     context.push(format!(
         "Site version: {}",
@@ -1295,50 +1328,25 @@ fn issue_body(draft: &IssueDraft, session: &AssistantSession) -> String {
         .map(|line| format!("- {line}\n"))
         .collect::<String>();
 
-    let head = format!(
-        "{}\n\n## What Kari was shown\n\n{}\n\n## Context\n\n{context}\n## \
-Conversation\n\n",
+    let key = session_key(&session.id);
+    // Name the bucket explicitly: test and prod file into the same
+    // repository, and a key on its own would leave the reader guessing
+    // which environment the conversation is in.
+    let where_it_is = match bucket {
+        Some(bucket) => format!("{CONVERSATION_LINE_PREFIX}{bucket}/{key}"),
+        None => format!("Conversation: {key} in this environment's content bucket"),
+    };
+
+    format!(
+        "{}\n\n## What Kari was shown\n\n{}\n\n## Context\n\n{context}\n\
+{where_it_is} (private — read it with the AWS CLI before planning)\n\n---\n\n\
+Filed by Kari through the helper in her admin workshop, from a conversation \
+that stays private (see the Conversation line above). Labelled \
+`{USER_FEEDBACK_LABEL}`: the issue pipeline picks this up as product work \
+ahead of its own backlog.\n",
         draft.body.trim(),
         draft.summary.trim(),
-    );
-    let foot = format!(
-        "\n---\n\nFiled by Kari through the helper in her admin workshop, \
-from the conversation above. Labelled `{USER_FEEDBACK_LABEL}`: the issue \
-pipeline picks this up as product work ahead of its own backlog.\n"
-    );
-
-    let room = MAX_ISSUE_BODY_BYTES.saturating_sub(head.len() + foot.len());
-    format!("{head}{}{foot}", transcript(&session.display, room))
-}
-
-/// The conversation as markdown, newest-first-priority.
-///
-/// Trimmed from the FRONT when it will not fit: the end of a conversation
-/// is the part that led to the draft, and an issue that says where it was
-/// cut is honest about it.
-fn transcript(messages: &[DisplayMessage], room: usize) -> String {
-    let omitted = "_(the earlier part of this conversation was too long to \
-include)_\n\n";
-    let mut kept: Vec<String> = vec![];
-    let mut used = 0;
-    // Whole messages only, from the end backwards — never split one, which
-    // also means never splitting a character.
-    for message in messages.iter().rev() {
-        let who = if message.role == "user" {
-            "Kari"
-        } else {
-            "Helper"
-        };
-        let line = format!("**{who}:** {}\n\n", message.text.trim());
-        if used + line.len() > room.saturating_sub(omitted.len()) {
-            kept.push(omitted.to_string());
-            break;
-        }
-        used += line.len();
-        kept.push(line);
-    }
-    kept.reverse();
-    kept.concat()
+    )
 }
 
 /// One Anthropic call, serialised behind the gate and with its failures

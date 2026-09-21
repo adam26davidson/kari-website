@@ -65,6 +65,9 @@ const DRAFT = {
   kind: "bug",
   title: "Photographs come out sideways",
   summary: "Your upright photographs are showing on their side.",
+  body:
+    "Kari uploads a photograph taken upright and it appears on its side " +
+    "in the gallery.\n\nExpected: it keeps the way up it was taken.",
 };
 
 function setup(storage: StorageLike | null = fakeStorage()) {
