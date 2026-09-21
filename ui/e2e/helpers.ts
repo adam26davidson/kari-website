@@ -55,6 +55,28 @@ export function deleteButton(scope: Page | Locator): Locator {
   return scope.getByRole("button", { name: "Delete", exact: true });
 }
 
+// --- The bare hook classes ---------------------------------------------
+// A handful of class names in the admin markup style nothing at all. They
+// survive only because this suite locates by them, and each one is a class
+// the pre-shadcn stylesheets used to define:
+//
+//   .admin-confirmation  the confirmation dialog, and `.admin-button`
+//                        inside it for its Yes/No (below)
+//   .admin-button        Save (admin-journeys.spec.ts) and Log In
+//                        (auth0-login.mjs)
+//   .admin-loading       the blocking overlay `waitForIdle` waits out
+//   .admin-toast         a save's acknowledgement
+//   .admin-menu-item     a section in the shell's nav
+//   .admin-data-list-item, .data-editor, .data-editor-item-controls
+//                        a list row and the editor pane around it
+//   .photo-picker, .photo-picker-image
+//                        the hidden file input and its preview
+//
+// The components carrying them say only "e2e hook, see helpers.ts" and
+// point here. #809 replaces these with role-based locators, after which the
+// classes can come out of the markup; until then, do not remove one from a
+// component without changing the locator that depends on it.
+
 /** Answer the "Are you sure?" dialog the admin page shows before mutations. */
 export async function confirmDialog(page: Page, label: "Yes" | "No") {
   const dialog = page.locator(".admin-confirmation");

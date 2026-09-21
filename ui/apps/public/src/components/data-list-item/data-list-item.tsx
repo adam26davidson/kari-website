@@ -5,7 +5,7 @@ interface DataListItemProps {
 }
 
 /** One entry in the public DataList. No admin controls — the admin pages
- * render their own AdminItemList. */
+ * render their own list rows (apps/admin/src/components/item-list). */
 export const DataListItem = ({ children }: DataListItemProps) => {
   return (
     <div className="data-list-item">

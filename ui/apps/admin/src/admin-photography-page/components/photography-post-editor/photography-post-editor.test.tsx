@@ -80,8 +80,8 @@ describe("PhotographyPostEditor", () => {
     // The filled-green recipe's own class (button-variants.ts): after the
     // migration Save and Close are shadcn `Button`s and carry no
     // `admin-button` class to sort by, and `bg-primary` is what "filled
-    // green primary" now IS. PhotoPicker's "Select an image" is an
-    // AdminButton, but a secondary one, so it is excluded on the same test.
+    // green primary" now IS. PhotoPicker's "Select an image" is a
+    // secondary Button, so it is excluded on the same test.
     const filled = screen
       .getAllByRole("button")
       .filter((button) => button.classList.contains("bg-primary"))

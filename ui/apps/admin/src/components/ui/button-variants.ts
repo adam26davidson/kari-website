@@ -7,8 +7,8 @@ import { cva } from "class-variance-authority";
  * It lives beside `button.tsx` rather than inside it because
  * `react-refresh/only-export-components` — which `npm run lint` runs at
  * `--max-warnings 0` — wants a module that exports a component to export
- * nothing else. `alert-dialog.tsx` and `admin-button.tsx` both need the
- * recipe without needing the component, so it is its own module.
+ * nothing else, and `button.tsx` exports the `ButtonProps` type the recipe's
+ * `VariantProps` builds.
  *
  * Four variants and no more, because the design brief allows exactly four
  * weights of action (§2, #457): one filled green primary per screen, the
@@ -54,9 +54,7 @@ export const buttonVariants = cva(
         // control left in the admin is a low-consequence directional
         // nudge, and the boards draw those as circles. Square, so the
         // `rounded-full` is a circle rather than a pill, and 44px below
-        // `sm` — the size a touch target stops being a gamble at, which
-        // the legacy `.admin-icon-button` phone rule says in its own way
-        // and which stays behind with that fork (#240).
+        // `sm` — the size a touch target stops being a gamble at.
         icon: "size-10 rounded-full max-sm:size-11",
       },
     },

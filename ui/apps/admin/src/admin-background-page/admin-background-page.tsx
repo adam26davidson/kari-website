@@ -309,11 +309,10 @@ export function AdminBackgroundPage() {
           <p className="text-muted-foreground text-center font-sans text-sm sm:text-left">
             Changes appear on your site once you save.
           </p>
-          {/* `admin-button` is the e2e journeys' hook for Save, the same
-              convention AdminButton's LEGACY_CLASS documents. The vendored
-              Button directly (rather than AdminButton) because this one
-              needs the boards' full-width-on-a-phone Save, which
-              AdminButton's four-weights API deliberately does not take. */}
+          {/* `admin-button` styles nothing: it is the e2e journeys' hook
+              for Save (see the hook-class note in e2e/helpers.ts). The
+              width utilities are the boards' full-width-on-a-phone
+              Save. */}
           <Button className="admin-button w-full sm:w-auto" onClick={saveData}>
             Save
           </Button>

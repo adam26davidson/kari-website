@@ -56,10 +56,10 @@ describe("EditorPage", () => {
   });
 
   // The two class hooks are how the admin e2e journeys find an open editor
-  // and its Save/Close pair, and the two data-slots are how the legacy
-  // data-editor.css opts out of styling them. Neither is decoration, and
-  // both are invisible to every other test here — so they are pinned.
-  it("keeps the e2e hooks and the stylesheet opt-outs the pair depends on", () => {
+  // and its Save/Close pair, and the two data-slots are shadcn's slot
+  // markers, which those journeys also locate by. Neither is decoration,
+  // and both are invisible to every other test here — so they are pinned.
+  it("keeps the e2e hooks and the slot markers the pair depends on", () => {
     const { container } = renderEditor();
 
     const root = container.querySelector(".data-editor");

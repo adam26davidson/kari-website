@@ -16,10 +16,10 @@ describe("Input", () => {
     expect(onChange).toHaveBeenCalled();
   });
 
-  // Not decoration: admin.css's unlayered `input` rules opt out through
-  // `:not([data-slot="input"])`, so without this attribute the field
-  // renders as the legacy grey 400px box whatever utilities it carries.
-  it("carries the data-slot the legacy stylesheet keys its opt-out on", () => {
+  // Not decoration: `data-slot` is shadcn's slot marker, the attribute a
+  // stylesheet or a test reaches this field by without depending on the
+  // utility classes it happens to carry.
+  it("carries shadcn's slot marker", () => {
     render(<Input aria-label="Publisher" readOnly value="" />);
 
     expect(screen.getByLabelText("Publisher")).toHaveAttribute(
