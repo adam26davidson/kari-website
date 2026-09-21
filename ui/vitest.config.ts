@@ -144,16 +144,25 @@ export default defineConfig({
       // test-helpers.ts): v4 resolves a function v2 folded into its parent,
       // it does not find new untested code. Re-pinned from measurement, per
       // CLAUDE.md, rather than carried over.
+      //
+      // Re-measured again in #240, the issue whose own body asks for it:
+      // that PR deleted four pre-shadcn admin components (admin-button,
+      // admin-item-list, data-editor, card) and every test that covered
+      // them. All four were at or near 100%, so removing them took covered
+      // branches out of the denominator without a single test being lost —
+      // every other number here ROSE, and `apps/admin/src`'s branches fell
+      // 95.7 -> 95.65 purely by arithmetic. Same measurement discipline as
+      // #529: numbers read off a run, not numbers chosen to pass.
       thresholds: {
-        lines: 99.2,
-        functions: 99.4,
-        branches: 95.9,
-        "apps/public/src/**": { lines: 99.8, functions: 99.9, branches: 93.3 },
-        "apps/admin/src/**": { lines: 98.8, functions: 99.9, branches: 95.7 },
+        lines: 99.4,
+        functions: 99.6,
+        branches: 96.2,
+        "apps/public/src/**": { lines: 99.9, functions: 99.9, branches: 96.0 },
+        "apps/admin/src/**": { lines: 99.2, functions: 99.9, branches: 95.6 },
         "packages/shared/src/**": {
-          lines: 99.8,
-          functions: 98.2,
-          branches: 97.4,
+          lines: 99.9,
+          functions: 98.6,
+          branches: 98.8,
         },
       },
     },
