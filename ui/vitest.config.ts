@@ -149,16 +149,21 @@ export default defineConfig({
       // that PR deleted four pre-shadcn admin components (admin-button,
       // admin-item-list, data-editor, card) and every test that covered
       // them. All four were at or near 100%, so removing them took covered
-      // branches out of the denominator without a single test being lost —
-      // every other number here ROSE, and `apps/admin/src`'s branches fell
-      // 95.7 -> 95.65 purely by arithmetic. Same measurement discipline as
-      // #529: numbers read off a run, not numbers chosen to pass.
+      // branches out of the denominator without a single test being lost,
+      // and every number here ROSE -- except `apps/admin/src`'s branches,
+      // which the same arithmetic pushed 95.70 -> 95.65. A floor is never
+      // lowered to let a PR pass (CLAUDE.md), so that one stayed at 95.7
+      // and the PR covered two admin branches that had never been tested
+      // instead: a background upload that resolves no file name, and the
+      // helper's draft card asking about an idea rather than a bug. 640
+      // of 667 -> 95.95, and the floor holds. Same measurement discipline
+      // as #529: numbers read off a run, not numbers chosen to pass.
       thresholds: {
         lines: 99.4,
         functions: 99.6,
         branches: 96.2,
         "apps/public/src/**": { lines: 99.9, functions: 99.9, branches: 96.0 },
-        "apps/admin/src/**": { lines: 99.2, functions: 99.9, branches: 95.6 },
+        "apps/admin/src/**": { lines: 99.2, functions: 99.9, branches: 95.7 },
         "packages/shared/src/**": {
           lines: 99.9,
           functions: 98.6,
