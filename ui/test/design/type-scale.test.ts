@@ -84,31 +84,41 @@ function sourceFiles(dir: string): string[] {
  * spellings the CSS scan produces.
  *
  * The admin picks its sizes in Tailwind utilities, not in `font-size`
- * declarations, and the two meet at the very token `:root` declares:
- * `className="text-xs"` compiles to `font-size: var(--text-xs)`. So a
- * CSS-only reading of "is this step spent" is half the picture, and the
- * half it misses is the whole admin app — when #831/#836 deleted the last
- * hand-written `--text-xs` rule (the haiku/haiga compact variants), every
- * admin row was still spending that step and nothing else was.
+ * declarations, and the two meet at the very token `:root` declares: in
+ * the admin, `className="text-xs"` compiles to `font-size:
+ * var(--text-xs)`. So a CSS-only reading of "is this step spent" is half
+ * the picture, and the half it misses is the whole admin app — when
+ * #831/#836 deleted the last hand-written `--text-xs` rule (the
+ * haiku/haiga compact variants), every admin row was still spending that
+ * step and nothing else was.
+ *
+ * Only the ADMIN app is scanned, and that boundary is the point rather
+ * than an oversight. Tailwind is registered by apps/admin/vite.config.ts
+ * alone; the public app's config has just `react()`, and its main.tsx
+ * imports only the shared stylesheets. So `text-lg` written in public
+ * markup compiles to nothing at all, and counting it would let a step
+ * stay in the scale on the strength of a class name no browser ever
+ * resolves. This directory is also exactly what the admin's Tailwind
+ * entry scans — `@source "../**\/*.{ts,tsx}"` in
+ * apps/admin/src/styles/theme.css, resolved from src/styles/ — so what
+ * counts here is what actually compiles.
  *
  * Comments are stripped first: a docstring that NAMES `text-xs` while
  * explaining a size is not a use of it.
  */
 function stepsSpentInMarkup(): Set<string> {
   const spent = new Set<string>();
-  for (const dir of ["apps/admin/src", "apps/public/src"]) {
-    for (const file of sourceFiles(dir)) {
-      const source = readFileSync(`${UI_ROOT}${file}`, "utf-8")
-        .replace(/\/\*[\s\S]*?\*\//g, "")
-        .replace(/\/\/.*$/gm, "");
-      for (const token of Object.keys(STEPS)) {
-        // Whole class name only, so `text-xl` is not read out of
-        // `text-2xl` and `text-base` not out of `text-balance`. A variant
-        // or arbitrary prefix (`sm:text-lg`) still counts.
-        const utility = token.replace("--text-", "text-");
-        if (new RegExp(`(?<![\\w-])${utility}(?![\\w-])`).test(source)) {
-          spent.add(`var(${token})`);
-        }
+  for (const file of sourceFiles("apps/admin/src")) {
+    const source = readFileSync(`${UI_ROOT}${file}`, "utf-8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "");
+    for (const token of Object.keys(STEPS)) {
+      // Whole class name only, so `text-xl` is not read out of
+      // `text-2xl` and `text-base` not out of `text-balance`. A variant
+      // or arbitrary prefix (`sm:text-lg`) still counts.
+      const utility = token.replace("--text-", "text-");
+      if (new RegExp(`(?<![\\w-])${utility}(?![\\w-])`).test(source)) {
+        spent.add(`var(${token})`);
       }
     }
   }
