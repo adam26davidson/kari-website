@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   RULES,
   declaration,
@@ -60,6 +62,58 @@ const STEPS: Record<string, string> = {
   "--text-xl": "20px",
   "--text-2xl": "25px",
 };
+
+const UI_ROOT = fileURLToPath(new URL("../..", import.meta.url));
+
+/** Every non-test source file under `dir`, as ui-relative paths. */
+function sourceFiles(dir: string): string[] {
+  return readdirSync(`${UI_ROOT}${dir}`, { withFileTypes: true }).flatMap(
+    (entry) => {
+      const path = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) return sourceFiles(path);
+      if (!entry.isFile()) return [];
+      return /\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)
+        ? [path]
+        : [];
+    },
+  );
+}
+
+/**
+ * The steps spent by markup rather than by a stylesheet, as the `var()`
+ * spellings the CSS scan produces.
+ *
+ * The admin picks its sizes in Tailwind utilities, not in `font-size`
+ * declarations, and the two meet at the very token `:root` declares:
+ * `className="text-xs"` compiles to `font-size: var(--text-xs)`. So a
+ * CSS-only reading of "is this step spent" is half the picture, and the
+ * half it misses is the whole admin app — when #831/#836 deleted the last
+ * hand-written `--text-xs` rule (the haiku/haiga compact variants), every
+ * admin row was still spending that step and nothing else was.
+ *
+ * Comments are stripped first: a docstring that NAMES `text-xs` while
+ * explaining a size is not a use of it.
+ */
+function stepsSpentInMarkup(): Set<string> {
+  const spent = new Set<string>();
+  for (const dir of ["apps/admin/src", "apps/public/src"]) {
+    for (const file of sourceFiles(dir)) {
+      const source = readFileSync(`${UI_ROOT}${file}`, "utf-8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\/\/.*$/gm, "");
+      for (const token of Object.keys(STEPS)) {
+        // Whole class name only, so `text-xl` is not read out of
+        // `text-2xl` and `text-base` not out of `text-balance`. A variant
+        // or arbitrary prefix (`sm:text-lg`) still counts.
+        const utility = token.replace("--text-", "text-");
+        if (new RegExp(`(?<![\\w-])${utility}(?![\\w-])`).test(source)) {
+          spent.add(`var(${token})`);
+        }
+      }
+    }
+  }
+  return spent;
+}
 
 /** A `font-size` with every step token replaced by the px it stands for. */
 const resolveSteps = (size: string): string =>
@@ -228,8 +282,12 @@ describe("the size axis of the type scale", () => {
 
   it("spends every step on something", () => {
     // A step nothing uses is a step nobody chose; it would drift out of the
-    // set the rest of the site is actually built from.
-    const used = new Set(declaring("font-size").map(([, value]) => value));
+    // set the rest of the site is actually built from. Both ways of
+    // spending one count — see stepsSpentInMarkup.
+    const used = new Set([
+      ...declaring("font-size").map(([, value]) => value),
+      ...stepsSpentInMarkup(),
+    ]);
     const unused = Object.keys(STEPS).filter(
       (token) => !used.has(`var(${token})`),
     );
