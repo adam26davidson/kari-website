@@ -18,11 +18,9 @@ import { cn } from "./cn";
  * none: index.css declares one site-wide and UNLAYERED, so it already beats
  * any Tailwind utility (which is layered) this could say.
  *
- * `data-slot="input"` is also load-bearing beyond shadcn convention:
- * admin.css still styles bare `<input>` unlayered for the pages that have
- * not been migrated yet, and those rules opt out through
- * `:not([data-slot="input"])`. Without the attribute this renders as the
- * old grey 400px box.
+ * `data-slot="input"` is shadcn's slot marker. It was also the opt-out from
+ * admin.css's unlayered `input` rules until #240 deleted those with the
+ * last page that wore them.
  */
 export function Input({ className, ...props }: React.ComponentProps<"input">) {
   return (

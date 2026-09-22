@@ -345,9 +345,8 @@ describe("ItemList", () => {
 
   // Neither of these is decoration, and neither is visible to any other
   // test here. The class is how e2e/helpers.ts locates a row; the
-  // data-slot is how admin.css and admin-item-list.css opt OUT of styling
-  // it, and without it the row renders half-legacy (#234).
-  it("keeps the e2e row hook and the stylesheets' opt-out on every row", () => {
+  // data-slot is shadcn's slot marker, which the journeys also key on.
+  it("keeps the e2e row hook and the slot marker on every row", () => {
     const { container } = renderList();
 
     const rows = container.querySelectorAll(".admin-data-list-item");

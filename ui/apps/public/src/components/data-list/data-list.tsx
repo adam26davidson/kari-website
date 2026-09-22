@@ -8,7 +8,8 @@ interface DataListProps {
 
 /**
  * The public list card: renders its children with a separator between
- * consecutive items. The admin pages use their own AdminItemList instead.
+ * consecutive items. The admin pages have their own list
+ * (apps/admin/src/components/item-list).
  * A single child (the blog permalink page) gets the same card with no
  * separator, so every public page shares one translucent surface.
  */

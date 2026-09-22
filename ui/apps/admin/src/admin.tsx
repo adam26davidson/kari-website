@@ -19,7 +19,7 @@ import { AdminOtherWorksPage } from "./admin-other-works-page/admin-other-works-
 import { AdminPhotographyPage } from "./admin-photography-page/admin-photography-page";
 import { AdminImageGcPage } from "./admin-image-gc-page/admin-image-gc-page";
 import { AdminBackgroundPage } from "./admin-background-page/admin-background-page";
-import { AdminButton } from "./components/admin-button/admin-button";
+import { Button } from "./components/ui/button";
 import { AdminUiProvider } from "./admin-ui-provider";
 import { AssistantProvider } from "./assistant/assistant-provider";
 import { AssistantWidget } from "./assistant/assistant-widget";
@@ -83,7 +83,12 @@ export function Admin() {
             : "Your workshop is behind a sign-in, so only you can change the site."}
         </p>
         {!isLoading && (
-          <AdminButton onClick={() => loginWithRedirect()}>Log In</AdminButton>
+          // `admin-button` styles nothing: it is the hook the Auth0 login
+          // smoke clicks this by (e2e/auth0-login.mjs:31; see the hook-class
+          // note in e2e/helpers.ts).
+          <Button className="admin-button" onClick={() => loginWithRedirect()}>
+            Log In
+          </Button>
         )}
       </div>
     );

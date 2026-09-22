@@ -15,10 +15,6 @@ import { cn } from "./cn";
  * docs/design/admin-redesign/README.md's "Supporting values". Tailwind's
  * preflight leaves a `<div>` no chrome at all, so every one of them is
  * stated here rather than inherited.
- *
- * NOT the same thing as `components/card/card.tsx`, which is the fork of the
- * public site's translucent photo-over card that the not-yet-migrated admin
- * pages still render. That one goes when the last of them migrates (#240).
  */
 export function Card({ className, ...props }: React.ComponentProps<"div">) {
   return (

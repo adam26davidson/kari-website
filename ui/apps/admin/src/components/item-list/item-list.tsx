@@ -53,17 +53,12 @@ export interface ItemListProps<T extends { id: string }> {
  * page's one filled Add button, and one hairline-divided row per item with
  * first/last aware move controls.
  *
- * The Tailwind/shadcn replacement for `components/admin-item-list` (#234),
- * which keeps the same behavior — searching filters in place (never
- * re-sorts; the order is hand-curated) and hides the move controls, since
- * "up" is meaningless relative to a partial view — and the same `?q=`
- * handling. The two exist side by side until the last legacy list migrates
- * and the fork dies (#235-#238, #240).
- *
- * Narrower than the fork on purpose: the fork's `compact`, `addVariant`,
- * `deleteLabel` and `hideEdit` are all for the photography editor's NESTED
- * image list, which is #236's problem. A prop nothing on this page can
- * reach is a branch nothing tests.
+ * Written in #234 as the Tailwind/shadcn replacement for the pre-shadcn
+ * `components/admin-item-list`, keeping that fork's behavior — searching
+ * filters in place (never re-sorts; the order is hand-curated) and hides
+ * the move controls, since "up" is meaningless relative to a partial view —
+ * and the same `?q=` handling. The fork is gone as of #240; this is the
+ * admin's only list.
  *
  * The boards (`HaikuList`, `HaikuTablet`, `HaikuListMobile`) put the search
  * and Add inside the card's header row from `sm` up and on the paper above
@@ -166,10 +161,9 @@ export function ItemList<T extends { id: string }>({
             </p>
           )}
           {visibleItems.map((item, idx) => (
-            // `admin-data-list-item` is not styling — admin.css and
-            // admin-item-list.css both opt out of it through
-            // `:not([data-slot="list-row"])`. It is how the e2e journeys
-            // find a row (e2e/helpers.ts).
+            // `admin-data-list-item` styles nothing: it is how the e2e
+            // journeys find a row (see the hook-class note in
+            // e2e/helpers.ts). `data-slot` is shadcn's slot marker.
             <div
               key={item.id}
               data-slot="list-row"

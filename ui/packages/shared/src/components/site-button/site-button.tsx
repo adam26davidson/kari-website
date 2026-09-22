@@ -1,9 +1,10 @@
 import "./site-button.css";
 
 /**
- * The public-side styled button (header logout, load-error retry). A
- * straight fork of the admin tree's AdminButton so no public component
- * imports from the admin tree; the styling is identical.
+ * The public-side styled button (header logout, load-error retry). Forked
+ * from the admin's pre-shadcn button so no public component imports from
+ * the admin tree; the admin's own button is shadcn/Tailwind since #592, and
+ * this is now the only holder of the old look.
  */
 export function SiteButton({
   children,

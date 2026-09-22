@@ -556,6 +556,37 @@ describe("AssistantWidget", () => {
     expect(screen.queryByText(DRAFT.title)).not.toBeInTheDocument();
   });
 
+  it("asks about an idea in an idea's words, not a bug's", async () => {
+    // The card opens by naming what it thinks it heard, and that line is
+    // the only thing on it that distinguishes a fix from a suggestion —
+    // the title, the sentence and the write-up read the same either way.
+    // Getting it wrong tells her the helper misunderstood her.
+    filing();
+    service.getSession.mockResolvedValue({
+      id: "old",
+      messages: [{ role: "assistant", text: "Have a look at this." }],
+      turnsRemaining: 30,
+      draft: {
+        ...DRAFT,
+        kind: "idea",
+        title: "A page for the workshops",
+        summary: "You'd like somewhere to list the workshops you run.",
+      },
+    });
+
+    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    await openPanel();
+
+    expect(
+      await screen.findByText(
+        "Shall I write this down as an idea for the site?",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Shall I write this down as something to fix?"),
+    ).not.toBeInTheDocument();
+  });
+
   it("brings a new card into view by its first line, not its buttons", async () => {
     filing();
     service.getSession.mockResolvedValue({

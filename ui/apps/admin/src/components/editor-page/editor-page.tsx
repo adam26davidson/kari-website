@@ -6,10 +6,10 @@ import { PageTitle } from "../page-title/page-title";
  * A migrated admin editor's scaffold: the page title with its Save/Close
  * pair beside it, and one card holding the fields.
  *
- * The Tailwind/shadcn replacement for `components/data-editor`, which it
- * deliberately matches prop for prop so the sibling migrations (#235-#238)
- * are a swap rather than a rewrite. Both exist until the last legacy editor
- * has moved and the fork dies (#240).
+ * Written in #233 as the Tailwind/shadcn replacement for the pre-shadcn
+ * `components/data-editor`, matching it prop for prop so the sibling
+ * migrations (#235-#238) were a swap rather than a rewrite. That fork is
+ * gone as of #240; this is the admin's only editor scaffold.
  *
  * The structure is the boards' (`HaikuEditor.png`, `HaikuEditorMobile.png`),
  * and it is a real change from the legacy editor rather than a restyle: the
@@ -17,12 +17,12 @@ import { PageTitle } from "../page-title/page-title";
  * card holds nothing but what she is editing. On a phone the title takes
  * its own line and the buttons drop below it.
  *
- * `data-editor` and `data-editor-item-controls` are NOT styling — the
- * stylesheet they came from opts out of both through
- * `:not([data-slot="editor"])` / `:not([data-slot="editor-controls"])`.
- * They are how the admin e2e journeys find an open editor and its Save and
- * Close buttons (e2e/admin-journeys.spec.ts), the same convention
- * `home-page-editor` and `AdminButton`'s LEGACY_CLASS document.
+ * `data-editor` and `data-editor-item-controls` style nothing: they are
+ * how the admin e2e journeys find an open editor and its Save and Close
+ * buttons (e2e/admin-journeys.spec.ts; see the hook-class note in
+ * e2e/helpers.ts). `data-slot` is shadcn's slot convention, and
+ * `admin-journeys.spec.ts` locates the card inside the editor through
+ * `.data-editor [data-slot="card"]`.
  */
 export function EditorPage({
   children,

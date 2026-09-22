@@ -8,7 +8,7 @@ import {
   AlertDialogTitle,
 } from "./components/ui/alert-dialog";
 import { Toaster } from "./components/ui/toaster";
-import { AdminButton } from "./components/admin-button/admin-button";
+import { Button } from "./components/ui/button";
 import { AdminUi, AdminUiContext, Notify } from "./admin-ui-context";
 
 interface Loading {
@@ -128,23 +128,31 @@ export function AdminUiProvider({ children }: { children: React.ReactNode }) {
                   focused on that Delete, behind the overlay and inside the
                   tree Radix has just marked aria-hidden.
 
-                  `asChild` keeps it an AdminButton, so it still carries
-                  the look and the `.admin-button` hook. Cancel also asks
-                  the dialog to close, which is inert here — this
-                  AlertDialog is controlled by `confirmation` with no
+                  `asChild` hands the primitive's props — including the ref
+                  it needs to focus this on open, a plain prop under React
+                  19 — to the Button, which spreads them onto its <button>.
+                  Cancel also asks the dialog to close, which is inert here
+                  — this AlertDialog is controlled by `confirmation` with no
                   `onOpenChange` — leaving the `onClick` below as the one
-                  thing that answers the question. */}
+                  thing that answers the question.
+
+                  `admin-button` on both answers styles nothing; it is the
+                  hook `confirmDialog` in e2e/helpers.ts clicks them by. */}
               <AlertDialogCancel asChild>
-                <AdminButton
+                <Button
                   variant="secondary"
+                  className="admin-button"
                   onClick={answerWith(confirmation.onNo)}
                 >
                   No
-                </AdminButton>
+                </Button>
               </AlertDialogCancel>
-              <AdminButton onClick={answerWith(confirmation.onYes)}>
+              <Button
+                className="admin-button"
+                onClick={answerWith(confirmation.onYes)}
+              >
                 Yes
-              </AdminButton>
+              </Button>
             </div>
           </AlertDialogContent>
         )}

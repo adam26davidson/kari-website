@@ -4,7 +4,7 @@ import { useLocation } from "react-router";
  * The URLs of one admin section's list and its item editors, carrying the
  * current search string along.
  *
- * The list's search box keeps its query in `?q=` (see AdminItemList), so
+ * The list's search box keeps its query in `?q=` (see components/item-list), so
  * carrying the search string into the editor URL and back out again is what
  * returns the user to the view she left rather than to the whole list.
  */

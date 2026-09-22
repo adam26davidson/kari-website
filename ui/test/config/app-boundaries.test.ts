@@ -16,6 +16,13 @@ import { fileURLToPath } from "node:url";
 // app is allowed to reach for. It is a source check, not a bundle check —
 // which is what makes the failure legible ("this file imports that") and
 // what lets it run in milliseconds on every test run.
+//
+// It runs the other way too, since #240: the admin app is not allowed the
+// public site's background photograph. That is the "admin bundle loads no
+// public-only assets" half of #240's audit, and it is an import check for
+// the same reason — a stylesheet in the shared package is emitted into
+// whichever bundle imports it, so the only way to keep 196 kB of petals
+// out of dist/admin is for nothing under apps/admin to ask for them.
 
 const UI_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -48,7 +55,11 @@ const importsUnder = (dir: string): Array<[string, string]> =>
   );
 
 const PUBLIC_IMPORTS = importsUnder("apps/public/src");
+const ADMIN_IMPORTS = importsUnder("apps/admin/src");
 const SHARED_IMPORTS = importsUnder("packages/shared/src");
+
+/** The public-only stylesheet that paints the site's background photo. */
+const BACKGROUND_CSS = "@kari/shared/styles/background.css";
 
 /**
  * Packages only the admin app may depend on: the Auth0 SDK it authenticates
@@ -136,6 +147,31 @@ describe("the shared package's dependency boundary", () => {
     const offenders = SHARED_IMPORTS.filter(
       ([, specifier]) =>
         specifier.startsWith("@kari/") || specifier.includes("apps/"),
+    ).map(([file]) => file);
+    expect(offenders).toEqual([]);
+  });
+});
+
+// The shared package holds one stylesheet each app imports (index.css: the
+// colour and type tokens, the body frame, the focus ring) and one only the
+// public site may (background.css: the `body::before` photograph and its
+// 960px variant). They were one file until #240, which meant the admin
+// build emitted both webps into dist/admin/assets to satisfy `url()`s that
+// theme.css then cancelled with `content: none`.
+describe("the background photo stylesheet", () => {
+  it("is imported by the public app", () => {
+    // Non-vacuous guard for the case below: renaming or deleting the
+    // stylesheet would otherwise make "the admin never imports it" pass
+    // while the photo stopped rendering anywhere.
+    const importers = PUBLIC_IMPORTS.filter(
+      ([, specifier]) => specifier === BACKGROUND_CSS,
+    ).map(([file]) => file);
+    expect(importers).toEqual(["apps/public/src/main.tsx"]);
+  });
+
+  it("is never imported by the admin app", () => {
+    const offenders = ADMIN_IMPORTS.filter(([, specifier]) =>
+      specifier.includes("styles/background.css"),
     ).map(([file]) => file);
     expect(offenders).toEqual([]);
   });

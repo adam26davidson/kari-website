@@ -112,19 +112,20 @@ const applyFontPairing = (settings: SiteSettings) => {
  * is set, the header's bar/title/nav colours, if any are, and — only when
  * the caller opts in — the chosen typeface pairing.
  *
- * The page background is painted by `body::before` (index.css) with the
- * bundled default image. When site-settings.json names a custom photo,
+ * The page background is painted by `body::before` (background.css) with
+ * the bundled default image. When site-settings.json names a custom photo,
  * this hook sets `data-custom-background` on <body> plus the
  * `--site-background` CSS variable, which a higher-specificity rule in
- * index.css uses to override the default (desktop and mobile variants
+ * background.css uses to override the default (desktop and mobile variants
  * alike). The header colours work the same way, as custom properties
  * header.css falls back from. Any fetch failure — including the settings
  * object simply not existing yet — leaves the default appearance in place.
  *
- * `applyFonts` is opt-in because BOTH apps call this hook, for the shared
- * background, and the typeface setting is the public site's alone: the
- * admin is a workshop, not a page of the site, and #212/#592 own what it
- * is set in. Only apps/public passes it.
+ * `applyFonts` is opt-in because both apps used to call this hook, for the
+ * shared background, while the typeface setting was the public site's
+ * alone. The admin stopped calling it with #642 (it has its own fixed
+ * look), so apps/public is the only caller and it passes the flag — the
+ * option stays as the record of which half of this is site-wide.
  */
 export function useSiteBackground(
   options: { applyFonts?: boolean } = {},

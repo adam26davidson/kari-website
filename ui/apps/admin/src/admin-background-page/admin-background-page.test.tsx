@@ -303,6 +303,26 @@ describe("AdminBackgroundPage saving", () => {
     expect(SiteSettingsService.update).not.toHaveBeenCalled();
   });
 
+  it("keeps the settings unsaved when the upload reports no file name", async () => {
+    // `ImageService.upload` RESOLVES null rather than throwing when it has
+    // nothing to send, so this is not the rejection case above: the save
+    // has to notice the empty answer itself. Writing it through would set
+    // `backgroundPhoto: ""`, which is how the page says "use the built-in
+    // background" — a silent failure that blanks the published photo.
+    vi.mocked(ImageService.upload).mockResolvedValue(null);
+    const { notify } = await renderAndPickFile();
+
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith(
+        "Failed to save — your change was not saved",
+        "error",
+      ),
+    );
+    expect(SiteSettingsService.update).not.toHaveBeenCalled();
+  });
+
   it("shows the validation message when the file is not a usable image", async () => {
     vi.mocked(validateBackgroundImage).mockRejectedValue(
       new BackgroundImageError(
