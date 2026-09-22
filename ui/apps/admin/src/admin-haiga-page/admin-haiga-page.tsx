@@ -211,8 +211,8 @@ export function AdminHaigaPage() {
       onDelete={onDelete}
       onMove={onMove}
       // The row's own markup rather than the shared HaigaContent: that
-      // component's `compact` variant is styled by the PUBLIC site's
-      // unlayered haiga-content.css, which would beat anything stated here.
+      // component is styled by the PUBLIC site's unlayered
+      // haiga-content.css, which would beat anything stated here.
       // The boards (`HaigaList.png`, `HaigaListMobile.png`) want the
       // artwork's small square thumbnail with the publisher quietly beside
       // it, at every width.

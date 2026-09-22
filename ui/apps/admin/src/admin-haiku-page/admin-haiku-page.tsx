@@ -158,11 +158,11 @@ export function AdminHaikuPage() {
       onDelete={onDelete}
       onMove={onMove}
       // The row's own markup rather than the shared HaikuContent: that
-      // component's `compact` variant is styled by the PUBLIC site's
-      // unlayered haiku-content.css, which would beat anything stated
-      // here, and it renders the poem over a photograph rather than on the
-      // admin's paper. The boards want her lines in the serif she wrote
-      // them in, with the publisher quiet underneath (`HaikuList.png`).
+      // component is styled by the PUBLIC site's unlayered
+      // haiku-content.css, which would beat anything stated here, and it
+      // renders the poem over a photograph rather than on the admin's
+      // paper. The boards want her lines in the serif she wrote them in,
+      // with the publisher quiet underneath (`HaikuList.png`).
       renderItem={(haiku) => (
         <>
           <div className="text-foreground font-serif text-[17px] leading-relaxed">
