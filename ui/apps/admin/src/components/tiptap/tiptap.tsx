@@ -1,18 +1,3 @@
-import {
-  faAlignCenter,
-  faAlignJustify,
-  faAlignLeft,
-  faAlignRight,
-  faBold,
-  faImage,
-  faItalic,
-  faLink,
-  faListOl,
-  faListUl,
-  faStrikethrough,
-  faUnlink,
-  IconDefinition,
-} from "@fortawesome/free-solid-svg-icons";
 import "./tiptap.css";
 
 import TextAlign from "@tiptap/extension-text-align";
@@ -20,8 +5,24 @@ import Image from "@tiptap/extension-image";
 import { Editor, EditorContent, useEditor } from "@tiptap/react";
 import { FormEvent, useState } from "react";
 import StarterKit from "@tiptap/starter-kit";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { ChevronDown } from "lucide-react";
+import {
+  AlignCenter,
+  AlignJustify,
+  AlignLeft,
+  AlignRight,
+  Bold,
+  ChevronDown,
+  Italic,
+  Link,
+  List,
+  ListOrdered,
+  // Aliased because `Image` in this file is already tiptap's image
+  // extension, imported above.
+  Image as ImageIcon,
+  Strikethrough,
+  Unlink,
+  type LucideIcon,
+} from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 
 import { Button } from "../ui/button";
@@ -68,7 +69,7 @@ interface ToolbarItem {
   // no text beside it, so this is the whole of what a screen reader
   // announces and what the hover tooltip says.
   label: string;
-  icon: IconDefinition;
+  icon: LucideIcon;
   command: (editor: Editor, menu: MenuActions) => void;
   isActive?: (editor: Editor) => boolean;
   isDisabled?: (editor: Editor) => boolean;
@@ -94,21 +95,21 @@ const TOOLBAR_GROUPS: ToolbarGroup[] = [
       {
         name: "bold",
         label: "Bold",
-        icon: faBold,
+        icon: Bold,
         command: (editor) => editor.chain().focus().toggleBold().run(),
         isActive: (editor) => editor.isActive("bold"),
       },
       {
         name: "italic",
         label: "Italic",
-        icon: faItalic,
+        icon: Italic,
         command: (editor) => editor.chain().focus().toggleItalic().run(),
         isActive: (editor) => editor.isActive("italic"),
       },
       {
         name: "strike",
         label: "Strikethrough",
-        icon: faStrikethrough,
+        icon: Strikethrough,
         command: (editor) => editor.chain().focus().toggleStrike().run(),
         isActive: (editor) => editor.isActive("strike"),
       },
@@ -124,21 +125,21 @@ const TOOLBAR_GROUPS: ToolbarGroup[] = [
       {
         name: "link",
         label: "Add or edit a link",
-        icon: faLink,
+        icon: Link,
         command: (_editor, menu) => menu.toggleLinkPanel(),
         isActive: (editor) => editor.isActive("link"),
       },
       {
         name: "unlink",
         label: "Remove the link",
-        icon: faUnlink,
+        icon: Unlink,
         command: (editor) => editor.chain().focus().unsetLink().run(),
         isDisabled: (editor) => !editor.isActive("link"),
       },
       {
         name: "image",
         label: "Add an image",
-        icon: faImage,
+        icon: ImageIcon,
         command: (_editor, menu) => menu.addImage(),
       },
     ],
@@ -149,14 +150,14 @@ const TOOLBAR_GROUPS: ToolbarGroup[] = [
       {
         name: "bullet-list",
         label: "Bulleted list",
-        icon: faListUl,
+        icon: List,
         command: (editor) => editor.chain().focus().toggleBulletList().run(),
         isActive: (editor) => editor.isActive("bulletList"),
       },
       {
         name: "ordered-list",
         label: "Numbered list",
-        icon: faListOl,
+        icon: ListOrdered,
         command: (editor) => editor.chain().focus().toggleOrderedList().run(),
         isActive: (editor) => editor.isActive("orderedList"),
       },
@@ -166,10 +167,10 @@ const TOOLBAR_GROUPS: ToolbarGroup[] = [
     name: "alignment",
     items: (
       [
-        { align: "left", label: "Align left", icon: faAlignLeft },
-        { align: "center", label: "Align center", icon: faAlignCenter },
-        { align: "right", label: "Align right", icon: faAlignRight },
-        { align: "justify", label: "Justify", icon: faAlignJustify },
+        { align: "left", label: "Align left", icon: AlignLeft },
+        { align: "center", label: "Align center", icon: AlignCenter },
+        { align: "right", label: "Align right", icon: AlignRight },
+        { align: "justify", label: "Justify", icon: AlignJustify },
       ] as const
     ).map(({ align, label, icon }) => ({
       name: `align-${align}`,
@@ -193,6 +194,9 @@ const ToolbarButton = ({
   expanded?: boolean;
 }) => {
   const active = item.isActive?.(editor);
+  // Capitalised so JSX renders the component this item carries rather than
+  // treating `item.icon` as an HTML tag name.
+  const Icon = item.icon;
 
   return (
     <button
@@ -224,7 +228,7 @@ const ToolbarButton = ({
       aria-label={item.label}
       title={item.label}
     >
-      <FontAwesomeIcon icon={item.icon} />
+      <Icon />
     </button>
   );
 };

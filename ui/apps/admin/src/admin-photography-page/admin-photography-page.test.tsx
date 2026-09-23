@@ -29,19 +29,17 @@ vi.mock("../hooks/use-admin-token", () => ({
 }));
 
 /**
- * A per-row control located by its FontAwesome glyph. Since #457 edit and
- * delete are labelled .admin-button text buttons and the move arrows are
- * .admin-icon-button circles, so this closes on the button element itself
- * rather than on either class.
+ * A per-row control of the list, located by the name it announces. Since
+ * #457 edit and delete are labelled text buttons and the move arrows are
+ * `aria-label`led circles, so every row control has an accessible name —
+ * which is what this closes on now that the admin draws its icons with
+ * lucide (#856), whose SVGs carry no `data-icon` attribute to query.
+ *
+ * Plural, because the list may show more than one row: every caller here
+ * wants the first row's control.
  */
-function iconButton(container: HTMLElement, icon: string): HTMLElement {
-  const button = container
-    .querySelector(`svg[data-icon="${icon}"]`)
-    ?.closest("button");
-  if (!(button instanceof HTMLElement)) {
-    throw new Error(`no icon button for "${icon}"`);
-  }
-  return button;
+function rowButton(name: string): HTMLElement {
+  return screen.getAllByRole("button", { name })[0];
 }
 
 /**
@@ -51,7 +49,9 @@ function iconButton(container: HTMLElement, icon: string): HTMLElement {
  * migration (#236) Save is a plain `Button` and carries no `admin-button`.
  */
 function saveButton(container: HTMLElement): HTMLElement {
-  const button = container.querySelector('[data-slot="editor-controls"] button');
+  const button = container.querySelector(
+    '[data-slot="editor-controls"] button',
+  );
   if (!(button instanceof HTMLElement)) {
     throw new Error("no save button in the editor");
   }
@@ -68,7 +68,7 @@ async function renderPage(initialEntry?: string) {
     initialEntry,
   );
   const notify = adminUi.notify;
-  await waitFor(() => iconButton(container, "pencil"));
+  await waitFor(() => rowButton("Edit"));
   return { container, notify, adminUi, router, subject };
 }
 
@@ -77,7 +77,7 @@ async function renderPage(initialEntry?: string) {
 // save.
 async function openEditorAndReplaceImage() {
   const { container, notify } = await renderPage();
-  fireEvent.click(iconButton(container, "pencil"));
+  fireEvent.click(rowButton("Edit"));
   // Opening the editor is a navigation now; wait for it to render.
   await screen.findByLabelText("Title");
   const input = container.querySelector('input[type="file"]');
@@ -202,7 +202,7 @@ describe("AdminPhotographyPage reordering in the editor", () => {
     ];
     vi.mocked(PhotographyService.getListFromApi).mockResolvedValue([savedPost]);
     const { container, notify } = await renderPage();
-    fireEvent.click(iconButton(container, "pencil"));
+    fireEvent.click(rowButton("Edit"));
     await screen.findByLabelText("Title");
 
     // Replace the first image with a not-yet-uploaded file...
@@ -214,7 +214,7 @@ describe("AdminPhotographyPage reordering in the editor", () => {
     });
     // ...then move that item down. The first list item has no move-up
     // control, so the first arrow-down on the page is item 0's.
-    fireEvent.click(iconButton(container, "arrow-down"));
+    fireEvent.click(screen.getByRole("button", { name: "Move down" }));
 
     fireEvent.click(saveButton(container));
     await waitFor(() =>
@@ -243,16 +243,16 @@ describe("AdminPhotographyPage deletion", () => {
   // Renders the page, clicks the delete control of the only post, and
   // confirms the deletion dialog.
   async function confirmDelete() {
-    const { container, notify, adminUi } = await renderPage();
-    fireEvent.click(iconButton(container, "trash"));
+    const { notify, adminUi } = await renderPage();
+    fireEvent.click(rowButton("Delete"));
     await answerYes(adminUi);
     return { notify };
   }
 
   it("names the post being deleted in the confirmation", async () => {
-    const { container, adminUi } = await renderPage();
+    const { adminUi } = await renderPage();
 
-    fireEvent.click(iconButton(container, "trash"));
+    fireEvent.click(rowButton("Delete"));
 
     expect(adminUi.confirm).toHaveBeenCalledWith(
       'Delete the photography post "A Post"?',
@@ -266,9 +266,9 @@ describe("AdminPhotographyPage deletion", () => {
     vi.mocked(PhotographyService.getListFromApi).mockResolvedValue([
       { ...savedPost, title: "", subtitle: "" },
     ]);
-    const { container, adminUi } = await renderPage();
+    const { adminUi } = await renderPage();
 
-    fireEvent.click(iconButton(container, "trash"));
+    fireEvent.click(rowButton("Delete"));
 
     expect(adminUi.confirm).toHaveBeenCalledWith(
       "Delete this untitled photography post?",
@@ -310,7 +310,9 @@ describe("AdminPhotographyPage creation", () => {
   // dialog has been handed to confirm().
   async function openCreateConfirmation() {
     const { container, notify, adminUi } = await renderPage();
-    fireEvent.click(screen.getByRole("button", { name: "Add a photography post" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add a photography post" }),
+    );
     return { container, notify, adminUi };
   }
 
@@ -462,25 +464,24 @@ describe("AdminPhotographyPage load failure", () => {
     vi.mocked(PhotographyService.getListFromApi).mockRejectedValueOnce(
       new Error("GET failed"),
     );
-    const { container } = renderAdminPage(
-      <AdminPhotographyPage />,
-      "/photography/:id?",
-    );
+    renderAdminPage(<AdminPhotographyPage />, "/photography/:id?");
 
     await screen.findByText("Failed to load photography posts.");
     // No editable list — saving one would overwrite the real data.
-    expect(screen.queryByRole("button", { name: "Add a photography post" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Add a photography post" }),
+    ).toBeNull();
 
     // Retry reloads and shows the list.
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    await waitFor(() => iconButton(container, "pencil"));
+    await waitFor(() => rowButton("Edit"));
   });
 });
 
 describe("AdminPhotographyPage closing the editor", () => {
   it("abandons the open post without saving", async () => {
-    const { container, adminUi } = await renderPage();
-    fireEvent.click(iconButton(container, "pencil"));
+    const { adminUi } = await renderPage();
+    fireEvent.click(rowButton("Edit"));
     await screen.findByLabelText("Title");
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
@@ -489,16 +490,16 @@ describe("AdminPhotographyPage closing the editor", () => {
     expect(PhotographyService.updateList).not.toHaveBeenCalled();
     expect(adminUi.confirm).not.toHaveBeenCalled();
     // Back on the list view.
-    iconButton(container, "pencil");
+    rowButton("Edit");
   });
 });
 
 describe("AdminPhotographyPage assistant context", () => {
   it("tells the helper which post is open and whether it is unsaved", async () => {
-    const { container, subject } = await renderPage();
+    const { subject } = await renderPage();
     expect(subject.current).toEqual({});
 
-    fireEvent.click(iconButton(container, "pencil"));
+    fireEvent.click(rowButton("Edit"));
     const title = await screen.findByLabelText("Title");
     expect(subject.current).toEqual({
       what: "photography post",
@@ -519,9 +520,9 @@ describe("AdminPhotographyPage assistant context", () => {
 
 describe("AdminPhotographyPage routing", () => {
   it("keeps the search filter through the editor round trip", async () => {
-    const { container, router } = await renderPage("/photography?q=post");
+    const { router } = await renderPage("/photography?q=post");
 
-    fireEvent.click(iconButton(container, "pencil"));
+    fireEvent.click(rowButton("Edit"));
     await screen.findByLabelText("Title");
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
@@ -530,9 +531,9 @@ describe("AdminPhotographyPage routing", () => {
   });
 
   it("opens the editor at /admin/photography/:id when editing", async () => {
-    const { container, router } = await renderPage();
+    const { router } = await renderPage();
 
-    fireEvent.click(iconButton(container, "pencil"));
+    fireEvent.click(rowButton("Edit"));
     await screen.findByLabelText("Title");
 
     expect(router.state.location.pathname).toBe("/photography/p1");
@@ -549,32 +550,32 @@ describe("AdminPhotographyPage routing", () => {
   });
 
   it("falls back to the list for an unknown editor URL", async () => {
-    const { container, router } = renderAdminPage(
+    const { router } = renderAdminPage(
       <AdminPhotographyPage />,
       "/photography/:id?",
       "/photography/no-such-id",
     );
 
-    await waitFor(() => iconButton(container, "pencil"));
+    await waitFor(() => rowButton("Edit"));
     await waitFor(() =>
       expect(router.state.location.pathname).toBe("/photography"),
     );
   });
 
   it("returns to the list on browser back", async () => {
-    const { container, router } = await renderPage();
-    fireEvent.click(iconButton(container, "pencil"));
+    const { router } = await renderPage();
+    fireEvent.click(rowButton("Edit"));
     await screen.findByLabelText("Title");
 
     await navigateInTest(router, -1);
 
     await waitFor(() => expect(screen.queryByLabelText("Title")).toBeNull());
-    iconButton(container, "pencil");
+    rowButton("Edit");
   });
 
   it("asks before discarding an edited title on Close", async () => {
-    const { container, adminUi } = await renderPage();
-    fireEvent.click(iconButton(container, "pencil"));
+    const { adminUi } = await renderPage();
+    fireEvent.click(rowButton("Edit"));
     const title = await screen.findByLabelText("Title");
     fireEvent.change(title, { target: { value: "New Title" } });
 
@@ -589,7 +590,7 @@ describe("AdminPhotographyPage routing", () => {
 
   it("treats a pending image file as unsaved changes on Close", async () => {
     const { container, adminUi } = await renderPage();
-    fireEvent.click(iconButton(container, "pencil"));
+    fireEvent.click(rowButton("Edit"));
     await screen.findByLabelText("Title");
     fireEvent.change(
       container.querySelector('input[type="file"]') as HTMLInputElement,
@@ -619,6 +620,6 @@ describe("AdminPhotographyPage routing", () => {
     );
     // The editor closed to the list with no unsaved-changes dialog.
     await waitFor(() => expect(screen.queryByLabelText("Title")).toBeNull());
-    iconButton(container, "pencil");
+    rowButton("Edit");
   });
 });
