@@ -1,10 +1,5 @@
 import { useId } from "react";
-import {
-  faArrowDown,
-  faArrowUp,
-  faTrash,
-} from "@fortawesome/free-solid-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
 import { PhotographyPost } from "@kari/shared/models";
 import { EditorPage } from "../../../components/editor-page/editor-page";
 import { FieldLabel } from "../../../components/field-label/field-label";
@@ -186,7 +181,7 @@ export function PhotographyPostEditor({
                   aria-label="Move up"
                   onClick={() => onMove(entry.id, "up")}
                 >
-                  <FontAwesomeIcon icon={faArrowUp} />
+                  <ArrowUp />
                 </Button>
               )}
               {idx !== images.length - 1 && (
@@ -196,7 +191,7 @@ export function PhotographyPostEditor({
                   aria-label="Move down"
                   onClick={() => onMove(entry.id, "down")}
                 >
-                  <FontAwesomeIcon icon={faArrowDown} />
+                  <ArrowDown />
                 </Button>
               )}
               {/* Named, and set further off than the arrows sit from each
@@ -208,7 +203,7 @@ export function PhotographyPostEditor({
                 className="ml-4 max-sm:h-11 max-sm:px-3"
                 onClick={() => onDelete(entry.id)}
               >
-                <FontAwesomeIcon icon={faTrash} />
+                <Trash2 />
                 Remove this image
               </Button>
             </div>

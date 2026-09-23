@@ -1,11 +1,4 @@
-import {
-  faArrowDown,
-  faArrowUp,
-  faMagnifyingGlass,
-  faPencil,
-  faTrash,
-} from "@fortawesome/free-solid-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { ArrowDown, ArrowUp, Pencil, Search, Trash2 } from "lucide-react";
 import { useSearchParams } from "react-router";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -113,8 +106,7 @@ export function ItemList<T extends { id: string }>({
             <div className="relative sm:flex-1">
               {/* Decorative: the field's accessible name is its
                   aria-label, and a magnifying glass adds nothing to it. */}
-              <FontAwesomeIcon
-                icon={faMagnifyingGlass}
+              <Search
                 aria-hidden="true"
                 className="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2"
               />
@@ -191,7 +183,7 @@ export function ItemList<T extends { id: string }>({
                   className="max-sm:h-11 max-sm:px-3"
                   onClick={() => onEdit(item.id)}
                 >
-                  <FontAwesomeIcon icon={faPencil} />
+                  <Pencil />
                   Edit
                 </Button>
                 {!filtering && idx !== 0 && (
@@ -201,7 +193,7 @@ export function ItemList<T extends { id: string }>({
                     aria-label="Move up"
                     onClick={() => onMove(item.id, "up")}
                   >
-                    <FontAwesomeIcon icon={faArrowUp} />
+                    <ArrowUp />
                   </Button>
                 )}
                 {!filtering && idx !== visibleItems.length - 1 && (
@@ -211,7 +203,7 @@ export function ItemList<T extends { id: string }>({
                     aria-label="Move down"
                     onClick={() => onMove(item.id, "down")}
                   >
-                    <FontAwesomeIcon icon={faArrowDown} />
+                    <ArrowDown />
                   </Button>
                 )}
                 {/* Outlined, not filled: maroon says "this destroys
@@ -228,7 +220,7 @@ export function ItemList<T extends { id: string }>({
                   className="ml-4 max-sm:h-11 max-sm:px-3"
                   onClick={() => onDelete(item.id)}
                 >
-                  <FontAwesomeIcon icon={faTrash} />
+                  <Trash2 />
                   Delete
                 </Button>
               </div>

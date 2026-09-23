@@ -1,5 +1,4 @@
-import { faArrowPointer } from "@fortawesome/free-solid-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { MousePointer2 } from "lucide-react";
 import { useRef } from "react";
 import { Button } from "../ui/button";
 import { apiImageUrl } from "@kari/shared/utils/image-management-helpers";
@@ -76,7 +75,7 @@ export function PhotoPicker({
         // could ever reach.
         onClick={() => inputRef.current!.click()}
       >
-        <FontAwesomeIcon icon={faArrowPointer} />
+        <MousePointer2 />
         {imageFile ? "Select a different image" : "Select an image"}
       </Button>
     </div>
