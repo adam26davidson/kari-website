@@ -10,7 +10,7 @@ import {
   removeItemById,
 } from "@kari/shared/utils/data-list-helpers";
 import { s3ImageUrl } from "@kari/shared/utils/image-management-helpers";
-import { LoadError } from "@kari/shared/components/load-error/load-error";
+import { LoadError } from "../components/load-error/load-error";
 import { ItemList } from "../components/item-list/item-list";
 import { deleteConfirmationMessage } from "../delete-confirmation";
 import { itemName } from "../item-name";

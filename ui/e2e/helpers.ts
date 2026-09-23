@@ -168,7 +168,7 @@ export async function openAdminSection(page: Page, section: AdminSection) {
     await waitForIdle(page);
     // A load can still fail after a 2xx (e.g. a body read/parse error), in
     // which case the section renders LoadError instead of the list.
-    await expect(page.locator(".load-error")).toHaveCount(0);
+    await expect(page.locator(".admin-load-error")).toHaveCount(0);
   } finally {
     page.off("framenavigated", onFrameNavigated);
     page.off("request", onRequest);

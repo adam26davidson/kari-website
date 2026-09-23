@@ -90,19 +90,25 @@
   /* --- The bridge --------------------------------------------------
      Not everything the admin renders is the admin's own. It imports the
      shared index.css for the tokens and the `.whole-page` frame, and with
-     them come components written for the public site: the `LoadError` and
-     `ErrorBoundary` notices, the `SiteButton` inside them, and the
-     `.loading` line. Those reach their colour and their face through the
-     shared tokens, so the tokens are re-pointed here rather than the
-     components being forked.
+     them come components written for the public site. Two are left: the
+     `ErrorBoundary` notice (app.tsx) and the `.loading` line (the Suspense
+     fallbacks in admin.tsx and admin-other-works-page.tsx). Those reach
+     their colour and their face through the shared tokens, so the tokens
+     are re-pointed here rather than the components being forked.
+
+     `LoadError` used to be a third, and `SiteButton` sat inside all three;
+     #832 gave the admin its own LoadError (components/load-error/), built
+     on the Card and Button below, which left no SiteButton in this bundle
+     at all and took the `.site-button` override at the foot of this file
+     with it. The two above are the same mismatch waiting for the same
+     treatment — they still wear the public site's notice card.
 
      `--primary-hover` is the darker green a filled control answers the
      pointer with — `--primary` itself needs no line of its own, because
      the shadcn alias above IS the re-declaration, which is the point: one
-     token, two worlds. This was written in #592 for the pre-shadcn pages'
-     filled controls and outlived them (#240); the shared components are
-     what spend it now, along with `.site-button` at the foot of this
-     file. */
+     token, two worlds. Written in #592 for the pre-shadcn pages' filled
+     controls and outlived them (#240); what spends it now is the button
+     recipe, via `--color-primary-hover` below. */
   --primary-hover: #24462f;
 
   /* The face axis, likewise (#483). Every rule in every workspace
@@ -177,21 +183,4 @@
 body {
   background-color: var(--background);
   color: var(--foreground);
-}
-
-/* The shared SiteButton, which in the admin is only ever an error card's
-   Retry or Reload. It is deliberately translucent on the public site,
-   where it sits over a photograph and a solid slab would read as a
-   sticker; on the admin's opaque paper that same 71% fill lands at 3.7:1
-   under its own near-white label — the one place re-pointing `--primary`
-   above makes a shared rule worse rather than better. Opaque here, like
-   every other filled control in this palette (7.9:1), and answering the
-   pointer with the same darker green the shadcn recipe uses. */
-.site-button {
-  background-color: var(--primary);
-}
-
-.site-button:hover,
-.site-button:active {
-  background-color: var(--primary-hover);
 }

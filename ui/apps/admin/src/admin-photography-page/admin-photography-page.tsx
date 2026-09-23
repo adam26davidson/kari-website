@@ -14,7 +14,7 @@ import {
   newEditorImage,
 } from "./components/photography-post-editor/editor-image";
 import { PhotographyPostSummary } from "./components/photography-post-summary/photography-post-summary";
-import { LoadError } from "@kari/shared/components/load-error/load-error";
+import { LoadError } from "../components/load-error/load-error";
 import { ItemList } from "../components/item-list/item-list";
 import { deleteConfirmationMessage } from "../delete-confirmation";
 import { itemName } from "../item-name";

@@ -140,7 +140,7 @@ async function openWhatsOnTest(page: Page) {
   await expect(
     section(page)
       .locator(".whats-on-test-shas")
-      .or(section(page).locator(".load-error")),
+      .or(section(page).locator(".admin-load-error")),
     "The page rendered neither its version footer nor an error, which means " +
       "the bundle under test carries no VITE_COMMIT_SHA. Stop any stale " +
       "`npm run preview` on the e2e port and let playwright build its own.",
@@ -278,7 +278,7 @@ test.describe("admin: what's on test", () => {
 
     await openWhatsOnTest(page);
 
-    const error = section(page).locator(".load-error");
+    const error = section(page).locator(".admin-load-error");
     await expect(error).toContainText(
       "Failed to load what's waiting to go live.",
     );
@@ -289,7 +289,7 @@ test.describe("admin: what's on test", () => {
     await mock(page, isDeploymentsRequest, jsonResponse([]));
     await error.getByRole("button", { name: "Retry" }).click();
 
-    await expect(section(page).locator(".load-error")).toHaveCount(0);
+    await expect(section(page).locator(".admin-load-error")).toHaveCount(0);
     await expect(section(page).locator(".whats-on-test-note")).toContainText(
       "hasn't been published from here yet",
     );

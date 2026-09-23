@@ -11,7 +11,7 @@ import { HomePageData } from "@kari/shared/models";
 import { PhotoPicker } from "../components/photo-picker/photo-picker";
 import { ImageService } from "@kari/shared/services/images";
 import { HomePageService } from "@kari/shared/services/home-page";
-import { LoadError } from "@kari/shared/components/load-error/load-error";
+import { LoadError } from "../components/load-error/load-error";
 import { useAdminUi } from "../admin-ui-context";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 import { useAssistantSubject } from "../assistant/use-assistant-subject";

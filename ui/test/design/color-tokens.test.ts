@@ -34,7 +34,7 @@ const SHARED_ROOT = "packages/shared/src/styles/index.css";
  * place a colour is deliberately declared TWICE on this site: it re-points
  * `--primary` (and `--primary-hover`) at the design boards' Fir green for
  * the admin build alone, which is how the shared components the admin
- * renders — the error notices, their SiteButton, the loading line — follow
+ * renders — the ErrorBoundary notice, the loading line — follow
  * the new palette without being forked. The public app never imports it,
  * so its brown is untouched.
  *
