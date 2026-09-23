@@ -36,8 +36,9 @@ export function pngFixturePath(): string {
 // --- Admin UI helpers -------------------------------------------------------
 // Save, Close, Add and the per-row Edit/Delete are labelled text buttons and
 // are located by their accessible name. Only the per-row move controls are
-// icon-only (FontAwesome renders <svg data-icon="...">), and nothing here
-// drives them.
+// icon-only, and nothing here drives them — anything that ever needs to
+// should locate them by their aria-label ("Move up" / "Move down"), not by
+// the icon markup, which is lucide's since #856 and identifies nothing.
 
 /**
  * A list row's Edit button. `exact` matters: without it "Edit" would also
