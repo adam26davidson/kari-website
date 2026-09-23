@@ -19,14 +19,6 @@ describe("HaigaContent", () => {
     expect(screen.getByText("kari")).toBeInTheDocument();
   });
 
-  it("omits the lines from the compact (admin list) view too", () => {
-    render(<HaigaContent haiga={haiga} compact />);
-    for (const line of haiga.lines) {
-      expect(screen.queryByText(line)).not.toBeInTheDocument();
-    }
-    expect(screen.getByText("kari")).toBeInTheDocument();
-  });
-
   it("uses the lines as image alt text when an older haiga has them", () => {
     render(<HaigaContent haiga={haiga} />);
     expect(
@@ -37,7 +29,7 @@ describe("HaigaContent", () => {
   });
 
   it("falls back to a generic alt text when there are no lines", () => {
-    render(<HaigaContent haiga={{ ...haiga, lines: [] }} compact />);
+    render(<HaigaContent haiga={{ ...haiga, lines: [] }} />);
     expect(screen.getByAltText("haiga")).toBeInTheDocument();
   });
 });

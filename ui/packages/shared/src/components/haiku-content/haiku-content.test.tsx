@@ -20,7 +20,7 @@ const css = readFileSync(
 /** The `text-align` of the rule for exactly `className`. */
 const alignment = (className: string) => {
   // `\s*\{` and not `[-\w]*` — it is what keeps ".haiku-list-line" from
-  // matching the ".haiku-list-line-compact" rule below it.
+  // matching a longer rule name that merely starts with it.
   const rule = css.match(new RegExp(`\\.${className}\\s*\\{([^}]*)\\}`));
   expect(rule, `no rule for .${className}`).not.toBeNull();
   return rule![1].match(/text-align\s*:\s*(\w+)/)?.[1];
@@ -35,24 +35,12 @@ describe("HaikuContent", () => {
     expect(screen.getByText("Matsuo Basho")).toBeInTheDocument();
   });
 
-  it("switches to the compact classes in the admin list", () => {
-    const { container } = render(<HaikuContent haiku={haiku} compact={true} />);
-    expect(container.querySelectorAll(".haiku-list-line-compact")).toHaveLength(
-      haiku.lines.length,
-    );
-    expect(
-      container.querySelector(".haiku-list-publisher-compact"),
-    ).toBeInTheDocument();
-  });
-
-  // The poem centred in the page is the public presentation and stays that
-  // way; centred in an ADMIN list row it left the row's first third empty
-  // and made haiku the one section whose entries did not start where every
-  // other section's title starts (#457, design brief §1).
-  it("centres the poem on the public page and left-aligns it in the admin row", () => {
+  // The poem centred in the page is the public presentation: the column is
+  // drawn around it and the centring IS the page. The admin list renders
+  // its own left-aligned serif rows instead (#457, design brief §1), so
+  // this component only ever has the one, centred, presentation.
+  it("centres the poem and its attribution on the public page", () => {
     expect(alignment("haiku-list-line")).toBe("center");
     expect(alignment("haiku-list-publisher")).toBe("center");
-    expect(alignment("haiku-list-line-compact")).toBe("left");
-    expect(alignment("haiku-list-publisher-compact")).toBe("left");
   });
 });

@@ -384,8 +384,8 @@ describe("AdminHaigaPage search", () => {
     const search = await screen.findByRole("searchbox", {
       name: "Search haiga",
     });
-    // Compact haiga rows only show the publisher (the lines live in the
-    // image), but the lines are still searchable.
+    // Haiga rows only show the publisher (the lines live in the image),
+    // but the lines are still searchable.
     fireEvent.change(search, { target: { value: "pond a frog" } });
     expect(screen.getByText("kari")).toBeInTheDocument();
     expect(screen.queryByText("other")).toBeNull();
