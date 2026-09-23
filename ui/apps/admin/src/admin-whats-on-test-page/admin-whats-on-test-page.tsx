@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { LoadError } from "@kari/shared/components/load-error/load-error";
+import { LoadError } from "../components/load-error/load-error";
 import { useS3Load } from "@kari/shared/hooks/use-s3-load";
 import {
   DeployStatusService,

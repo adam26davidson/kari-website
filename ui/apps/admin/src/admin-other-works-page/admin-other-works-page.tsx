@@ -10,7 +10,7 @@ import { formatPostDate, todayAsPostDate } from "@kari/shared/utils/date-helpers
 import { BlogService } from "@kari/shared/services/blog";
 import { ImageService } from "@kari/shared/services/images";
 import { lazyWithRetry } from "@kari/shared/components/error-boundary/lazy-with-retry";
-import { LoadError } from "@kari/shared/components/load-error/load-error";
+import { LoadError } from "../components/load-error/load-error";
 import { BlogPostRow } from "./components/blog-post-row/blog-post-row";
 import { ItemList } from "../components/item-list/item-list";
 import { deleteConfirmationMessage } from "../delete-confirmation";

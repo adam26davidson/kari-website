@@ -8,7 +8,7 @@ import {
   removeItemById,
 } from "@kari/shared/utils/data-list-helpers";
 import { HaikuEditor } from "./components/haiku-editor/haiku-editor";
-import { LoadError } from "@kari/shared/components/load-error/load-error";
+import { LoadError } from "../components/load-error/load-error";
 import { ItemList } from "../components/item-list/item-list";
 import { deleteConfirmationMessage } from "../delete-confirmation";
 import { itemName } from "../item-name";
