@@ -18,6 +18,11 @@ import {
   restoreHomePage,
   snapshotHomePage,
 } from "./home-page-state";
+import {
+  SiteSettingsSnapshot,
+  restoreSiteSettings,
+  snapshotSiteSettings,
+} from "./site-settings-state";
 
 // Admin journeys: real create/edit/delete flows against the local e2e stack
 // (the API on localhost:3000 backed by the seeded local MinIO),
@@ -116,9 +121,9 @@ test.describe("admin navigation", () => {
     await expect(page.locator(".data-editor")).toBeVisible({
       timeout: 60_000,
     });
-    await expect(
-      page.locator(".data-editor textarea"),
-    ).toHaveValue(new RegExp(marker));
+    await expect(page.locator(".data-editor textarea")).toHaveValue(
+      new RegExp(marker),
+    );
 
     // Back from a clean editor returns to the list, no questions asked.
     await page.goBack();
@@ -253,9 +258,7 @@ test.describe("haiga", () => {
     await saveEditor(page);
     await expectToast(page, "Haiga saved");
     await closeEditor(page);
-    await expect(adminListItem(page, marker)).toContainText(
-      `${marker} edited`,
-    );
+    await expect(adminListItem(page, marker)).toContainText(`${marker} edited`);
 
     // Verify on the public page: the haiga renders its S3-published image,
     // with no haiku lines displayed as text (they live in the image).
@@ -435,12 +438,10 @@ test.describe("photography", () => {
 
     // Add an image: new picker slot, then pick the PNG fixture.
     const imagesSection = page.locator(".photography-post-editor-images");
+    await imagesSection.getByRole("button", { name: "Add an image" }).click();
     await imagesSection
-      .getByRole("button", { name: "Add an image" })
-      .click();
-    await imagesSection.locator('input[type="file"]').setInputFiles(
-      pngFixturePath(),
-    );
+      .locator('input[type="file"]')
+      .setInputFiles(pngFixturePath());
     // The chosen image shows up in the photo picker as a preview.
     await expect(imagesSection.locator(".photo-picker-image")).toBeVisible();
     await page.getByLabel("Caption (optional)").fill("e2e caption");
@@ -734,5 +735,197 @@ test.describe("home page preview", () => {
     await expect(
       page.frameLocator(PREVIEW).locator(".home-page.mobile"),
     ).toBeVisible();
+  });
+});
+
+test.describe("appearance", () => {
+  // The Appearance page edits a single shared document (site-settings.json),
+  // not an append-only list, so — like the home page — nothing done through
+  // the UI can undo a run. e2e/seed.mjs writes no settings object at all, so
+  // the state to restore is usually "there was none"; see
+  // e2e/site-settings-state.ts, whose restore runs even when a test dies
+  // midway and does not depend on the page still being alive.
+  let snapshot: SiteSettingsSnapshot | undefined;
+
+  // Colours the site uses nowhere else, so an assertion below can only pass
+  // if THIS journey's save is what painted the header. All three differ from
+  // the built-in colours (a near-black green bar, white title, white links).
+  const BAR_COLOR = "#2f5d8a";
+  const TITLE_COLOR = "#ffe08a";
+  const NAV_COLOR = "#c8f0d0";
+
+  /** `#rrggbb` as Chromium serializes an opaque computed colour. */
+  const rgb = (hex: string) =>
+    `rgb(${[1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16)).join(", ")})`;
+
+  /** The Appearance page's single Save, under everything it saves. */
+  const savePage = (page: Page) =>
+    page.locator(".admin-button", { hasText: "Save" }).click();
+
+  /** A per-row "Use default", exact so the background card's is not one. */
+  const useDefaultButtons = (page: Page) =>
+    page.getByRole("button", { name: "Use default", exact: true });
+
+  /**
+   * A rendered element's computed value for one property, as the browser
+   * serializes it. Read through the real cascade rather than off the style
+   * attribute: the whole point is that the custom property useSiteBackground
+   * sets actually reaches the rule in header.css that consumes it.
+   */
+  const computedStyle = (page: Page, selector: string, property: string) =>
+    page.evaluate(
+      ([sel, prop]) => {
+        const element = document.querySelector(sel);
+        if (!element) throw new Error(`Nothing matched ${sel}`);
+        return getComputedStyle(element).getPropertyValue(prop);
+      },
+      [selector, property],
+    );
+
+  /**
+   * Load the public home page and wait for the settings fetch the header
+   * colours ride in on, so the assertions that follow are made against an
+   * applied settings object rather than the first paint.
+   */
+  async function openPublicHome(page: Page) {
+    const settingsLoaded = page.waitForResponse((r) =>
+      r.url().includes("site-settings.json"),
+    );
+    await page.goto("/");
+    await settingsLoaded;
+    await expect(page.locator(".header")).toBeVisible();
+  }
+
+  test.beforeEach(async ({ page }) => {
+    snapshot = await snapshotSiteSettings();
+    // The public site reads site-settings.json straight from MinIO, whose
+    // Last-Modified has one-second granularity: when two saves land in the
+    // same second, revalidation returns 304 forever and reloads keep serving
+    // the first body. Registering a route disables the HTTP cache for the
+    // matched request (the same trick expectGoneFromPublicPage uses).
+    await page.route("**/site-settings.json*", (route) => route.continue());
+  });
+
+  test.afterEach(async () => {
+    if (!snapshot) return;
+    await restoreSiteSettings(snapshot);
+    snapshot = undefined;
+  });
+
+  test("pick a header colour, save, and find it there after a reload", async ({
+    page,
+  }) => {
+    await openAdminSection(page, "Appearance");
+
+    const barSwatch = page.locator("#header-bar-color");
+    await expect(barSwatch).toBeVisible();
+    await barSwatch.fill(BAR_COLOR);
+    await expect(barSwatch).toHaveValue(BAR_COLOR);
+    // A colour that is no longer the built-in one offers the way back.
+    await expect(useDefaultButtons(page)).toHaveCount(1);
+
+    // Only the colour group changed, so the acknowledgement names that group
+    // rather than the whole page.
+    await savePage(page);
+    await expectToast(page, "Header colours saved");
+    await waitForIdle(page, 120_000);
+
+    // Reload rather than re-read the form: this is what proves the save
+    // reached the settings object instead of only the React state.
+    await page.reload();
+    await expect(page.locator("#header-bar-color")).toHaveValue(BAR_COLOR, {
+      timeout: 60_000,
+    });
+    await expect(useDefaultButtons(page)).toHaveCount(1);
+  });
+
+  test("header colours reach the public header, and Use default puts them back", async ({
+    page,
+  }) => {
+    // The built-in appearance, measured rather than hard-coded: header.css
+    // states the defaults as var() fallbacks (one of them a color-mix), and
+    // this journey cares that clearing a setting gets the site BACK here,
+    // not how Chromium spells it.
+    await openPublicHome(page);
+    const defaultBar = await computedStyle(page, ".header", "background-color");
+    const defaultTitle = await computedStyle(page, ".header-title", "color");
+    const defaultNav = await computedStyle(page, ".pages a", "color");
+
+    await openAdminSection(page, "Appearance");
+    // The captured baseline is only the default appearance if the site is
+    // unconfigured, which a seeded stack is — say so loudly if it is not,
+    // rather than comparing the end of this journey against leaked state.
+    await expect(
+      page.getByText("These are the site's built-in colours."),
+    ).toBeVisible();
+
+    await page.locator("#header-bar-color").fill(BAR_COLOR);
+    await page.locator("#header-title-color").fill(TITLE_COLOR);
+    await page.locator("#header-nav-color").fill(NAV_COLOR);
+
+    // The bar is stored as `#rrggbbaa` — the chosen colour plus the
+    // see-through slider's alpha — and the admin's preview bar carries that
+    // composed value as an inline style. Taking the expected colour from
+    // there keeps the alpha out of this test entirely, and makes the
+    // assertion below "the visitor sees what the preview promised".
+    const expectedBar = await computedStyle(
+      page,
+      ".header-colors-preview-bar",
+      "background-color",
+    );
+    expect(expectedBar).not.toBe(defaultBar);
+
+    await savePage(page);
+    await expectToast(page, "Header colours saved");
+    await waitForIdle(page, 120_000);
+
+    // The whole point of the feature: the PUBLIC header repaints.
+    await openPublicHome(page);
+    await expect(page.locator(".header")).toHaveCSS(
+      "background-color",
+      expectedBar,
+    );
+    await expect(page.locator(".header-title")).toHaveCSS(
+      "color",
+      rgb(TITLE_COLOR),
+    );
+    await expect(page.locator(".pages a").first()).toHaveCSS(
+      "color",
+      rgb(NAV_COLOR),
+    );
+
+    // Now clear all three. Each row's reset disappears once that setting is
+    // back to the built-in colour, so the count itself says how far this
+    // got; the loop is bounded by the number of settings.
+    await openAdminSection(page, "Appearance");
+    const resets = useDefaultButtons(page);
+    await expect(resets).toHaveCount(3);
+    for (let remaining = 3; remaining > 0; remaining--) {
+      await resets.first().click();
+      await expect(resets).toHaveCount(remaining - 1);
+    }
+    await expect(
+      page.getByText("These are the site's built-in colours."),
+    ).toBeVisible();
+
+    await savePage(page);
+    await expectToast(page, "Header colours saved");
+    await waitForIdle(page, 120_000);
+
+    // Cleared settings are stored as "", which useSiteBackground declines to
+    // publish — so the stylesheet's own fallbacks paint again.
+    await openPublicHome(page);
+    await expect(page.locator(".header")).toHaveCSS(
+      "background-color",
+      defaultBar,
+    );
+    await expect(page.locator(".header-title")).toHaveCSS(
+      "color",
+      defaultTitle,
+    );
+    await expect(page.locator(".pages a").first()).toHaveCSS(
+      "color",
+      defaultNav,
+    );
   });
 });
