@@ -7,7 +7,19 @@
    explanation of why each of the four is needed (#581). The centring below
    is what makes it matter here: `justify-content: center` overflows BOTH
    ends when free space goes negative, so a home page too tall for a short
-   desktop window would put its own top out of reach. */
+   desktop window would put its own top out of reach.
+
+   The centring is unconditional: at every width this wrapper holds exactly
+   one child (the loading line, the load error, or the card), for which
+   `center` distributes free space exactly as `.content-page`'s
+   `space-evenly` does for the other public pages — so home floats on the
+   background at the same height as its siblings instead of hugging the
+   header. Mobile used to override this with `justify-content: flex-start`,
+   from back when `.home-page` was `height: 100%; overflow-y: auto` and
+   centring a card taller than the wrapper clipped its top (#130). #581
+   removed that height cap, so free space here can no longer go negative
+   and the override only cost the phone layout its strip of background
+   above the card (#634). */
 .home-page {
   display: flex;
   flex-direction: column;
@@ -17,10 +29,6 @@
   min-height: 100%;
   width: 100%;
   min-width: 0;
-}
-
-.home-page.mobile {
-  justify-content: flex-start;
 }
 
 .home-page-card {

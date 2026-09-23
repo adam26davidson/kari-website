@@ -317,10 +317,11 @@ test("list pages: the shell is the only thing that scrolls (mobile)", async ({
 test("home page: the shell is the only thing that scrolls (desktop)", async ({
   page,
 }) => {
-  // Desktop width on purpose: `.home-page.mobile` switches to
-  // `justify-content: flex-start`, so the centring fallback this guards
-  // against is only reachable at >= 768px. Short enough that the card,
-  // whose photo is capped at 400px tall, cannot fit.
+  // Desktop width on purpose: it is the cheapest viewport that overflows.
+  // The card lays its 400px-capped photo out BESIDE the blurb here, so a
+  // 420px-tall window cannot fit it; the centring this guards against is
+  // `.home-page`'s and applies at every width (#634 dropped the mobile
+  // `justify-content: flex-start` override), so one width proves it.
   await page.setViewportSize({ width: 1000, height: 420 });
   await page.goto("/");
   const photo = page.locator(".home-page-photo");
