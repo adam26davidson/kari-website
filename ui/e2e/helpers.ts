@@ -91,36 +91,44 @@ export async function waitForIdle(page: Page, timeout = 60_000) {
   await expect(page.locator(".admin-loading")).toBeHidden({ timeout });
 }
 
-export type AdminSection =
-  | "Home"
-  | "Haiku"
-  | "Haiga"
-  | "Photography"
-  | "Other works";
+/** The admin sections that own a list of content items, each with rows. */
+export type AdminListSection =
+  "Haiku" | "Haiga" | "Photography" | "Other works";
 
-/** The API endpoint each admin section fetches its list from on mount. */
-const SECTION_LIST_ENDPOINT: Record<AdminSection, string> = {
+/** Every section `openAdminSection` can reach from the shell's nav. */
+export type AdminSection = AdminListSection | "Home" | "Appearance";
+
+/**
+ * The API endpoint each admin section fetches on mount — for the list
+ * sections its list, for the two single-document pages the document. It is
+ * only ever used as the "this section has finished loading" signal below, so
+ * what matters is that the section requests it exactly once per mount.
+ */
+const SECTION_MOUNT_ENDPOINT: Record<AdminSection, string> = {
   Home: "/home-page",
   Haiku: "/haiku",
   Haiga: "/haiga",
   Photography: "/photography",
   "Other works": "/blog",
+  // The Appearance page loads the settings and the image listing in
+  // parallel; the settings are the half it cannot render without.
+  Appearance: "/site-settings",
 };
 
 /**
  * Open /admin (already signed in — the test bundle's fake auth, or a real
  * Auth0 session in the login smoke) and switch to the given section,
- * waiting for its list to finish loading.
+ * waiting for it to finish loading.
  */
 export async function openAdminSection(page: Page, section: AdminSection) {
-  const listUrl = TEST_API_URL + SECTION_LIST_ENDPOINT[section];
+  const mountUrl = TEST_API_URL + SECTION_MOUNT_ENDPOINT[section];
   // The "Loading..." overlay only appears after the section component's
   // mount effect runs, so waitForIdle alone can pass before loading has
   // even started — leaving the list at its initial empty state and letting
   // cleanup miss rows that exist but haven't rendered yet. The section's
-  // list fetch is a positive signal that the load actually happened: once
+  // mount fetch is a positive signal that the load actually happened: once
   // its response arrives, the overlay is up and is hidden in the same
-  // React commit that populates the list.
+  // React commit that populates the section.
   //
   // The wait is scoped to requests issued by the post-goto document while
   // still being registered before goto, reconciling two concerns:
@@ -139,13 +147,13 @@ export async function openAdminSection(page: Page, section: AdminSection) {
     if (frame === page.mainFrame()) navigated = true;
   };
   const onRequest = (request: Request) => {
-    if (navigated && request.method() === "GET" && request.url() === listUrl) {
+    if (navigated && request.method() === "GET" && request.url() === mountUrl) {
       postNavRequests.add(request);
     }
   };
   page.on("framenavigated", onFrameNavigated);
   page.on("request", onRequest);
-  const listLoaded = page.waitForResponse(
+  const mountLoaded = page.waitForResponse(
     (r) => postNavRequests.has(r.request()),
     { timeout: 60_000 },
   );
@@ -155,19 +163,19 @@ export async function openAdminSection(page: Page, section: AdminSection) {
     // First load after login can wait on Auth0 checkSession + the test API.
     await expect(menuItem).toBeVisible({ timeout: 60_000 });
     await menuItem.click();
-    const response = await listLoaded;
-    // Fail loudly when the list load fails: on a non-2xx the section
-    // renders LoadError with zero rows, which deleteItemsMatching would
-    // otherwise mistake for "nothing to delete" and pass silently.
+    const response = await mountLoaded;
+    // Fail loudly when the load fails: on a non-2xx the section renders
+    // LoadError with zero rows, which deleteItemsMatching would otherwise
+    // mistake for "nothing to delete" and pass silently.
     if (!response.ok()) {
       throw new Error(
-        `Admin "${section}" list failed to load: ` +
-          `GET ${listUrl} returned ${response.status()}`,
+        `Admin "${section}" failed to load: ` +
+          `GET ${mountUrl} returned ${response.status()}`,
       );
     }
     await waitForIdle(page);
     // A load can still fail after a 2xx (e.g. a body read/parse error), in
-    // which case the section renders LoadError instead of the list.
+    // which case the section renders LoadError instead of its content.
     await expect(page.locator(".admin-load-error")).toHaveCount(0);
   } finally {
     page.off("framenavigated", onFrameNavigated);
@@ -244,7 +252,7 @@ export async function expectGoneFromPublicPage(
  */
 export async function deleteItemsMatching(
   page: Page,
-  section: AdminSection,
+  section: AdminListSection,
   marker: string,
 ) {
   await openAdminSection(page, section);
