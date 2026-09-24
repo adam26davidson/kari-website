@@ -1,4 +1,9 @@
-import { ComponentType, lazy, LazyExoticComponent } from "react";
+import {
+  ComponentProps,
+  ComponentType,
+  lazy,
+  LazyExoticComponent,
+} from "react";
 
 /**
  * Message fragments browsers emit when a dynamic `import()` of a route
@@ -98,16 +103,32 @@ function clearReloadedFlag(storage: StorageLike | null): void {
  *    reload, so a persistent failure falls through to the
  *    ErrorBoundary, which shows tailored "new version deployed" copy.
  */
-// The constraint is React's own `lazy` signature, verbatim: a bare
-// `ComponentType` means `ComponentType<{}>`, which admits only components
-// with no required props — fine while the only lazy component took none,
-// but it rejected the blog-post editor (#419). Narrower stand-ins don't
-// work: `ComponentType<never>` satisfies neither `lazy` nor
-// `LazyExoticComponent`, both of which are themselves written against
-// `ComponentType<any>`. `T` is still inferred as the concrete component,
-// so callers get full prop checking at the JSX site.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function lazyWithRetry<T extends ComponentType<any>>(
+// Two type parameters, and only the first one is ever written by a
+// caller. `T` is inferred from the factory as the concrete component, so
+// callers keep full prop checking at the JSX site; `P` exists purely to
+// give `T`'s constraint a props type, and defaults to the component's own
+// props, which makes the constraint self-satisfying for any component.
+//
+// The obvious simpler forms don't work (#419, #679):
+//   - a bare `ComponentType` means `ComponentType<{}>`, which admits only
+//     components with no required props — it rejected the blog-post
+//     editor;
+//   - `ComponentType<never>` satisfies neither `lazy` nor
+//     `LazyExoticComponent`, whose own constraints are wider than it;
+//   - declaring the props type first (`<P, T extends ComponentType<P>>`)
+//     leaves `P` with no inference site, so it collapses to `unknown` and
+//     `ComponentType<P>`, contravariant in `P`, rejects every component
+//     with props;
+//   - a single `<P>` inferred straight from the factory breaks on the
+//     `import(...).then((m) => ({ default: m.X }))` shape every call site
+//     uses, because the promise's union member contributes
+//     `ComponentType<never>`.
+// Ordering `T` first and defaulting `P` from it avoids all of that
+// without an `any`.
+export function lazyWithRetry<
+  T extends ComponentType<P>,
+  P = ComponentProps<T>,
+>(
   factory: () => Promise<{ default: T }>,
   hooks: LazyRetryHooks = {},
 ): LazyExoticComponent<T> {

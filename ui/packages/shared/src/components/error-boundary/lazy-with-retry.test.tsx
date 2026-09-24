@@ -12,6 +12,11 @@ function Page() {
   return <p>page loaded</p>;
 }
 
+/** Stand-in for a lazy component with required props (the blog editor). */
+function TitledPage({ title }: { title: string }) {
+  return <p>{title}</p>;
+}
+
 // What Chrome throws when a hashed chunk URL 404s after a redeploy.
 function chunkError() {
   return new TypeError(
@@ -270,5 +275,43 @@ describe("lazyWithRetry", () => {
 
     await waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
     expect(screen.getByText("loading chunk")).toBeInTheDocument();
+  });
+});
+
+// Type-level pins for #679: the generic is `<T extends ComponentType<P>,
+// P = ComponentProps<T>>` rather than `ComponentType<any>`, and it has to
+// keep typing both call-site shapes the apps use -- prop-less pages and
+// the blog-post editor's required props. `npm run typecheck` covers this
+// file, so a `@ts-expect-error` that stops erroring fails the build: that
+// is what stops the generic from quietly widening back to `any`.
+describe("lazyWithRetry typing", () => {
+  it("wraps a component with required props and still checks them", async () => {
+    const Titled = lazyWithRetry(async () => ({ default: TitledPage }));
+    render(
+      <Suspense fallback={<p>loading chunk</p>}>
+        <Titled title="typed page" />
+      </Suspense>,
+    );
+    expect(await screen.findByText("typed page")).toBeInTheDocument();
+
+    // @ts-expect-error -- `title` is required, so the wrapper must reject
+    // this element. Widen the wrapper back to an `any` component type and
+    // this directive goes unused, which is itself a typecheck error.
+    const missingProp = <Titled />;
+    expect(missingProp).toBeTruthy();
+
+    // @ts-expect-error -- and unknown props are still rejected too.
+    const unknownProp = <Titled title="x" subtitle="y" />;
+    expect(unknownProp).toBeTruthy();
+  });
+
+  it("wraps a prop-less component without demanding props", async () => {
+    const PropLess = lazyWithRetry(async () => ({ default: Page }));
+    render(
+      <Suspense fallback={<p>loading chunk</p>}>
+        <PropLess />
+      </Suspense>,
+    );
+    expect(await screen.findByText("page loaded")).toBeInTheDocument();
   });
 });
