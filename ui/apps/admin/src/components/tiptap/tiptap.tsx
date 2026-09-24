@@ -500,15 +500,19 @@ export function Tiptap({
       // since Tiptap 3 — Link; registering any of them again triggers
       // Tiptap's duplicate-extension warning.
       StarterKit.configure({
-        // Two more of Tiptap 3's StarterKit additions change the schema,
-        // and the blog posts already in the bucket were written without
-        // them. Underline would start parsing stored <u> tags as a mark
-        // the toolbar offers no way to remove, and TrailingNode appends
-        // an empty paragraph to any document ending in a list or an
-        // image — which getHTML() then reports as an edit, so merely
-        // opening an old post would queue a save. Both stay off.
+        // Underline is one of Tiptap 3's StarterKit additions and stays
+        // off (#671): underlined text that isn't a link reads as a
+        // mistake on the web, so there is no toolbar button for it —
+        // which would leave a stored <u> parsed as a mark with no way to
+        // take it off again.
         underline: false,
-        trailingNode: false,
+        // TrailingNode, by contrast, is on (#671): it keeps an empty
+        // paragraph after a document that ends in an image or a list, so
+        // the cursor can get past one and the writing can carry on.
+        // The cost is that opening an old post that ends that way and
+        // touching it at all appends that paragraph to the stored HTML
+        // on the next save — accepted, since the alternative is a
+        // trailing image the admin cannot type below.
         link: {
           // Link defaults to opening its href on click, and since its
           // other default puts target="_blank" on every anchor, clicking

@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { Editor } from "@tiptap/react";
 import type { EditorView } from "@tiptap/pm/view";
@@ -238,17 +244,19 @@ describe("Tiptap toolbar", () => {
     const user = userEvent.setup();
     const { setContent } = renderTiptap();
 
+    // The empty paragraph trailing each list is TrailingNode, which is on
+    // so the cursor can get below a list that ends the post (#671).
     await user.click(getButton("Bulleted list"));
     expect(getButton("Bulleted list")).toHaveAttribute("aria-pressed", "true");
     expect(setContent).toHaveBeenLastCalledWith(
-      "<ul><li><p>hello</p></li></ul>"
+      "<ul><li><p>hello</p></li></ul><p></p>"
     );
 
     await user.click(getButton("Numbered list"));
     expect(getButton("Numbered list")).toHaveAttribute("aria-pressed", "true");
     expect(getButton("Bulleted list")).toHaveAttribute("aria-pressed", "false");
     expect(setContent).toHaveBeenLastCalledWith(
-      "<ol><li><p>hello</p></li></ol>"
+      "<ol><li><p>hello</p></li></ol><p></p>"
     );
   });
 
@@ -260,11 +268,13 @@ describe("Tiptap toolbar", () => {
     expect(select).toHaveValue("p");
     await user.selectOptions(select, "h2");
     expect(select).toHaveValue("h2");
-    expect(setContent).toHaveBeenLastCalledWith("<h2>hello</h2>");
+    // Again the trailing empty paragraph from TrailingNode (#671); it stays
+    // in the document once the heading it followed becomes a paragraph.
+    expect(setContent).toHaveBeenLastCalledWith("<h2>hello</h2><p></p>");
 
     await user.selectOptions(select, "p");
     expect(select).toHaveValue("p");
-    expect(setContent).toHaveBeenLastCalledWith("<p>hello</p>");
+    expect(setContent).toHaveBeenLastCalledWith("<p>hello</p><p></p>");
   });
 
   it("disables unlink when the cursor is not on a link", () => {
@@ -522,18 +532,59 @@ describe("Tiptap toolbar", () => {
     expect(html).toContain('src="data:image/png;base64');
   });
 
-  it("does not append a trailing paragraph to a document ending in a list", async () => {
-    // Tiptap 3's StarterKit bundles TrailingNode, which would add an empty
-    // paragraph after a closing list or image. getHTML() reports that as an
-    // edit, so an untouched post would come back from the editor changed and
-    // queue a pointless save. The extension is configured off; this pins it.
+  it("keeps an empty paragraph after a document ending in a list", async () => {
+    // TrailingNode (bundled with Tiptap 3's StarterKit) adds an empty
+    // paragraph after a closing list or image so the cursor can get past it
+    // and the writing carries on. It is enabled on purpose (#671); this pins
+    // it, because turning it off again would silently trap the cursor.
     const user = userEvent.setup();
     const { setContent } = renderTiptap("<ul><li><p>only item</p></li></ul>");
 
     await user.click(getButton("Numbered list"));
 
     expect(setContent).toHaveBeenLastCalledWith(
-      "<ol><li><p>only item</p></li></ol>"
+      "<ol><li><p>only item</p></li></ol><p></p>"
+    );
+  });
+
+  it("keeps an empty paragraph after a document ending in an image", async () => {
+    // The reason the extension is on: an image is the last thing a post
+    // often ends with, and without a paragraph after it there is nowhere to
+    // put the cursor to keep writing.
+    const { setContent } = renderTiptap(
+      '<img src="https://x.test/a.png" alt="a">'
+    );
+
+    // The paragraph arrives on the editor's first transaction, so this is
+    // what the admin clicking into the post does.
+    await act(async () => {
+      getEditor().commands.focus();
+    });
+
+    expect(setContent).toHaveBeenLastCalledWith(
+      expect.stringContaining("<p></p>")
+    );
+  });
+
+  it("ignores ctrl+u: underline is not part of the schema", async () => {
+    // StarterKit bundles Underline too, but it stays off (#671): underlined
+    // text that is not a link reads as a mistake on the web, and the toolbar
+    // offers no way to take the mark off again. Ctrl+U is its shortcut, so
+    // pressing it here must leave the text exactly as it was.
+    const { setContent } = renderTiptap("<p>hello</p>");
+    const editor = getEditor();
+
+    await act(async () => {
+      editor.commands.setTextSelection({ from: 1, to: 6 });
+    });
+    await act(async () => {
+      fireEvent.keyDown(editor.view.dom, { key: "u", ctrlKey: true });
+      fireEvent.keyDown(editor.view.dom, { key: "u", metaKey: true });
+    });
+
+    expect(editor.getHTML()).toBe("<p>hello</p>");
+    expect(setContent).not.toHaveBeenCalledWith(
+      expect.stringContaining("<u>")
     );
   });
 
