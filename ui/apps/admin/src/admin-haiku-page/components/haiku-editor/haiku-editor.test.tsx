@@ -48,7 +48,7 @@ describe("HaikuEditor", () => {
     const { setHaiku } = renderEditor();
     // Through the visible label, which proves the htmlFor/id wiring and
     // not merely that some text sits above the box (#457).
-    fireEvent.change(screen.getByLabelText("Publisher"), {
+    fireEvent.change(screen.getByLabelText("Publisher (optional)"), {
       target: { value: "basho" },
     });
     expect(setHaiku).toHaveBeenCalledWith({ ...haiku, publisher: "basho" });
@@ -77,6 +77,22 @@ describe("HaikuEditor", () => {
     expect(screen.getByLabelText("Haiku")).toHaveValue(
       "line one\nline two\nline three",
     );
-    expect(screen.getByLabelText("Publisher")).toHaveValue("kari");
+    expect(screen.getByLabelText("Publisher (optional)")).toHaveValue("kari");
+  });
+
+  it("explains each field where it stands, and ties the words to the box", () => {
+    renderEditor();
+
+    // Not `getByText`: the point is that the explanation is ATTACHED to the
+    // box it describes, so a screen reader reads it with the field rather
+    // than as a stray line at the foot of the card (#695).
+    expect(screen.getByLabelText("Haiku")).toHaveAccessibleDescription(
+      "One line of the haiku per line of the box — it appears on the site exactly as typed.",
+    );
+    expect(
+      screen.getByLabelText("Publisher (optional)"),
+    ).toHaveAccessibleDescription(
+      "Where the haiku was published, or a prize it won — it appears under the poem on the site.",
+    );
   });
 });

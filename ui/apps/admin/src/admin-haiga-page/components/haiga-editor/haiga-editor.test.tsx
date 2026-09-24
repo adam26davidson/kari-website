@@ -33,7 +33,7 @@ function renderEditor(overrides?: { saveDisabled?: boolean }) {
 describe("HaigaEditor", () => {
   it("updates the publisher while keeping the rest of the haiga", () => {
     const { setHaiga } = renderEditor();
-    fireEvent.change(screen.getByLabelText("Publisher"), {
+    fireEvent.change(screen.getByLabelText("Publisher (optional)"), {
       target: { value: "issa" },
     });
     expect(setHaiga).toHaveBeenCalledWith({ ...haiga, publisher: "issa" });
@@ -86,6 +86,19 @@ describe("HaigaEditor", () => {
       screen.getByRole("heading", { name: "Edit haiga" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Image")).toBeInTheDocument();
-    expect(screen.getByLabelText("Publisher")).toHaveValue("kari");
+    expect(screen.getByLabelText("Publisher (optional)")).toHaveValue("kari");
+  });
+
+  it("says what the publisher line is and where it lands on the site", () => {
+    renderEditor();
+
+    // Not `getByText`: the point is that the explanation is ATTACHED to the
+    // box it describes, so a screen reader reads it with the field rather
+    // than as a stray line at the foot of the card (#695).
+    expect(
+      screen.getByLabelText("Publisher (optional)"),
+    ).toHaveAccessibleDescription(
+      "Where the haiga was published, and who made the picture — it appears under the artwork on the site.",
+    );
   });
 });
