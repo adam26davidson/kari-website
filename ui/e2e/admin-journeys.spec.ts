@@ -738,6 +738,19 @@ test.describe("home page preview", () => {
   });
 });
 
+/**
+ * The header-colour half of site-settings.json as the public site receives
+ * it, or null when the object does not exist. Declared here rather than
+ * imported from the app: the e2e project compiles on its own (see
+ * ui/tsconfig.e2e.json), and what matters is the shape on the WIRE — the
+ * API serializes every field, storing a cleared colour as "" (#482).
+ */
+type HeaderColorSettings = {
+  headerBackgroundColor?: string;
+  headerTitleColor?: string;
+  headerNavColor?: string;
+} | null;
+
 test.describe("appearance", () => {
   // The Appearance page edits a single shared document (site-settings.json),
   // not an append-only list, so — like the home page — nothing done through
@@ -783,17 +796,28 @@ test.describe("appearance", () => {
     );
 
   /**
-   * Load the public home page and wait for the settings fetch the header
-   * colours ride in on, so the assertions that follow are made against an
-   * applied settings object rather than the first paint.
+   * Load the public home page and hand back the settings object the header
+   * colours ride in on — `null` when the site has none yet, which is a
+   * seeded stack's starting state.
+   *
+   * Waiting for the response is not a sync point for what the page PAINTS:
+   * useSiteBackground only applies the colours after its own
+   * `response.json()`, and a fresh document first-paints the stylesheet's
+   * own fallbacks, so any assertion that the DEFAULT colours are showing
+   * would pass against that first paint whatever the settings said.
+   * Returning the body lets a caller assert on the bytes the hook is about
+   * to act on instead, which is the part a regression could break.
    */
-  async function openPublicHome(page: Page) {
+  async function openPublicHome(page: Page): Promise<HeaderColorSettings> {
     const settingsLoaded = page.waitForResponse((r) =>
       r.url().includes("site-settings.json"),
     );
     await page.goto("/");
-    await settingsLoaded;
+    const response = await settingsLoaded;
     await expect(page.locator(".header")).toBeVisible();
+    // A never-configured site has no such object; the hook falls back from
+    // the failed fetch, which is a legitimate state this returns as null.
+    return response.ok() ? await response.json() : null;
   }
 
   test.beforeEach(async ({ page }) => {
@@ -914,7 +938,19 @@ test.describe("appearance", () => {
 
     // Cleared settings are stored as "", which useSiteBackground declines to
     // publish — so the stylesheet's own fallbacks paint again.
-    await openPublicHome(page);
+    //
+    // Assert the SAVE first, off the body the page just fetched: a fresh
+    // document paints those fallbacks before the hook has read anything, so
+    // the three checks below would pass on their first poll even if the
+    // clearing save had not persisted and the header were about to repaint
+    // itself the custom colours. Empty fields here are what makes the
+    // fallback paint the end state rather than a moment on the way to one.
+    const cleared = await openPublicHome(page);
+    expect(cleared).toMatchObject({
+      headerBackgroundColor: "",
+      headerTitleColor: "",
+      headerNavColor: "",
+    });
     await expect(page.locator(".header")).toHaveCSS(
       "background-color",
       defaultBar,
