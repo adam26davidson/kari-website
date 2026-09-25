@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # One-command dev stack (issues #194, #220).
 #
-#   scripts/dev.sh          hermetic local MinIO: compose up + seed + API +
-#                           both UIs (public and admin)
-#   scripts/dev.sh --aws    no MinIO; API uses your SSO credentials against
+#   scripts/dev.sh          hermetic local S3 (RustFS): compose up + seed +
+#                           API + both UIs (public and admin)
+#   scripts/dev.sh --aws    no local S3; API uses your SSO credentials against
 #                           the test.karidavidson.com bucket
 #
-# Stacks are per-worktree and self-contained (issue #220): the MinIO
+# Stacks are per-worktree and self-contained (issue #220): the S3
 # container is namespaced by compose's directory-based project name, and
-# ports are chosen per stack — defaults (MinIO 9000, API 3000) when free,
+# ports are chosen per stack — defaults (S3 9000, API 3000) when free,
 # otherwise a free port is picked automatically, so N stacks can run in
 # parallel with no coordination and `docker compose down` in one worktree
-# never touches another's stack. Override the choices with KARI_MINIO_PORT
+# never touches another's stack. Override the choices with KARI_S3_PORT
 # (0 = ephemeral) and KARI_API_PORT. The chosen URLs are printed at startup
 # and exported to the UI/API, so every piece of one stack talks to that
 # stack only.
 #
-# Ctrl-C tears everything down (API, both UI dev servers, and the MinIO
+# Ctrl-C tears everything down (API, both UI dev servers, and the S3
 # container).
 #
 # UI dependencies are installed by scripts/setup-worktree.sh, which this
@@ -26,7 +26,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-mode=minio
+mode=local
 for arg in "$@"; do
   case "$arg" in
     --aws) mode=aws ;;
@@ -65,7 +65,7 @@ cleanup() {
     kill "${pids[@]}" 2> /dev/null || true
     wait "${pids[@]}" 2> /dev/null || true
   fi
-  if [ "$mode" = minio ]; then
+  if [ "$mode" = local ]; then
     docker compose down
   fi
 }
@@ -98,37 +98,37 @@ if [ -z "${KARI_API_PORT:-}" ]; then
 fi
 export PORT="$KARI_API_PORT"
 # Real env vars beat .env.* files in Vite, so this pins the UI (and, in
-# minio mode, the seeds via ui/e2e/config.mjs) to THIS stack's API.
+# local mode, the seeds via ui/e2e/config.mjs) to THIS stack's API.
 export VITE_API_URL="http://localhost:$KARI_API_PORT"
 
-if [ "$mode" = minio ]; then
+if [ "$mode" = local ]; then
   command -v docker > /dev/null || {
-    echo "docker is required for local MinIO mode" >&2
+    echo "docker is required for local S3 mode" >&2
     exit 1
   }
-  # MinIO host port: explicit KARI_MINIO_PORT wins (0 = ephemeral);
+  # S3 host port: explicit KARI_S3_PORT wins (0 = ephemeral);
   # otherwise the conventional 9000 when free, else ephemeral. Either way
   # the real port is read back from docker after the container is up.
-  if [ -z "${KARI_MINIO_PORT:-}" ]; then
+  if [ -z "${KARI_S3_PORT:-}" ]; then
     if port_in_use 9000; then
-      echo "Port 9000 is taken; MinIO will use an ephemeral port"
-      KARI_MINIO_PORT=0
+      echo "Port 9000 is taken; local S3 will use an ephemeral port"
+      KARI_S3_PORT=0
     else
-      KARI_MINIO_PORT=9000
+      KARI_S3_PORT=9000
     fi
   fi
-  export KARI_MINIO_PORT
-  docker compose up -d --wait minio
-  minio_port=$(docker compose port minio 9000)
-  minio_port=${minio_port##*:}
-  export VITE_S3_URL="http://localhost:$minio_port/kari-e2e"
+  export KARI_S3_PORT
+  docker compose up -d --wait s3
+  s3_port=$(docker compose port s3 9000)
+  s3_port=${s3_port##*:}
+  export VITE_S3_URL="http://localhost:$s3_port/kari-e2e"
   # e2e/config.mjs prefers VITE_S3_URL from the environment, so the seed
-  # lands in this stack's MinIO whatever port it got.
+  # lands in this stack's S3 whatever port it got.
   (cd ui && node e2e/seed.mjs)
   # Mirror api/.env (endpoint port aside); exported here because the API
   # runs from the repo root (see comment below) and never reads that file.
   export BUCKET_NAME=kari-e2e
-  export AWS_ENDPOINT_URL="http://localhost:$minio_port"
+  export AWS_ENDPOINT_URL="http://localhost:$s3_port"
   export AWS_REGION=us-east-1
   export AWS_ACCESS_KEY_ID=kari-e2e
   export AWS_SECRET_ACCESS_KEY=kari-e2e-secret
@@ -143,7 +143,7 @@ else
   fi
   export BUCKET_NAME=test.karidavidson.com
   # No AWS_ENDPOINT_URL / static keys: the SDK uses the SSO chain.
-  # ui/.env.development points at local MinIO (issue #246), so --aws mode
+  # ui/.env.development points at local S3 (issue #246), so --aws mode
   # must say explicitly that the UI reads the real test bucket.
   export VITE_S3_URL=https://s3.us-east-2.amazonaws.com/test.karidavidson.com
 fi
@@ -178,7 +178,7 @@ export KARI_DEV_AUTH=1
 cargo run --manifest-path api/Cargo.toml --features dev-auth &
 pids+=($!)
 
-# No --mode flag: .env.development targets local MinIO too (issue #246),
+# No --mode flag: .env.development targets local S3 too (issue #246),
 # and the VITE_* exports above override any .env file with this stack's
 # actual URLs in both modes.
 (cd ui && npm run dev) &

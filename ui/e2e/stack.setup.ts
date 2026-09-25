@@ -1,5 +1,5 @@
 import { test as setup, APIRequestContext } from "@playwright/test";
-import { MINIO_START_COMMAND } from "./config.mjs";
+import { S3_START_COMMAND } from "./config.mjs";
 import { TEST_API_URL } from "./helpers";
 
 // A dependency project that every admin suite waits on: it does not log
@@ -12,7 +12,7 @@ import { TEST_API_URL } from "./helpers";
  * The API runs on localhost (the CI job starts it before Playwright; for
  * local runs you start it yourself). Fail fast with a clear message if it
  * isn't up — /health also probes S3 read/write, so this catches a missing
- * or unseeded local MinIO too.
+ * or unseeded local S3 too.
  */
 async function checkApiIsUp(request: APIRequestContext) {
   const deadline = Date.now() + 30_000;
@@ -35,12 +35,12 @@ async function checkApiIsUp(request: APIRequestContext) {
   }
   throw new Error(
     `API at ${TEST_API_URL} is not healthy (${lastError}). ` +
-      "For local runs, start the local MinIO:\n" +
-      MINIO_START_COMMAND +
+      "For local runs, start the local S3:\n" +
+      S3_START_COMMAND +
       "\nseed it (`node e2e/seed.mjs`), and then " +
       "`cargo run --features dev-auth` in api/ — that feature is what " +
       "makes the API accept the admin journeys' dev token, and api/.env " +
-      "already sets KARI_DEV_AUTH=1 and targets the local MinIO.",
+      "already sets KARI_DEV_AUTH=1 and targets the local S3.",
   );
 }
 

@@ -153,7 +153,7 @@ the exception in the doc.
   first), then actually Read every PNG and fix what looks wrong before
   proceeding. Stop the stack when you are done with it (SIGTERM the
   `dev.sh` process you started — its trap tears down the API, vite and
-  the MinIO container); the dispatcher reaps whatever survives your
+  the local S3 container); the dispatcher reaps whatever survives your
   session, but a stack left running wastes RAM for the rest of it. Admin
   pages are captured too and need no Auth0 credentials (#266: the dev and
   test bundles sign themselves in), so an admin-only change gets the same

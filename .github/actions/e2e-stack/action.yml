@@ -2,7 +2,7 @@
 # ci.yml and the visual-review job in visual-review.yml, so a change to
 # how the stack boots happens in one place.
 #
-# The stack is fully local and hermetic: a throwaway MinIO stands in for
+# The stack is fully local and hermetic: a throwaway RustFS stands in for
 # S3 (seeded with fixture content by ui/e2e/seed.mjs), and the real API
 # runs on localhost:3000 against it. No AWS account or shared bucket is
 # involved, so runs can't be broken by drifting bucket data.
@@ -13,7 +13,7 @@
 # not apply here.
 name: Hermetic e2e stack
 description: >
-  Node + npm ci, Rust + cargo cache, local MinIO (seeded), the API built
+  Node + npm ci, Rust + cargo cache, local S3 (RustFS, seeded), the API built
   and health-polled on localhost:3000, and Playwright's chromium (cached
   by version) — the full local stack the Playwright e2e tests and visual
   screenshots run against.
@@ -41,10 +41,10 @@ runs:
       with:
         workspaces: api
 
-    - name: Start local S3 (MinIO)
+    - name: Start local S3 (RustFS)
       # docker-compose.yml lives at the repo root.
       shell: bash
-      run: docker compose up -d --wait minio
+      run: docker compose up -d --wait s3
 
     # Create + seed the bucket before the API starts: its /health probes
     # S3 read/write, so the bucket must exist first. (npm run test:e2e
@@ -72,7 +72,7 @@ runs:
         BUCKET_NAME: kari-e2e
         AWS_ENDPOINT_URL: http://localhost:9000
         AWS_REGION: us-east-1
-        # Local MinIO credentials (match docker-compose.yml) — not secrets.
+        # Local S3 credentials (match docker-compose.yml) — not secrets.
         AWS_ACCESS_KEY_ID: kari-e2e
         AWS_SECRET_ACCESS_KEY: kari-e2e-secret
         # The second gate on the dev-auth bypass: compiled in above, and

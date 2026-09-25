@@ -213,11 +213,11 @@ export async function expectGoneFromPublicPage(
     readySelector?: string;
   },
 ) {
-  // Bypass the browser HTTP cache while polling: MinIO's Last-Modified has
-  // one-second granularity, so when a delete rewrites the JSON within the
-  // same second as the previous write, revalidation returns 304 forever and
-  // reloads alone keep re-serving the stale cached body. Registering a
-  // route disables the cache for the matched request.
+  // Bypass the browser HTTP cache while polling: the local S3's
+  // Last-Modified has one-second granularity, so when a delete rewrites the
+  // JSON within the same second as the previous write, revalidation returns
+  // 304 forever and reloads alone keep re-serving the stale cached body.
+  // Registering a route disables the cache for the matched request.
   await page.route(`**/${opts.json}*`, (route) => route.continue());
   try {
     await expect(async () => {

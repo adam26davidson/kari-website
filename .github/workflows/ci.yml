@@ -165,7 +165,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Node + npm ci, Rust + cargo cache, MinIO seeded with fixture
+      # Node + npm ci, Rust + cargo cache, local S3 seeded with fixture
       # content, the API health-polled on localhost:3000, and Playwright's
       # chromium. Shared with visual-review.yml — see the action for the
       # hermetic-stack details.

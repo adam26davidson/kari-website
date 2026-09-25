@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 // End-to-end tests. These run against a fully local, hermetic stack: a
-// throwaway MinIO stands in for S3 (started via docker, seeded with fixture
+// throwaway RustFS stands in for S3 (started via docker, seeded with fixture
 // content by e2e/seed.mjs — see that file's header for the docker command)
 // and the real API runs on localhost:3000 against it. The app is built in
 // test mode (ui/.env.test points at both), served with `vite preview`, and
@@ -96,7 +96,7 @@ export default defineConfig({
   projects: [
     {
       // Not a login any more (the bundle signs itself in): just the
-      // fail-fast check that the local API and its seeded MinIO are up,
+      // fail-fast check that the local API and its seeded local S3 are up,
       // so a missing stack says so once instead of timing out a dozen
       // content assertions. Every admin project depends on it.
       name: "setup",
