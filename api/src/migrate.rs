@@ -299,7 +299,7 @@ pub async fn run_migrate_images_command(
 ) -> i32 {
     let apply = args.iter().any(|arg| arg == "--apply");
 
-    // `dotenv` has already loaded api/.env, which points at the local MinIO
+    // `dotenv` has already loaded api/.env, which points at the local S3
     // — running the migration against a dev stack while believing it is
     // pointed at a real bucket is the easiest mistake to make here, so it
     // takes an explicit flag.
@@ -307,15 +307,15 @@ pub async fn run_migrate_images_command(
     if local && !args.iter().any(|arg| arg == "--allow-local") {
         // Note the working directory in the recipe: `dotenv` searches the cwd
         // and its ancestors, so from `api/` it finds `api/.env` and refills
-        // AWS_ENDPOINT_URL/AWS_REGION/the MinIO keys even when the caller
+        // AWS_ENDPOINT_URL/AWS_REGION/the local S3 keys even when the caller
         // just unset them with `env -u`. Running cargo from the repo root
         // (as scripts/dev.sh does, for the same reason) is what actually
         // leaves the real credential chain in charge.
         eprintln!(
             "Refusing to run against the local endpoint {endpoint} \
              (api/.env sets it). Pass --allow-local to rehearse against \
-             MinIO, or run from the REPO ROOT, where there is no .env to \
-             load, to target a real bucket:\n  \
+             the local S3, or run from the REPO ROOT, where there is no .env \
+             to load, to target a real bucket:\n  \
              BUCKET_NAME=<bucket> cargo run --manifest-path api/Cargo.toml \
              -- migrate-images [--apply]\n\
              (running this from api/ cannot work: dotenv reloads api/.env, \

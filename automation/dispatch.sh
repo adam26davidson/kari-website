@@ -647,7 +647,7 @@ launch() { # launch <name> <model> <fallback> <agent-file> — backgrounded
     # KillMode=process (the tick exits while the session runs on), so
     # nothing else ever reaps what a session spawns and forgets -- most
     # often a `./scripts/dev.sh` backgrounded for the visual check: three
-    # full API+vite stacks, 3.6G of RAM, and their MinIO containers were
+    # full API+vite stacks, 3.6G of RAM, and their local S3 containers were
     # found idling in the service cgroup hours after their ticks (#401).
     # With a scope, the whole tree is one cgroup and `systemctl stop`
     # SIGTERMs all of it; dev.sh's TERM trap brings its container down
