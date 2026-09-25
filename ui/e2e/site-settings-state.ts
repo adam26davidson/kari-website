@@ -35,8 +35,9 @@ export interface SiteSettingsSnapshot {
 export async function snapshotSiteSettings(): Promise<SiteSettingsSnapshot> {
   const response = await fetch(`${TEST_S3_URL}/${SETTINGS_KEY}`);
   if (response.ok) return { json: await response.text() };
-  // MinIO answers 404 for a missing key in a public bucket; a bucket policy
-  // that hides existence answers 403. Both mean "nothing configured yet".
+  // The local S3 answers 404 for a missing key in a public bucket; a bucket
+  // policy that hides existence answers 403. Both mean "nothing configured
+  // yet".
   if (response.status === 404 || response.status === 403) return { json: null };
   throw new Error(
     `Cannot snapshot the site settings (GET ${SETTINGS_KEY} returned ` +

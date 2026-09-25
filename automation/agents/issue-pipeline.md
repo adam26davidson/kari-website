@@ -312,7 +312,7 @@ Liveness, in order:
      shell, so a snapshot usually finds no process at all. It catches
      only a worker that is mid-command at the instant the tick samples.
      The ancestry requirement separates a live worker from the debris a
-     dead one leaves behind — an orphaned dev server or MinIO
+     dead one leaves behind — an orphaned dev server or local S3
      reparented to PID 1 matches the cwd but has no `claude` above it.
    - `fetch=failed`, `open_pr=error`, `issue_<n>_updated=error` — a
      probe that could not answer. These count as life (`alive_by`
