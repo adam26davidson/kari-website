@@ -11,7 +11,11 @@ export function useAdminToken() {
 
   return useCallback(async () => {
     try {
-      return await getAccessTokenSilently();
+      // auth0-react >= 2.25 may resolve with no token; treat that like an
+      // expired session rather than sending an unauthenticated request.
+      const token = await getAccessTokenSilently();
+      if (!token) throw new Error("Auth0 returned no access token");
+      return token;
     } catch (error) {
       console.error("Auth session expired or invalid", error);
       await loginWithRedirect();
