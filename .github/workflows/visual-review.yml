@@ -1,7 +1,7 @@
 name: Visual review
 
 # AI visual check on PRs that touch the UI: stands up the same hermetic
-# stack as the e2e job (MinIO + seed + API + test-mode preview), captures
+# stack as the e2e job (local S3 + seed + API + test-mode preview), captures
 # screenshots of the public pages and the admin pages
 # (ui/e2e/screenshots.mjs — the test bundle signs itself in since #266, so
 # no Auth0 credentials are involved), and
@@ -72,7 +72,7 @@ jobs:
         if: steps.check.outputs.enabled == 'true'
 
       # Same hermetic stack as the frontend-e2e job in ci.yml (Node +
-      # npm ci, Rust + cargo cache, MinIO seeded with fixture content,
+      # npm ci, Rust + cargo cache, local S3 seeded with fixture content,
       # the API health-polled on localhost:3000, Playwright's chromium);
       # the test-mode bundle is then previewed locally below.
       - name: Stand up hermetic e2e stack

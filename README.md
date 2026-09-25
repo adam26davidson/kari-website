@@ -14,14 +14,14 @@ this shared guidance does not change their runners or model settings.
 
 ## Running the app locally
 
-One command brings up the whole stack (MinIO, seeded fixture data, API on
+One command brings up the whole stack (local S3, seeded fixture data, API on
 :3000, UI dev server):
 
 ```
 ./scripts/dev.sh
 ```
 
-By default the stack is hermetic — a throwaway MinIO container stands in for
+By default the stack is hermetic — a throwaway RustFS container stands in for
 S3, seeded with deterministic fixture content, and no AWS account is needed.
 Ctrl-C tears everything down.
 
@@ -33,8 +33,8 @@ aws sso login   # once per session
 ```
 
 The pieces can still be run by hand if needed: `docker compose up -d --wait
-minio`, `node e2e/seed.mjs` (in `ui/`), `cargo run` (in `api/`, whose `.env`
-targets the local MinIO), and `npm run dev` (in `ui/`).
+s3`, `node e2e/seed.mjs` (in `ui/`), `cargo run` (in `api/`, whose `.env`
+targets the local S3), and `npm run dev` (in `ui/`).
 
 ## Deployment
 

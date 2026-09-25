@@ -428,7 +428,7 @@ async fn the_command_writes_only_with_apply() {
 
 #[tokio::test]
 async fn the_command_refuses_a_local_endpoint_without_allow_local() {
-    // api/.env points at the dev stack's MinIO, and dotenv loads it before
+    // api/.env points at the dev stack's local S3, and dotenv loads it before
     // the subcommand runs — migrating a dev stack while believing you are
     // migrating a real bucket must not be one typo away.
     let store = unmigrated_variants_store();

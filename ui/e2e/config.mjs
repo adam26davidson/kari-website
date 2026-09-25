@@ -1,4 +1,4 @@
-// Shared configuration for the local S3 (MinIO) stack the e2e suite runs
+// Shared configuration for the local S3 (RustFS) stack the e2e suite runs
 // against. This is the one place that owns the `.env.test` parsing and the
 // endpoint/bucket/credential conventions, so seed.mjs, helpers.ts, and
 // home-page-state.ts always agree on where the data lives.
@@ -124,14 +124,14 @@ export function makeSolidPng(width, height) {
   ]);
 }
 
-/** How to start the throwaway MinIO instance the suite expects. */
-export const MINIO_START_COMMAND =
-  "  docker compose up -d --wait minio   (from the repo root)";
+/** How to start the throwaway local S3 the suite expects. */
+export const S3_START_COMMAND =
+  "  docker compose up -d --wait s3   (from the repo root)";
 
 /**
  * An S3 client targeting the local e2e store. Constructing it opens no
- * connection. Local-only credentials for the throwaway MinIO instance — not
- * secrets; the env overrides let a non-default MinIO be targeted without
+ * connection. Local-only credentials for the throwaway local S3 — not
+ * secrets; the env overrides let a non-default local S3 be targeted without
  * code changes.
  *
  * @returns {S3Client}
