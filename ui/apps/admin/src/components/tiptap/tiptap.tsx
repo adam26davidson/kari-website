@@ -20,7 +20,6 @@ import {
   // extension, imported above.
   Image as ImageIcon,
   Strikethrough,
-  Unlink,
   type LucideIcon,
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
@@ -72,7 +71,6 @@ interface ToolbarItem {
   icon: LucideIcon;
   command: (editor: Editor, menu: MenuActions) => void;
   isActive?: (editor: Editor) => boolean;
-  isDisabled?: (editor: Editor) => boolean;
 }
 
 interface ToolbarGroup {
@@ -84,10 +82,10 @@ interface ToolbarGroup {
 // what they point at, then how the block is shaped. Every group is a group
 // now — the old `grouped` flag existed because three of them sat inside a
 // shared grey slab and the other two did not, which grouped by look rather
-// than by meaning and left link, unlink and image floating as loose
-// buttons. Each group is a run of ghost buttons behind a hairline, so the
-// toolbar reads as five short sentences instead of thirteen identical
-// glyphs (visual review, PR #829; the 390px wrap remainder is #681).
+// than by meaning and left the insert buttons floating loose. Each group
+// is a run of ghost buttons behind a hairline, so the toolbar reads as
+// five short sentences instead of a dozen identical glyphs (visual
+// review, PR #829; the 390px wrap remainder is #975).
 const TOOLBAR_GROUPS: ToolbarGroup[] = [
   {
     name: "marks",
@@ -115,10 +113,14 @@ const TOOLBAR_GROUPS: ToolbarGroup[] = [
       },
     ],
   },
-  // What the words point at: putting a link or a picture into the post,
-  // and taking a link back off. Both link controls stay — whether the
-  // unlink button earns its place beside the panel's "submit it empty" is
-  // #698's question, not this migration's.
+  // What the words point at: putting a link or a picture into the post.
+  // There is no unlink button here any more (#698). Taking a link off is
+  // the bubble menu's "remove", which appears on the link itself exactly
+  // when the toolbar button would have been enabled, and the link panel's
+  // "submit it empty" — so the toolbar's third way said the same thing a
+  // third time, and spent an icon and a permanently-greyed slot on a row
+  // that already wraps at 390px. The boards draw this group as link +
+  // image (`WorksEditor.png`, `WorksEditorMobile.png`).
   {
     name: "insert",
     items: [
@@ -128,13 +130,6 @@ const TOOLBAR_GROUPS: ToolbarGroup[] = [
         icon: Link,
         command: (_editor, menu) => menu.toggleLinkPanel(),
         isActive: (editor) => editor.isActive("link"),
-      },
-      {
-        name: "unlink",
-        label: "Remove the link",
-        icon: Unlink,
-        command: (editor) => editor.chain().focus().unsetLink().run(),
-        isDisabled: (editor) => !editor.isActive("link"),
       },
       {
         name: "image",
@@ -221,10 +216,8 @@ const ToolbarButton = ({
         "transition-colors hover:bg-muted hover:text-foreground",
         "aria-pressed:bg-primary/10 aria-pressed:text-primary",
         "aria-expanded:bg-primary/10 aria-expanded:text-primary",
-        "disabled:pointer-events-none disabled:opacity-40",
         "[&_svg]:size-4",
       )}
-      disabled={item.isDisabled?.(editor)}
       aria-label={item.label}
       title={item.label}
     >
