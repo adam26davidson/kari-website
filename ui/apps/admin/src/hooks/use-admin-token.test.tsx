@@ -38,6 +38,20 @@ describe("use-admin-token", () => {
     expect(loginWithRedirect).toHaveBeenCalledOnce();
   });
 
+  it("redirects to login and throws when Auth0 returns no token", async () => {
+    // auth0-react >= 2.25 types getAccessTokenSilently as resolving to
+    // `string | undefined`; a missing token is a dead session too.
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    getAccessTokenSilently.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useAdminToken());
+
+    await expect(result.current()).rejects.toThrow(
+      "Session expired — redirecting to login",
+    );
+    expect(loginWithRedirect).toHaveBeenCalledOnce();
+  });
+
   it("returns a stable callback across re-renders", () => {
     const { result, rerender } = renderHook(() => useAdminToken());
     const first = result.current;

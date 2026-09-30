@@ -27,7 +27,7 @@ async fn main() {
         .init();
 
     // Initialize AWS SDK. aws-config picks up AWS_ENDPOINT_URL from the
-    // environment, which the e2e stack uses to point at a local MinIO; a
+    // environment, which the e2e stack uses to point at a local S3; a
     // custom endpoint also needs path-style addressing, since
     // virtual-host-style would resolve "<bucket>.localhost".
     let sdk_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;

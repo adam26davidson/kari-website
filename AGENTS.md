@@ -40,7 +40,7 @@ Repo:
 - `./scripts/setup-worktree.sh` — fresh-worktree setup (UI dependencies +
   the Playwright browser the visual check needs). Idempotent and cheap to
   re-run.
-- `./scripts/dev.sh` — the whole dev stack (MinIO + seed + API + both UI
+- `./scripts/dev.sh` — the whole dev stack (local S3 + seed + API + both UI
   dev servers). `--aws` targets the real test bucket via SSO.
 - `./scripts/lint-workflows.sh` — actionlint + shellcheck over `.github/`
   and every `*.sh` in the repo

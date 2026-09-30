@@ -148,7 +148,7 @@ exit 1
 EOF
 chmod +x "$NPX_FAIL_BIN/npx"
 
-# A stub dir for --aws mode. The minio-mode docker stub fails on purpose, so
+# A stub dir for --aws mode. The local-mode docker stub fails on purpose, so
 # every case above stops before the stack itself starts; --aws never calls
 # docker, so with an `aws` that succeeds the run reaches the part that starts
 # the API and the two UI dev servers — the only case that gets that far, and
@@ -220,7 +220,7 @@ start_dev() { # <repo> [args...] — launch dev.sh; stdout+stderr in <repo>/out
   # the stack from hanging this harness.
   STUB_LOG="$repo/stub.log" STUB_STOP="$repo/stop" \
     PATH="${STUB_PATH:-$STUB_BIN}:$PATH" \
-    KARI_API_PORT=31000 KARI_MINIO_PORT=39000 \
+    KARI_API_PORT=31000 KARI_S3_PORT=39000 \
     timeout 60 bash "$repo/scripts/dev.sh" "$@" > "$repo/out" 2>&1 &
   DEV_PID=$!
 }

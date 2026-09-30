@@ -79,15 +79,16 @@ BUCKET_NAME=test.karidavidson.com cargo run --manifest-path api/Cargo.toml \
 
 For the same reason `scripts/dev.sh` starts the API from the root: `dotenv`
 searches the cwd and its ancestors, so from `api/` it loads `api/.env` and
-sets `AWS_ENDPOINT_URL` to the dev stack's MinIO, `AWS_REGION` to
+sets `AWS_ENDPOINT_URL` to the dev stack's local S3, `AWS_REGION` to
 `us-east-1` and the `kari-e2e` static keys.
 
 Unsetting them on the command line does NOT help — `env -u` makes them
 unset, which is exactly the case `dotenv` fills in — so from `api/` the
 command refuses to run ("Refusing to run against the local endpoint"), and
-adding `--allow-local` to get past that migrates local MinIO while you
+adding `--allow-local` to get past that migrates the local S3 while you
 believe you are migrating the real bucket. From the root there is no `.env`
 to find, so the SSO credential chain and profile region are in charge.
 
 `--allow-local` is only for a deliberate rehearsal against the dev stack
-(run it from `api/`, where `api/.env` supplies MinIO's endpoint and keys).
+(run it from `api/`, where `api/.env` supplies the local S3's endpoint and
+keys).

@@ -1,4 +1,4 @@
-// Seeds the local S3 (MinIO) the e2e suite runs against. Idempotent: every
+// Seeds the local S3 (RustFS) the e2e suite runs against. Idempotent: every
 // run recreates the bucket policy and overwrites the seed objects, so tests
 // always start from the same known content regardless of what previous runs
 // (or admin-journey mutations) left behind.
@@ -15,7 +15,7 @@ import {
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
 import {
-  MINIO_START_COMMAND,
+  S3_START_COMMAND,
   S3_BUCKET,
   S3_ENDPOINT,
   createS3Client,
@@ -175,7 +175,7 @@ async function createBucketWithRetry() {
         throw new Error(
           `Local S3 at ${S3_ENDPOINT} is not reachable ` +
             `(${name || String(error)}). Start it with:\n` +
-            MINIO_START_COMMAND,
+            S3_START_COMMAND,
         );
       }
       await new Promise((resolve) => setTimeout(resolve, 1_000));

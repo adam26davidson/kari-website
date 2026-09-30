@@ -7,28 +7,35 @@
 # `docker compose down` only ever touches this directory's stack.
 #
 # The host port defaults to 9000 (what CI, api/.env, and ui/.env.test
-# assume). Set KARI_MINIO_PORT to publish on another port, or to 0 for an
-# ephemeral one — discover it with `docker compose port minio 9000`.
+# assume). Set KARI_S3_PORT to publish on another port, or to 0 for an
+# ephemeral one — discover it with `docker compose port s3 9000`.
 # scripts/dev.sh does exactly that when 9000 is already taken.
 #
-# The image comes from quay.io, not Docker Hub: MinIO removed the
-# `minio/minio` Docker Hub repository, so every `docker pull` there now
-# fails with "pull access denied" (CI dies at "Start local S3 (MinIO)";
-# machines with the image cached keep working, which hides it locally).
-# quay.io/minio/minio is MinIO's own registry and still publishes it.
-# The tag is pinned so a CI run and a laptop agree on the binary; bump it
-# deliberately.
+# The server is RustFS (Apache-2.0), not MinIO. MinIO withdrew its free
+# images: first the `minio/minio` Docker Hub repository, then anonymous
+# pulls of quay.io/minio/minio (#973), each of which killed CI at the
+# "Start local S3" step while machines with the image cached kept working.
+# RustFS speaks the same S3 API on the same port, honours the public-read
+# bucket policy ui/e2e/seed.mjs installs, and keeps its data in /data.
+#
+# RUSTFS_CORS_ALLOWED_ORIGINS matters: the public site fetch()es its JSON
+# from this origin, cross-origin, and RustFS sends no CORS headers unless
+# told to (MinIO allowed any origin by default). Without it every page
+# that loads content fails in the browser while curl looks fine.
+#
+# The tag is pinned so a CI run and a laptop agree on the binary; Renovate
+# proposes bumps.
 services:
-  minio:
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
-    command: server /data
+  s3:
+    image: rustfs/rustfs:1.0.0
     ports:
-      - "${KARI_MINIO_PORT:-9000}:9000"
+      - "${KARI_S3_PORT:-9000}:9000"
     environment:
-      MINIO_ROOT_USER: kari-e2e
-      MINIO_ROOT_PASSWORD: kari-e2e-secret
+      RUSTFS_ACCESS_KEY: kari-e2e
+      RUSTFS_SECRET_KEY: kari-e2e-secret
+      RUSTFS_CORS_ALLOWED_ORIGINS: "*"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health/ready"]
       interval: 2s
       timeout: 2s
       retries: 30

@@ -321,7 +321,7 @@ resolution; each agent's own `every` decides how often it runs.
 The service unit needs `KillMode=process` (the tick exits while the
 sessions run on), so systemd never reaps what a session spawns and
 forgets — most often a `./scripts/dev.sh` backgrounded for the visual
-check. Three full API+vite stacks, 3.6 GB of RAM and their MinIO
+check. Three full API+vite stacks, 3.6 GB of RAM and their local S3
 containers were once found idling in the service cgroup hours after
 their ticks (#401). So the dispatcher runs each session inside a
 transient scope unit (`systemd-run --user --scope`, named

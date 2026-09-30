@@ -25,18 +25,18 @@ Changing this script, or `dev.sh`'s delegation to it? Re-run the tests:
 
 ## The dev stack (`./scripts/dev.sh`)
 
-`./scripts/dev.sh` starts MinIO, seeds it, starts the API, and starts both
-UI dev servers (public and admin). `--aws` targets the real test bucket
-via SSO instead of local MinIO.
+`./scripts/dev.sh` starts a local S3 (RustFS), seeds it, starts the API,
+and starts both UI dev servers (public and admin). `--aws` targets the
+real test bucket via SSO instead of the local S3.
 
 It runs `setup-worktree.sh` first, so a stack always starts against
 lockfile-matching dependencies; that script's skip check keeps a warm start
 cheap.
 
 Stacks are per-worktree: compose's directory-based project naming keeps
-each worktree's MinIO container separate, and dev.sh uses the default ports
-(MinIO 9000, API 3000) when free but picks free ports otherwise (override
-with `KARI_MINIO_PORT` / `KARI_API_PORT`; `KARI_MINIO_PORT=0` means
+each worktree's S3 container separate, and dev.sh uses the default ports
+(S3 9000, API 3000) when free but picks free ports otherwise (override
+with `KARI_S3_PORT` / `KARI_API_PORT`; `KARI_S3_PORT=0` means
 ephemeral). It prints the chosen URLs at startup and wires them into the
 UI/API via env vars, so N stacks can run in parallel and `docker compose
 down` in one worktree never touches another's stack.
@@ -44,7 +44,7 @@ down` in one worktree never touches another's stack.
 ## Dev servers
 
 - `npm run dev` starts the PUBLIC site's dev server. Like the rest of the
-  local toolchain it targets the local MinIO + localhost:3000 API from
+  local toolchain it targets the local S3 + localhost:3000 API from
   `.env.development`; the real AWS test bucket is opt-in via
   `./scripts/dev.sh --aws` — no vite mode silently reads AWS.
 - `npm run dev:admin` starts the ADMIN app's dev server on its own port
@@ -127,10 +127,10 @@ The stack is fully local and hermetic — no AWS account or shared bucket.
 
 Two things must be running:
 
-1. a throwaway MinIO standing in for S3, on host port 9000 (the default):
-   `docker compose up -d --wait minio` (defined in `docker-compose.yml`)
+1. a throwaway RustFS standing in for S3, on host port 9000 (the default):
+   `docker compose up -d --wait s3` (defined in `docker-compose.yml`)
 2. the API on localhost:3000: `cargo run --features dev-auth` in `api/`
-   (its `.env` already targets the local MinIO and already sets
+   (its `.env` already targets the local S3 and already sets
    `KARI_DEV_AUTH=1`; run `node e2e/seed.mjs` in `ui/` first so the bucket
    exists for the API's health probe). Without `--features dev-auth` the
    API rejects the bundle's dev token and every admin journey fails on an

@@ -47,6 +47,11 @@ const uiRoot = fileURLToPath(new URL("../..", import.meta.url));
 //   the shell — draws every glyph. Both budgets below come down with it,
 //   because a budget pinned above a weight that has since halved stops
 //   guarding anything.
+//
+//   React 19.3 then took it to 763.6 kB: react-dom's own runtime grew by
+//   ~29 kB (the public app's entry grew by the same amount), and the
+//   framework every page renders with cannot move into a lazy chunk. The
+//   budget moved to 790 kB ahead of that bump, keeping the usual headroom.
 // - "blog-post-editor" is the lazy chunk holding the editor, tiptap,
 //   prosemirror and their CSS (468.3 kB), fetched only when a post is
 //   opened. It was 445 kB until #427 added the link bubble menu, which
@@ -112,6 +117,6 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    bundleBudget({ index: 760, "blog-post-editor": 495 }),
+    bundleBudget({ index: 790, "blog-post-editor": 495 }),
   ],
 });

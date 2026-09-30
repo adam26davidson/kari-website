@@ -25,7 +25,7 @@ import {
 } from "./site-settings-state";
 
 // Admin journeys: real create/edit/delete flows against the local e2e stack
-// (the API on localhost:3000 backed by the seeded local MinIO),
+// (the API on localhost:3000 backed by the seeded local S3),
 // signed in by the test bundle's fake auth (#266) — no Auth0 credentials
 // needed.
 //
@@ -822,11 +822,11 @@ test.describe("appearance", () => {
 
   test.beforeEach(async ({ page }) => {
     snapshot = await snapshotSiteSettings();
-    // The public site reads site-settings.json straight from MinIO, whose
-    // Last-Modified has one-second granularity: when two saves land in the
-    // same second, revalidation returns 304 forever and reloads keep serving
-    // the first body. Registering a route disables the HTTP cache for the
-    // matched request (the same trick expectGoneFromPublicPage uses).
+    // The public site reads site-settings.json straight from the local S3,
+    // whose Last-Modified has one-second granularity: when two saves land in
+    // the same second, revalidation returns 304 forever and reloads keep
+    // serving the first body. Registering a route disables the HTTP cache for
+    // the matched request (the same trick expectGoneFromPublicPage uses).
     await page.route("**/site-settings.json*", (route) => route.continue());
   });
 

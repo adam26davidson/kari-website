@@ -20,7 +20,7 @@
     "uuid": "^14.0.2"
   },
   "peerDependencies": {
-    "react": "^19.2.8",
+    "react": "^19.3.0",
     "react-router": "^8.4.0"
   }
 }
