@@ -432,25 +432,28 @@ test.describe("blog (other works)", () => {
       timeout: 60_000,
     });
 
-    // A link on the first line, then enough filler below it that the
-    // admin's one scroll container can scroll the link up the page.
+    // A first line that will be the link, then enough filler below it that
+    // the admin's one scroll container can scroll the link up the page.
+    // The link goes on LAST: applying it refocuses the editor a frame
+    // later with the linked words still selected, so anything typed
+    // straight after "apply" could land on top of the link.
     const prose = page.locator(".tiptap-container .ProseMirror");
     await prose.click();
     await page.keyboard.type("linked words");
-    await page.keyboard.press("Shift+Home");
+    for (let i = 0; i < 40; i++) {
+      await page.keyboard.press("Enter");
+      await page.keyboard.type("filler");
+    }
+    await page.keyboard.press("ControlOrMeta+Home");
+    await page.keyboard.press("Shift+End");
     await page.getByRole("button", { name: "Add or edit a link" }).click();
     await page
       .getByRole("textbox", { name: "link url" })
       .fill("https://example.com/");
     await page.getByRole("button", { name: "apply" }).click();
     const link = prose.locator("a").first();
+    await expect(link).toHaveText("linked words");
     await expect(link).toHaveAttribute("href", "https://example.com/");
-    await prose.locator("p").first().click();
-    await page.keyboard.press("End");
-    for (let i = 0; i < 40; i++) {
-      await page.keyboard.press("Enter");
-      await page.keyboard.type("filler");
-    }
 
     // Precondition: the page really can scroll by 200px, so the case
     // cannot pass on a short page that never moves the link.
