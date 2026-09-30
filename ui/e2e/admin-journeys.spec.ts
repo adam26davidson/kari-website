@@ -413,6 +413,101 @@ test.describe("blog (other works)", () => {
       readySelector: ".data-list",
     });
   });
+
+  test("the link bubble follows its link when the page scrolls", async ({
+    page,
+  }) => {
+    await openAdminSection(page, "Other works");
+
+    // Create and save an empty post so afterEach can find it by marker;
+    // the bubble work then happens on the reopened editor.
+    await createNewItem(page);
+    await page.getByLabel("Title", { exact: true }).fill(marker);
+    await saveEditor(page);
+    await expect(page.locator(".data-editor")).toBeHidden({
+      timeout: 120_000,
+    });
+    await editButton(adminListItem(page, marker)).click();
+    await expect(page.locator(".data-editor")).toBeVisible({
+      timeout: 60_000,
+    });
+
+    // A link on the first line, then enough filler below it that the
+    // admin's one scroll container can scroll the link up the page.
+    const prose = page.locator(".tiptap-container .ProseMirror");
+    await prose.click();
+    await page.keyboard.type("linked words");
+    await page.keyboard.press("Shift+Home");
+    await page.getByRole("button", { name: "Add or edit a link" }).click();
+    await page
+      .getByRole("textbox", { name: "link url" })
+      .fill("https://example.com/");
+    await page.getByRole("button", { name: "apply" }).click();
+    const link = prose.locator("a").first();
+    await expect(link).toHaveAttribute("href", "https://example.com/");
+    await prose.locator("p").first().click();
+    await page.keyboard.press("End");
+    for (let i = 0; i < 40; i++) {
+      await page.keyboard.press("Enter");
+      await page.keyboard.type("filler");
+    }
+
+    // Precondition: the page really can scroll by 200px, so the case
+    // cannot pass on a short page that never moves the link.
+    const scroller = page.locator(".admin-content");
+    const scrollRoom = await scroller.evaluate(
+      (el) => el.scrollHeight - el.clientHeight,
+    );
+    expect(scrollRoom).toBeGreaterThan(200);
+    // Typing followed the caret down the page; start from the top so the
+    // 200px scroll below has room to happen in full.
+    await scroller.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+
+    // `openOnClick` is off, so clicking the link puts the cursor in it.
+    await link.click();
+    const bubble = page.getByRole("group", { name: "link actions" });
+    await expect(bubble).toBeVisible();
+
+    // Both rects in one evaluate, so they come from the same layout pass.
+    // The plugin's offset middleware leaves 8px between the bubble and the
+    // words it belongs to; the placement lands asynchronously, hence poll.
+    const measure = () =>
+      page.evaluate(() => {
+        const a = document
+          .querySelector(".tiptap-container .ProseMirror a")!
+          .getBoundingClientRect();
+        const b = document
+          .querySelector('[role="group"][aria-label="link actions"]')!
+          .getBoundingClientRect();
+        return { linkTop: a.top, gap: a.top - b.bottom };
+      });
+    await expect
+      .poll(async () => Math.round((await measure()).gap))
+      .toBeGreaterThanOrEqual(7);
+    const before = await measure();
+    expect(before.gap).toBeLessThanOrEqual(9);
+
+    // Scroll the page, not the window: `.admin-content` is what moves.
+    await scroller.evaluate((el) => {
+      el.scrollTop += 200;
+    });
+    // The scroll happened: the link went up the viewport by ~200px...
+    await expect
+      .poll(async () => Math.round(before.linkTop - (await measure()).linkTop))
+      .toBe(200);
+    // ...and the bubble went with it. Before #700 it stayed where it was,
+    // 192px below its link, until the next keystroke re-placed it.
+    const after = await measure();
+    expect(after.gap).toBeGreaterThanOrEqual(7);
+    expect(after.gap).toBeLessThanOrEqual(9);
+
+    // Discard the unsaved body; afterEach deletes the saved post.
+    await editorControls(page).getByRole("button", { name: "Close" }).click();
+    await confirmDialog(page, "Yes");
+    await expect(page.locator(".data-editor")).toBeHidden();
+  });
 });
 
 test.describe("photography", () => {
