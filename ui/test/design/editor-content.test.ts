@@ -104,8 +104,8 @@ describe("the editor previews what the post will look like", () => {
     ).toEqual(expect.any(String));
   });
 
-  // The toolbar's link button, its unlink button and the bubble menu are
-  // all about one mark, and preflight gives `a` `color: inherit;
+  // The toolbar's link button, the link panel and the bubble menu are all
+  // about one mark, and preflight gives `a` `color: inherit;
   // text-decoration: inherit` — so a linked phrase looked exactly like the
   // words either side of it, which is the one thing about her own post the
   // author cannot check by reading it.

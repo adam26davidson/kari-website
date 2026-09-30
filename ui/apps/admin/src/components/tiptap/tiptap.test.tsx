@@ -90,9 +90,9 @@ describe("Tiptap toolbar", () => {
       ...container.querySelectorAll(".control-group > div > div"),
     ];
     expect(groups.map((group) => group.querySelectorAll("button").length)) //
-      .toEqual([3, 3, 2, 4]);
+      .toEqual([3, 2, 2, 4]);
     // Everything lives in a group now: no control is loose in the row.
-    expect(toolbarButtons(container)).toHaveLength(12);
+    expect(toolbarButtons(container)).toHaveLength(11);
   });
 
   it("omits the toolbar entirely until the editor exists", () => {
@@ -163,7 +163,6 @@ describe("Tiptap toolbar", () => {
       "Italic",
       "Strikethrough",
       "Add or edit a link",
-      "Remove the link",
       "Add an image",
       "Bulleted list",
       "Numbered list",
@@ -206,11 +205,11 @@ describe("Tiptap toolbar", () => {
     const user = userEvent.setup();
     renderTiptap('<p><a href="https://x.test/">hello</a></p>');
 
-    // Unlink and the image picker act once and stay put, and the link
-    // button is a disclosure for the link panel — it reports aria-expanded,
-    // and carrying aria-pressed as well would tell assistive tech two
-    // stories about one press.
-    for (const name of ["Add or edit a link", "Remove the link", "Add an image"]) {
+    // The image picker acts once and stays put, and the link button is a
+    // disclosure for the link panel — it reports aria-expanded, and
+    // carrying aria-pressed as well would tell assistive tech two stories
+    // about one press.
+    for (const name of ["Add or edit a link", "Add an image"]) {
       expect(getButton(name)).not.toHaveAttribute("aria-pressed");
     }
 
@@ -275,29 +274,6 @@ describe("Tiptap toolbar", () => {
     await user.selectOptions(select, "p");
     expect(select).toHaveValue("p");
     expect(setContent).toHaveBeenLastCalledWith("<p>hello</p><p></p>");
-  });
-
-  it("disables unlink when the cursor is not on a link", () => {
-    renderTiptap();
-    expect(getButton("Remove the link")).toBeDisabled();
-  });
-
-  it("enables unlink on a link and strips it on click", async () => {
-    const user = userEvent.setup();
-    const { setContent } = renderTiptap(
-      '<p><a href="https://x.test/">hello</a></p>'
-    );
-    const unlink = getButton("Remove the link");
-    const link = getButton("Add or edit a link");
-
-    // the initial cursor sits at the start of the link text. The link
-    // button is a disclosure, so it reports aria-expanded rather than
-    // aria-pressed; that the cursor IS on a link is what enables unlink.
-    expect(link).toHaveAttribute("aria-expanded", "false");
-    expect(unlink).toBeEnabled();
-    await user.click(unlink);
-    expect(setContent).toHaveBeenLastCalledWith("<p>hello</p>");
-    expect(getButton("Remove the link")).toBeDisabled();
   });
 
   it("does not open the link target when a link is clicked", () => {
@@ -411,7 +387,10 @@ describe("Tiptap toolbar", () => {
     await user.click(getButton("apply"));
 
     expect(setContent).toHaveBeenLastCalledWith("<p>hello</p>");
-    expect(getButton("Remove the link")).toBeDisabled();
+    // The toolbar no longer carries an unlink button to read the result
+    // off (#698), so ask the editor directly: the mark is gone, not just
+    // absent from the serialised html.
+    expect(getEditor().isActive("link")).toBe(false);
     expect(queryLinkInput()).toBeNull();
   });
 
@@ -720,7 +699,7 @@ describe("Tiptap link bubble menu", () => {
     await user.click(getButton("remove"));
 
     expect(setContent).toHaveBeenLastCalledWith("<p>hello</p>");
-    expect(getButton("Remove the link")).toBeDisabled();
+    expect(getEditor().isActive("link")).toBe(false);
     await waitFor(() => expect(queryBubble()).toBeNull());
   });
 });
