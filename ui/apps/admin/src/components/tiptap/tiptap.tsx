@@ -84,7 +84,7 @@ interface ToolbarGroup {
 // shared grey slab and the other two did not, which grouped by look rather
 // than by meaning and left the insert buttons floating loose. Each group
 // is a run of ghost buttons behind a hairline, so the toolbar reads as
-// five short sentences instead of a dozen identical glyphs (visual
+// five short sentences instead of eleven identical glyphs (visual
 // review, PR #829; the 390px wrap remainder is #975).
 const TOOLBAR_GROUPS: ToolbarGroup[] = [
   {
