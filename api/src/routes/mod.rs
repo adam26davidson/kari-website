@@ -36,9 +36,9 @@ pub fn create_router(state: AppState) -> Router {
     //
     // Two things outside this file are pinned to this number:
     //   - `MAX_UPLOAD_BYTES` in
-    //     `ui/packages/shared/src/utils/background-image.ts` sits just
-    //     BELOW it, so the admin gets a friendly "too big" message instead
-    //     of a bare 413;
+    //     `ui/packages/shared/src/utils/upload-size.ts` sits just BELOW
+    //     it, so every admin image picker gives a friendly "too big"
+    //     message instead of a bare 413 (#711);
     //   - the deployed nginx vhosts' `client_max_body_size` must be at
     //     least this, or nginx rejects the upload before it arrives. Those
     //     vhosts are hand-maintained on the host, not in this repo (#714) —

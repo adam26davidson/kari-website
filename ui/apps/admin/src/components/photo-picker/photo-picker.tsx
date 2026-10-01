@@ -1,8 +1,9 @@
 import { MousePointer2 } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Button } from "../ui/button";
 import { apiImageUrl } from "@kari/shared/utils/image-management-helpers";
 import { useObjectUrl } from "@kari/shared/hooks/use-object-url";
+import { uploadSizeProblem } from "@kari/shared/utils/upload-size";
 
 export function PhotoPicker({
   imageFile,
@@ -22,11 +23,21 @@ export function PhotoPicker({
   // site preview needs the same one for a candidate photo it renders on the
   // public page, so it moved to the shared hook (#239).
   const previewUrl = useObjectUrl(imageFile);
+  // Why the last pick was turned away, shown under the button until she
+  // picks something usable (#711).
+  const [problem, setProblem] = useState<string | null>(null);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
       const file: File = event.target.files[0];
-      setImageFile(file);
+      // Turned away here, before any save starts, rather than after a long
+      // upload the API was always going to refuse. The photo already
+      // picked stays picked: refusing a new one must not lose her work.
+      const sizeProblem = uploadSizeProblem(file);
+      setProblem(sizeProblem);
+      if (!sizeProblem) {
+        setImageFile(file);
+      }
     } else {
       setImageFile(null);
     }
@@ -78,6 +89,16 @@ export function PhotoPicker({
         <MousePointer2 />
         {imageFile ? "Select a different image" : "Select an image"}
       </Button>
+      {problem && (
+        // The admin's one danger colour, filled — the same treatment the
+        // error toast and the image-cleanup page's failure wear.
+        <p
+          role="alert"
+          className="bg-destructive text-destructive-foreground max-w-[60ch] rounded-lg px-4 py-3 font-sans text-sm leading-relaxed"
+        >
+          {problem}
+        </p>
+      )}
     </div>
   );
 }

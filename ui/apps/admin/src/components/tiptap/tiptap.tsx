@@ -29,6 +29,7 @@ import { Input } from "../ui/input";
 import { cn } from "../ui/cn";
 import { LinkBubbleMenu } from "./link-bubble-menu";
 import { linkRefusedMessage } from "./link-refusal-message";
+import { uploadSizeProblem } from "@kari/shared/utils/upload-size";
 
 const HEADING_LEVELS = [1, 2, 3] as const;
 
@@ -237,6 +238,8 @@ const MenuBar = ({
   // Declared above the null guard so the hook order never changes.
   const [linkDraft, setLinkDraft] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
+  // Why the last picked image was turned away (#711).
+  const [imageProblem, setImageProblem] = useState<string | null>(null);
 
   if (!editor) {
     return null;
@@ -307,6 +310,15 @@ const MenuBar = ({
       const file = input.files?.[0];
 
       if (!file) {
+        return;
+      }
+
+      // Turned away before anything is inserted or queued for upload: the
+      // API would refuse it anyway, but only at save, after a long upload
+      // and as a generic failure (#711).
+      const sizeProblem = uploadSizeProblem(file);
+      setImageProblem(sizeProblem);
+      if (sizeProblem) {
         return;
       }
 
@@ -410,6 +422,25 @@ const MenuBar = ({
           </div>
         ))}
       </div>
+      {imageProblem && (
+        // A row of its own under the toolbar, in the flow rather than
+        // floating, so it can never cover the words she is writing. Same
+        // filled danger colour as the link panel's refusal below.
+        <div
+          role="alert"
+          className="bg-destructive text-destructive-foreground mx-1.5 mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md px-3 py-2 font-sans text-sm leading-relaxed"
+        >
+          <p className="min-w-0 flex-[1_1_240px]">{imageProblem}</p>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => setImageProblem(null)}
+          >
+            OK
+          </Button>
+        </div>
+      )}
       {/* One link surface at a time: while the panel is open it holds the
           address being edited, and a bubble still showing the old one over
           the same words would only be in the way. */}

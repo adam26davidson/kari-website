@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   BackgroundImageError,
-  MAX_UPLOAD_BYTES,
   validateBackgroundImage,
 } from "./background-image";
+import { MAX_UPLOAD_BYTES } from "./upload-size";
 
 /** A stand-in ImageBitmap with just the members the helper uses. */
 function fakeBitmap(width: number, height: number) {

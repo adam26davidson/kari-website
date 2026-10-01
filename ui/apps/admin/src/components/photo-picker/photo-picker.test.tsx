@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, MockInstance } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PhotoPicker } from "./photo-picker";
+import { MAX_UPLOAD_BYTES } from "@kari/shared/utils/upload-size";
 
 // Spy on the setup.ts object-URL polyfills, handing out a distinct URL per
 // call so the tests can assert create/revoke pairing. restoreAllMocks in the
@@ -22,6 +23,16 @@ beforeEach(() => {
 
 const makeFile = (name: string) =>
   new File(["image-bytes"], name, { type: "image/png" });
+
+/** A picked file that reports `bytes` without allocating them. */
+const fileReporting = (name: string, bytes: number) => {
+  const file = makeFile(name);
+  Object.defineProperty(file, "size", { value: bytes });
+  return file;
+};
+
+const getFileInput = () =>
+  document.querySelector("input[type=file]") as HTMLInputElement;
 
 describe("PhotoPicker", () => {
   it("shows no preview when there is no file and no fileName", () => {
@@ -189,5 +200,57 @@ describe("PhotoPicker", () => {
     await userEvent.upload(input, file);
 
     expect(setImageFile).toHaveBeenCalledWith(file);
+  });
+
+  it("refuses a photo too big to upload, keeping the one already picked", async () => {
+    // #711: without this the oversized file was accepted here and only
+    // failed after a full upload, as a generic "Failed to save" notice.
+    const setImageFile = vi.fn();
+    const kept = makeFile("kept.png");
+    render(
+      <PhotoPicker imageFile={kept} fileName="" setImageFile={setImageFile} />,
+    );
+
+    await userEvent.upload(
+      getFileInput(),
+      fileReporting("huge.jpg", MAX_UPLOAD_BYTES + 1),
+    );
+
+    expect(setImageFile).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /too big to upload \(over 25 MB\)/,
+    );
+  });
+
+  it("clears the too-big message once a usable photo is picked", async () => {
+    const setImageFile = vi.fn();
+    render(
+      <PhotoPicker imageFile={null} fileName="" setImageFile={setImageFile} />,
+    );
+
+    await userEvent.upload(
+      getFileInput(),
+      fileReporting("huge.jpg", MAX_UPLOAD_BYTES + 1),
+    );
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+
+    const usable = makeFile("small.png");
+    await userEvent.upload(getFileInput(), usable);
+
+    expect(setImageFile).toHaveBeenCalledWith(usable);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("accepts a photo exactly on the upload limit", async () => {
+    const setImageFile = vi.fn();
+    render(
+      <PhotoPicker imageFile={null} fileName="" setImageFile={setImageFile} />,
+    );
+
+    const file = fileReporting("limit.jpg", MAX_UPLOAD_BYTES);
+    await userEvent.upload(getFileInput(), file);
+
+    expect(setImageFile).toHaveBeenCalledWith(file);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });
