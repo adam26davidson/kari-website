@@ -651,6 +651,24 @@ describe("Tiptap link bubble menu", () => {
     expect(askPredicate(true)).toBe(false);
   });
 
+  it("mounts the bubble inside the editor's positioned wrapper", async () => {
+    // The plugin places the bubble with floating-ui's `absolute` strategy,
+    // whose coordinates are relative to the bubble's offsetParent. Only a
+    // positioned wrapper INSIDE `.admin-content` makes the bubble move with
+    // its link when the page scrolls (#700). jsdom lays nothing out, so the
+    // parent and the class are the mechanism under test here; the geometry
+    // itself is asserted by the "link bubble follows its link" journey in
+    // e2e/admin-journeys.spec.ts.
+    const { container } = renderTiptap(LINKED);
+    await focusEditor();
+
+    const bubble = queryBubble()!;
+    const wrapper = container.querySelector(".editor")!;
+    expect(bubble.parentElement).toBe(wrapper);
+    expect(wrapper).toHaveClass("relative");
+    expect(bubble.style.position).toBe("absolute");
+  });
+
   it("shows the link's address with edit and remove actions", async () => {
     renderTiptap(LINKED);
     await focusEditor();

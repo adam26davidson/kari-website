@@ -19,6 +19,9 @@ import { shouldShowLinkBubble } from "./link-bubble-visibility";
  * Position, width, visibility and opacity are set INLINE by the bubble-menu
  * plugin, so nothing here may declare them: floating-ui owns where this
  * sits, and these classes own what it looks like once it gets there.
+ * The plugin's `absolute` coordinates are relative to the `.editor` wrapper
+ * in `tiptap.tsx`, which is `relative` for exactly that reason: it keeps
+ * the bubble on its link while the page scrolls (#700).
  */
 export const LinkBubbleMenu = ({
   editor,

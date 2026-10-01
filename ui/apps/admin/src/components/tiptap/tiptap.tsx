@@ -545,7 +545,19 @@ export function Tiptap({
     // convention `data-editor` and `control-group` document.
     <div className="tiptap-container border-input bg-popover flex min-h-[350px] w-full flex-col items-start justify-start rounded-lg border">
       <MenuBar editor={editor} onAddImage={onAddImage} />
-      <EditorContent editor={editor} className="editor w-full flex-1" />
+      {/* This div is where the bubble-menu plugin appends the link bubble
+          (`view.dom.parentElement`), and the bubble is `position:
+          absolute`. `relative` makes this div its containing block, so the
+          bubble scrolls with the post inside `.admin-content` instead of
+          staying put against the page until the next keystroke (#700).
+          Nothing between here and `.admin-content` may become
+          `overflow: hidden`/`clip`, or the bubble would be cut off at the
+          card's edge; and no z-index or isolate here either, so it keeps
+          painting over the toolbar as it always has. */}
+      <EditorContent
+        editor={editor}
+        className="editor relative w-full flex-1"
+      />
     </div>
   );
 }
