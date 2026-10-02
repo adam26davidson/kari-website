@@ -9,11 +9,13 @@ import {
 } from "./components/ui/alert-dialog";
 import { Toaster } from "./components/ui/toaster";
 import { Button } from "./components/ui/button";
+import { LoadingOverlay } from "./components/loading-overlay/loading-overlay";
 import { AdminUi, AdminUiContext, Notify } from "./admin-ui-context";
 
 interface Loading {
   isLoading: boolean;
   message: string;
+  progress?: number;
 }
 
 interface Confirmation {
@@ -38,7 +40,7 @@ const TOAST_ID = "admin-toast";
  * the corresponding chrome next to its children.
  *
  * The three surfaces are shadcn/ui since #592 — a Radix `AlertDialog` for
- * the confirmation, sonner for the toast, and a plain fixed overlay for the
+ * the confirmation, sonner for the toast, and `LoadingOverlay` for the
  * blocking "Saving..." state — but the context this publishes has not
  * changed, so its twelve consumers ask for them exactly as before.
  */
@@ -50,7 +52,8 @@ export function AdminUiProvider({ children }: { children: React.ReactNode }) {
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
 
   const showLoading = useCallback(
-    (message: string) => setLoading({ isLoading: true, message }),
+    (message: string, progress?: number) =>
+      setLoading({ isLoading: true, message, progress }),
     [],
   );
   const hideLoading = useCallback(
@@ -70,6 +73,9 @@ export function AdminUiProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Keyed on `loading.isLoading`, NOT `loading`: an upload reports its
+  // progress many times a second, and none of those ticks may re-render
+  // the twelve consumers — only the overlay below needs them.
   const value = useMemo<AdminUi>(
     () => ({
       isLoading: loading.isLoading,
@@ -158,14 +164,7 @@ export function AdminUiProvider({ children }: { children: React.ReactNode }) {
         )}
       </AlertDialog>
       {loading.isLoading && (
-        // Fixed, so it covers the page whatever the content column has
-        // been scrolled to. `.admin-loading` is what e2e/helpers.ts waits
-        // to disappear before asserting on a list.
-        <div className="admin-loading fixed inset-0 z-[1001] flex items-center justify-center bg-foreground/40">
-          <div className="rounded-xl border border-border bg-card px-8 py-4 font-sans text-base text-foreground shadow-[0_18px_48px_rgba(74,62,40,0.22)]">
-            {loading.message}
-          </div>
-        </div>
+        <LoadingOverlay message={loading.message} progress={loading.progress} />
       )}
       <Toaster />
     </AdminUiContext.Provider>

@@ -25,6 +25,9 @@ function Consumer() {
     <div>
       <div>isLoading: {String(isLoading)}</div>
       <button onClick={() => showLoading("Working...")}>show-loading</button>
+      <button onClick={() => showLoading("Sending...", 0.4)}>
+        show-progress
+      </button>
       <button onClick={() => hideLoading()}>hide-loading</button>
       <button onClick={() => confirm("Really do it?", onYes)}>ask</button>
       <button onClick={() => confirm("Discard changes?", onYes, onNo)}>
@@ -70,6 +73,21 @@ describe("AdminUiProvider loading overlay", () => {
     const { press } = renderProvider();
     await press("show-loading");
     expect(document.querySelector(".admin-loading")).not.toBeNull();
+  });
+
+  it("passes a progress fraction through to the overlay, and drops it after", async () => {
+    const { press } = renderProvider();
+
+    await press("show-progress");
+    expect(screen.getByRole("progressbar")).toHaveAttribute(
+      "aria-valuenow",
+      "40",
+    );
+
+    // A later wait with no fraction is of unknown length: no stale bar.
+    await press("show-loading");
+    expect(screen.getByText("Working...")).toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).toBeNull();
   });
 });
 

@@ -251,6 +251,7 @@ describe("AdminBackgroundPage saving", () => {
       picked,
       true,
       expect.any(Function),
+      expect.any(Function),
     );
     expect(SiteSettingsService.update).toHaveBeenCalledWith(
       { backgroundPhoto: "uploaded.webp" },
@@ -267,6 +268,28 @@ describe("AdminBackgroundPage saving", () => {
     expect(
       screen.getByText("Pick an already-uploaded image (3)"),
     ).toBeInTheDocument();
+  });
+
+  it("narrates the upload as it goes", async () => {
+    vi.mocked(ImageService.upload).mockImplementation(
+      async (_file, _published, _token, onProgress) => {
+        onProgress?.(0.4);
+        onProgress?.(1);
+        return "uploaded.webp";
+      },
+    );
+    const { adminUi } = await renderAndPickFile();
+    adminUi.showLoading.mockClear();
+    adminUi.hideLoading.mockClear();
+
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() => expect(adminUi.hideLoading).toHaveBeenCalledOnce());
+    expect(adminUi.showLoading.mock.calls).toEqual([
+      ["Saving the site's appearance..."],
+      ["Sending your photo to the site...", 0.4],
+      ["Nearly there — resizing your photo for the site...", undefined],
+    ]);
   });
 
   it("saves the default (no photo) without touching any image", async () => {
