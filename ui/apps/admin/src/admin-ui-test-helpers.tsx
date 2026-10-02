@@ -17,7 +17,7 @@ import { AssistantProvider } from "./assistant/assistant-provider";
 
 /** AdminUi with every function mocked, for asserting page behavior. */
 export interface AdminUiMock extends AdminUi {
-  showLoading: Mock<(message: string) => void>;
+  showLoading: Mock<(message: string, progress?: number) => void>;
   hideLoading: Mock<() => void>;
   confirm: Mock<(message: string, onYes: () => void, onNo?: () => void) => void>;
   notify: Mock<(message: string, type?: "success" | "error") => void>;

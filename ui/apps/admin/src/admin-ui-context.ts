@@ -6,7 +6,11 @@ export type Notify = (message: string, type?: "success" | "error") => void;
 export interface AdminUi {
   /** True while the loading overlay is up (mirrors show/hideLoading). */
   isLoading: boolean;
-  showLoading: (message: string) => void;
+  /**
+   * Shows the blocking overlay. `progress` is a 0-1 fraction of a transfer,
+   * drawn as a filling bar; omit it for a wait of unknown length.
+   */
+  showLoading: (message: string, progress?: number) => void;
   hideLoading: () => void;
   /**
    * Shows a Yes/No dialog; onYes runs only when Yes is chosen, onNo (if

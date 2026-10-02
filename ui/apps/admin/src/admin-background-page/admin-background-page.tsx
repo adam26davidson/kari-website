@@ -13,6 +13,7 @@ import { LoadError } from "../components/load-error/load-error";
 import { useAdminUi } from "../admin-ui-context";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 import { useAssistantSubject } from "../assistant/use-assistant-subject";
+import { uploadFeedback } from "../upload-feedback";
 import { apiImageUrl } from "@kari/shared/utils/image-management-helpers";
 import {
   BackgroundImageError,
@@ -126,10 +127,16 @@ export function AdminBackgroundPage() {
         // Upload first: the settings are only written after it succeeds, so
         // a failure at any step leaves the published background intact.
         await validateBackgroundImage(imageFile);
+        // A big photo can take a while to send, so the overlay follows
+        // it: a filling bar, then a word about the resizing (#712).
         const newFileName = await ImageService.upload(
           imageFile,
           true,
           getAccessTokenSilently,
+          (sent) => {
+            const feedback = uploadFeedback(sent);
+            showLoading(feedback.message, feedback.progress);
+          },
         );
         if (!newFileName) {
           throw new Error("Failed to upload image");
