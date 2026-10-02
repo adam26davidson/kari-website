@@ -1,6 +1,13 @@
 import { v4 as uuidv4 } from "uuid";
 import { HttpError } from "./http-error";
-import { TokenGetter, authorizedFetch, ensureOk, readErrorText } from "./http";
+import {
+  TokenGetter,
+  UploadProgress,
+  authorizedFetch,
+  authorizedUpload,
+  ensureOk,
+  readErrorText,
+} from "./http";
 
 const API_IMAGES_URL = import.meta.env.VITE_API_URL + "/images";
 
@@ -29,10 +36,17 @@ export interface GcReport {
 }
 
 export class ImageService {
+  /**
+   * Uploads `file` and resolves the name it was stored under. `onProgress`,
+   * when given, hears the fraction of the file sent so far, ending with 1
+   * once it is all sent — the API still resizes it before replying, so 1
+   * is not yet done.
+   */
   static async upload(
     file: File | null,
     isPublished: boolean,
     getAccessTokenSilently: TokenGetter,
+    onProgress?: UploadProgress,
   ) {
     if (!file) {
       console.error("No file provided for upload.");
@@ -56,13 +70,15 @@ export class ImageService {
     const formData = new FormData();
     formData.append("file", file); // Ensure that your server is expecting the file under the key "file"
 
-    // Set up the request to your file upload endpoint. Content-Type is set
-    // to multipart/form-data automatically by the browser when the body is
-    // FormData, so only the bearer header is added.
-    const response = await authorizedFetch(
+    // Content-Type is set to multipart/form-data automatically by the
+    // browser when the body is FormData, so authorizedUpload adds only the
+    // bearer header. It is an XMLHttpRequest rather than a fetch because
+    // only XHR reports how much of the body has been sent.
+    const response = await authorizedUpload(
       `${API_IMAGES_URL}?isPublished=${isPublished}`,
       getAccessTokenSilently,
-      { method: "POST", body: formData },
+      formData,
+      onProgress,
     );
     ensureOk(response, "Failed to upload image");
 

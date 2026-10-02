@@ -1,6 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { GcReport, ImageService } from "./images";
-import { getToken, mockFetchOnce, setupServiceTestHooks } from "./test-helpers";
+import {
+  getToken,
+  mockFetchOnce,
+  setupServiceTestHooks,
+  stubXhr,
+} from "./test-helpers";
 
 const API_IMAGES_URL = "https://api.test.local/images";
 
@@ -10,16 +15,16 @@ vi.mock("uuid", () => ({ v4: () => "fixed-uuid" }));
 setupServiceTestHooks();
 
 describe("ImageService.upload", () => {
-  it("returns null without fetching when no file is provided", async () => {
-    const fetchMock = mockFetchOnce({ ok: true, text: async () => "" });
+  it("returns null without uploading when no file is provided", async () => {
+    const requests = stubXhr({ status: 200 });
     expect(await ImageService.upload(null, true, getToken)).toBeNull();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(requests).toHaveLength(0);
   });
 
   it("POSTs the file and returns the server-stored name", async () => {
-    const fetchMock = mockFetchOnce({
-      ok: true,
-      json: async () => ({
+    const requests = stubXhr({
+      status: 200,
+      responseText: JSON.stringify({
         message: "File uploaded successfully",
         fileName: "server-uuid.png",
       }),
@@ -30,12 +35,12 @@ describe("ImageService.upload", () => {
 
     // The name the API stored the image under wins over the sent name.
     expect(result).toBe("server-uuid.png");
-    expect(fetchMock).toHaveBeenCalledOnce();
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${API_IMAGES_URL}?isPublished=true`);
-    expect(init.method).toBe("POST");
-    expect(init.headers).toEqual({ Authorization: "Bearer test-token" });
-    const uploaded = (init.body as FormData).get("file") as File;
+    expect(requests).toHaveLength(1);
+    const [xhr] = requests;
+    expect(xhr.url).toBe(`${API_IMAGES_URL}?isPublished=true`);
+    expect(xhr.method).toBe("POST");
+    expect(xhr.headers).toEqual({ Authorization: "Bearer test-token" });
+    const uploaded = (xhr.body as FormData).get("file") as File;
     expect(uploaded.name).toBe("fixed-uuid.png");
     expect(uploaded.type).toBe("image/png");
     // jsdom's File lacks .text(); the byte count confirms the data came along.
@@ -43,27 +48,25 @@ describe("ImageService.upload", () => {
   });
 
   it("sends a file with no extension as just the uuid", async () => {
-    const fetchMock = mockFetchOnce({
-      ok: true,
-      json: async () => ({ fileName: "server-uuid" }),
+    const requests = stubXhr({
+      status: 200,
+      responseText: JSON.stringify({ fileName: "server-uuid" }),
     });
     const file = new File(["RAW"], "photo", { type: "image/png" });
 
     const result = await ImageService.upload(file, true, getToken);
 
     expect(result).toBe("server-uuid");
-    const uploaded = (fetchMock.mock.calls[0][1].body as FormData).get(
-      "file",
-    ) as File;
+    const uploaded = (requests[0].body as FormData).get("file") as File;
     expect(uploaded.name).toBe("fixed-uuid");
   });
 
   it("falls back to the sent name when the API returns no fileName", async () => {
     // An older API stores the sent name verbatim and only returns a
     // message, so the sent (already unique) name is the stored one.
-    mockFetchOnce({
-      ok: true,
-      json: async () => ({ message: "File uploaded successfully" }),
+    stubXhr({
+      status: 200,
+      responseText: JSON.stringify({ message: "File uploaded successfully" }),
     });
     const file = new File(["PNGDATA"], "photo.png", { type: "image/png" });
 
@@ -73,21 +76,19 @@ describe("ImageService.upload", () => {
   });
 
   it("passes isPublished=false through to the query string", async () => {
-    const fetchMock = mockFetchOnce({
-      ok: true,
-      json: async () => ({ fileName: "server-uuid.jpg" }),
+    const requests = stubXhr({
+      status: 200,
+      responseText: JSON.stringify({ fileName: "server-uuid.jpg" }),
     });
     const file = new File(["JPG"], "draft.jpg", { type: "image/jpeg" });
 
     await ImageService.upload(file, false, getToken);
 
-    expect(fetchMock.mock.calls[0][0]).toBe(
-      `${API_IMAGES_URL}?isPublished=false`,
-    );
+    expect(requests[0].url).toBe(`${API_IMAGES_URL}?isPublished=false`);
   });
 
   it("throws an HttpError when the upload fails so the editor can surface the error", async () => {
-    mockFetchOnce({ ok: false, status: 500, text: async () => "" });
+    stubXhr({ status: 500 });
     const file = new File(["x"], "photo.png", { type: "image/png" });
     const failure = ImageService.upload(file, true, getToken);
     await expect(failure).rejects.toThrow("Failed to upload image (HTTP 500)");
@@ -95,6 +96,20 @@ describe("ImageService.upload", () => {
       name: "HttpError",
       status: 500,
     });
+  });
+
+  it("tells the caller how much of the file has been sent", async () => {
+    stubXhr({
+      status: 200,
+      responseText: JSON.stringify({ fileName: "server-uuid.png" }),
+    });
+    const onProgress = vi.fn();
+    const file = new File(["PNGDATA"], "photo.png", { type: "image/png" });
+
+    await ImageService.upload(file, true, getToken, onProgress);
+
+    // The stub sends everything in one progress event, then finishes.
+    expect(onProgress.mock.calls).toEqual([[1], [1]]);
   });
 });
 

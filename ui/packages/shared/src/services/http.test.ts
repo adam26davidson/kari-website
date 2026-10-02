@@ -1,7 +1,17 @@
-import { describe, it, expect } from "vitest";
-import { authorizedFetch, ensureOk, readErrorText } from "./http";
+import { describe, it, expect, vi } from "vitest";
+import {
+  authorizedFetch,
+  authorizedUpload,
+  ensureOk,
+  readErrorText,
+} from "./http";
 import { HttpError } from "./http-error";
-import { getToken, mockFetchOnce, setupServiceTestHooks } from "./test-helpers";
+import {
+  getToken,
+  mockFetchOnce,
+  setupServiceTestHooks,
+  stubXhr,
+} from "./test-helpers";
 
 setupServiceTestHooks();
 
@@ -45,6 +55,121 @@ describe("authorizedFetch", () => {
       authorizedFetch("https://x.test/a", getToken),
     ).rejects.toThrow("login required");
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("authorizedUpload", () => {
+  const url = "https://x.test/images";
+
+  it("POSTs the form to the url with a bearer header", async () => {
+    const requests = stubXhr({ status: 200, responseText: "{}" });
+    const form = new FormData();
+    form.append("file", new File(["x"], "a.png"));
+
+    await authorizedUpload(url, getToken, form);
+
+    expect(requests).toHaveLength(1);
+    const [xhr] = requests;
+    expect(xhr.method).toBe("POST");
+    expect(xhr.url).toBe(url);
+    // Only the bearer header: the browser writes the multipart
+    // Content-Type, boundary included, for a FormData body.
+    expect(xhr.headers).toEqual({ Authorization: "Bearer test-token" });
+    expect(xhr.body).toBe(form);
+  });
+
+  it("resolves a Response carrying the status and body", async () => {
+    stubXhr({
+      status: 200,
+      statusText: "OK",
+      responseText: '{"fileName":"a.webp"}',
+    });
+
+    const response = await authorizedUpload(url, getToken, new FormData());
+
+    expect(response.ok).toBe(true);
+    expect(response.status).toBe(200);
+    expect(response.statusText).toBe("OK");
+    expect(await response.json()).toEqual({ fileName: "a.webp" });
+  });
+
+  // A failed upload is still an answer, not a network failure: ensureOk
+  // in the caller is what turns it into the HttpError the page explains.
+  it("resolves a non-ok response rather than rejecting", async () => {
+    stubXhr({ status: 500, responseText: "boom" });
+
+    const response = await authorizedUpload(url, getToken, new FormData());
+
+    expect(response.ok).toBe(false);
+    expect(response.status).toBe(500);
+    expect(await response.text()).toBe("boom");
+  });
+
+  // `new Response("", { status: 204 })` throws: a null-body status must be
+  // given a null body.
+  it("copes with an empty body on a no-content status", async () => {
+    stubXhr({ status: 204 });
+
+    const response = await authorizedUpload(url, getToken, new FormData());
+
+    expect(response.status).toBe(204);
+  });
+
+  it("reports the fraction sent for a measurable progress event", async () => {
+    const onProgress = vi.fn();
+    const requests = stubXhr({ status: 200, autoComplete: false });
+    const pending = authorizedUpload(url, getToken, new FormData(), onProgress);
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    const [xhr] = requests;
+
+    xhr.upload.emit("progress", {
+      lengthComputable: true,
+      loaded: 25,
+      total: 100,
+    });
+    expect(onProgress).toHaveBeenLastCalledWith(0.25);
+
+    // A progress event that cannot say how much is left says nothing.
+    xhr.upload.emit("progress", { lengthComputable: false, loaded: 50 });
+    expect(onProgress).toHaveBeenCalledOnce();
+
+    // The upload finishing reports exactly 1, even if the last progress
+    // event stopped short of the total.
+    xhr.upload.emit("load");
+    expect(onProgress).toHaveBeenLastCalledWith(1);
+
+    xhr.emit("load");
+    await expect(pending).resolves.toBeInstanceOf(Response);
+  });
+
+  it("uploads without a progress callback", async () => {
+    // The default stub fires a progress event and the upload's load, so
+    // both listeners run with nothing to report to.
+    stubXhr({ status: 200, responseText: "{}" });
+
+    const response = await authorizedUpload(url, getToken, new FormData());
+
+    expect(response.ok).toBe(true);
+  });
+
+  it("rejects when the request fails at the network", async () => {
+    const requests = stubXhr({ status: 0, autoComplete: false });
+    const pending = authorizedUpload(url, getToken, new FormData());
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+
+    requests[0].emit("error");
+
+    await expect(pending).rejects.toThrow(TypeError);
+  });
+
+  it("does not open a request at all when the token getter rejects", async () => {
+    const requests = stubXhr({ status: 200 });
+    getToken.mockRejectedValue(new Error("login required"));
+
+    await expect(
+      authorizedUpload(url, getToken, new FormData()),
+    ).rejects.toThrow("login required");
+    expect(requests).toHaveLength(0);
   });
 });
 
