@@ -78,39 +78,6 @@ class FakeTarget {
   }
 }
 
-/**
- * Stand-in for `XMLHttpRequest`, recording what the code under test asked
- * of it. `upload` and the request itself are separate listener targets, as
- * in the browser; a test drives them with `upload.emit(...)` / `emit(...)`.
- */
-export class FakeXhr extends FakeTarget {
-  readonly upload = new FakeTarget();
-  method?: string;
-  url?: string;
-  readonly headers: Record<string, string> = {};
-  body?: unknown;
-  status = 0;
-  statusText = "";
-  responseText = "";
-
-  open(method: string, url: string) {
-    this.method = method;
-    this.url = url;
-  }
-
-  setRequestHeader(name: string, value: string) {
-    this.headers[name] = value;
-  }
-
-  send(body: unknown) {
-    this.body = body;
-    this.onSend(this);
-  }
-
-  /** Replaced by `stubXhr`; what happens once the body is sent. */
-  onSend: (xhr: FakeXhr) => void = () => {};
-}
-
 export interface StubXhrOptions {
   status: number;
   statusText?: string;
@@ -124,39 +91,74 @@ export interface StubXhrOptions {
 }
 
 /**
- * Stubs the global `XMLHttpRequest` with a `FakeXhr` that answers with
- * `status`/`responseText`, and returns the list every constructed request
- * is pushed onto so tests can assert on it. Unstubbed by
- * `setupServiceTestHooks`'s `vi.unstubAllGlobals()`.
+ * Stand-in for `XMLHttpRequest`, recording what the code under test asked
+ * of it and answering with the options it was built from. `upload` and the
+ * request itself are separate listener targets, as in the browser; a test
+ * drives them with `upload.emit(...)` / `emit(...)`.
  */
-export function stubXhr({
-  status,
-  statusText = "",
-  responseText = "",
-  autoComplete = true,
-}: StubXhrOptions): Array<FakeXhr> {
-  const requests: Array<FakeXhr> = [];
-  class StubbedXhr extends FakeXhr {
-    constructor() {
-      super();
-      requests.push(this);
-      this.onSend = (xhr) => {
-        xhr.status = status;
-        xhr.statusText = statusText;
-        xhr.responseText = responseText;
-        if (!autoComplete) return;
-        queueMicrotask(() => {
-          xhr.upload.emit("progress", {
-            lengthComputable: true,
-            loaded: 10,
-            total: 10,
-          });
-          xhr.upload.emit("load");
-          xhr.emit("load");
-        });
-      };
-    }
+export class FakeXhr extends FakeTarget {
+  readonly upload = new FakeTarget();
+  method?: string;
+  url?: string;
+  readonly headers: Record<string, string> = {};
+  body?: unknown;
+  status = 0;
+  statusText = "";
+  responseText = "";
+
+  constructor(private readonly answer: StubXhrOptions) {
+    super();
   }
-  vi.stubGlobal("XMLHttpRequest", StubbedXhr);
+
+  open(method: string, url: string) {
+    this.method = method;
+    this.url = url;
+  }
+
+  setRequestHeader(name: string, value: string) {
+    this.headers[name] = value;
+  }
+
+  send(body: unknown) {
+    const {
+      status,
+      statusText = "",
+      responseText = "",
+      autoComplete = true,
+    } = this.answer;
+    this.body = body;
+    this.status = status;
+    this.statusText = statusText;
+    this.responseText = responseText;
+    if (!autoComplete) return;
+    queueMicrotask(() => {
+      this.upload.emit("progress", {
+        lengthComputable: true,
+        loaded: 10,
+        total: 10,
+      });
+      this.upload.emit("load");
+      this.emit("load");
+    });
+  }
+}
+
+/**
+ * Stubs the global `XMLHttpRequest` with a `FakeXhr` answering per
+ * `answer`, and returns the list every constructed request is pushed onto
+ * so tests can assert on it. Unstubbed by `setupServiceTestHooks`'s
+ * `vi.unstubAllGlobals()`.
+ */
+export function stubXhr(answer: StubXhrOptions): Array<FakeXhr> {
+  const requests: Array<FakeXhr> = [];
+  vi.stubGlobal(
+    "XMLHttpRequest",
+    class extends FakeXhr {
+      constructor() {
+        super(answer);
+        requests.push(this);
+      }
+    },
+  );
   return requests;
 }
