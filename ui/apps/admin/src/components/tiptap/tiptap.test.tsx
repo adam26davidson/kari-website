@@ -12,6 +12,7 @@ import type { EditorView } from "@tiptap/pm/view";
 import { Tiptap } from "./tiptap";
 import { LINK_EXAMPLES } from "./link-refusal-message";
 import { shouldShowLinkBubble } from "./link-bubble-visibility";
+import { MAX_UPLOAD_BYTES } from "@kari/shared/utils/upload-size";
 
 // useEditor returns null until the editor instance exists. That never
 // happens in these tests, so the toolbar's null guard is only reachable by
@@ -509,6 +510,63 @@ describe("Tiptap toolbar", () => {
     );
     const html = setContent.mock.calls.at(-1)?.[0] as string;
     expect(html).toContain('src="data:image/png;base64');
+  });
+
+  it("refuses an image too big to upload and says what to do", async () => {
+    // #711: the oversized file used to be handed to onAddImage and inlined
+    // as a base64 preview, failing only at save as a generic notice.
+    const user = userEvent.setup();
+    const clickSpy = vi
+      .spyOn(HTMLInputElement.prototype, "click")
+      .mockImplementation(() => {});
+    const { setContent, onAddImage } = renderTiptap("<p>kept</p>");
+
+    await user.click(getButton("Add an image"));
+    const fileInput = clickSpy.mock.contexts[0] as HTMLInputElement;
+    const file = new File(["x"], "huge.jpg", { type: "image/jpeg" });
+    Object.defineProperty(file, "size", { value: MAX_UPLOAD_BYTES + 1 });
+    Object.defineProperty(fileInput, "files", { value: [file] });
+    await act(async () => {
+      fileInput.onchange?.(new Event("change"));
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      /too big to upload \(over 25 MB\)/,
+    );
+    expect(onAddImage).not.toHaveBeenCalled();
+    expect(setContent).not.toHaveBeenCalled();
+    expect(getEditor().getHTML()).toBe("<p>kept</p>");
+
+    // Dismissable, so a stale message does not hang over the toolbar.
+    await user.click(getButton("OK"));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("clears the too-big message when a usable image is picked", async () => {
+    const user = userEvent.setup();
+    const clickSpy = vi
+      .spyOn(HTMLInputElement.prototype, "click")
+      .mockImplementation(() => {});
+    const { onAddImage } = renderTiptap();
+
+    const pick = async (file: File) => {
+      clickSpy.mockClear();
+      await user.click(getButton("Add an image"));
+      const fileInput = clickSpy.mock.contexts[0] as HTMLInputElement;
+      Object.defineProperty(fileInput, "files", { value: [file] });
+      await act(async () => {
+        fileInput.onchange?.(new Event("change"));
+      });
+    };
+
+    const huge = new File(["x"], "huge.jpg", { type: "image/jpeg" });
+    Object.defineProperty(huge, "size", { value: MAX_UPLOAD_BYTES + 1 });
+    await pick(huge);
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+
+    await pick(new File(["img"], "small.png", { type: "image/png" }));
+    expect(onAddImage).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("keeps an empty paragraph after a document ending in a list", async () => {
