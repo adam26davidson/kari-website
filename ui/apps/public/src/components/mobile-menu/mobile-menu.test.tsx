@@ -23,6 +23,21 @@ describe("MobileMenu", () => {
     expect(menu).toHaveAttribute("id", MOBILE_MENU_ID);
   });
 
+  // At phone width this menu is the site's only navigation, so it must be
+  // a labelled landmark screen-reader users can jump to (#730) — and the
+  // landmark itself must be the element aria-controls points at.
+  it("is a labelled navigation landmark holding every page link", () => {
+    renderMenu("/");
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    expect(nav).toHaveAttribute("id", MOBILE_MENU_ID);
+    expect(nav).toHaveClass("mobile-menu");
+    for (const page of PAGES) {
+      expect(nav).toContainElement(
+        screen.getByRole("link", { name: page.name }),
+      );
+    }
+  });
+
   it("renders one mobile-menu-item link per page", () => {
     renderMenu("/");
     const links = screen.getAllByRole("link");

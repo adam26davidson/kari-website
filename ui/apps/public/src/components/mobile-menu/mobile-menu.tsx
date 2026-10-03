@@ -10,7 +10,9 @@ export function MobileMenu({
   const location = useLocation();
   return (
     // The id is what the header's hamburger names in aria-controls (#502).
-    <div id={MOBILE_MENU_ID} className="mobile-menu">
+    // A labelled <nav>: below 768px this is the site's only navigation, so
+    // screen-reader users need a landmark to jump to (#730).
+    <nav id={MOBILE_MENU_ID} className="mobile-menu" aria-label="Main">
       {PAGES.map((page) => (
         <Link
           key={page.path}
@@ -25,6 +27,6 @@ export function MobileMenu({
         </Link>
       ))}
       {/* No /admin entry here either — see header.tsx. */}
-    </div>
+    </nav>
   );
 }
