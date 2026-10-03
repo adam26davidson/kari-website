@@ -5,7 +5,7 @@
    clears WCAG AAA over a mid-lightness photo and still clears AA at both
    extremes, while staying lighter than the body text so the line still
    reads as secondary (#343). The admin panels reuse it on the same
-   translucent grey (#354). Enforced by src/test/text-contrast.test.ts. */
+   translucent grey (#354). Enforced by test/design/text-contrast.test.ts. */
 :root {
   --muted-text: #3d3d3d;
 
@@ -171,7 +171,7 @@ body {
      The `overflow: hidden` that finishes the job lives in the
      `@supports` block below, not here — see the note there.
 
-     Pinned by src/test/viewport-shell.test.ts. */
+     Pinned by test/design/viewport-shell.test.ts. */
   height: 100vh;
   height: 100dvh;
 }
@@ -215,7 +215,7 @@ body {
    the surface swallows, the other still draws the shape. The box-shadow's
    4px spread grows from the border edge outward and the outline paints over
    its inner half, giving 2px white inside 2px green; both follow the
-   element's border-radius. Enforced by src/test/text-contrast.test.ts. */
+   element's border-radius. Enforced by test/design/text-contrast.test.ts. */
 :focus-visible {
   outline: 2px solid #ffffff;
   outline-offset: 0;

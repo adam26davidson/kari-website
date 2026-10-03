@@ -182,7 +182,7 @@ test("photography page renders at least one seeded post", async ({ page }) => {
 //
 // Honest scope: headless Chromium has no retracting URL bar, so `dvh` and
 // `vh` are equal here and this cannot exercise the unit change itself
-// (src/test/viewport-shell.test.ts pins that). What it does cover is the
+// (test/design/viewport-shell.test.ts pins that). What it does cover is the
 // other half of the fix, which is what actually strands the header: the
 // document must never be a scroll container, and wheeling over the content
 // must move the content and leave the header where it is.
