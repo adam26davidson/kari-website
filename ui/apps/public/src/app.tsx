@@ -67,11 +67,18 @@ export function App() {
           showingMobileMenu={showingMobileMenu}
           setShowingMobileMenu={setShowingMobileMenu}
         />
-        <div className="content">
-          {isMobile && showingMobileMenu && (
-            <MobileMenu setShowingMobileMenu={setShowingMobileMenu} />
-          )}
-          {!showingMobileMenu && (
+        {/* The open menu takes the page's place in the same `.content` box,
+            so it still fills the screen below the bar. It is navigation, not
+            page content, so it gets a plain <div> rather than sitting inside
+            <main> (#738); the routed page alone is the main landmark. */}
+        {showingMobileMenu ? (
+          <div className="content">
+            {isMobile && (
+              <MobileMenu setShowingMobileMenu={setShowingMobileMenu} />
+            )}
+          </div>
+        ) : (
+          <main className="content">
             <RouteErrorBoundary>
               <Suspense fallback={<RouteFallback />}>
                 <Routes>
@@ -88,8 +95,8 @@ export function App() {
                 </Routes>
               </Suspense>
             </RouteErrorBoundary>
-          )}
-        </div>
+          </main>
+        )}
       </div>
     </PreviewOverridesProvider>
   );

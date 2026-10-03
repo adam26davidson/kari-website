@@ -19,8 +19,12 @@ export function Header({
   const location = useLocation();
   const isMobile = useIsMobile();
 
+  // <header>, <nav> and the <main> in app.tsx are the page's landmarks
+  // (#738); the classes stay, so styling and the e2e locators are unchanged.
+  // The nav is named "Main" like the mobile menu's, which replaces it below
+  // 768px — the two are never mounted together.
   return (
-    <div className="header">
+    <header className="header">
       {isMobile && (
         // aria-controls only while the menu is open: app.tsx mounts it on
         // demand, and the attribute may only name an element that is in the
@@ -53,7 +57,7 @@ export function Header({
         Kari Davidson
       </h1>
       {!isMobile && (
-        <div className="pages">
+        <nav className="pages" aria-label="Main">
           {PAGES.map((page) => (
             <Link
               key={page.path}
@@ -66,8 +70,8 @@ export function Header({
           {/* Deliberately no link to /admin: the admin app is reached by
               typing its URL. It exists for two people, and a visible entry
               on the public site advertises it to every visitor. */}
-        </div>
+        </nav>
       )}
-    </div>
+    </header>
   );
 }
