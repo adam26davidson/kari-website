@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { App } from "./app";
@@ -65,6 +65,21 @@ describe("App", () => {
     renderApp("/");
     expect(screen.getByText("Kari Davidson")).toBeInTheDocument();
     expect(await screen.findByText("Home page stub")).toBeInTheDocument();
+  });
+
+  // Landmarks (#738): the header bar is the banner and the routed page
+  // lives in <main>, so a screen-reader user can jump straight past the
+  // chrome. Exactly one of each — the desktop links are the only nav.
+  it("renders the page inside a main landmark below the banner", async () => {
+    renderApp("/");
+    const main = screen.getByRole("main");
+    expect(main).toHaveClass("content");
+    expect(
+      await within(main).findByText("Home page stub"),
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole("banner")).toHaveLength(1);
+    expect(screen.getAllByRole("navigation")).toHaveLength(1);
+    expect(within(main).queryByRole("navigation")).toBeNull();
   });
 
   // Every public route, so each lazy chunk factory is actually invoked —
@@ -144,6 +159,13 @@ describe("App", () => {
       "mobile-menu-item",
     );
     expect(screen.queryByText("Home page stub")).not.toBeInTheDocument();
+    // The open menu is the site's navigation, not page content: it must
+    // not sit inside a <main> (#738). It takes the page's place in the
+    // same `.content` box, so it still fills the screen below the bar.
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    expect(nav.parentElement).toHaveClass("content");
+    expect(nav.closest("main")).toBeNull();
+    expect(screen.queryByRole("main")).toBeNull();
 
     await userEvent.click(screen.getByRole("link", { name: "Haiku" }));
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
