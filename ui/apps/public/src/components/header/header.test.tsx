@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { Header } from "./header";
@@ -65,6 +65,19 @@ describe("Header on desktop", () => {
     );
   });
 
+  // The bar is the site's banner and its links the desktop navigation
+  // (#738). Below 768px the mobile menu's <nav> is the navigation instead,
+  // and it is labelled "Main" too, so the landmark reads the same at every
+  // width; only one of the two is ever mounted.
+  it("is the banner landmark holding a navigation landmark named Main", () => {
+    renderHeader("/");
+    const banner = screen.getByRole("banner");
+    expect(banner).toHaveClass("header");
+    const nav = within(banner).getByRole("navigation", { name: "Main" });
+    expect(nav).toHaveClass("pages");
+    expect(within(nav).getAllByRole("link")).toHaveLength(PAGES.length);
+  });
+
   // The admin app is for its two users only and is reached by typing its
   // URL. It briefly had a link here (#591), which put "Admin" in front of
   // every visitor; the public bar must never advertise it.
@@ -94,6 +107,8 @@ describe("Header on mobile", () => {
   it("hides the nav links", () => {
     renderHeader("/");
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation")).toBeNull();
+    expect(screen.getByRole("banner")).toBeInTheDocument();
   });
 
   // The mobile title swaps to .header-title-mobile ALONE — .header-title
