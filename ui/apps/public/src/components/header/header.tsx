@@ -39,7 +39,6 @@ export function Header({
         >
           <svg
             aria-hidden="true"
-            className="header-menu-icon"
             height="1em"
             viewBox="0 0 448 512"
             width="1.25em"
