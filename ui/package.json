@@ -48,9 +48,6 @@
     "vitest": "^5.0.2"
   },
   "allowScripts": {
-    "@fortawesome/fontawesome-common-types": false,
-    "@fortawesome/fontawesome-svg-core": false,
-    "@fortawesome/free-solid-svg-icons": false,
     "@swc/core": false,
     "browser-tabs-lock": false
   },
