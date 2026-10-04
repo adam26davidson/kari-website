@@ -29,7 +29,12 @@ serde = { version = "1.0.229", features = ["derive"] }
 hyper = "0.14.32"
 reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls"] }
 aws-config = "1.12.0"
-aws-sdk-s3 = "1.148.0"
+# Default features minus `rustls`: that one compiles in the legacy hyper
+# 0.14 / rustls 0.21 / ring connector, whose rustls-webpki 0.101 has no
+# patched release (#784). With `BehaviorVersion::latest()` the SDK already
+# picks `default-https-client` (hyper 1 / rustls 0.23 / aws-lc-rs), so this
+# removes dead code, not the client S3 calls actually use.
+aws-sdk-s3 = { version = "1.152.0", default-features = false, features = ["sigv4a", "http-1x", "default-https-client", "rt-tokio"] }
 aws-smithy-types = "1.8.0"
 aws-sig-auth = "0.60.3"
 async-trait = "0.1.92"
@@ -43,6 +48,6 @@ tower-test = "0.4.0"
 http-body-util = "0.1.5"
 jsonwebtoken = { version = "10.4.0", features = ["aws_lc_rs"] }
 serde = { version = "1.0.229", features = ["derive"] }
-aws-sdk-s3 = { version = "1.148.0", features = ["test-util"] }
+aws-sdk-s3 = { version = "1.152.0", default-features = false, features = ["sigv4a", "http-1x", "default-https-client", "rt-tokio", "test-util"] }
 aws-smithy-mocks = "0.3.0"
 aws-smithy-runtime-api = "1.17.0"
