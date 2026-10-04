@@ -64,7 +64,17 @@ export function AlertDialogTitle({
       // the display face is for the calm, welcoming parts of the app
       // (greetings, page titles) rather than for the moment she is being
       // asked to confirm a delete.
-      className={cn("text-base font-medium text-balance", className)}
+      //
+      // `overflow-wrap: anywhere` because the question quotes her own text
+      // (a delete names the item, #551): a long name with no spaces — a
+      // pasted URL or filename — would otherwise set the title's
+      // min-content width and run out past the card, at 390px and at
+      // desktop width alike. The legacy dialog had this rule (#770) and the
+      // shadcn migration dropped it (#773); the provider's test pins it.
+      className={cn(
+        "text-base font-medium text-balance [overflow-wrap:anywhere]",
+        className,
+      )}
       {...props}
     />
   );

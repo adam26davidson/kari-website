@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useAdminUi } from "./admin-ui-context";
 import { AdminUiProvider } from "./admin-ui-provider";
+import { deleteConfirmationMessage } from "./delete-confirmation";
 
 // The two callbacks a confirmation carries, as spies rather than as toasts.
 // Sonner's store is a module singleton, so a toast raised in one test is
@@ -15,6 +16,17 @@ beforeEach(() => {
   onYes.mockReset();
   onNo.mockReset();
 });
+
+// The worst name a delete confirmation can quote: her own text, as long as
+// deleteConfirmationMessage lets it be, with no space anywhere in it (a
+// pasted URL or filename). With the browser's default `overflow-wrap:
+// normal` a run like this sets the title's min-content width and spills out
+// past the dialog card, at 390px and at desktop width alike (#773).
+const LONG_UNBROKEN_NAME = "W".repeat(60);
+const LONG_NAME_MESSAGE = deleteConfirmationMessage(
+  "other works item",
+  LONG_UNBROKEN_NAME,
+);
 
 // A consumer exposing every context function as a button, so the tests
 // drive the provider exactly the way the admin pages do.
@@ -32,6 +44,9 @@ function Consumer() {
       <button onClick={() => confirm("Really do it?", onYes)}>ask</button>
       <button onClick={() => confirm("Discard changes?", onYes, onNo)}>
         ask-with-no
+      </button>
+      <button onClick={() => confirm(LONG_NAME_MESSAGE, onYes)}>
+        ask-about-long-name
       </button>
       <button onClick={() => notify("saved")}>notify-success</button>
       <button onClick={() => notify("broke", "error")}>notify-error</button>
@@ -225,6 +240,23 @@ describe("AdminUiProvider confirmation dialog", () => {
     expect(
       [...dialog!.querySelectorAll(".admin-button")].map((b) => b.textContent),
     ).toEqual(["No", "Yes"]);
+  });
+
+  // The question quotes unvetted user text, so the title has to wrap a run
+  // with no spaces in it rather than let it overflow the card. jsdom does no
+  // layout and applies no Tailwind, so this pins the utility that does the
+  // wrapping in a browser; #813 dropped the legacy rule that used to, and
+  // nothing noticed.
+  it("wraps a long unbroken item name inside the dialog", async () => {
+    const { press } = renderProvider();
+    await press("ask-about-long-name");
+
+    const title = screen.getByText(LONG_NAME_MESSAGE);
+    expect(title.textContent).toContain(LONG_UNBROKEN_NAME);
+    expect(
+      screen.getByRole("alertdialog", { name: LONG_NAME_MESSAGE }),
+    ).toContainElement(title);
+    expect(title).toHaveClass("[overflow-wrap:anywhere]");
   });
 });
 
