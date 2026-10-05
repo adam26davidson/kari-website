@@ -286,7 +286,7 @@ describe("AdminUiProvider toast", () => {
 
     expect(success).toHaveBeenCalledWith(
       "saved",
-      expect.not.objectContaining({ duration: expect.anything() }),
+      expect.objectContaining({ duration: 3000 }),
     );
     expect(error).toHaveBeenCalledWith(
       "broke",
@@ -294,6 +294,25 @@ describe("AdminUiProvider toast", () => {
     );
     success.mockRestore();
     error.mockRestore();
+  });
+
+  // Both toasts share one id, and sonner updates a showing toast by
+  // merging the new options over the old ones — so a "Saved" that arrives
+  // while a failure is still up would inherit the failure's 8s unless it
+  // names its own duration. Read off sonner's store, not the call
+  // arguments, because the merge is what decides how long it stays.
+  it("gives a success that replaces an error the short duration", async () => {
+    const { press } = renderProvider();
+
+    await press("notify-error");
+    await screen.findByText("broke");
+    await press("notify-success");
+    await screen.findByText("saved");
+
+    const showing = toast
+      .getToasts()
+      .find((shown) => shown.id === "admin-toast");
+    expect(showing).toMatchObject({ duration: 3000 });
   });
 
   // One toast at a time. Sonner stacks by default, and the e2e journeys
