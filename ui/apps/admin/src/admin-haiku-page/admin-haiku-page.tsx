@@ -99,7 +99,13 @@ export function AdminHaikuPage() {
   const createNewHaiku = async () => {
     const newHaiku: Haiku = { lines: [], publisher: "", id: uuidv4() };
     const newHaikuList = [...haikuList, { ...newHaiku }];
-    if (await saveList(newHaikuList, "New haiku created", LIST_CHANGE_FAILED_MESSAGE)) {
+    if (
+      await saveList(
+        newHaikuList,
+        "New haiku created",
+        LIST_CHANGE_FAILED_MESSAGE,
+      )
+    ) {
       navigate(itemUrl(newHaiku.id));
     }
   };

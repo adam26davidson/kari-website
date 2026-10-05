@@ -143,10 +143,7 @@ describe("AdminOtherWorksPage image removal on save", () => {
     fireEvent.click(rowButton("Save"));
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        SAVE_FAILED_MESSAGE,
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
     );
     // Content-first ordering: the content had already been written when
     // the list save failed.
@@ -452,10 +449,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
-        expect(notify).toHaveBeenCalledWith(
-          SAVE_FAILED_MESSAGE,
-          "error",
-        ),
+        expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
       );
       // The public list still says draft, so the published content that
       // was written is rolled back to the original draft content and the
@@ -577,10 +571,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
-        expect(notify).toHaveBeenCalledWith(
-          SAVE_FAILED_MESSAGE,
-          "error",
-        ),
+        expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
       );
       expect(BlogService.updateContent).not.toHaveBeenCalled();
       expect(ImageService.setPublished).not.toHaveBeenCalled();
@@ -789,10 +780,7 @@ describe("AdminOtherWorksPage deletion", () => {
     const { notify } = await confirmDelete();
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        LIST_CHANGE_FAILED_MESSAGE,
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(LIST_CHANGE_FAILED_MESSAGE, "error"),
     );
     // Still-referenced content must never be deleted on a failed save.
     expect(BlogService.deleteContent).not.toHaveBeenCalled();
@@ -889,10 +877,7 @@ describe("AdminOtherWorksPage creation", () => {
     await answerYes(adminUi);
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        LIST_CHANGE_FAILED_MESSAGE,
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(LIST_CHANGE_FAILED_MESSAGE, "error"),
     );
     expect(BlogService.updateContent).not.toHaveBeenCalled();
     expect(screen.queryByPlaceholderText("post content")).toBeNull();

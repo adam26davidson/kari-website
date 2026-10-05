@@ -111,7 +111,13 @@ export function AdminHaigaPage() {
       image: "",
     };
     const newHaigaList = [...haigaList, { ...newHaiga }];
-    if (await saveList(newHaigaList, "New haiga created", LIST_CHANGE_FAILED_MESSAGE)) {
+    if (
+      await saveList(
+        newHaigaList,
+        "New haiga created",
+        LIST_CHANGE_FAILED_MESSAGE,
+      )
+    ) {
       navigate(itemUrl(newHaiga.id));
     }
   };

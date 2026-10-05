@@ -319,10 +319,7 @@ describe("AdminBackgroundPage saving", () => {
     fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        SAVE_FAILED_MESSAGE,
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
     );
     expect(SiteSettingsService.update).not.toHaveBeenCalled();
   });
@@ -339,10 +336,7 @@ describe("AdminBackgroundPage saving", () => {
     fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        SAVE_FAILED_MESSAGE,
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
     );
     expect(SiteSettingsService.update).not.toHaveBeenCalled();
   });
@@ -422,10 +416,7 @@ describe("AdminBackgroundPage header colours", () => {
     fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        SAVE_FAILED_MESSAGE,
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
     );
     expect(screen.getByLabelText("Page links")).toHaveValue("#00ff00");
   });

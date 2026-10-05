@@ -144,11 +144,13 @@ export function AdminPhotographyPage() {
     showLoading("Creating new photography post...");
 
     const newPostList = [...postList, copyPost(newPost)];
-    if (await saveList(
+    if (
+      await saveList(
         newPostList,
         "New photography post created",
         LIST_CHANGE_FAILED_MESSAGE,
-      )) {
+      )
+    ) {
       navigate(itemUrl(newPost.id));
     }
   };
