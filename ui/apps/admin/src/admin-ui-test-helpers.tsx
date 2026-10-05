@@ -1,6 +1,6 @@
-import { Mock, vi } from "vitest";
+import { expect, Mock, vi } from "vitest";
 import { useContext } from "react";
-import { act, render } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import {
   createMemoryRouter,
   DataRouter,
@@ -92,23 +92,13 @@ export function renderAdminPage(
 /**
  * Navigates the test router, the way a real in-app navigation would.
  *
- * The extra `act` before the navigation is load-bearing, not belt-and-
- * braces. react-router registers the unsaved-changes predicate through a
- * PASSIVE effect (`useBlocker` -> `router.getBlocker(key, fn)`), and that
- * effect re-runs whenever `isDirty` changes, because the predicate is a
- * fresh closure each render. So between "the page became clean" and "the
- * router knows it is clean" there is one pending passive effect.
- *
- * A real user never sees that gap: React flushes pending passive effects
- * before it dispatches the next discrete event, so the click that follows
- * a save or an undo always meets the fresh predicate. Calling
- * `router.navigate()` straight from a test is not a React event and forces
- * no such flush, so it can hit the STALE predicate and be blocked — the
- * guard offering to discard changes that were already saved. Flushing
- * first is what reproduces the browser's ordering.
- *
- * Only visible on React 19 (issue #534), which defers passive effects more
- * than 18 did: the same tests were already racing, and simply won.
+ * The empty `act` first is a microtask yield that lets already-scheduled
+ * React work settle; it is NOT a guarantee that a render the test just
+ * triggered has committed. (An earlier version of this comment claimed
+ * React flushes pending passive effects before the next discrete event —
+ * it does not, #835.) A test that navigates after async work, such as a
+ * save, must first await a post-commit signal of the state it depends on
+ * — usually `waitUntilClean`.
  */
 export async function navigateInTest(router: DataRouter, to: To | number) {
   await act(async () => {});
@@ -119,6 +109,26 @@ export async function navigateInTest(router: DataRouter, to: To | number) {
     // union, so the call has to be made once per narrowed type.
     await (typeof to === "number" ? router.navigate(to) : router.navigate(to));
   });
+}
+
+/**
+ * Waits until the page has committed its clean (saved) state, for a test
+ * that saves and then leaves.
+ *
+ * A success toast is NOT that signal: `notify("... saved")` is called in
+ * the same continuation as the setState that makes the page clean, so it
+ * fires before that render has even started. The assistant subject is:
+ * every page publishes `{ dirty }` from a passive effect declared right
+ * after its `useUnsavedChanges(dirty)` call, and a component's passive
+ * effects run in hook order, so once the subject says clean, the clean
+ * render has committed and the guard's effects have flushed too. That
+ * hook order is load-bearing — keep `useUnsavedChanges` first in a page.
+ *
+ * Asserts on `dirty` alone: other subject fields (a haiku's title) change
+ * with the edit itself.
+ */
+export async function waitUntilClean(subject: { current: AssistantSubject }) {
+  await waitFor(() => expect(subject.current.dirty).toBe(false));
 }
 
 /**

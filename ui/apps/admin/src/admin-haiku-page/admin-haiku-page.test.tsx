@@ -8,6 +8,7 @@ import {
   answerYes,
   navigateInTest,
   renderAdminPage,
+  waitUntilClean,
 } from "../admin-ui-test-helpers";
 import {
   LIST_CHANGE_FAILED_MESSAGE,
@@ -485,13 +486,14 @@ describe("AdminHaikuPage routing", () => {
   });
 
   it("does not block leaving after the edits were saved", async () => {
-    const { adminUi } = renderPage();
+    const { adminUi, subject } = renderPage();
     const textarea = await openFirstHaiku();
     fireEvent.change(textarea, { target: { value: "changed line" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(adminUi.notify).toHaveBeenCalledWith("Haiku saved"),
     );
+    await waitUntilClean(subject);
 
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 

@@ -9,6 +9,7 @@ import {
   answerYes,
   navigateInTest,
   renderAdminPage,
+  waitUntilClean,
 } from "../admin-ui-test-helpers";
 import { SAVE_FAILED_MESSAGE } from "../save-failure";
 
@@ -294,12 +295,13 @@ describe("HomePageEditor unsaved-changes guard", () => {
   });
 
   it("does not block leaving after the edits were saved", async () => {
-    const { adminUi, notify, router } = await renderAndPickImage();
+    const { adminUi, notify, router, subject } = await renderAndPickImage();
     fireEvent.change(screen.getByDisplayValue("hello"), {
       target: { value: "changed blurb" },
     });
     fireEvent.click(screen.getByText("Save"));
     await waitFor(() => expect(notify).toHaveBeenCalledWith("Home page saved"));
+    await waitUntilClean(subject);
 
     await navigateInTest(router, "/haiku");
 
