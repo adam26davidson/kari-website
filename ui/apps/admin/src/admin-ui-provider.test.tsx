@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { toast } from "sonner";
 import { useAdminUi } from "./admin-ui-context";
 import { AdminUiProvider } from "./admin-ui-provider";
 import { deleteConfirmationMessage } from "./delete-confirmation";
@@ -271,6 +272,28 @@ describe("AdminUiProvider toast", () => {
     const { press } = renderProvider();
     await press("notify-error");
     expect(await screen.findByText("broke")).toBeInTheDocument();
+  });
+
+  // A failure explains itself in a sentence or two (what happened, what to
+  // do next — #830), which the 3s a "Saved" gets is too short to read.
+  it("keeps an error toast up longer than a success toast", async () => {
+    const success = vi.spyOn(toast, "success");
+    const error = vi.spyOn(toast, "error");
+    const { press } = renderProvider();
+
+    await press("notify-success");
+    await press("notify-error");
+
+    expect(success).toHaveBeenCalledWith(
+      "saved",
+      expect.not.objectContaining({ duration: expect.anything() }),
+    );
+    expect(error).toHaveBeenCalledWith(
+      "broke",
+      expect.objectContaining({ duration: 8000 }),
+    );
+    success.mockRestore();
+    error.mockRestore();
   });
 
   // One toast at a time. Sonner stacks by default, and the e2e journeys

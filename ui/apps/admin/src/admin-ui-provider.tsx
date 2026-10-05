@@ -36,6 +36,14 @@ interface Confirmation {
 const TOAST_ID = "admin-toast";
 
 /**
+ * How long a failure stays up. A "Saved" is one word and gets the
+ * Toaster's 3s; a failure says what happened AND what to do next (#830) —
+ * a sentence or two she has to actually read — so it lingers. Sonner also
+ * pauses the timer while the pointer is over the toast.
+ */
+const ERROR_TOAST_DURATION_MS = 8000;
+
+/**
  * Owns the loading/confirmation/toast state for the admin area and renders
  * the corresponding chrome next to its children.
  *
@@ -67,7 +75,10 @@ export function AdminUiProvider({ children }: { children: React.ReactNode }) {
   );
   const notify = useCallback<Notify>((message, type = "success") => {
     if (type === "error") {
-      toast.error(message, { id: TOAST_ID });
+      toast.error(message, {
+        id: TOAST_ID,
+        duration: ERROR_TOAST_DURATION_MS,
+      });
     } else {
       toast.success(message, { id: TOAST_ID });
     }
