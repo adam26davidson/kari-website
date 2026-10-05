@@ -27,7 +27,8 @@ import { PageTitle } from "../page-title/page-title";
  * - At `sm` and up the whole header row pins — it is one line, so "Edit
  *   ..." staying with the buttons costs nothing and says what she is
  *   editing.
- * - On a phone only the Save/Close row pins (a 56px strip) and the title
+ * - On a phone only the Save/Close row pins (a 56px strip, widened over
+ *   the 8px gutters so the card cannot show beside it) and the title
  *   scrolls away: the stacked pair would park ~110px under the top bar. A
  *   sticky element only travels inside its parent, so below `sm` the row
  *   is `contents` and the controls are a direct child of the full-height
@@ -80,7 +81,7 @@ export function EditorPage({
         <PageTitle>{title}</PageTitle>
         <div
           data-slot="editor-controls"
-          className="data-editor-item-controls sticky -top-3 z-10 -mt-5 -mb-2 flex shrink-0 gap-3 bg-background py-2 sm:static sm:z-auto sm:my-0 sm:bg-transparent sm:py-0"
+          className="data-editor-item-controls sticky -top-3 z-10 -mx-2 -mt-5 -mb-2 flex shrink-0 gap-3 bg-background px-2 py-2 sm:static sm:z-auto sm:m-0 sm:bg-transparent sm:p-0"
         >
           {/* Save first and filled: the one obvious next action on this
               screen (design brief §2). Close stands beside it as the quiet
