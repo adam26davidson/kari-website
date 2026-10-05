@@ -11,6 +11,7 @@ import { ImageService } from "@kari/shared/services/images";
 import { SiteSettingsService } from "@kari/shared/services/site-settings";
 import { LoadError } from "../components/load-error/load-error";
 import { useAdminUi } from "../admin-ui-context";
+import { SAVE_FAILED_MESSAGE } from "../save-failure";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 import { useAssistantSubject } from "../assistant/use-assistant-subject";
 import { uploadFeedback } from "../upload-feedback";
@@ -174,7 +175,7 @@ export function AdminBackgroundPage() {
       notify(
         error instanceof BackgroundImageError
           ? error.message
-          : "Failed to save — your change was not saved",
+          : SAVE_FAILED_MESSAGE,
         "error",
       );
     } finally {

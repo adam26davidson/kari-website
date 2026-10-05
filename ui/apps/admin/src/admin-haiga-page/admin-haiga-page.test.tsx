@@ -10,6 +10,10 @@ import {
   navigateInTest,
   renderAdminPage,
 } from "../admin-ui-test-helpers";
+import {
+  LIST_CHANGE_FAILED_MESSAGE,
+  SAVE_FAILED_MESSAGE,
+} from "../save-failure";
 
 function renderPage(initialEntry?: string) {
   return renderAdminPage(<AdminHaigaPage />, "/haiga/:id?", initialEntry);
@@ -78,10 +82,7 @@ describe("AdminHaigaPage image replacement", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
     );
     // The replacement was uploaded before the list save was attempted.
     expect(ImageService.upload).toHaveBeenCalledOnce();
@@ -208,10 +209,7 @@ describe("AdminHaigaPage deletion", () => {
     const { notify } = await confirmDelete();
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(LIST_CHANGE_FAILED_MESSAGE, "error"),
     );
     expect(
       await screen.findByRole("button", { name: "Edit" }),
@@ -301,10 +299,7 @@ describe("AdminHaigaPage creation", () => {
     await answerYes(adminUi);
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(LIST_CHANGE_FAILED_MESSAGE, "error"),
     );
     // The editor must not open for a haiga that was never persisted.
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();

@@ -9,6 +9,10 @@ import {
   navigateInTest,
   renderAdminPage,
 } from "../admin-ui-test-helpers";
+import {
+  LIST_CHANGE_FAILED_MESSAGE,
+  SAVE_FAILED_MESSAGE,
+} from "../save-failure";
 
 vi.mock("@kari/shared/services/haiku", () => ({
   HaikuService: {
@@ -140,7 +144,7 @@ describe("AdminHaikuPage new haiku", () => {
 
     await waitFor(() =>
       expect(adminUi.notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
+        LIST_CHANGE_FAILED_MESSAGE,
         "error",
       ),
     );
@@ -225,6 +229,25 @@ describe("AdminHaikuPage reordering", () => {
       expect.any(Function),
     );
   });
+
+  it("keeps the old order and says nothing changed when saving fails", async () => {
+    vi.mocked(HaikuService.updateList).mockRejectedValue(
+      new Error("PUT failed"),
+    );
+    const { adminUi } = renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Move down" }));
+
+    await waitFor(() =>
+      expect(adminUi.notify).toHaveBeenCalledWith(
+        LIST_CHANGE_FAILED_MESSAGE,
+        "error",
+      ),
+    );
+    // Still in the saved order: the first haiku keeps its "Move down".
+    expect(screen.getAllByText(/old pond|summer grass/)[0]).toHaveTextContent(
+      "old pond",
+    );
+  });
 });
 
 describe("AdminHaikuPage search", () => {
@@ -286,6 +309,23 @@ describe("AdminHaikuPage editing", () => {
       ],
       expect.any(Function),
     );
+  });
+
+  it("keeps the editor open with the edits when saving fails", async () => {
+    vi.mocked(HaikuService.updateList).mockRejectedValue(
+      new Error("PUT failed"),
+    );
+    const { adminUi } = renderPage();
+    const textarea = await openFirstHaiku();
+    fireEvent.change(textarea, { target: { value: "new pond" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(adminUi.notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
+    );
+    // The toast promises "your changes are still here" — they must be.
+    expect(screen.getByPlaceholderText(/line 1/)).toHaveValue("new pond");
   });
 
   it("disables save when the first line is empty", async () => {

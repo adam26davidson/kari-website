@@ -2,6 +2,14 @@ import { CircleAlert, CircleCheck } from "lucide-react";
 import { Toaster as Sonner } from "sonner";
 
 /**
+ * How long a toast stays up unless it asks for longer. Exported because
+ * `AdminUiProvider` has to pass it explicitly on a success: its toasts
+ * share one id, and sonner updating a showing toast keeps any duration the
+ * previous one set.
+ */
+export const TOAST_DURATION_MS = 3000;
+
+/**
  * The toast surface, shadcn/ui's sonner wrapper (#592) styled to the
  * boards: a small warm card, bottom-right, with a green tick for a save and
  * a maroon ring for a failure.
@@ -28,7 +36,7 @@ export function Toaster() {
       mobileOffset={{ bottom: "96px" }}
       toastOptions={{
         className: "admin-toast",
-        duration: 3000,
+        duration: TOAST_DURATION_MS,
         unstyled: true,
         classNames: {
           toast:

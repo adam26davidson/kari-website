@@ -10,6 +10,10 @@ import {
   navigateInTest,
   renderAdminPage,
 } from "../admin-ui-test-helpers";
+import {
+  LIST_CHANGE_FAILED_MESSAGE,
+  SAVE_FAILED_MESSAGE,
+} from "../save-failure";
 
 vi.mock("@kari/shared/services/photography", () => ({
   PhotographyService: {
@@ -117,10 +121,7 @@ describe("AdminPhotographyPage image replacement", () => {
     fireEvent.click(saveButton(container));
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
     );
     // The replacement was uploaded before the list save was attempted.
     expect(ImageService.upload).toHaveBeenCalledOnce();
@@ -283,10 +284,7 @@ describe("AdminPhotographyPage deletion", () => {
     const { notify } = await confirmDelete();
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(LIST_CHANGE_FAILED_MESSAGE, "error"),
     );
   });
 
@@ -361,10 +359,7 @@ describe("AdminPhotographyPage creation", () => {
     await answerYes(adminUi);
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(LIST_CHANGE_FAILED_MESSAGE, "error"),
     );
     // The editor must not open for a post that was never persisted.
     expect(screen.queryByLabelText("Title")).toBeNull();

@@ -15,6 +15,7 @@ import { itemName } from "../item-name";
 import { useAssistantSubject } from "../assistant/use-assistant-subject";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
+import { LIST_CHANGE_FAILED_MESSAGE } from "../save-failure";
 import { useListUrls } from "../use-list-urls";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 
@@ -79,7 +80,11 @@ export function AdminHaikuPage() {
   );
 
   const deleteHaiku = async (id: string) => {
-    await saveList(removeItemById(haikuList, id), "Haiku deleted");
+    await saveList(
+      removeItemById(haikuList, id),
+      "Haiku deleted",
+      LIST_CHANGE_FAILED_MESSAGE,
+    );
   };
 
   // List display functions ---------------------------------------------------
@@ -94,7 +99,13 @@ export function AdminHaikuPage() {
   const createNewHaiku = async () => {
     const newHaiku: Haiku = { lines: [], publisher: "", id: uuidv4() };
     const newHaikuList = [...haikuList, { ...newHaiku }];
-    if (await saveList(newHaikuList, "New haiku created")) {
+    if (
+      await saveList(
+        newHaikuList,
+        "New haiku created",
+        LIST_CHANGE_FAILED_MESSAGE,
+      )
+    ) {
       navigate(itemUrl(newHaiku.id));
     }
   };
@@ -110,7 +121,7 @@ export function AdminHaikuPage() {
 
   const onMove = async (id: string, direction: "up" | "down") => {
     const newHaikuList = moveItemByIdByOne(haikuList, id, direction);
-    await saveList(newHaikuList, "Order updated");
+    await saveList(newHaikuList, "Order updated", LIST_CHANGE_FAILED_MESSAGE);
   };
 
   const onEdit = (id: string) => {

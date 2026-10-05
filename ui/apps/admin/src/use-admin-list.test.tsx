@@ -48,6 +48,17 @@ function Host() {
       <button onClick={() => saveList([{ id: "n2", name: "quiet" }])}>
         save-quietly
       </button>
+      <button
+        onClick={() =>
+          saveList(
+            [{ id: "n3", name: "moved" }],
+            "Order updated",
+            "Couldn't move it",
+          )
+        }
+      >
+        save-list-change
+      </button>
       <button onClick={() => setList([{ id: "l1", name: "local-only" }])}>
         set-local
       </button>
@@ -145,7 +156,7 @@ describe("useAdminList saving", () => {
     expect(screen.getByText("quiet")).toBeInTheDocument();
   });
 
-  it("toasts the standard error and keeps the old list when saving fails", async () => {
+  it("toasts the editor error and keeps the old list when saving fails", async () => {
     updateList.mockRejectedValueOnce(new Error("PUT failed"));
     const { adminUi } = renderWithAdminUi(<Host />);
     await screen.findByText("alpha");
@@ -156,7 +167,8 @@ describe("useAdminList saving", () => {
 
     await waitFor(() =>
       expect(adminUi.notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
+        "Couldn't save — the site may be offline. Your changes are still " +
+          "here; try again in a moment.",
         "error",
       ),
     );
@@ -165,6 +177,23 @@ describe("useAdminList saving", () => {
     expect(screen.getByText("alpha")).toBeInTheDocument();
     expect(screen.queryByText("new")).toBeNull();
     expect(adminUi.hideLoading).toHaveBeenCalled();
+  });
+
+  it("toasts the caller's failure message when one is given", async () => {
+    updateList.mockRejectedValueOnce(new Error("PUT failed"));
+    const { adminUi } = renderWithAdminUi(<Host />);
+    await screen.findByText("alpha");
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("save-list-change"));
+    });
+
+    await waitFor(() =>
+      expect(adminUi.notify).toHaveBeenCalledWith("Couldn't move it", "error"),
+    );
+    expect(adminUi.notify).toHaveBeenCalledOnce();
+    expect(screen.getByText("alpha")).toBeInTheDocument();
+    expect(screen.queryByText("moved")).toBeNull();
   });
 
   it("lets rollback paths replace the list without persisting", async () => {

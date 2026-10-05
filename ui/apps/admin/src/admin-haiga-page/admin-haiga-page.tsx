@@ -18,6 +18,7 @@ import { useAssistantSubject } from "../assistant/use-assistant-subject";
 import { useAdminToken } from "../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
+import { LIST_CHANGE_FAILED_MESSAGE } from "../save-failure";
 import { useListUrls } from "../use-list-urls";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 
@@ -90,7 +91,7 @@ export function AdminHaigaPage() {
     // The image object is deliberately NOT deleted: it may still be
     // referenced by other content (e.g. as the site background), and if
     // not, the image-cleanup sweep collects it later.
-    await saveList(newDataList, "Haiga deleted");
+    await saveList(newDataList, "Haiga deleted", LIST_CHANGE_FAILED_MESSAGE);
   };
 
   // List display functions ---------------------------------------------------
@@ -110,7 +111,13 @@ export function AdminHaigaPage() {
       image: "",
     };
     const newHaigaList = [...haigaList, { ...newHaiga }];
-    if (await saveList(newHaigaList, "New haiga created")) {
+    if (
+      await saveList(
+        newHaigaList,
+        "New haiga created",
+        LIST_CHANGE_FAILED_MESSAGE,
+      )
+    ) {
       navigate(itemUrl(newHaiga.id));
     }
   };
@@ -127,7 +134,7 @@ export function AdminHaigaPage() {
 
   const onMove = async (id: string, direction: "up" | "down") => {
     const newHaigaList = moveItemByIdByOne(haigaList, id, direction);
-    await saveList(newHaigaList, "Order updated");
+    await saveList(newHaigaList, "Order updated", LIST_CHANGE_FAILED_MESSAGE);
   };
 
   const onEdit = (id: string) => {

@@ -7,7 +7,7 @@ import {
   AlertDialogDescription,
   AlertDialogTitle,
 } from "./components/ui/alert-dialog";
-import { Toaster } from "./components/ui/toaster";
+import { Toaster, TOAST_DURATION_MS } from "./components/ui/toaster";
 import { Button } from "./components/ui/button";
 import { LoadingOverlay } from "./components/loading-overlay/loading-overlay";
 import { AdminUi, AdminUiContext, Notify } from "./admin-ui-context";
@@ -34,6 +34,19 @@ interface Confirmation {
  * that cleared the old single toast was restarted by each new message.
  */
 const TOAST_ID = "admin-toast";
+
+/**
+ * How long a failure stays up. A "Saved" is one word and gets the
+ * Toaster's 3s; a failure says what happened AND what to do next (#830) —
+ * a sentence or two she has to actually read — so it lingers. Sonner also
+ * pauses the timer while the pointer is over the toast.
+ *
+ * A success names the short duration explicitly rather than leaving it to
+ * the Toaster: both share `TOAST_ID`, and sonner updates a showing toast
+ * by merging the new options over the old, so a "Saved" replacing a
+ * failure would otherwise keep the failure's 8s.
+ */
+const ERROR_TOAST_DURATION_MS = 8000;
 
 /**
  * Owns the loading/confirmation/toast state for the admin area and renders
@@ -67,9 +80,12 @@ export function AdminUiProvider({ children }: { children: React.ReactNode }) {
   );
   const notify = useCallback<Notify>((message, type = "success") => {
     if (type === "error") {
-      toast.error(message, { id: TOAST_ID });
+      toast.error(message, {
+        id: TOAST_ID,
+        duration: ERROR_TOAST_DURATION_MS,
+      });
     } else {
-      toast.success(message, { id: TOAST_ID });
+      toast.success(message, { id: TOAST_ID, duration: TOAST_DURATION_MS });
     }
   }, []);
 

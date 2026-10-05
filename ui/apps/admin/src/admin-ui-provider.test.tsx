@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { toast } from "sonner";
 import { useAdminUi } from "./admin-ui-context";
 import { AdminUiProvider } from "./admin-ui-provider";
 import { deleteConfirmationMessage } from "./delete-confirmation";
@@ -271,6 +272,47 @@ describe("AdminUiProvider toast", () => {
     const { press } = renderProvider();
     await press("notify-error");
     expect(await screen.findByText("broke")).toBeInTheDocument();
+  });
+
+  // A failure explains itself in a sentence or two (what happened, what to
+  // do next — #830), which the 3s a "Saved" gets is too short to read.
+  it("keeps an error toast up longer than a success toast", async () => {
+    const success = vi.spyOn(toast, "success");
+    const error = vi.spyOn(toast, "error");
+    const { press } = renderProvider();
+
+    await press("notify-success");
+    await press("notify-error");
+
+    expect(success).toHaveBeenCalledWith(
+      "saved",
+      expect.objectContaining({ duration: 3000 }),
+    );
+    expect(error).toHaveBeenCalledWith(
+      "broke",
+      expect.objectContaining({ duration: 8000 }),
+    );
+    success.mockRestore();
+    error.mockRestore();
+  });
+
+  // Both toasts share one id, and sonner updates a showing toast by
+  // merging the new options over the old ones — so a "Saved" that arrives
+  // while a failure is still up would inherit the failure's 8s unless it
+  // names its own duration. Read off sonner's store, not the call
+  // arguments, because the merge is what decides how long it stays.
+  it("gives a success that replaces an error the short duration", async () => {
+    const { press } = renderProvider();
+
+    await press("notify-error");
+    await screen.findByText("broke");
+    await press("notify-success");
+    await screen.findByText("saved");
+
+    const showing = toast
+      .getToasts()
+      .find((shown) => shown.id === "admin-toast");
+    expect(showing).toMatchObject({ duration: 3000 });
   });
 
   // One toast at a time. Sonner stacks by default, and the e2e journeys

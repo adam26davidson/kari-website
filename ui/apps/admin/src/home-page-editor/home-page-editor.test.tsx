@@ -10,6 +10,7 @@ import {
   navigateInTest,
   renderAdminPage,
 } from "../admin-ui-test-helpers";
+import { SAVE_FAILED_MESSAGE } from "../save-failure";
 
 vi.mock("@kari/shared/services/images", () => ({
   ImageService: {
@@ -134,10 +135,7 @@ describe("HomePageEditor photo replacement", () => {
     fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
     );
     // The upload happened first and the attempted save referenced it.
     expect(ImageService.upload).toHaveBeenCalledOnce();
@@ -156,10 +154,7 @@ describe("HomePageEditor photo replacement", () => {
     fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
     );
     expect(HomePageService.update).not.toHaveBeenCalled();
   });
@@ -174,10 +169,7 @@ describe("HomePageEditor photo replacement", () => {
     fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
     );
     expect(HomePageService.update).not.toHaveBeenCalled();
   });
@@ -322,10 +314,7 @@ describe("HomePageEditor unsaved-changes guard", () => {
     const { adminUi, notify, router } = await renderAndPickImage();
     fireEvent.click(screen.getByText("Save"));
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
     );
 
     await navigateInTest(router, "/haiku");

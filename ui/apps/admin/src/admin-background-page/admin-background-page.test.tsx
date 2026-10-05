@@ -17,6 +17,7 @@ import {
   DEFAULT_FONT_PAIRING as DEFAULT_PAIRING,
   FONT_PAIRINGS,
 } from "@kari/shared/utils/fonts";
+import { SAVE_FAILED_MESSAGE } from "../save-failure";
 
 /** Any pairing that is not the built-in one. */
 const CUSTOM_PAIRING = FONT_PAIRINGS[1];
@@ -318,10 +319,7 @@ describe("AdminBackgroundPage saving", () => {
     fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
     );
     expect(SiteSettingsService.update).not.toHaveBeenCalled();
   });
@@ -338,10 +336,7 @@ describe("AdminBackgroundPage saving", () => {
     fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
     );
     expect(SiteSettingsService.update).not.toHaveBeenCalled();
   });
@@ -421,10 +416,7 @@ describe("AdminBackgroundPage header colours", () => {
     fireEvent.click(screen.getByText("Save"));
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
     );
     expect(screen.getByLabelText("Page links")).toHaveValue("#00ff00");
   });

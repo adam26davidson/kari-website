@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useAdminToken } from "./hooks/use-admin-token";
 import { TokenGetter } from "@kari/shared/services/http";
 import { useAdminUi } from "./admin-ui-context";
+import { SAVE_FAILED_MESSAGE } from "./save-failure";
 
 export interface UseAdminListOptions<T> {
   /** Plural noun used in overlay messages, e.g. "haiku" or "other works". */
@@ -27,9 +28,15 @@ export interface AdminList<T> {
   /**
    * Persists newList and, on success, makes it the local list. Toasts on
    * error always; toasts success only when a message is given, so
-   * multi-step flows can notify once at the end.
+   * multi-step flows can notify once at the end. The error toast defaults
+   * to the editor wording ("your changes are still here"); one-click list
+   * actions with no form behind them pass `LIST_CHANGE_FAILED_MESSAGE`.
    */
-  saveList: (newList: Array<T>, successMessage?: string) => Promise<boolean>;
+  saveList: (
+    newList: Array<T>,
+    successMessage?: string,
+    failureMessage?: string,
+  ) => Promise<boolean>;
 }
 
 /**
@@ -73,6 +80,7 @@ export function useAdminList<T extends { id: string }>({
   const saveList = async (
     newList: Array<T>,
     successMessage?: string,
+    failureMessage: string = SAVE_FAILED_MESSAGE,
   ): Promise<boolean> => {
     showLoading(`Updating ${noun}...`);
     try {
@@ -84,7 +92,7 @@ export function useAdminList<T extends { id: string }>({
       return true;
     } catch (error) {
       console.error(error);
-      notify("Failed to save — your change was not saved", "error");
+      notify(failureMessage, "error");
       return false;
     } finally {
       hideLoading();
