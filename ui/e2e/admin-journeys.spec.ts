@@ -520,6 +520,11 @@ test.describe("photography", () => {
   });
 
   test.afterEach(async ({ page }) => {
+    // A phone-width test leaves the section menu behind the hamburger,
+    // where the cleanup's openAdminSection cannot reach it — so put the
+    // project's own viewport back first, even when the test failed midway.
+    const viewport = test.info().project.use.viewport;
+    if (viewport) await page.setViewportSize(viewport);
     await deleteItemsMatching(page, "Photography", marker);
   });
 
