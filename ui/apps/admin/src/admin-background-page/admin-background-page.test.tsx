@@ -17,6 +17,7 @@ import {
   DEFAULT_FONT_PAIRING as DEFAULT_PAIRING,
   FONT_PAIRINGS,
 } from "@kari/shared/utils/fonts";
+import { SAVE_FAILED_MESSAGE } from "../save-failure";
 
 /** Any pairing that is not the built-in one. */
 const CUSTOM_PAIRING = FONT_PAIRINGS[1];
@@ -319,7 +320,7 @@ describe("AdminBackgroundPage saving", () => {
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
+        SAVE_FAILED_MESSAGE,
         "error",
       ),
     );
@@ -339,7 +340,7 @@ describe("AdminBackgroundPage saving", () => {
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
+        SAVE_FAILED_MESSAGE,
         "error",
       ),
     );
@@ -422,7 +423,7 @@ describe("AdminBackgroundPage header colours", () => {
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
+        SAVE_FAILED_MESSAGE,
         "error",
       ),
     );

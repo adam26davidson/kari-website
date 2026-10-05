@@ -10,6 +10,7 @@ import {
   navigateInTest,
   renderAdminPage,
 } from "../admin-ui-test-helpers";
+import { SAVE_FAILED_MESSAGE } from "../save-failure";
 
 vi.mock("@kari/shared/services/images", () => ({
   ImageService: {
@@ -135,7 +136,7 @@ describe("HomePageEditor photo replacement", () => {
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
+        SAVE_FAILED_MESSAGE,
         "error",
       ),
     );
@@ -157,7 +158,7 @@ describe("HomePageEditor photo replacement", () => {
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
+        SAVE_FAILED_MESSAGE,
         "error",
       ),
     );
@@ -175,7 +176,7 @@ describe("HomePageEditor photo replacement", () => {
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
+        SAVE_FAILED_MESSAGE,
         "error",
       ),
     );
@@ -323,7 +324,7 @@ describe("HomePageEditor unsaved-changes guard", () => {
     fireEvent.click(screen.getByText("Save"));
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
+        SAVE_FAILED_MESSAGE,
         "error",
       ),
     );

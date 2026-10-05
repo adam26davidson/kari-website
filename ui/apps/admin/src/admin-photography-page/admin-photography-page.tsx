@@ -22,6 +22,7 @@ import { useAssistantSubject } from "../assistant/use-assistant-subject";
 import { useAdminToken } from "../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
+import { LIST_CHANGE_FAILED_MESSAGE } from "../save-failure";
 import { useListUrls } from "../use-list-urls";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 
@@ -115,7 +116,11 @@ export function AdminPhotographyPage() {
     // The post's image objects are deliberately NOT deleted: they may
     // still be referenced by other content (e.g. as the site background),
     // and if not, the image-cleanup sweep collects them later.
-    await saveList(removeItemById(postList, id), "Photography post deleted");
+    await saveList(
+      removeItemById(postList, id),
+      "Photography post deleted",
+      LIST_CHANGE_FAILED_MESSAGE,
+    );
   };
 
   // List display functions ---------------------------------------------------
@@ -139,7 +144,11 @@ export function AdminPhotographyPage() {
     showLoading("Creating new photography post...");
 
     const newPostList = [...postList, copyPost(newPost)];
-    if (await saveList(newPostList, "New photography post created")) {
+    if (await saveList(
+        newPostList,
+        "New photography post created",
+        LIST_CHANGE_FAILED_MESSAGE,
+      )) {
       navigate(itemUrl(newPost.id));
     }
   };
@@ -158,7 +167,7 @@ export function AdminPhotographyPage() {
 
   const onMove = async (id: string, direction: "up" | "down") => {
     const newPostList = moveItemByIdByOne(postList, id, direction);
-    await saveList(newPostList, "Order updated");
+    await saveList(newPostList, "Order updated", LIST_CHANGE_FAILED_MESSAGE);
   };
 
   const onEdit = (id: string) => {

@@ -15,6 +15,10 @@ import {
   applyTimeZone,
   restoreHostTimeZoneAfterEach,
 } from "@kari/shared/test/timezone";
+import {
+  LIST_CHANGE_FAILED_MESSAGE,
+  SAVE_FAILED_MESSAGE,
+} from "../save-failure";
 
 vi.mock("@kari/shared/services/blog", () => ({
   BlogService: {
@@ -140,7 +144,7 @@ describe("AdminOtherWorksPage image removal on save", () => {
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
+        SAVE_FAILED_MESSAGE,
         "error",
       ),
     );
@@ -449,7 +453,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
-          "Failed to save — your change was not saved",
+          SAVE_FAILED_MESSAGE,
           "error",
         ),
       );
@@ -574,7 +578,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
 
       await waitFor(() =>
         expect(notify).toHaveBeenCalledWith(
-          "Failed to save — your change was not saved",
+          SAVE_FAILED_MESSAGE,
           "error",
         ),
       );
@@ -786,7 +790,7 @@ describe("AdminOtherWorksPage deletion", () => {
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
+        LIST_CHANGE_FAILED_MESSAGE,
         "error",
       ),
     );
@@ -886,7 +890,7 @@ describe("AdminOtherWorksPage creation", () => {
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
+        LIST_CHANGE_FAILED_MESSAGE,
         "error",
       ),
     );

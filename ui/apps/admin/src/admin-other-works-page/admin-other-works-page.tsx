@@ -19,6 +19,7 @@ import { useAssistantSubject } from "../assistant/use-assistant-subject";
 import { useAdminToken } from "../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
+import { LIST_CHANGE_FAILED_MESSAGE } from "../save-failure";
 import { useListUrls } from "../use-list-urls";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 import { saveBlogPost } from "./blog-post-save";
@@ -158,7 +159,11 @@ export function AdminOtherWorksPage() {
     // Save the shortened list first — if this fails the item stays fully
     // intact and referenced.
     const newList = removeItemById(postList, id);
-    if (!(await savePostList(newList, "Other works item deleted"))) return;
+    if (!(await savePostList(
+        newList,
+        "Other works item deleted",
+        LIST_CHANGE_FAILED_MESSAGE,
+      ))) return;
 
     // The saved list no longer references the item, so its content
     // document can go; a failed delete just leaves an orphan. The item's
@@ -190,7 +195,7 @@ export function AdminOtherWorksPage() {
       isPublished: false,
     };
     const newPostList = [...postList, { ...newPost }];
-    if (!(await savePostList(newPostList))) return;
+    if (!(await savePostList(newPostList, undefined, LIST_CHANGE_FAILED_MESSAGE))) return;
     showLoading("Creating new other works item...");
     try {
       await BlogService.updateContent(id, "", false, getAccessTokenSilently);
@@ -214,7 +219,7 @@ export function AdminOtherWorksPage() {
 
   const onMove = async (id: string, direction: "up" | "down") => {
     const newPostList = moveItemByIdByOne(postList, id, direction);
-    await savePostList(newPostList, "Order updated");
+    await savePostList(newPostList, "Order updated", LIST_CHANGE_FAILED_MESSAGE);
   };
 
   const onEdit = (id: string) => {

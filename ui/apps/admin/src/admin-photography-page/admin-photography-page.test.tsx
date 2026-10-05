@@ -10,6 +10,10 @@ import {
   navigateInTest,
   renderAdminPage,
 } from "../admin-ui-test-helpers";
+import {
+  LIST_CHANGE_FAILED_MESSAGE,
+  SAVE_FAILED_MESSAGE,
+} from "../save-failure";
 
 vi.mock("@kari/shared/services/photography", () => ({
   PhotographyService: {
@@ -118,7 +122,7 @@ describe("AdminPhotographyPage image replacement", () => {
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
+        SAVE_FAILED_MESSAGE,
         "error",
       ),
     );
@@ -284,7 +288,7 @@ describe("AdminPhotographyPage deletion", () => {
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
+        LIST_CHANGE_FAILED_MESSAGE,
         "error",
       ),
     );
@@ -362,7 +366,7 @@ describe("AdminPhotographyPage creation", () => {
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
-        "Failed to save — your change was not saved",
+        LIST_CHANGE_FAILED_MESSAGE,
         "error",
       ),
     );
