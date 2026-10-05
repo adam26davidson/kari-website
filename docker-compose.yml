@@ -27,7 +27,7 @@
 # proposes bumps.
 services:
   s3:
-    image: rustfs/rustfs:1.0.0
+    image: rustfs/rustfs:1.0.1
     ports:
       - "${KARI_S3_PORT:-9000}:9000"
     environment:
