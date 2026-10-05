@@ -74,6 +74,12 @@ structure and span the content column the rail leaves, exactly as the
 card does on the `*Tablet` list boards; form fields stay full-width
 within the card. Every other screen has all three widths.
 
+The editor boards are single-screen frames, so they say nothing about
+scrolling. A tall editor pins its Save/Close to the top of the page as it
+scrolls (#796): the whole title + action row on tablet and desktop, only
+the Save/Close row on a phone, on plain paper. At rest it looks exactly
+as the boards draw it.
+
 Notable deliberate decisions, beyond restyling:
 
 - The horizontal admin menu becomes the sidebar/rail/hamburger shell

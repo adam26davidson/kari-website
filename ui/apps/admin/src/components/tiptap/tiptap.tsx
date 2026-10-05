@@ -27,6 +27,7 @@ import { v4 as uuidv4 } from "uuid";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { cn } from "../ui/cn";
+import { PINNED_CONTROLS_CLEARANCE } from "../editor-page/pinned-controls";
 import { LinkBubbleMenu } from "./link-bubble-menu";
 import { linkRefusedMessage } from "./link-refusal-message";
 import { uploadSizeProblem } from "@kari/shared/utils/upload-size";
@@ -558,6 +559,25 @@ export function Tiptap({
       }),
     ],
     content: content,
+    // ProseMirror keeps the caret in view itself, against the scroller's
+    // edge — which is under the pinned Save/Close strip (#796). Pushing
+    // the top threshold and margin past the strip keeps the caret on paper
+    // while she arrows or types her way back up a long post. The other
+    // three sides keep ProseMirror's defaults (0 threshold, 5px margin).
+    editorProps: {
+      scrollThreshold: {
+        top: PINNED_CONTROLS_CLEARANCE,
+        right: 0,
+        bottom: 0,
+        left: 0,
+      },
+      scrollMargin: {
+        top: PINNED_CONTROLS_CLEARANCE,
+        right: 5,
+        bottom: 5,
+        left: 5,
+      },
+    },
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
       setContent(html);

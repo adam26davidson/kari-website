@@ -1,4 +1,4 @@
-import { test, expect, Page } from "@playwright/test";
+import { test, expect, Locator, Page } from "@playwright/test";
 import {
   adminListItem,
   confirmDialog,
@@ -520,6 +520,11 @@ test.describe("photography", () => {
   });
 
   test.afterEach(async ({ page }) => {
+    // A phone-width test leaves the section menu behind the hamburger,
+    // where the cleanup's openAdminSection cannot reach it — so put the
+    // project's own viewport back first, even when the test failed midway.
+    const viewport = test.info().project.use.viewport;
+    if (viewport) await page.setViewportSize(viewport);
     await deleteItemsMatching(page, "Photography", marker);
   });
 
@@ -613,40 +618,7 @@ test.describe("photography", () => {
   test("the editor card contains its content when a post has several images", async ({
     page,
   }) => {
-    await openAdminSection(page, "Photography");
-
-    // Create and save an empty post so afterEach can find it by marker;
-    // the layout work then happens on the reopened editor.
-    await createNewItem(page);
-    await page.getByLabel("Title", { exact: true }).fill(marker);
-    await saveEditor(page);
-    await expect(page.locator(".data-editor")).toBeHidden({
-      timeout: 180_000,
-    });
-    await editButton(adminListItem(page, marker)).click();
-
-    // Four image rows takes the editor past the 720px-tall desktop
-    // viewport. No files are attached: the row's height is what makes the
-    // editor tall, and an unsaved row costs no upload.
-    const imagesSection = page.locator(".photography-post-editor-images");
-    const addImage = imagesSection.getByRole("button", {
-      name: "Add an image",
-    });
-    for (let i = 0; i < 4; i++) {
-      await addImage.click();
-    }
-    const removeButtons = imagesSection.getByRole("button", {
-      name: "Remove this image",
-    });
-    await expect(removeButtons).toHaveCount(4);
-
-    const viewportHeight = page.viewportSize()!.height;
-    const lastRemove = removeButtons.last();
-    // Precondition: the editor really is taller than the window, so the
-    // assertions below are about the overflowing case and not a short card
-    // that would pass either way.
-    const lastRemoveBox = (await lastRemove.boundingBox())!;
-    expect(lastRemoveBox.y).toBeGreaterThan(viewportHeight);
+    const lastRemove = await openTallPhotographyEditor(page, marker);
 
     // Containment: the fields end inside the card, with the card's own
     // bottom padding intact below them. Before #578 they ran past the rim
@@ -681,7 +653,117 @@ test.describe("photography", () => {
     await waitForIdle(page, 180_000);
     await expect(adminListItem(page, marker)).toHaveCount(0);
   });
+
+  // #796: a tall editor scrolls .admin-content, and Save/Close used to
+  // scroll off the top with the title. They now pin to the top of the
+  // scroller — the whole header row at `sm` and up, just the Save/Close row
+  // on a phone. Layout again, so e2e-only (jsdom lays nothing out), and the
+  // default screenshot capture grows its viewport until nothing scrolls, so
+  // it never sees the pinned state either.
+  test("Save and Close stay in view while a tall editor scrolls", async ({
+    page,
+  }) => {
+    const lastRemove = await openTallPhotographyEditor(page, marker);
+    const controls = editorControls(page);
+    const close = controls.getByRole("button", { name: "Close" });
+
+    // At rest nothing is covered: the card starts below the controls.
+    const cardTop = await page.evaluate(
+      () =>
+        document
+          .querySelector('.data-editor [data-slot="card"]')!
+          .getBoundingClientRect().top,
+    );
+    expect(cardTop).toBeGreaterThanOrEqual(
+      await boundingBottom(page, ".data-editor-item-controls"),
+    );
+
+    await lastRemove.scrollIntoViewIfNeeded();
+    await expect(lastRemove).toBeInViewport();
+    await expect(saveButton(page)).toBeInViewport();
+    await expect(close).toBeInViewport();
+    // The title rides with the pair at this width.
+    await expect(page.locator(".data-editor h2")).toBeInViewport();
+
+    // The pinned pair still works from down here: Playwright's click
+    // hit-tests, so this also proves nothing sits on top of the strip.
+    await close.click();
+    await confirmDialog(page, "Yes");
+    await expect(page.locator(".data-editor")).toBeHidden();
+  });
+
+  test("on a phone only Save and Close stay in view, below the top bar", async ({
+    page,
+  }) => {
+    // Built at desktop width (the section menu is behind the phone's
+    // hamburger), then narrowed: the editor survives the resize.
+    const lastRemove = await openTallPhotographyEditor(page, marker);
+    await page.setViewportSize({ width: 390, height: 844 });
+    const controls = editorControls(page);
+
+    await lastRemove.scrollIntoViewIfNeeded();
+    await expect(lastRemove).toBeInViewport();
+    await expect(saveButton(page)).toBeInViewport();
+    await expect(
+      controls.getByRole("button", { name: "Close" }),
+    ).toBeInViewport();
+    // Pinned under the 56px top bar, not over or behind it.
+    const scrollerTop = await page.evaluate(
+      () =>
+        document.querySelector(".admin-content")!.getBoundingClientRect().top,
+    );
+    const controlsTop = (await controls.boundingBox())!.y;
+    expect(controlsTop).toBeGreaterThanOrEqual(scrollerTop);
+    // The stacked title scrolls away, leaving the screen to her content.
+    await expect(page.locator(".data-editor h2")).not.toBeInViewport();
+
+    await controls.getByRole("button", { name: "Close" }).click();
+    await confirmDialog(page, "Yes");
+    await expect(page.locator(".data-editor")).toBeHidden();
+  });
 });
+
+/**
+ * Create and save an empty photography post named `marker` (so afterEach
+ * can find and delete it), reopen it, and add four unsaved image rows —
+ * enough to take the editor past the 720px-tall desktop viewport. No files
+ * are attached: the row's height is what makes the editor tall, and an
+ * unsaved row costs no upload. Returns the last row's "Remove this image",
+ * asserted to start below the fold so a caller's layout assertions are
+ * about the overflowing case and not a short card that would pass either
+ * way.
+ */
+async function openTallPhotographyEditor(
+  page: Page,
+  marker: string,
+): Promise<Locator> {
+  await openAdminSection(page, "Photography");
+
+  await createNewItem(page);
+  await page.getByLabel("Title", { exact: true }).fill(marker);
+  await saveEditor(page);
+  await expect(page.locator(".data-editor")).toBeHidden({
+    timeout: 180_000,
+  });
+  await editButton(adminListItem(page, marker)).click();
+
+  const imagesSection = page.locator(".photography-post-editor-images");
+  const addImage = imagesSection.getByRole("button", {
+    name: "Add an image",
+  });
+  for (let i = 0; i < 4; i++) {
+    await addImage.click();
+  }
+  const removeButtons = imagesSection.getByRole("button", {
+    name: "Remove this image",
+  });
+  await expect(removeButtons).toHaveCount(4);
+
+  const lastRemove = removeButtons.last();
+  const lastRemoveBox = (await lastRemove.boundingBox())!;
+  expect(lastRemoveBox.y).toBeGreaterThan(page.viewportSize()!.height);
+  return lastRemove;
+}
 
 test.describe("home page", () => {
   // The home page is a single shared document (home-page.json + one photo),
