@@ -72,6 +72,20 @@
   }
 }
 
+/* An open editor pins its Save/Close strip to the top of this scroller
+   (#796, editor-page.tsx). The browser's focus scrolling knows nothing of a
+   sticky element, so a field she Shift+Tabs back up to could land under
+   the strip — and one only half under it is not scrolled at all, which is
+   why this is scroll-padding on the scroller rather than scroll-margin on
+   the fields. It makes the strip's footprint part of what "in view" means.
+
+   80px is PINNED_CONTROLS_CLEARANCE (editor-page/pinned-controls.ts), the
+   same clearance ProseMirror gets for the caret;
+   test/design/pinned-controls-clearance.test.ts keeps the two equal. */
+.admin-content:has([data-slot="editor"]) {
+  scroll-padding-top: 80px;
+}
+
 ::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0);
 }
