@@ -12,6 +12,7 @@ import {
   answerNo,
   navigateInTest,
   renderAdminPage,
+  waitUntilClean,
 } from "../admin-ui-test-helpers";
 import {
   DEFAULT_FONT_PAIRING as DEFAULT_PAIRING,
@@ -587,11 +588,12 @@ describe("AdminBackgroundPage unsaved-changes guard", () => {
   });
 
   it("does not block leaving after a save", async () => {
-    const { adminUi, notify, router } = await renderAndPickFile();
+    const { adminUi, notify, router, subject } = await renderAndPickFile();
     fireEvent.click(screen.getByText("Save"));
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Site background saved"),
     );
+    await waitUntilClean(subject);
 
     await navigateInTest(router, "/haiku");
 
