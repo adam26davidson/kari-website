@@ -411,6 +411,21 @@ describe("AdminHaigaPage list rows", () => {
     expect(thumbnail).toHaveAttribute("src", expect.stringContaining("a.png"));
   });
 
+  // An 80px row has no use for the untouched original (up to 25 MB): it
+  // asks the API for the thumb rendition, which falls back to the
+  // original server-side for uploads that never got one (#837).
+  it("loads each row's artwork as the small thumb rendition", async () => {
+    vi.mocked(HaigaService.getListFromApi).mockResolvedValue([
+      { id: "h1", lines: [], publisher: "kari", image: "a.png" },
+    ]);
+    renderPage();
+
+    expect(await screen.findByRole("img", { name: "haiga" })).toHaveAttribute(
+      "src",
+      "https://api.test.local/images/a.png?size=thumb"
+    );
+  });
+
   it("names the artwork plainly when the haiga carries no lines", async () => {
     vi.mocked(HaigaService.getListFromApi).mockResolvedValue([
       { id: "h1", lines: [], publisher: "kari", image: "a.png" },
