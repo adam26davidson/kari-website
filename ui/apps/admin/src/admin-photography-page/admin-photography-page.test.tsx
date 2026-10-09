@@ -46,22 +46,6 @@ function rowButton(name: string): HTMLElement {
   return screen.getAllByRole("button", { name })[0];
 }
 
-/**
- * The editor's Save control. A floppy-disk icon circle until #457 made it
- * a labelled text button; it is the first control in the editor header.
- * Reached through the header's `data-slot`, because since the shadcn
- * migration (#236) Save is a plain `Button` and carries no `admin-button`.
- */
-function saveButton(container: HTMLElement): HTMLElement {
-  const button = container.querySelector(
-    '[data-slot="editor-controls"] button',
-  );
-  if (!(button instanceof HTMLElement)) {
-    throw new Error("no save button in the editor");
-  }
-  return button;
-}
-
 // The saved post as it exists in the published list before the edit.
 let savedPost: PhotographyPost;
 
@@ -90,7 +74,7 @@ async function openEditorAndReplaceImage() {
       files: [new File(["img"], "next.png", { type: "image/png" })],
     },
   });
-  return { container, notify };
+  return { notify };
 }
 
 beforeEach(() => {
@@ -116,9 +100,9 @@ describe("AdminPhotographyPage image replacement", () => {
     vi.mocked(PhotographyService.updateList).mockRejectedValue(
       new Error("PUT failed"),
     );
-    const { container, notify } = await openEditorAndReplaceImage();
+    const { notify } = await openEditorAndReplaceImage();
 
-    fireEvent.click(saveButton(container));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
@@ -136,9 +120,9 @@ describe("AdminPhotographyPage image replacement", () => {
 
   it("treats an empty upload result as a failed upload", async () => {
     vi.mocked(ImageService.upload).mockResolvedValue("");
-    const { container, notify } = await openEditorAndReplaceImage();
+    const { notify } = await openEditorAndReplaceImage();
 
-    fireEvent.click(saveButton(container));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
@@ -154,9 +138,9 @@ describe("AdminPhotographyPage image replacement", () => {
     vi.mocked(ImageService.upload).mockRejectedValue(
       new Error("upload failed"),
     );
-    const { container, notify } = await openEditorAndReplaceImage();
+    const { notify } = await openEditorAndReplaceImage();
 
-    fireEvent.click(saveButton(container));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(
@@ -169,9 +153,9 @@ describe("AdminPhotographyPage image replacement", () => {
   });
 
   it("saves the new image and leaves the replaced object in storage", async () => {
-    const { container, notify } = await openEditorAndReplaceImage();
+    const { notify } = await openEditorAndReplaceImage();
 
-    fireEvent.click(saveButton(container));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Photography post saved"),
@@ -217,7 +201,7 @@ describe("AdminPhotographyPage reordering in the editor", () => {
     // control, so the first arrow-down on the page is item 0's.
     fireEvent.click(screen.getByRole("button", { name: "Move down" }));
 
-    fireEvent.click(saveButton(container));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Photography post saved"),
     );
@@ -606,9 +590,9 @@ describe("AdminPhotographyPage routing", () => {
   });
 
   it("returns to the list after a successful save without asking", async () => {
-    const { container, notify } = await openEditorAndReplaceImage();
+    const { notify } = await openEditorAndReplaceImage();
 
-    fireEvent.click(saveButton(container));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith("Photography post saved"),
