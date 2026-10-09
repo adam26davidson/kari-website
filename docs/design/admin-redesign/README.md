@@ -80,6 +80,11 @@ scrolls (#796): the whole title + action row on tablet and desktop, only
 the Save/Close row on a phone, on plain paper. At rest it looks exactly
 as the boards draw it.
 
+`PhotoEditorMobile` draws only Title, Blurb and Images: it omits the
+Subtitle field that `PhotoEditor` (desktop) and the real editor have.
+That is an omission in the board, not a design decision — keep Subtitle
+on every width.
+
 Notable deliberate decisions, beyond restyling:
 
 - The horizontal admin menu becomes the sidebar/rail/hamburger shell
