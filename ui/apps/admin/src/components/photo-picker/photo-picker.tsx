@@ -26,6 +26,10 @@ export function PhotoPicker({
   // Why the last pick was turned away, shown under the button until she
   // picks something usable (#711).
   const [problem, setProblem] = useState<string | null>(null);
+  // Whether a photo is on screen: one just picked, or the saved one an
+  // editor opened with. The button's wording follows this rather than the
+  // picked File alone, so a saved photo offers to be replaced (#840).
+  const showsImage = previewUrl !== null || fileName !== "";
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -61,7 +65,7 @@ export function PhotoPicker({
         onChange={handleFileSelect}
         hidden
       />
-      {(previewUrl || fileName !== "") && (
+      {showsImage && (
         <img
           src={previewUrl ?? apiImageUrl(fileName, "thumb")}
           alt="Selected"
@@ -87,7 +91,7 @@ export function PhotoPicker({
         onClick={() => inputRef.current!.click()}
       >
         <MousePointer2 />
-        {imageFile ? "Select a different image" : "Select an image"}
+        {showsImage ? "Select a different image" : "Select an image"}
       </Button>
       {problem && (
         // The admin's one danger colour, filled — the same treatment the

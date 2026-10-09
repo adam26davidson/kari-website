@@ -86,6 +86,23 @@ describe("PhotoPicker", () => {
     ).toBeInTheDocument();
   });
 
+  it("offers a different image when a saved one is already shown", () => {
+    // An editor opened on an existing item shows its saved photo with no
+    // File picked yet; the button still offers to replace it, as the
+    // HaigaEditor and PhotoEditor boards draw (#840).
+    render(
+      <PhotoPicker
+        imageFile={null}
+        fileName="cat.png"
+        setImageFile={() => {}}
+      />,
+    );
+    expect(screen.getByAltText("Selected")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Select a different image/ }),
+    ).toBeInTheDocument();
+  });
+
   it("previews an already-uploaded image from its thumbnail", () => {
     // The preview is 200px wide; downloading the camera original for it is
     // what made the editors laggy (#273).
