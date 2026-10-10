@@ -47,6 +47,23 @@ describe("isPreviewOverridesMessage", () => {
     expect(isPreviewOverridesMessage(message)).toBe(true);
   });
 
+  it("accepts the list-item and blog-post keys alongside the home page", () => {
+    const message = {
+      type: PREVIEW_OVERRIDES,
+      overrides: {
+        haiku: { id: "h1", lines: ["old pond"], publisher: "" },
+        blogPost: {
+          id: "b1",
+          title: "A post",
+          date: "2026-01-01T00:00:00.000Z",
+          isPublished: false,
+          content: "<p>draft</p>",
+        },
+      },
+    };
+    expect(isPreviewOverridesMessage(message)).toBe(true);
+  });
+
   it("accepts an empty overrides object", () => {
     // An editor with nothing to say yet still says it, rather than leaving
     // the pane showing stale drafts from a previous mount.

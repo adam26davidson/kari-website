@@ -1,4 +1,11 @@
-import { HomePageData } from "../models";
+import {
+  BlogPost,
+  Haiga,
+  Haiku,
+  HomePageData,
+  PhotographyImage,
+  PhotographyPost,
+} from "../models";
 
 /**
  * The postMessage protocol the admin's in-editor site preview speaks with
@@ -40,15 +47,63 @@ export interface HomePageOverride extends HomePageData {
 }
 
 /**
+ * The haiku being edited. A haiku has no picture, so there is nothing
+ * pending beyond the form itself; the alias keeps the keys of
+ * `PreviewOverrides` uniform.
+ */
+export type HaikuOverride = Haiku;
+
+/**
+ * The haiga being edited. `imageFile` is a picture she has picked but not
+ * saved — `null` when she has not picked one, in which case `image` (the
+ * stored image id, `""` on a just-added haiga) is what to render.
+ */
+export interface HaigaOverride extends Haiga {
+  imageFile: File | null;
+}
+
+/**
+ * One photograph of a post being edited. `file` is a photo picked for this
+ * row but not uploaded — `null` for a stored one, rendered from `image`.
+ */
+export interface PhotographyImageOverride extends PhotographyImage {
+  file: File | null;
+}
+
+/**
+ * The photography post being edited. Extends `PhotographyPost`, so it
+ * splices into the public list in place of the deployed post as it is.
+ */
+export interface PhotographyPostOverride extends PhotographyPost {
+  images: Array<PhotographyImageOverride>;
+}
+
+/**
+ * The blog post being edited. `content` is the editor's HTML as it stands —
+ * UNSANITIZED, straight out of tiptap, with any picture she has inserted
+ * but not saved inlined as a `data:` URL. The public side must run it
+ * through the same sanitizer as content read from S3 before rendering it.
+ */
+export interface BlogPostOverride extends BlogPost {
+  content: string;
+}
+
+/**
  * Draft state for every public page the preview knows how to override. One
  * key per page, all optional: an editor sends only its own page, and the
  * site falls back to the deployed data for the rest.
  *
- * Only the home page is wired up so far; the other editors follow one at a
- * time (#239), each adding a key here and a fallback in its public page.
+ * The list pages (haiku, haiga, photography) take ONE item, spliced into
+ * the deployed list by `id`; `blogPost` takes over `/blog/:id` for its own
+ * id only. A new page joins by adding a key here, a `SitePreview` in its
+ * editor and a fallback in its public page (#239, #859).
  */
 export interface PreviewOverrides {
   homePage?: HomePageOverride;
+  haiku?: HaikuOverride;
+  haiga?: HaigaOverride;
+  photographyPost?: PhotographyPostOverride;
+  blogPost?: BlogPostOverride;
 }
 
 export interface PreviewReadyMessage {

@@ -27,3 +27,17 @@ export function removeItemById<T extends { id: string }>(
 ): Array<T> {
   return array.filter((item) => item.id !== id);
 }
+
+/**
+ * A copy of array with item in place of the entry carrying its id, or with
+ * item appended when no entry does. Order is otherwise preserved and the
+ * input is never mutated.
+ */
+export function replaceOrAppendById<T extends { id: string }>(
+  array: Array<T>,
+  item: T,
+): Array<T> {
+  const idx = array.findIndex((entry) => entry.id === item.id);
+  if (idx === -1) return [...array, item];
+  return array.map((entry, i) => (i === idx ? item : entry));
+}
