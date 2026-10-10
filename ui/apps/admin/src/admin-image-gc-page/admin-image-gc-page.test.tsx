@@ -359,33 +359,61 @@ describe("AdminImageGcPage real run", () => {
 });
 
 describe("AdminImageGcPage failures", () => {
-  it("surfaces the server's error and clears any stale report", async () => {
+  it("says in plain words that the preview failed and clears any stale report", async () => {
     vi.mocked(ImageService.gc).mockResolvedValue(dryRunReport);
     const { notify } = renderPage();
     await clickPreview();
 
-    vi.mocked(ImageService.gc).mockRejectedValue(
-      new HttpError(
-        "Image cleanup failed (HTTP 500): Image GC aborted before any delete",
-        500,
-      ),
+    const serverError = new HttpError(
+      'Image cleanup failed (HTTP 500): {"error":"Image GC aborted before' +
+        ' any delete"}',
+      500,
     );
+    vi.mocked(ImageService.gc).mockRejectedValue(serverError);
     await clickPreview();
 
     expect(notify).toHaveBeenCalledWith("Image cleanup failed", "error");
     const alert = screen.getByRole("alert");
+    // What happened, in her words (design brief §3, §5)...
     expect(alert.textContent).toContain(
-      "Image cleanup failed (HTTP 500): Image GC aborted before any delete",
+      "Couldn't preview the cleanup — the site may be busy or offline.",
     );
-    // And what to do next, rather than a dead end (design brief §5).
+    // ...and what to do next, rather than a dead end.
     expect(alert.textContent).toContain(
       "Nothing further was deleted. Try previewing again in a moment.",
     );
+    // The status code and the server's own wording stay off the page; they
+    // are kept for whoever debugs it, in the console.
+    expect(alert.textContent).not.toMatch(/HTTP|500|GC|\{|error"/);
+    expect(console.error).toHaveBeenCalledWith(serverError);
     // The admin's one danger treatment, now spelled in the migrated
     // palette's tokens rather than the legacy banner's class.
     expect(alert).toHaveClass("bg-destructive", "text-destructive-foreground");
     // The stale successful report must not remain visible as if current.
     expect(screen.queryByText(/^Preview: /)).toBeNull();
+  });
+
+  it("says in plain words that deleting failed", async () => {
+    vi.mocked(ImageService.gc).mockResolvedValue(dryRunReport);
+    const { adminUi } = renderPage();
+    await clickPreview();
+    fireEvent.click(screen.getByText("Delete 2 unused images"));
+
+    vi.mocked(ImageService.gc).mockRejectedValue(
+      new HttpError(
+        'Image cleanup failed (HTTP 500): {"error":"Image GC: delete failed' +
+          ' partway; re-run to finish"}',
+        500,
+      ),
+    );
+    await answerYes(adminUi);
+
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toContain(
+      "Couldn't finish deleting the unused images — the site may be busy or" +
+        " offline.",
+    );
+    expect(alert.textContent).not.toMatch(/HTTP|500|GC|\{|error"/);
   });
 
   it("clears the error once a later run succeeds", async () => {
