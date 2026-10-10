@@ -61,8 +61,8 @@ export function PublicListPage<T extends { id: string }>({
   // Keyed on the id, not the draft: she is typing into it, and the pane
   // jumping back to her item on every keystroke would fight her scrolling.
   useEffect(() => {
-    if (draftId === undefined || isLoading) return;
-    draftRef.current?.scrollIntoView({ block: "start" });
+    if (draftId === undefined || isLoading || !draftRef.current) return;
+    revealInScroller(draftRef.current);
   }, [draftId, isLoading]);
 
   return (
@@ -83,4 +83,30 @@ export function PublicListPage<T extends { id: string }>({
       )}
     </ContentPage>
   );
+}
+
+/**
+ * Scrolls `item` to the top of its nearest scrolling ancestor when it is
+ * out of view there — and scrolls nothing else.
+ *
+ * Not `Element.scrollIntoView`: that scrolls EVERY scrollable ancestor,
+ * and the site's `body` is `overflow: hidden` yet still programmatically
+ * scrollable, so in the admin's preview pane it slid the site header out
+ * of the frame and left a blank band beneath the page (caught by the
+ * visual check, #859). Being same-origin, it could scroll the admin page
+ * around the frame too. `.content` is the site's one scroller (app.css).
+ */
+function revealInScroller(item: HTMLElement) {
+  let scroller = item.parentElement;
+  while (
+    scroller &&
+    !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)
+  ) {
+    scroller = scroller.parentElement;
+  }
+  if (!scroller) return;
+  const view = scroller.getBoundingClientRect();
+  const box = item.getBoundingClientRect();
+  if (box.top >= view.top && box.bottom <= view.bottom) return;
+  scroller.scrollTop += box.top - view.top;
 }
