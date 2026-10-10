@@ -67,7 +67,11 @@ describe("useObjectUrls", () => {
         seen.push(urls);
         return urls;
       },
-      { initialProps: { files: [aFile("a.png")] } },
+      {
+        initialProps: { files: [aFile("a.png")] } as {
+          files: Array<File | null>;
+        },
+      },
     );
     seen.length = 0;
     rerender({ files: [null, aFile("b.png")] });

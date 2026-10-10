@@ -1,6 +1,7 @@
 import { test, expect, Locator, Page } from "@playwright/test";
 import {
   adminListItem,
+  adminListItems,
   confirmDialog,
   deleteButton,
   deleteItemsMatching,
@@ -827,7 +828,7 @@ test.describe("home page", () => {
   });
 });
 
-test.describe("home page preview", () => {
+test.describe("site preview", () => {
   // The whole point of the in-editor preview (#239) is that she sees the
   // change BEFORE saving, so nothing here saves anything: no snapshot, no
   // restore, no upload. The editor is left dirty and the test ends; the
@@ -915,6 +916,51 @@ test.describe("home page preview", () => {
     await expect(
       page.frameLocator(PREVIEW).locator(".home-page.mobile"),
     ).toBeVisible();
+  });
+
+  // The other editors' panes (#859). Same no-save discipline: each opens a
+  // seeded item, edits it, and leaves without saving.
+
+  test("shows the unsaved haiku in its place on the Haiku page", async ({
+    page,
+  }) => {
+    await openAdminSection(page, "Haiku");
+    await editButton(adminListItems(page).first()).click();
+    const lines = page.locator(".data-editor textarea");
+    await expect(lines).not.toHaveValue("", { timeout: 60_000 });
+
+    await lines.fill(`${marker}\nline two\nline three`);
+    const frame = page.locator(PREVIEW);
+    await frame.scrollIntoViewIfNeeded();
+    const draftLine = page.frameLocator(PREVIEW).getByText(marker);
+    await expect(draftLine).toBeVisible({ timeout: 60_000 });
+    // The page scrolls her item into view, wherever it sits in the list.
+    await expect(draftLine).toBeInViewport();
+
+    // Nothing was saved, so the LIVE page does not have it.
+    await page.goto("/haiku");
+    await expect(page.locator(".data-list")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(marker)).toHaveCount(0);
+  });
+
+  test("shows the unsaved post on its own page", async ({ page }) => {
+    await openAdminSection(page, "Other works");
+    await editButton(adminListItems(page).first()).click();
+    const title = page.getByLabel("Title", { exact: true });
+    await expect(title).not.toHaveValue("", { timeout: 60_000 });
+
+    // The pane frames this post's /blog/:id page — and shows the draft
+    // whether or not the post is published yet.
+    await expect(page.locator(PREVIEW)).toHaveAttribute(
+      "src",
+      /^\/blog\/[\w-]+\?preview=1$/,
+    );
+    await title.fill(`${marker} unsaved title`);
+    await expect(
+      page.frameLocator(PREVIEW).getByRole("heading", {
+        name: `${marker} unsaved title`,
+      }),
+    ).toBeVisible({ timeout: 60_000 });
   });
 });
 
