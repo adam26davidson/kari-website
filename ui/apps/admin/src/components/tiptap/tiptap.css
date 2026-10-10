@@ -8,8 +8,9 @@
 
 .tiptap {
   margin: 10px;
-  /* The body text must not inherit the page's light-on-photo color */
-  color: var(--dark-text);
+  /* The admin palette's Ink, through its shadcn alias — the same
+     convention `.tiptap a` follows with `--destructive` (#853). */
+  color: var(--foreground);
   overflow-wrap: anywhere;
 }
 

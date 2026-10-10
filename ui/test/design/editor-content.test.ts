@@ -138,3 +138,24 @@ describe("the editor previews what the post will look like", () => {
     },
   );
 });
+
+// The editor is where she writes, so its text wears the admin palette's
+// Ink like every other admin text surface — through the shadcn alias
+// `--foreground`, the same convention `.tiptap a` follows with
+// `--destructive`. It used to borrow the public site's `--dark-text`, a
+// leftover from when the admin page was light text over a photo (#853).
+describe("the editor writes in the admin's palette", () => {
+  it("colours its body text with the admin Ink", () => {
+    const rootRules = RULES.filter(
+      (rule) =>
+        rule.atRules.length === 0 &&
+        rule.selector.split(",").some((part) => part.trim() === ".tiptap"),
+    );
+    const colors = rootRules
+      .map((rule) => declaration(rule.block, "color"))
+      .filter((value) => value !== undefined);
+    expect(colors, rootRules.map(label).join(", ")).toEqual([
+      "var(--foreground)",
+    ]);
+  });
+});
