@@ -52,6 +52,10 @@ const uiRoot = fileURLToPath(new URL("../..", import.meta.url));
 //   ~29 kB (the public app's entry grew by the same amount), and the
 //   framework every page renders with cannot move into a lazy chunk. The
 //   budget moved to 790 kB ahead of that bump, keeping the usual headroom.
+//   That headroom did not survive: by #859 `main` built 788.9 kB, 1 kB
+//   under the line, and wiring the site preview into the haiku, haiga and
+//   photography editors (which live in this chunk) took it to 790.4 kB.
+//   The budget moved to 815 kB, back to ~25 kB above today's size.
 // - "blog-post-editor" is the lazy chunk holding the editor, tiptap,
 //   prosemirror and their CSS (468.3 kB), fetched only when a post is
 //   opened. It was 445 kB until #427 added the link bubble menu, which
@@ -117,6 +121,6 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    bundleBudget({ index: 790, "blog-post-editor": 495 }),
+    bundleBudget({ index: 815, "blog-post-editor": 495 }),
   ],
 });
