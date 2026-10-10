@@ -15,6 +15,13 @@ if (typeof window.URL.revokeObjectURL !== "function") {
   window.URL.revokeObjectURL = () => {};
 }
 
+// jsdom does no layout and so has no scrollIntoView. The public list page
+// scrolls the admin's previewed draft into view (#859); a no-op here lets
+// every page test render a draft, and tests that care spy on it.
+if (typeof Element.prototype.scrollIntoView !== "function") {
+  Element.prototype.scrollIntoView = () => {};
+}
+
 // jsdom implements no ResizeObserver, and Radix measures a control's parts
 // through one (`@radix-ui/react-use-size`, reached by the Slider behind
 // components/ui/slider.tsx). Without this the slider throws on mount rather

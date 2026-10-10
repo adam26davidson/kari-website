@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HaikuPage } from "./haiku-page";
 import { HaikuService } from "@kari/shared/services/haiku";
+import { PreviewOverridesContext } from "../../preview/preview-overrides-context";
 
 vi.mock("@kari/shared/services/haiku", () => ({
   HaikuService: {
@@ -57,5 +58,19 @@ describe("HaikuPage", () => {
       screen.queryByText("Failed to load haiku."),
     ).not.toBeInTheDocument();
     expect(HaikuService.getListFromS3).toHaveBeenCalledTimes(2);
+  });
+
+  // The admin's in-editor site preview (#859).
+  it("shows the admin's unsaved haiku in place of the deployed one", async () => {
+    render(
+      <PreviewOverridesContext.Provider
+        value={{ haiku: { ...haiku, lines: ["a draft first line"] } }}
+      >
+        <HaikuPage />
+      </PreviewOverridesContext.Provider>,
+    );
+
+    expect(await screen.findByText("a draft first line")).toBeInTheDocument();
+    expect(screen.queryByText("an old silent pond")).not.toBeInTheDocument();
   });
 });

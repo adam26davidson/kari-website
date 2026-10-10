@@ -18,19 +18,25 @@ import { useEffect, useState } from "react";
 export function useObjectUrls(
   files: ReadonlyArray<Blob | null>,
 ): Array<string | null> {
-  const [urls, setUrls] = useState<Array<string | null>>([]);
+  // The URLs remember which list they were made for. On the render where a
+  // new list arrives, the effect has not run yet and the old URLs are about
+  // to be revoked — and line up with the OLD rows, so a reorder would put a
+  // photo in the wrong place for a frame. Until the effect catches up the
+  // answer is "none yet".
+  const [made, setMade] = useState<{
+    files: ReadonlyArray<Blob | null>;
+    urls: Array<string | null>;
+  } | null>(null);
 
   useEffect(() => {
-    const created = files.map((file) =>
-      file ? URL.createObjectURL(file) : null,
-    );
-    setUrls(created);
+    const urls = files.map((file) => (file ? URL.createObjectURL(file) : null));
+    setMade({ files, urls });
     return () => {
-      for (const url of created) {
+      for (const url of urls) {
         if (url) URL.revokeObjectURL(url);
       }
     };
   }, [files]);
 
-  return urls;
+  return made?.files === files ? made.urls : [];
 }

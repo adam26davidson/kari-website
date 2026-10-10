@@ -14,14 +14,17 @@ const items: Array<Item> = [
   { id: "c", label: "last item" },
 ];
 
-function renderPage(fetchList: () => Promise<Array<Item>>) {
-  return render(
+function renderPage(fetchList: () => Promise<Array<Item>>, draft?: Item) {
+  const ui = (draft?: Item) => (
     <PublicListPage
       fetchList={fetchList}
       errorMessage="Failed to load things."
       renderItem={(item) => <span>{item.label}</span>}
-    />,
+      draft={draft}
+    />
   );
+  const utils = render(ui(draft));
+  return { ...utils, rerenderWith: (next?: Item) => utils.rerender(ui(next)) };
 }
 
 describe("PublicListPage", () => {
@@ -76,5 +79,81 @@ describe("PublicListPage", () => {
       screen.queryByText("Failed to load things."),
     ).not.toBeInTheDocument();
     expect(fetchList).toHaveBeenCalledTimes(2);
+  });
+});
+
+// The admin's site preview hands the page one unsaved item (#859).
+describe("PublicListPage with a preview draft", () => {
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    // A spy on test/setup.ts's no-op, which jsdom needs.
+    vi.spyOn(Element.prototype, "scrollIntoView");
+  });
+
+  const labels = () =>
+    Array.from(document.querySelectorAll(".data-list-item")).map(
+      (el) => el.textContent,
+    );
+
+  it("shows the draft in place of the deployed item with its id", async () => {
+    renderPage(vi.fn().mockResolvedValue(items), {
+      id: "b",
+      label: "edited middle",
+    });
+
+    expect(await screen.findByText("edited middle")).toBeInTheDocument();
+    expect(screen.queryByText("middle item")).not.toBeInTheDocument();
+    expect(labels()).toEqual(["first item", "edited middle", "last item"]);
+  });
+
+  it("puts a draft the deployed list does not have yet at the end", async () => {
+    renderPage(vi.fn().mockResolvedValue(items), {
+      id: "new",
+      label: "brand new",
+    });
+
+    await screen.findByText("brand new");
+    expect(labels()).toEqual([
+      "first item",
+      "middle item",
+      "last item",
+      "brand new",
+    ]);
+  });
+
+  it("does not scroll anywhere without a draft", async () => {
+    renderPage(vi.fn().mockResolvedValue(items));
+
+    await screen.findByText("middle item");
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("scrolls the draft into view once, not on every keystroke", async () => {
+    const { rerenderWith } = renderPage(vi.fn().mockResolvedValue(items), {
+      id: "c",
+      label: "edited last",
+    });
+
+    const draftText = await screen.findByText("edited last");
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledOnce();
+    expect(
+      vi.mocked(Element.prototype.scrollIntoView).mock.contexts[0],
+    ).toBe(draftText.closest(".data-list-item"));
+
+    rerenderWith({ id: "c", label: "edited last, again" });
+    expect(await screen.findByText("edited last, again")).toBeInTheDocument();
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledOnce();
+  });
+
+  it("still shows the load error, not the draft, when the fetch fails", async () => {
+    renderPage(vi.fn().mockRejectedValue(new Error("network down")), {
+      id: "b",
+      label: "edited middle",
+    });
+
+    expect(
+      await screen.findByText("Failed to load things."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("edited middle")).not.toBeInTheDocument();
   });
 });

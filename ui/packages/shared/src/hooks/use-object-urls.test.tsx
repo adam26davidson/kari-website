@@ -55,6 +55,27 @@ describe("useObjectUrls", () => {
     expect(revoke).toHaveBeenCalledWith("blob:two");
   });
 
+  it("never answers a new list with the previous list's URLs", () => {
+    vi.spyOn(URL, "createObjectURL")
+      .mockReturnValueOnce("blob:one")
+      .mockReturnValueOnce("blob:two");
+    const seen: Array<Array<string | null>> = [];
+
+    const { rerender } = renderHook(
+      ({ files }: { files: Array<File | null> }) => {
+        const urls = useObjectUrls(files);
+        seen.push(urls);
+        return urls;
+      },
+      { initialProps: { files: [aFile("a.png")] } },
+    );
+    seen.length = 0;
+    rerender({ files: [null, aFile("b.png")] });
+
+    expect(seen).not.toContainEqual(["blob:one"]);
+    expect(seen.at(-1)).toEqual([null, "blob:two"]);
+  });
+
   it("keeps its URLs across re-renders with the same list", () => {
     const create = vi
       .spyOn(URL, "createObjectURL")
