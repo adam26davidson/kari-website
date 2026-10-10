@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BlogPostEditor } from "./blog-post-editor";
 import { BlogPost } from "@kari/shared/models";
@@ -33,7 +33,11 @@ const post: BlogPost = {
   isPublished: false,
 };
 
-function renderEditor(overrides?: { post?: BlogPost; saveDisabled?: boolean }) {
+function renderEditor(overrides?: {
+  post?: BlogPost;
+  saveDisabled?: boolean;
+  content?: string | null;
+}) {
   const setPost = vi.fn();
   const setContent = vi.fn();
   const onSave = vi.fn();
@@ -41,7 +45,9 @@ function renderEditor(overrides?: { post?: BlogPost; saveDisabled?: boolean }) {
   const utils = render(
     <BlogPostEditor
       post={overrides?.post ?? post}
-      content="<p>hello</p>"
+      content={
+        overrides?.content === undefined ? "<p>hello</p>" : overrides.content
+      }
       setContent={setContent}
       setPost={setPost}
       saveDisabled={overrides?.saveDisabled ?? false}
@@ -190,5 +196,49 @@ describe("BlogPostEditor", () => {
     await userEvent.click(screen.getByText("Published"));
     expect(setPost).toHaveBeenCalledWith({ ...post, isPublished: true });
   });
+});
 
+// The pane's iframe, with a contentWindow whose postMessage is a spy: jsdom
+// gives the frame a real window, but nothing listens in it.
+function spyOnPreviewFrame() {
+  const post = vi.fn();
+  Object.defineProperty(
+    screen.getByTitle("Preview of your site"),
+    "contentWindow",
+    { value: { postMessage: post }, configurable: true },
+  );
+  return post;
+}
+
+// Named apart from the postMessage spies below, which are `post` too.
+const samplePost = post;
+
+describe("BlogPostEditor's site preview", () => {
+  it("frames this post's own public page in preview mode", () => {
+    renderEditor();
+    expect(screen.getByTitle("Preview of your site")).toHaveAttribute(
+      "src",
+      "/blog/b1?preview=1",
+    );
+  });
+
+  it("hands the pane the post and its current HTML", async () => {
+    renderEditor();
+    const post = spyOnPreviewFrame();
+
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    const [message] = post.mock.calls.at(-1)!;
+    expect(message.overrides).toEqual({
+      blogPost: { ...samplePost, content: "<p>hello</p>" },
+    });
+  });
+
+  it("sends empty content while the editor has none", async () => {
+    renderEditor({ content: null });
+    const post = spyOnPreviewFrame();
+
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    const [message] = post.mock.calls.at(-1)!;
+    expect(message.overrides.blogPost.content).toBe("");
+  });
 });

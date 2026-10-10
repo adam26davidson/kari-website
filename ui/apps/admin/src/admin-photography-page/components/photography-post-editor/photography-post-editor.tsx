@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useMemo } from "react";
 import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
 import { PhotographyPost } from "@kari/shared/models";
 import { EditorPage } from "../../../components/editor-page/editor-page";
@@ -12,6 +12,8 @@ import {
   removeItemById,
 } from "@kari/shared/utils/data-list-helpers";
 import { EditorImage, newEditorImage } from "./editor-image";
+import { SitePreview } from "../../../components/site-preview/site-preview";
+import { PreviewOverrides } from "@kari/shared/utils/preview-channel";
 
 export function PhotographyPostEditor({
   post,
@@ -34,6 +36,26 @@ export function PhotographyPostEditor({
   const subtitleId = useId();
   const blurbId = useId();
   const captionIdPrefix = useId();
+  // What the site preview below the form renders: the post as it stands,
+  // its photographs in their current order, each with any file picked but
+  // not uploaded (#859). Memoised because SitePreview debounces on this
+  // object's identity — a fresh one per render would restart the debounce
+  // forever and never send.
+  // Each row's client-side `id` is left behind: it is the editor's own
+  // bookkeeping, never stored, and the public page has no such field.
+  const previewOverrides = useMemo<PreviewOverrides>(
+    () => ({
+      photographyPost: {
+        ...post,
+        images: images.map(({ image, blurb, file }) => ({
+          image,
+          blurb,
+          file,
+        })),
+      },
+    }),
+    [post, images],
+  );
   const updateField =
     (field: "title" | "subtitle" | "blurb") =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -80,6 +102,13 @@ export function PhotographyPostEditor({
       onSave={onSave}
       onClose={onClose}
       disableSave={saveDisabled}
+      preview={
+        <SitePreview
+          path="/photography"
+          description="This is how the Photography page will look with the changes above. It updates as you type, before you save."
+          overrides={previewOverrides}
+        />
+      }
     >
       <div className="flex flex-col gap-2">
         <FieldLabel htmlFor={titleId}>Title</FieldLabel>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HaigaEditor } from "./haiga-editor";
 import { Haiga } from "@kari/shared/models";
@@ -11,7 +11,10 @@ const haiga: Haiga = {
   publisher: "kari",
 };
 
-function renderEditor(overrides?: { saveDisabled?: boolean }) {
+function renderEditor(overrides?: {
+  saveDisabled?: boolean;
+  imageFile?: File | null;
+}) {
   const setHaiga = vi.fn();
   const setImageFile = vi.fn();
   const onSave = vi.fn();
@@ -21,7 +24,7 @@ function renderEditor(overrides?: { saveDisabled?: boolean }) {
       haiga={haiga}
       setHaiga={setHaiga}
       saveDisabled={overrides?.saveDisabled ?? false}
-      imageFile={null}
+      imageFile={overrides?.imageFile ?? null}
       setImageFile={setImageFile}
       onSave={onSave}
       onClose={onClose}
@@ -100,5 +103,37 @@ describe("HaigaEditor", () => {
     ).toHaveAccessibleDescription(
       "Where the haiga was published, and who made the picture — it appears under the artwork on the site.",
     );
+  });
+});
+
+// The pane's iframe, with a contentWindow whose postMessage is a spy: jsdom
+// gives the frame a real window, but nothing listens in it.
+function spyOnPreviewFrame() {
+  const post = vi.fn();
+  Object.defineProperty(
+    screen.getByTitle("Preview of your site"),
+    "contentWindow",
+    { value: { postMessage: post }, configurable: true },
+  );
+  return post;
+}
+
+describe("HaigaEditor's site preview", () => {
+  it("frames the public Haiga page in preview mode", () => {
+    renderEditor();
+    expect(screen.getByTitle("Preview of your site")).toHaveAttribute(
+      "src",
+      "/haiga?preview=1",
+    );
+  });
+
+  it("hands the pane the haiga and its picked, unsaved picture", async () => {
+    const imageFile = new File(["img"], "photo.png", { type: "image/png" });
+    renderEditor({ imageFile });
+    const post = spyOnPreviewFrame();
+
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    const [message] = post.mock.calls.at(-1)!;
+    expect(message.overrides).toEqual({ haiga: { ...haiga, imageFile } });
   });
 });

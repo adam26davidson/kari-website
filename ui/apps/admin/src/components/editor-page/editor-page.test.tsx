@@ -3,7 +3,10 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EditorPage } from "./editor-page";
 
-function renderEditor(overrides?: { disableSave?: boolean }) {
+function renderEditor(overrides?: {
+  disableSave?: boolean;
+  preview?: React.ReactNode;
+}) {
   const onSave = vi.fn();
   const onClose = vi.fn();
   const utils = render(
@@ -12,6 +15,7 @@ function renderEditor(overrides?: { disableSave?: boolean }) {
       onSave={onSave}
       onClose={onClose}
       disableSave={overrides?.disableSave}
+      preview={overrides?.preview}
     >
       <p>the fields</p>
     </EditorPage>,
@@ -68,5 +72,24 @@ describe("EditorPage", () => {
     const controls = container.querySelector(".data-editor-item-controls");
     expect(controls).toHaveAttribute("data-slot", "editor-controls");
     expect(root).toContainElement(controls as HTMLElement);
+  });
+
+  // The site preview card (#859) sits below the fields card. Below, not
+  // above: the e2e journeys find the fields card as the FIRST card in the
+  // editor, and the preview is a card too.
+  it("renders the preview after the fields card", () => {
+    renderEditor({ preview: <p>the preview</p> });
+
+    const card = screen.getByText("the fields").closest('[data-slot="card"]');
+    const preview = screen.getByText("the preview");
+    expect(card).not.toContainElement(preview);
+    expect(
+      card!.compareDocumentPosition(preview) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("renders no preview unless given one", () => {
+    const { container } = renderEditor();
+    expect(container.querySelectorAll('[data-slot="card"]')).toHaveLength(1);
   });
 });

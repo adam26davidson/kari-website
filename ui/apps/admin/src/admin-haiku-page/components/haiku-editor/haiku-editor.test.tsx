@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HaikuEditor } from "./haiku-editor";
 import { Haiku } from "@kari/shared/models";
@@ -94,5 +94,37 @@ describe("HaikuEditor", () => {
     ).toHaveAccessibleDescription(
       "Where the haiku was published, or a prize it won — it appears under the poem on the site.",
     );
+  });
+});
+
+// The pane's iframe, with a contentWindow whose postMessage is a spy: jsdom
+// gives the frame a real window, but nothing listens in it.
+function spyOnPreviewFrame() {
+  const post = vi.fn();
+  Object.defineProperty(
+    screen.getByTitle("Preview of your site"),
+    "contentWindow",
+    { value: { postMessage: post }, configurable: true },
+  );
+  return post;
+}
+
+describe("HaikuEditor's site preview", () => {
+  it("frames the public Haiku page in preview mode", () => {
+    renderEditor();
+    expect(screen.getByTitle("Preview of your site")).toHaveAttribute(
+      "src",
+      "/haiku?preview=1",
+    );
+  });
+
+  it("hands the pane the haiku as it stands", async () => {
+    renderEditor();
+    const post = spyOnPreviewFrame();
+
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    const [message, origin] = post.mock.calls.at(-1)!;
+    expect(origin).toBe(window.location.origin);
+    expect(message.overrides).toEqual({ haiku });
   });
 });
