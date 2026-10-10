@@ -217,11 +217,19 @@ export function AdminImageGcPage() {
         notify(`Deleted ${countOfImages(result.deleted.length)}`);
       }
     } catch (e) {
+      // The status code and the server's reason are for whoever debugs
+      // this, so they go to the console only; the page says what happened
+      // in her words (design brief §3, §5).
       console.error(e);
       // Keep the failure visible on the page (the toast disappears); a
       // stale report from before the failure must not look current.
       setReport(null);
-      setError(e instanceof Error ? e.message : "Image cleanup failed");
+      setError(
+        dryRun
+          ? "Couldn't preview the cleanup — the site may be busy or offline."
+          : "Couldn't finish deleting the unused images — the site may be" +
+              " busy or offline.",
+      );
       notify("Image cleanup failed", "error");
     } finally {
       hideLoading();
@@ -249,11 +257,10 @@ export function AdminImageGcPage() {
       {error && (
         // The admin's one danger colour, filled — the same treatment the
         // error toast and the confirmed-destructive button wear, so "this
-        // did not work" is one colour wherever it appears. `anywhere`
-        // because the server's message can carry an unbreakable id or URL.
+        // did not work" is one colour wherever it appears.
         <div
           role="alert"
-          className="bg-destructive text-destructive-foreground rounded-lg px-4 py-3 font-sans text-sm [overflow-wrap:anywhere]"
+          className="bg-destructive text-destructive-foreground rounded-lg px-4 py-3 font-sans text-sm"
         >
           {error}
           <p className="mt-1.5">
