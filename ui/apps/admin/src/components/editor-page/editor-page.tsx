@@ -56,6 +56,12 @@ import { PageTitle } from "../page-title/page-title";
  * e2e/helpers.ts). `data-slot` is shadcn's slot convention, and
  * `admin-journeys.spec.ts` locates the card inside the editor through
  * `.data-editor [data-slot="card"]`.
+ *
+ * `preview` is the editor's site-preview card (#859), rendered under the
+ * fields card — under, not beside, as on the home editor: the boards give
+ * this column one card at a time, and on a phone there is no "beside". It
+ * must stay AFTER the fields card, because that e2e locator takes the
+ * first card it finds and the preview is a card too.
  */
 export function EditorPage({
   children,
@@ -65,12 +71,14 @@ export function EditorPage({
   disableSave,
   onSave,
   onClose,
+  preview,
 }: {
   children: React.ReactNode;
   title: string;
   disableSave?: boolean;
   onSave: () => void;
   onClose: () => void;
+  preview?: React.ReactNode;
 }) {
   return (
     <div
@@ -95,6 +103,7 @@ export function EditorPage({
         </div>
       </div>
       <Card className="flex flex-col gap-6 p-5 sm:p-8">{children}</Card>
+      {preview}
     </div>
   );
 }

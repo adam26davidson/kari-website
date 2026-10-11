@@ -1,6 +1,6 @@
 import { BlogPost, BlogPostContentUpdate } from "../models";
-import DOMPurify from "dompurify";
 import { TokenGetter, authorizedFetch, ensureOk } from "./http";
+import { sanitizeHtml } from "../utils/sanitize-html";
 
 const API_BLOG_URL = import.meta.env.VITE_API_URL + "/blog";
 const API_BLOG_CONTENT_URL = import.meta.env.VITE_API_URL + "/blog-content";
@@ -81,8 +81,7 @@ export class BlogService {
       "Failed to fetch blog content from S3",
     );
     const content: string = await response.text();
-    const sanitizedContent = DOMPurify.sanitize(content);
-    return sanitizedContent;
+    return sanitizeHtml(content);
   }
 
   static async updateContent(

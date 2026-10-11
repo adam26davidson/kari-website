@@ -180,10 +180,19 @@ const routes = explicitRoutes ?? DEFAULT_ROUTES;
  * and `currentSrc` set, so the route times out rather than being quietly
  * captured. The `!img.currentSrc` arm passes elements with no source at all.
  *
+ * Every frame, not just the top document: the admin editors embed the real
+ * site in a "See it on your site" iframe (#239, #859), and its images are
+ * part of what is photographed.
+ *
  * @param {import("@playwright/test").Page} page
  */
 async function waitForImages(page) {
-  await page.waitForFunction(
+  await Promise.all(page.frames().map((frame) => waitForFrameImages(frame)));
+}
+
+/** @param {import("@playwright/test").Frame} frame */
+async function waitForFrameImages(frame) {
+  await frame.waitForFunction(
     () => {
       const images = Array.from(document.images);
       // Re-promote on every poll, not once up front: the app may mount more
@@ -204,14 +213,26 @@ async function waitForImages(page) {
  * Waits for entrance animations (.fade-in) to finish so text isn't captured
  * mid-transition at partial opacity.
  *
+ * In every frame. The public site's fade-ins do not honour the context's
+ * `reducedMotion`, and `document.getAnimations()` sees only its own
+ * document — so awaiting the top page alone photographed the admin
+ * editors' site-preview iframe mid-fade: a see-through card over a sharp
+ * background, and the home blurb (1s delay) not yet visible at all (#859).
+ *
  * @param {import("@playwright/test").Page} page
  */
 async function waitForAnimations(page) {
-  await page
-    .evaluate(() =>
-      Promise.all(document.getAnimations().map((a) => a.finished)),
-    )
-    .catch(() => {});
+  await Promise.all(
+    page
+      .frames()
+      .map((frame) =>
+        frame
+          .evaluate(() =>
+            Promise.all(document.getAnimations().map((a) => a.finished)),
+          )
+          .catch(() => {}),
+      ),
+  );
 }
 
 /**

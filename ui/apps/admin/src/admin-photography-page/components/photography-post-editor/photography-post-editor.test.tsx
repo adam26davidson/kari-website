@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { PhotographyPostEditor } from "./photography-post-editor";
@@ -359,5 +359,52 @@ describe("newEditorImage", () => {
       file: null,
     });
     expect(a.id).not.toBe(b.id);
+  });
+});
+
+// The pane's iframe, with a contentWindow whose postMessage is a spy: jsdom
+// gives the frame a real window, but nothing listens in it.
+function spyOnPreviewFrame() {
+  const post = vi.fn();
+  Object.defineProperty(
+    screen.getByTitle("Preview of your site"),
+    "contentWindow",
+    { value: { postMessage: post }, configurable: true },
+  );
+  return post;
+}
+
+describe("PhotographyPostEditor's site preview", () => {
+  it("frames the public Photography page in preview mode", () => {
+    renderEditor();
+    expect(screen.getByTitle("Preview of your site")).toHaveAttribute(
+      "src",
+      "/photography?preview=1",
+    );
+  });
+
+  it("hands the pane the post with its images, picked files and all", async () => {
+    const file = new File(["img"], "new.png", { type: "image/png" });
+    renderEditor({
+      images: [
+        { id: "img-a", image: "a.jpg", blurb: "first", file: null },
+        { id: "img-b", image: "", blurb: "second", file },
+      ],
+    });
+    const post = spyOnPreviewFrame();
+
+    await waitFor(() => expect(post).toHaveBeenCalled());
+    const [message] = post.mock.calls.at(-1)!;
+    // The rows' client-side ids are the editor's own bookkeeping, never
+    // persisted; the page gets the stored shape plus each pending file.
+    expect(message.overrides).toEqual({
+      photographyPost: {
+        ...makePost(),
+        images: [
+          { image: "a.jpg", blurb: "first", file: null },
+          { image: "", blurb: "second", file },
+        ],
+      },
+    });
   });
 });

@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { moveItemByIdByOne, removeItemById } from "./data-list-helpers";
+import {
+  moveItemByIdByOne,
+  removeItemById,
+  replaceOrAppendById,
+} from "./data-list-helpers";
 
 describe("moveItemByIdByOne", () => {
   const a = { id: "a" };
@@ -59,5 +63,28 @@ describe("removeItemById", () => {
     const original = [a, b];
     expect(removeItemById(original, "zzz")).toEqual([a, b]);
     expect(original).toEqual([a, b]);
+  });
+});
+
+describe("replaceOrAppendById", () => {
+  const a = { id: "a", n: 1 };
+  const b = { id: "b", n: 2 };
+  const c = { id: "c", n: 3 };
+
+  it("replaces the entry with the same id, in place", () => {
+    const b2 = { id: "b", n: 20 };
+    expect(replaceOrAppendById([a, b, c], b2)).toEqual([a, b2, c]);
+  });
+
+  it("appends an item whose id is not in the list", () => {
+    const d = { id: "d", n: 4 };
+    expect(replaceOrAppendById([a, b, c], d)).toEqual([a, b, c, d]);
+  });
+
+  it("does not mutate the input", () => {
+    const list = [a, b, c];
+    replaceOrAppendById(list, { id: "b", n: 20 });
+    replaceOrAppendById(list, { id: "d", n: 4 });
+    expect(list).toEqual([a, b, c]);
   });
 });

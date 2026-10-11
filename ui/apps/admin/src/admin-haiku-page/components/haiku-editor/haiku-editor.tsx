@@ -1,9 +1,11 @@
-import { useId } from "react";
+import { useId, useMemo } from "react";
 import { EditorPage } from "../../../components/editor-page/editor-page";
 import { FieldLabel } from "../../../components/field-label/field-label";
 import { Input } from "../../../components/ui/input";
 import { Textarea } from "../../../components/ui/textarea";
 import { Haiku } from "@kari/shared/models";
+import { SitePreview } from "../../../components/site-preview/site-preview";
+import { PreviewOverrides } from "@kari/shared/utils/preview-channel";
 
 export function HaikuEditor({
   haiku,
@@ -22,12 +24,27 @@ export function HaikuEditor({
   const linesHintId = useId();
   const publisherId = useId();
   const publisherHintId = useId();
+  // What the site preview below the form renders: the haiku as it stands,
+  // unsaved (#859). Memoised because SitePreview debounces on this object's
+  // identity — a fresh one per render would restart the debounce forever
+  // and never send.
+  const previewOverrides = useMemo<PreviewOverrides>(
+    () => ({ haiku }),
+    [haiku],
+  );
   return (
     <EditorPage
       title="Edit haiku"
       onSave={onSave}
       onClose={onClose}
       disableSave={saveDisabled}
+      preview={
+        <SitePreview
+          path="/haiku"
+          description="This is how the Haiku page will look with the changes above. It updates as you type, before you save."
+          overrides={previewOverrides}
+        />
+      }
     >
       <div className="flex flex-col gap-2">
         <FieldLabel htmlFor={linesId}>Haiku</FieldLabel>

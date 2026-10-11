@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, useMemo } from "react";
 import { BlogPost } from "@kari/shared/models";
 import { toDateInputValue, toPostDate } from "@kari/shared/utils/date-helpers";
 import { EditorPage } from "../../../components/editor-page/editor-page";
@@ -6,6 +6,8 @@ import { FieldLabel } from "../../../components/field-label/field-label";
 import { Input } from "../../../components/ui/input";
 import { Switch } from "../../../components/ui/switch";
 import { Tiptap } from "../../../components/tiptap/tiptap";
+import { SitePreview } from "../../../components/site-preview/site-preview";
+import { PreviewOverrides } from "@kari/shared/utils/preview-channel";
 
 export function BlogPostEditor({
   post,
@@ -32,6 +34,17 @@ export function BlogPostEditor({
   const publishedId = useId();
   const publishedLabelId = `${publishedId}-label`;
   const publishedHintId = `${publishedId}-hint`;
+  // What the site preview below the form renders: the post as it stands,
+  // its body as the editor's HTML (#859). Memoised because SitePreview
+  // debounces on this object's identity — a fresh one per render would
+  // restart the debounce forever and never send.
+  // A picture she has inserted but not saved is already inline in that
+  // HTML as a data: URL (tiptap.tsx), so no File has to travel with it.
+  // The page sanitizes it, exactly as it does content read from S3.
+  const previewOverrides = useMemo<PreviewOverrides>(
+    () => ({ blogPost: { ...post, content: content ?? "" } }),
+    [post, content],
+  );
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // toPostDate pins the picked day to UTC midnight, the one shape
     // stored post dates take (#379), and returns null for a value that
@@ -48,6 +61,13 @@ export function BlogPostEditor({
       onSave={onSave}
       onClose={onClose}
       disableSave={saveDisabled}
+      preview={
+        <SitePreview
+          path={`/blog/${post.id}`}
+          description="This is how this post will look on your site with the changes above. It updates as you type, before you save."
+          overrides={previewOverrides}
+        />
+      }
     >
       <div className="flex flex-col gap-2">
         <FieldLabel htmlFor={titleId}>Title</FieldLabel>

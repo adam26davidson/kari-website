@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { PhotographyPage } from "./photography-page";
 import { PhotographyService } from "@kari/shared/services/photography";
+import { PreviewOverridesContext } from "../../preview/preview-overrides-context";
 
 vi.mock("@kari/shared/services/photography", () => ({
   PhotographyService: {
@@ -55,5 +56,25 @@ describe("PhotographyPage", () => {
       screen.queryByText("Failed to load photography."),
     ).not.toBeInTheDocument();
     expect(PhotographyService.getListFromS3).toHaveBeenCalledTimes(2);
+  });
+
+  // The admin's in-editor site preview (#859).
+  it("shows the admin's unsaved post in place of the deployed one", async () => {
+    render(
+      <PreviewOverridesContext.Provider
+        value={{
+          photographyPost: {
+            ...post,
+            title: "Draft coast",
+            images: [{ image: "coast.jpg", blurb: "dunes", file: null }],
+          },
+        }}
+      >
+        <PhotographyPage />
+      </PreviewOverridesContext.Provider>,
+    );
+
+    expect(await screen.findByText("Draft coast")).toBeInTheDocument();
+    expect(screen.queryByText("Coast")).not.toBeInTheDocument();
   });
 });

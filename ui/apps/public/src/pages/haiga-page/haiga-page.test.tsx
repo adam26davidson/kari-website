@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HaigaPage } from "./haiga-page";
 import { HaigaService } from "@kari/shared/services/haiga";
+import { PreviewOverridesContext } from "../../preview/preview-overrides-context";
 
 vi.mock("@kari/shared/services/haiga", () => ({
   HaigaService: {
@@ -54,5 +55,21 @@ describe("HaigaPage", () => {
       screen.queryByText("Failed to load haiga."),
     ).not.toBeInTheDocument();
     expect(HaigaService.getListFromS3).toHaveBeenCalledTimes(2);
+  });
+
+  // The admin's in-editor site preview (#859).
+  it("shows the admin's unsaved haiga in place of the deployed one", async () => {
+    render(
+      <PreviewOverridesContext.Provider
+        value={{
+          haiga: { ...haiga, publisher: "draft credit", imageFile: null },
+        }}
+      >
+        <HaigaPage />
+      </PreviewOverridesContext.Provider>,
+    );
+
+    expect(await screen.findByText("draft credit")).toBeInTheDocument();
+    expect(screen.queryByText("kari haiga")).not.toBeInTheDocument();
   });
 });
