@@ -64,7 +64,9 @@ admin app.
 So `ui/apps/admin/vite.config.ts` proxies everything NOT under `/admin`
 to `http://localhost:5173`, making 5174 behave like the deployed host.
 This needs BOTH dev servers up, which is what `./scripts/dev.sh` starts;
-`npm run dev:admin` on its own leaves the preview pane blank. The public
+`npm run dev:admin` on its own leaves the preview pane showing its
+"Couldn't show the preview" notice (the proxied frame request 502s with
+nothing on 5173; Try again works once the public server is up). The public
 port is hardcoded, so in a parallel stack whose public vite got bumped to
 5175 the pane frames the *first* stack's site — only the pane, nothing
 else.
