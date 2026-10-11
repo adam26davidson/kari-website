@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowUpRight, Monitor, Smartphone } from "lucide-react";
+import { ArrowUpRight, CircleAlert, Monitor, Smartphone } from "lucide-react";
 import { useIsMobile } from "@kari/shared/hooks/use-is-mobile";
 import {
   PREVIEW_OVERRIDES,
@@ -35,6 +35,27 @@ const DEVICE_NAMES = Object.keys(DEVICES) as DeviceName[];
  */
 const RESEND_DELAY_MS = 300;
 
+/**
+ * How long a frame that has finished loading gets to say it is ready before
+ * the pane gives up on it (#865).
+ *
+ * Armed by the iframe's `load` event, never by mount. An iframe raises no
+ * error for an HTTP failure: an empty 502, a server error page or a deploy
+ * caught half-way all fire `load` and then never say READY. A slow but
+ * healthy site has simply not fired `load` yet, so it is never timed out —
+ * a false "the site may be offline" would cost more of her trust than a
+ * few seconds of blank pane. Once `load` has fired, READY is only React
+ * mounting (tens of milliseconds), so five seconds is a wide margin; don't
+ * tune it below about three.
+ */
+export const READY_TIMEOUT_MS = 5000;
+
+/**
+ * `loading` until the frame says READY; `failed` when it loaded and never
+ * did. READY always wins, whichever order it and `load` arrive in.
+ */
+type FrameStatus = "loading" | "ready" | "failed";
+
 /** The iframe's accessible name, which the e2e journey reaches it by. */
 export const PREVIEW_FRAME_TITLE = "Preview of your site";
 
@@ -65,6 +86,11 @@ export const PREVIEW_FRAME_TITLE = "Preview of your site";
  * Toggling restyles the ONE mounted iframe — it never remounts it. A
  * remount would drop the overrides already delivered and restart the
  * handshake, so switching to Phone would blank her draft.
+ *
+ * "Try again" (after a frame that never became ready) and a change of
+ * `path` DO remount it, on purpose, through its `key`: re-assigning the
+ * same `src` is invisible to React, and a fresh element is the one
+ * dependable way to reload a frame. Both start a fresh handshake.
  */
 export function SitePreview({
   path,
@@ -96,6 +122,10 @@ export function SitePreview({
   // The latest overrides, readable from the message listener without making
   // the listener depend on them (which would re-attach it per keystroke).
   const overridesRef = useRef(overrides);
+  const [status, setStatus] = useState<FrameStatus>("loading");
+  const [attempt, setAttempt] = useState(0);
+  const readyTimerRef = useRef<number | undefined>(undefined);
+  const frameKey = `${path}#${attempt}`;
 
   const { width, height } = DEVICES[device];
 
@@ -119,10 +149,31 @@ export function SitePreview({
       if (event.source !== iframeRef.current?.contentWindow) return;
       if (!isPreviewReadyMessage(event.data)) return;
       postOverrides(overridesRef.current);
+      window.clearTimeout(readyTimerRef.current);
+      setStatus("ready");
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
   }, [postOverrides]);
+
+  // Each new frame (first mount, Try again, a new path) starts unproven,
+  // and an unmounted one must not fire its guard. Idempotent, so
+  // StrictMode's double run is harmless.
+  useEffect(() => {
+    setStatus("loading");
+    return () => window.clearTimeout(readyTimerRef.current);
+  }, [frameKey]);
+
+  // The document arrived; now it has READY_TIMEOUT_MS to speak. A later
+  // `load` (she followed a link inside the pane) re-arms rather than
+  // stacks, and can never undo a pane that already said READY.
+  const handleFrameLoad = () => {
+    window.clearTimeout(readyTimerRef.current);
+    readyTimerRef.current = window.setTimeout(
+      () => setStatus((s) => (s === "loading" ? "failed" : s)),
+      READY_TIMEOUT_MS,
+    );
+  };
 
   // Re-send on every form change, debounced, so the pane follows her typing.
   useEffect(() => {
@@ -198,26 +249,71 @@ export function SitePreview({
         ref={stageRef}
         className="border-border bg-background flex justify-center overflow-hidden rounded-lg border"
       >
-        {/* Sized to the SCALED frame, so the shrunk page takes exactly the
-            room it looks like it takes. */}
-        <div
-          className="overflow-hidden"
-          style={{ width: width * scale, height: height * scale }}
-        >
-          <iframe
-            ref={iframeRef}
-            title={PREVIEW_FRAME_TITLE}
-            src={`${path}?${PREVIEW_QUERY_PARAM}=1`}
-            className="block border-0"
-            style={{
-              width,
-              height,
-              transform: `scale(${scale})`,
-              transformOrigin: "top left",
-            }}
-          />
-        </div>
+        {status === "failed" ? (
+          <FrameFailedNotice onRetry={() => setAttempt((n) => n + 1)} />
+        ) : (
+          // Sized to the SCALED frame, so the shrunk page takes exactly the
+          // room it looks like it takes.
+          <div
+            className="overflow-hidden"
+            style={{ width: width * scale, height: height * scale }}
+          >
+            <iframe
+              key={frameKey}
+              ref={iframeRef}
+              title={PREVIEW_FRAME_TITLE}
+              src={`${path}?${PREVIEW_QUERY_PARAM}=1`}
+              onLoad={handleFrameLoad}
+              className="block border-0"
+              style={{
+                width,
+                height,
+                transform: `scale(${scale})`,
+                transformOrigin: "top left",
+              }}
+            />
+          </div>
+        )}
       </div>
     </Card>
+  );
+}
+
+/**
+ * In place of the frame when the site would not show (#865): what happened,
+ * that her work is safe, and a way back (design brief §5, §8).
+ *
+ * A polite `status`, not an `alert` — she can keep editing, and a screen
+ * reader should not be cut off mid-sentence. Only the mark carries the
+ * maroon, as on the admin LoadError, and Try again is a secondary chip so
+ * Save stays the editor's one primary action (§2). Not the admin LoadError
+ * itself: that one replaces a whole page and says "Nothing on the site has
+ * changed", which is beside the point here.
+ */
+function FrameFailedNotice({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div
+      role="status"
+      className="flex w-full max-w-[480px] flex-col items-start gap-4 p-5 sm:p-8"
+    >
+      <div className="flex flex-row items-start gap-3">
+        <CircleAlert
+          aria-hidden="true"
+          className="text-destructive mt-0.5 size-5 shrink-0"
+        />
+        <div className="flex flex-col gap-1">
+          <p className="text-foreground font-sans text-sm leading-relaxed">
+            Couldn&apos;t show the preview — the site may be offline.
+          </p>
+          <p className="text-muted-foreground font-sans text-sm leading-relaxed">
+            Your changes are still here. Keep editing, and try the preview again
+            in a moment.
+          </p>
+        </div>
+      </div>
+      <Button variant="secondary" size="sm" onClick={onRetry}>
+        Try again
+      </Button>
+    </div>
   );
 }

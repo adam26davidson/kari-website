@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -6,7 +6,11 @@ import {
   PREVIEW_READY,
   PreviewOverrides,
 } from "@kari/shared/utils/preview-channel";
-import { PREVIEW_FRAME_TITLE, SitePreview } from "./site-preview";
+import {
+  PREVIEW_FRAME_TITLE,
+  READY_TIMEOUT_MS,
+  SitePreview,
+} from "./site-preview";
 
 const homePage = { photo: "kari.jpg", blurb: "draft words", photoFile: null };
 const overrides: PreviewOverrides = { homePage };
@@ -274,5 +278,144 @@ describe("SitePreview's width toggle", () => {
     });
 
     expect(frame().style.transform).toBe("scale(1)");
+  });
+});
+
+describe("SitePreview when the site cannot be shown", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const notice = () => screen.queryByRole("status");
+
+  /**
+   * jsdom fetches nothing for a framed `src`, so it never fires `load` on
+   * its own: the browser's "the document arrived" is dispatched by hand.
+   */
+  const frameLoads = () => fireEvent.load(frame());
+
+  const wait = (ms: number) =>
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+
+  /** A frame that loaded (an empty 502, say) but never said it was ready. */
+  const reachFailed = () => {
+    frameLoads();
+    wait(READY_TIMEOUT_MS);
+  };
+
+  const tryAgain = () =>
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+  it("says the preview could not be shown when the frame loads but never says it is ready", () => {
+    renderPreview();
+    reachFailed();
+
+    expect(notice()).toHaveTextContent(/Couldn't show the preview/);
+    expect(notice()).toHaveTextContent(/Your changes are still here/);
+    expect(screen.queryByTitle(PREVIEW_FRAME_TITLE)).toBeNull();
+  });
+
+  it("keeps the width toggle and the new-tab link alongside the notice", () => {
+    renderPreview();
+    reachFailed();
+
+    expect(screen.getByRole("button", { name: "Phone" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /Open in a new tab/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("stays quiet while the frame is still loading, however long that takes", () => {
+    renderPreview();
+    wait(60_000);
+
+    expect(notice()).toBeNull();
+    expect(screen.getByTitle(PREVIEW_FRAME_TITLE)).toBeInTheDocument();
+  });
+
+  it("stays quiet when the frame says it is ready after loading", () => {
+    renderPreview();
+    frameLoads();
+    announceReady();
+    wait(READY_TIMEOUT_MS);
+
+    expect(notice()).toBeNull();
+  });
+
+  it("keeps a ready pane when it said ready before it finished loading", () => {
+    renderPreview();
+    announceReady();
+    frameLoads();
+    wait(READY_TIMEOUT_MS);
+
+    expect(notice()).toBeNull();
+    expect(screen.getByTitle(PREVIEW_FRAME_TITLE)).toBeInTheDocument();
+  });
+
+  it("gives a slow-to-start frame the whole grace period", () => {
+    renderPreview();
+    frameLoads();
+    wait(READY_TIMEOUT_MS - 1);
+
+    expect(notice()).toBeNull();
+  });
+
+  it("shows the frame again and re-arms the guard when she tries again", () => {
+    renderPreview();
+    reachFailed();
+
+    tryAgain();
+    expect(notice()).toBeNull();
+    expect(frame().getAttribute("src")).toBe("/?preview=1");
+
+    // A second failed attempt is caught too.
+    reachFailed();
+    expect(notice()).toHaveTextContent(/Couldn't show the preview/);
+
+    // And an attempt that works stays shown.
+    tryAgain();
+    frameLoads();
+    announceReady();
+    wait(READY_TIMEOUT_MS);
+    expect(notice()).toBeNull();
+    expect(screen.getByTitle(PREVIEW_FRAME_TITLE)).toBeInTheDocument();
+  });
+
+  it("forgets a failed attempt when the path changes", () => {
+    const { rerender } = renderPreview();
+    reachFailed();
+
+    rerender(
+      <SitePreview path="/haiku" description="desc" overrides={overrides} />,
+    );
+
+    expect(notice()).toBeNull();
+    expect(frame().getAttribute("src")).toBe("/haiku?preview=1");
+  });
+
+  it("clears the guard on unmount", () => {
+    const { unmount } = renderPreview();
+    frameLoads();
+
+    unmount();
+
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("sends nothing and throws nothing for a keystroke while the notice is up", () => {
+    const { rerender } = renderPreview();
+    reachFailed();
+
+    const typed = { homePage: { ...homePage, blurb: "more words" } };
+    rerender(<SitePreview path="/" description="desc" overrides={typed} />);
+
+    expect(() => wait(300)).not.toThrow();
+    expect(notice()).toHaveTextContent(/Couldn't show the preview/);
   });
 });

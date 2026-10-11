@@ -918,6 +918,34 @@ test.describe("site preview", () => {
     ).toBeVisible();
   });
 
+  test("says so and offers to try again when the site itself will not load", async ({
+    page,
+  }) => {
+    // The real-browser premise behind #865: an empty 502 still fires the
+    // frame's `load`, and the public app never gets to say READY. A
+    // predicate, not a glob — `?` is a one-character wildcard in globs.
+    const framedPage = (url: URL) =>
+      url.pathname === "/" && url.searchParams.get("preview") === "1";
+    await page.route(framedPage, (route) =>
+      route.fulfill({ status: 502, body: "" }),
+    );
+
+    await openHomeEditor(page);
+    const notice = page
+      .getByRole("status")
+      .filter({ hasText: "Couldn't show the preview" });
+    await expect(notice).toBeVisible();
+    await expect(page.locator(PREVIEW)).toHaveCount(0);
+
+    // The site comes back; Try again frames it.
+    await page.unroute(framedPage);
+    await notice.getByRole("button", { name: "Try again" }).click();
+    await expect(
+      page.frameLocator(PREVIEW).locator(".home-page-blurb"),
+    ).toBeVisible({ timeout: 60_000 });
+    await expect(notice).toHaveCount(0);
+  });
+
   // The other editors' panes (#859). Same no-save discipline: each opens a
   // seeded item, edits it, and leaves without saving.
 
