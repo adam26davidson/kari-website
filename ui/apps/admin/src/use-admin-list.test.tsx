@@ -11,9 +11,7 @@ interface Item {
 const getList = vi.fn<() => Promise<Array<Item>>>();
 const updateList = vi.fn<(list: Array<Item>) => Promise<void>>();
 
-vi.mock("./hooks/use-admin-token", () => ({
-  useAdminToken: () => async () => "token",
-}));
+vi.mock("./hooks/use-admin-token", () => import("./hooks/mock-admin-token"));
 
 // A minimal host page: renders the list, a retry control, and save
 // buttons covering both toast variants.

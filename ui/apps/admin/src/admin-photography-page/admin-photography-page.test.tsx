@@ -28,9 +28,7 @@ vi.mock("@kari/shared/services/images", () => ({
   },
 }));
 
-vi.mock("../hooks/use-admin-token", () => ({
-  useAdminToken: () => async () => "token",
-}));
+vi.mock("../hooks/use-admin-token", () => import("../hooks/mock-admin-token"));
 
 /**
  * A per-row control of the list, located by the name it announces. Since

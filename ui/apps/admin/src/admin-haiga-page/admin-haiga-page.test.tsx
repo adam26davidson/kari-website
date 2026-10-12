@@ -32,9 +32,7 @@ vi.mock("@kari/shared/services/images", () => ({
   },
 }));
 
-vi.mock("../hooks/use-admin-token", () => ({
-  useAdminToken: () => async () => "token",
-}));
+vi.mock("../hooks/use-admin-token", () => import("../hooks/mock-admin-token"));
 
 // The saved haiga as it exists in the published list before the edit.
 let savedHaiga: Haiga;

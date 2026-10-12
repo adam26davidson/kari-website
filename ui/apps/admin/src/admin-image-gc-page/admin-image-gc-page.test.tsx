@@ -11,9 +11,7 @@ vi.mock("@kari/shared/services/images", () => ({
   },
 }));
 
-vi.mock("../hooks/use-admin-token", () => ({
-  useAdminToken: () => async () => "token",
-}));
+vi.mock("../hooks/use-admin-token", () => import("../hooks/mock-admin-token"));
 
 /// One image, two stored objects — the shape that made the page count
 /// objects and report twice as many images as it swept (#454).

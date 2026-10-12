@@ -49,6 +49,19 @@ Frontend job runs it as its own step, so a type error is named rather than
 buried in a build failure. `npm run typecheck:e2e` covers the Playwright
 specs plus the plain-`.mjs` node scripts, which are a separate TS project.
 
+## Mocking `useAdminToken`
+
+Admin tests that need the token hook mocked load the shared double,
+`ui/apps/admin/src/hooks/mock-admin-token.ts`, as the mock factory:
+`vi.mock("../hooks/use-admin-token", () => import("../hooks/mock-admin-token"))`.
+Don't hand-roll `useAdminToken: () => async () => "token"`. The real hook
+returns the same getter on every render, and code may rely on that by
+putting the getter in an effect's dependencies (the assistant's
+availability check does); a mock that builds a fresh function per render
+re-runs such effects on every render and the test hangs or flakes (#876).
+The double returns one shared `vi.fn` getter (`mockAdminGetToken`, resolving
+`"token"`), which a test can import to assert it was passed along.
+
 ## What CI runs
 
 `.github/workflows/ci.yml` runs the lint, typecheck, test, build and
