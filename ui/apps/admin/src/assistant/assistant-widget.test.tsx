@@ -11,8 +11,9 @@ import {
 import { AssistantProvider } from "./assistant-provider";
 import { useAssistantSubject } from "./use-assistant-subject";
 import { SESSION_STORAGE_KEY, type StorageLike } from "./use-assistant-session";
+import { mockAdminGetToken as getToken } from "../hooks/mock-admin-token";
 
-const { service, getToken } = vi.hoisted(() => ({
+const { service } = vi.hoisted(() => ({
   service: {
     getStatus: vi.fn(),
     createSession: vi.fn(),
@@ -21,15 +22,16 @@ const { service, getToken } = vi.hoisted(() => ({
     fileIssue: vi.fn(),
     dismissDraft: vi.fn(),
   },
-  // Stable across renders: the session hook has it in an effect's
-  // dependencies, so a fresh function each render would loop.
-  getToken: vi.fn(),
 }));
 
 vi.mock("@kari/shared/services/assistant", () => ({
   AssistantService: service,
 }));
-vi.mock("../hooks/use-admin-token", () => ({ useAdminToken: () => getToken }));
+// The shared double keeps the getter stable across renders, which the
+// session hook relies on: it has the getter in an effect's dependencies.
+vi.mock("../hooks/use-admin-token", () =>
+  import("../hooks/mock-admin-token"),
+);
 
 beforeAll(() => {
   // jsdom lays nothing out and has no scrollIntoView; the panel calls it to

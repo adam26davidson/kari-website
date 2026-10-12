@@ -48,9 +48,7 @@ vi.mock("@kari/shared/utils/background-image", async (importOriginal) => ({
   validateBackgroundImage: vi.fn(),
 }));
 
-vi.mock("../hooks/use-admin-token", () => ({
-  useAdminToken: () => async () => "token",
-}));
+vi.mock("../hooks/use-admin-token", () => import("../hooks/mock-admin-token"));
 
 function renderPage() {
   return renderAdminPage(

@@ -22,9 +22,7 @@ vi.mock("@kari/shared/services/haiku", () => ({
   },
 }));
 
-vi.mock("../hooks/use-admin-token", () => ({
-  useAdminToken: () => async () => "token",
-}));
+vi.mock("../hooks/use-admin-token", () => import("../hooks/mock-admin-token"));
 
 // Deterministic id for haiku created through the "new item" flow.
 vi.mock("uuid", () => ({ v4: () => "new-id" }));

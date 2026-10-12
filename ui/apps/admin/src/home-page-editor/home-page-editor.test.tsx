@@ -26,9 +26,7 @@ vi.mock("@kari/shared/services/home-page", () => ({
   },
 }));
 
-vi.mock("../hooks/use-admin-token", () => ({
-  useAdminToken: () => async () => "token",
-}));
+vi.mock("../hooks/use-admin-token", () => import("../hooks/mock-admin-token"));
 
 // The page greets whoever is signed in; the real hook reads Auth0, which
 // these tests do not mount. greeting.test.ts covers what the greeting says.

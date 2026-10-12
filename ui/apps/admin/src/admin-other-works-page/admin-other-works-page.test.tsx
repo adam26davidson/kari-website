@@ -37,9 +37,7 @@ vi.mock("@kari/shared/services/images", () => ({
   },
 }));
 
-vi.mock("../hooks/use-admin-token", () => ({
-  useAdminToken: () => async () => "token",
-}));
+vi.mock("../hooks/use-admin-token", () => import("../hooks/mock-admin-token"));
 
 // The rich-text editor pulls in the whole tiptap stack; stub it with a
 // plain textarea so the tests exercise only the page's own logic. The
