@@ -55,7 +55,29 @@ pub struct Stub {
     calls: Arc<AtomicUsize>,
     /// Permits the held replies wait on — one per `release()`.
     release: Arc<tokio::sync::Semaphore>,
+    /// Requests whose handler was dropped before it could answer.
+    abandoned: Arc<AtomicUsize>,
     pub base_url: String,
+}
+
+/// Counts a stub request that was dropped before it answered.
+///
+/// When the code under test hangs up on the stub mid-request, the stub's own
+/// hyper drops the handler future — the same mechanism the API relies on for
+/// her abandoned turns (#884), one hop further along. A witness created at
+/// the top of the handler and marked done just before it returns is how a
+/// test observes that hang-up.
+struct DropWitness {
+    abandoned: Arc<AtomicUsize>,
+    done: bool,
+}
+
+impl Drop for DropWitness {
+    fn drop(&mut self) {
+        if !self.done {
+            self.abandoned.fetch_add(1, Ordering::SeqCst);
+        }
+    }
 }
 
 /// Serve `replies` in order from a local stand-in for an HTTP service. The
@@ -79,17 +101,24 @@ pub async fn spawn_stub_holding(replies: Vec<(StatusCode, Value)>, hold_from: us
     let seen = Arc::new(Mutex::new(Vec::new()));
     let calls = Arc::new(AtomicUsize::new(0));
     let release = Arc::new(tokio::sync::Semaphore::new(0));
+    let abandoned = Arc::new(AtomicUsize::new(0));
     let replies = Arc::new(replies);
 
     let handler_seen = seen.clone();
     let handler_calls = calls.clone();
     let handler_release = release.clone();
+    let handler_abandoned = abandoned.clone();
     let app = Router::new().fallback(move |request: Request<Body>| {
         let seen = handler_seen.clone();
         let calls = handler_calls.clone();
         let release = handler_release.clone();
+        let abandoned = handler_abandoned.clone();
         let replies = replies.clone();
         async move {
+            let mut witness = DropWitness {
+                abandoned,
+                done: false,
+            };
             let path = request.uri().path().to_string();
             let headers = request
                 .headers()
@@ -120,6 +149,7 @@ pub async fn spawn_stub_holding(replies: Vec<(StatusCode, Value)>, hold_from: us
                 release.acquire().await.expect("stub release").forget();
             }
             let (status, reply) = replies[n.min(replies.len() - 1)].clone();
+            witness.done = true;
             (status, Json(reply))
         }
     });
@@ -136,6 +166,7 @@ pub async fn spawn_stub_holding(replies: Vec<(StatusCode, Value)>, hold_from: us
         seen,
         calls,
         release,
+        abandoned,
         base_url: format!("http://{addr}"),
     }
 }
@@ -189,6 +220,25 @@ impl Stub {
             tokio::time::sleep(std::time::Duration::from_millis(1)).await;
         }
         panic!("stub only saw {} of {n} calls", self.call_count());
+    }
+
+    /// How many requests were hung up on before the stub answered them.
+    pub fn abandoned_count(&self) -> usize {
+        self.abandoned.load(Ordering::SeqCst)
+    }
+
+    /// Wait until the code under test has hung up on `n` requests.
+    pub async fn wait_for_abandoned(&self, n: usize) {
+        for _ in 0..2_000 {
+            if self.abandoned_count() >= n {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+        }
+        panic!(
+            "stub saw only {} of {n} requests abandoned",
+            self.abandoned_count()
+        );
     }
 }
 
@@ -312,6 +362,53 @@ pub async fn send(app: &Router, request: Request<Body>) -> (StatusCode, Value) {
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     let body = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
     (status, body)
+}
+
+/// Serve `app` on a real local socket and return its base url — the
+/// `spawn_stub` pattern, for the app itself. Only the tests about a client
+/// hanging up need this: `oneshot` has no connection to drop.
+pub async fn serve(app: Router) -> String {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind app");
+    let addr = listener.local_addr().expect("local addr");
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.expect("serve app");
+    });
+    format!("http://{addr}")
+}
+
+/// Send one message as Kari over a raw socket and return the socket
+/// without reading the reply, so the test can drop it mid-turn.
+///
+/// A raw `TcpStream` on purpose: dropping it is an unambiguous hang-up, with
+/// no client library deciding to pool or linger — exactly what the browser's
+/// abort does to the connection.
+pub async fn open_message(base_url: &str, id: &str, text: &str) -> tokio::net::TcpStream {
+    use tokio::io::AsyncWriteExt;
+
+    let addr = base_url.trim_start_matches("http://");
+    let mut stream = tokio::net::TcpStream::connect(addr)
+        .await
+        .expect("connect to app");
+    let body = json!({"text": text}).to_string();
+    let request = format!(
+        "POST /assistant/sessions/{id}/messages HTTP/1.1\r\n\
+         Host: {addr}\r\n\
+         Authorization: {}\r\n\
+         Content-Type: application/json\r\n\
+         Content-Length: {}\r\n\
+         \r\n\
+         {body}",
+        bearer(),
+        body.len(),
+    );
+    stream
+        .write_all(request.as_bytes())
+        .await
+        .expect("write request");
+    stream.flush().await.expect("flush request");
+    stream
 }
 
 /// Start a conversation and return its id.

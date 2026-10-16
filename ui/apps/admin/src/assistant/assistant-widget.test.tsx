@@ -220,6 +220,7 @@ describe("AssistantWidget", () => {
       "How do I add a haiku?",
       { route: "/haiku/h1", what: "haiku", title: "Autumn rain", dirty: true },
       getToken,
+      expect.any(AbortSignal),
     );
     // The box is empty again, ready for the next question.
     expect(screen.getByRole("textbox", { name: "Your message" })).toHaveValue(

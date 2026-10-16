@@ -140,12 +140,17 @@ export class AssistantService {
    * Returning the full transcript rather than just the new lines keeps the
    * panel a mirror of the server: there is no client-side merge to get
    * wrong, and a reload shows exactly what a send showed.
+   *
+   * Aborting `signal` drops the request — which is what lets the API stop
+   * the model call (#884) — and rejects with the fetch's `AbortError`;
+   * callers that abort are expected to have already moved on.
    */
   static async sendMessage(
     id: string,
     text: string,
     context: AssistantContext,
     getAccessTokenSilently: TokenGetter,
+    signal?: AbortSignal,
   ): Promise<AssistantSession> {
     const response = await authorizedFetch(
       `${API_ASSISTANT_URL}/sessions/${encodeURIComponent(id)}/messages`,
@@ -154,6 +159,7 @@ export class AssistantService {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text, context }),
+        signal,
       },
     );
     ensureOk(response, "Failed to send the message");

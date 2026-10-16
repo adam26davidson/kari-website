@@ -464,6 +464,13 @@ impl AssistantState {
 
     /// Count one turn against today's allowance, resetting when the date
     /// rolls over.
+    ///
+    /// Claimed before the model is asked and deliberately never handed back,
+    /// even when she abandons the turn mid-call (#884). Dropping a
+    /// non-streaming Messages call stops OUR wait, but nothing promises
+    /// Anthropic stopped generating or billing it — and this ceiling is the
+    /// spend backstop, so a refund would let abandoned turns slip under it.
+    /// The price is one count on a generous daily limit.
     async fn claim_daily_turn(&self) -> Result<(), AppError> {
         let mut daily = self.daily.lock().await;
         let day = today();
@@ -956,6 +963,26 @@ fn spoken(text: &str) -> Value {
 /// Add one message to the conversation and return the updated session.
 ///
 /// This is the whole turn: ceilings, the tool loop, and the write-back.
+///
+/// # Cancellation
+///
+/// When she starts again mid-reply the browser aborts the request (#884),
+/// and hyper drops this future at whatever it is awaiting. That drop is the
+/// ONLY cancellation there is, so the turn must stay drop-safe:
+///
+/// - everything held across an await is a guard the drop releases — the
+///   session lock (`_write`) here and the single upstream slot (`_permit`)
+///   in `call_anthropic` — so her next message is not stuck behind a reply
+///   nobody will read;
+/// - the model call and the save are never `tokio::spawn`ed: detaching
+///   either from this future would let an abandoned turn run on and
+///   reintroduce #884;
+/// - the save stays last, so an abandoned turn leaves the stored
+///   conversation exactly as it was loaded (`pending_notes` is taken from
+///   the in-memory copy only, so the next turn still sees them).
+///
+/// The daily turn claimed on the way in is NOT refunded; see
+/// `claim_daily_turn`.
 pub async fn send_message(
     state: &Arc<AssistantState>,
     store: &dyn ObjectStore,
@@ -1351,6 +1378,9 @@ ahead of its own backlog.\n",
 
 /// One Anthropic call, serialised behind the gate and with its failures
 /// translated into something the admin can show.
+///
+/// Dropped mid-call when she abandons the turn (see `send_message`): the
+/// permit goes with the future and the reqwest future hangs up on the API.
 async fn call_anthropic(
     state: &AssistantState,
     config: &AnthropicConfig,
