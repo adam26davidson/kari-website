@@ -235,6 +235,16 @@ export function useAssistantSession(
    */
   const turn = useRef(0);
   /**
+   * The in-flight send's request, so `startOver` can drop it.
+   *
+   * The other half of the `turn` gate: `turn` keeps an abandoned reply off
+   * the screen, aborting the request stops the API doing the work — the
+   * dropped connection ends the model call and frees the helper's single
+   * upstream slot for her next message, instead of a reply nobody will read
+   * running on for minutes (#884).
+   */
+  const inFlight = useRef<AbortController | null>(null);
+  /**
    * Bumped to ask the availability check to run again.
    *
    * `started` alone cannot do it: it is already true the second time the
@@ -367,11 +377,16 @@ export function useAssistantSession(
           sessionId.current = id;
           writeId(storage, id);
         }
+        // Never cleared once settled: aborting a finished request is a
+        // no-op, so a stale controller here is harmless.
+        const controller = new AbortController();
+        inFlight.current = controller;
         const session = await AssistantService.sendMessage(
           id,
           trimmed,
           context,
           getToken,
+          controller.signal,
         );
         if (turn.current !== mine) return true;
         setMessages(session.messages);
@@ -492,6 +507,10 @@ export function useAssistantSession(
   const startOver = useCallback(() => {
     // Everything in flight now belongs to the previous conversation.
     turn.current += 1;
+    // Then drop its request. The bump comes first so the AbortError this
+    // produces already reads as someone else's conversation when it lands
+    // in `send`, which then touches nothing on screen.
+    inFlight.current?.abort();
     sessionId.current = null;
     clearId(storage);
     setMessages([]);

@@ -165,6 +165,7 @@ describe("useAssistantSession", () => {
       "Hello",
       { route: "/haiku" },
       getToken,
+      expect.any(AbortSignal),
     );
     // Remembered, so a reload finds the same conversation.
     expect(storage.getItem(SESSION_STORAGE_KEY)).toBe("s1");
@@ -326,6 +327,104 @@ describe("useAssistantSession", () => {
     expect(storage.getItem(SESSION_STORAGE_KEY)).toBeNull();
     // Nothing to put back in the box either: those words went with it.
     await expect(sent).resolves.toBe(true);
+  });
+
+  it("aborts the request when she starts again mid-reply", async () => {
+    available();
+    service.createSession.mockResolvedValue({
+      id: "s1",
+      messages: [],
+      turnsRemaining: 40,
+    });
+    service.sendMessage.mockReturnValue(new Promise(() => {}));
+
+    const { result } = setup();
+    act(() => result.current.begin());
+    await waitFor(() => expect(result.current.phase).toBe("ready"));
+
+    await act(async () => {
+      void result.current.send("Hello", {});
+    });
+    await waitFor(() => expect(service.sendMessage).toHaveBeenCalled());
+    const signal = service.sendMessage.mock.calls[0][4] as AbortSignal;
+    expect(signal.aborted).toBe(false);
+
+    act(() => result.current.startOver());
+
+    // Dropping the request is what lets the API stop the model call and
+    // free its one upstream slot for her next message (#884).
+    expect(signal.aborted).toBe(true);
+  });
+
+  it("an aborted send lands nowhere and puts nothing back in the box", async () => {
+    available();
+    service.createSession.mockResolvedValue({
+      id: "s1",
+      messages: [],
+      turnsRemaining: 40,
+    });
+    // Rejects the way a real fetch does when its signal fires.
+    service.sendMessage.mockImplementation(
+      (_id, _text, _context, _getToken, signal: AbortSignal) =>
+        new Promise((_resolve, reject) => {
+          signal.addEventListener("abort", () =>
+            reject(
+              new DOMException("The operation was aborted.", "AbortError"),
+            ),
+          );
+        }),
+    );
+
+    const { result } = setup();
+    act(() => result.current.begin());
+    await waitFor(() => expect(result.current.phase).toBe("ready"));
+
+    let sent: Promise<boolean> | undefined;
+    await act(async () => {
+      sent = result.current.send("Hello", {});
+    });
+    await waitFor(() => expect(result.current.sending).toBe(true));
+
+    await act(async () => {
+      result.current.startOver();
+      await sent;
+    });
+
+    expect(result.current.messages).toEqual([]);
+    expect(result.current.error).toBeNull();
+    expect(result.current.sending).toBe(false);
+    await expect(sent).resolves.toBe(true);
+  });
+
+  it("a send after starting again gets its own signal", async () => {
+    available();
+    service.createSession.mockResolvedValue({
+      id: "s1",
+      messages: [],
+      turnsRemaining: 40,
+    });
+    service.sendMessage.mockReturnValue(new Promise(() => {}));
+
+    const { result } = setup();
+    act(() => result.current.begin());
+    await waitFor(() => expect(result.current.phase).toBe("ready"));
+
+    await act(async () => {
+      void result.current.send("Hello", {});
+    });
+    await waitFor(() => expect(service.sendMessage).toHaveBeenCalledTimes(1));
+    act(() => result.current.startOver());
+
+    await act(async () => {
+      void result.current.send("Again", {});
+    });
+    await waitFor(() => expect(service.sendMessage).toHaveBeenCalledTimes(2));
+
+    const first = service.sendMessage.mock.calls[0][4] as AbortSignal;
+    const second = service.sendMessage.mock.calls[1][4] as AbortSignal;
+    expect(second).not.toBe(first);
+    expect(first.aborted).toBe(true);
+    expect(second.aborted).toBe(false);
   });
 
   it("does not remember a conversation she abandoned while it was being made", async () => {

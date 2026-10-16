@@ -121,6 +121,23 @@ describe("AssistantService.sendMessage", () => {
     });
   });
 
+  it("passes the abort signal through to fetch", async () => {
+    const fetchMock = mockFetchOnce({ ok: true, json: async () => session });
+    const controller = new AbortController();
+
+    await AssistantService.sendMessage(
+      "abc",
+      "Hi",
+      {},
+      getToken,
+      controller.signal,
+    );
+
+    // The panel aborts this when she starts again, so the API can stop the
+    // model call (#884).
+    expect(fetchMock.mock.calls[0][1].signal).toBe(controller.signal);
+  });
+
   it("throws with the status so the panel can tell resting from full", async () => {
     mockFetchOnce({ ok: false, status: 429, json: async () => ({}) });
     await expect(
