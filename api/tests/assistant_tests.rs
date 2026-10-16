@@ -15,8 +15,9 @@ use axum::{
     http::{Request, StatusCode},
 };
 use common::assistant::{
-    app_with, configured, get_auth, last_message, new_session, post_auth, resting_app, send,
-    spawn_stub, stored_sessions, text_reply, tool_reply, ABSENT_SESSION,
+    app_with, configured, get_auth, last_message, new_session, open_message, post_auth,
+    resting_app, say, send, serve, spawn_stub, spawn_stub_holding, stored_sessions, text_reply,
+    tool_reply, ABSENT_SESSION,
 };
 use common::store::{state_with_store_and_assistant, InMemoryStore};
 use common::{build_jwks, capture_tracing};
@@ -882,4 +883,85 @@ async fn the_request_matches_what_this_model_accepts() {
         system.contains("haiga"),
         "the page map must reach the model"
     );
+}
+
+// ------------------------------------------------------- abandoned turns
+
+/// The texts of a conversation's transcript, in order.
+fn transcript(body: &Value) -> Vec<String> {
+    body["messages"]
+        .as_array()
+        .expect("messages")
+        .iter()
+        .map(|message| message["text"].as_str().unwrap_or_default().to_string())
+        .collect()
+}
+
+#[tokio::test]
+async fn an_abandoned_turn_stops_the_model_call_and_frees_the_helper() {
+    // Every model call waits for a `release()`, so the first turn sits
+    // mid-call until she walks away from it.
+    let stub = spawn_stub_holding(vec![text_reply("Yes.")], 0).await;
+    let (_, app) = app_with(&stub, AssistantLimits::default());
+    let id = new_session(&app).await;
+    let base = serve(app.clone()).await;
+
+    let stream = open_message(&base, &id, "Hello").await;
+    stub.wait_for_calls(1).await;
+
+    // "Start again": the browser aborts the request, which closes the
+    // connection. hyper drops the handler, the handler drops its reqwest
+    // future, and THAT hangs up on the model — which the stub sees as its own
+    // handler being dropped before it answered (#884).
+    drop(stream);
+    stub.wait_for_abandoned(1).await;
+
+    // Her next message on the same conversation is not stuck behind the
+    // abandoned one: the drop released the session lock and the single
+    // upstream slot. A leak would hang here, so the timeout turns it into a
+    // failure rather than a stuck CI job.
+    stub.release();
+    let (status, body) =
+        tokio::time::timeout(std::time::Duration::from_secs(5), say(&app, &id, "Again"))
+            .await
+            .expect("the follow-up waited on the abandoned turn");
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    // The abandoned "Hello" was never written back: the save comes last, so
+    // the turn left the conversation exactly as it found it.
+    let (status, stored) = send(&app, get_auth(&format!("/assistant/sessions/{id}"))).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(transcript(&stored), vec!["Again", "Yes."]);
+    assert_eq!(stored["turnsRemaining"], 39);
+}
+
+#[tokio::test]
+async fn an_abandoned_turn_still_counts_against_the_day() {
+    // Deliberate (#884): the day's allowance is claimed before the model is
+    // asked and is not handed back when she walks away — dropping a
+    // non-streaming call does not promise it stopped being billed, and the
+    // daily ceiling is the spend backstop.
+    let stub = spawn_stub_holding(vec![text_reply("Yes.")], 0).await;
+    let limits = AssistantLimits {
+        daily_turn_limit: 1,
+        ..AssistantLimits::default()
+    };
+    let (_, app) = app_with(&stub, limits);
+    let id = new_session(&app).await;
+
+    // Abandon it in-process: aborting the task drops the handler future at
+    // the pending model call, just as hyper does when the browser hangs up.
+    let handler = tokio::spawn(app.clone().oneshot(post_auth(
+        &format!("/assistant/sessions/{id}/messages"),
+        json!({"text": "Hello"}),
+    )));
+    stub.wait_for_calls(1).await;
+    handler.abort();
+    let _ = handler.await;
+    stub.release();
+
+    let fresh = new_session(&app).await;
+    let (status, body) = say(&app, &fresh, "Again").await;
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(body, json!({"error": ENOUGH_FOR_NOW_MESSAGE}));
 }
