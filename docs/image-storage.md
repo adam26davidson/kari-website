@@ -47,9 +47,6 @@ or deleted together — and reports that way too: `referenced`, `orphaned`,
 image, id-sorted, so the admin page's counts are counts of pictures rather
 than of storage objects (#454).
 
-Don't press "Image cleanup" between migrating a bucket and deploying the
-code that understands it.
-
 ## Bucket migration (`migrate-images`)
 
 `migrate-images`, a subcommand of the API binary, backfills every missing
