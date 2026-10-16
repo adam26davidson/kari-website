@@ -50,15 +50,14 @@ than of storage objects (#454).
 ## Bucket migration (`migrate-images`)
 
 `migrate-images`, a subcommand of the API binary, backfills every missing
-derived variant and rewrites the S3 URLs in published blog HTML. Dry-run by
-default, and idempotent, so run it, deploy, then run it again to catch
-uploads in between.
+derived variant. Dry-run by default, and idempotent, so run it, deploy,
+then run it again to catch uploads in between. It touches nothing outside
+`images/`: the one-time rewrite of published blog HTML to the directory
+layout ran on both buckets on 2026-09-07 and was retired in #906.
 
-Both halves work from the same rule: an image is an id the bucket holds an
-`original.<ext>` for. An id without one (already swept, or a stray object
-at the bare pre-#273 key `images/<id>`) gets no renditions AND no URL
-rewrite — rewriting it would replace a reference that may still resolve
-with one that certainly 404s.
+An image is an id the bucket holds an `original.<ext>` for. An id without
+one (already swept, or a stray object at the bare pre-#273 key
+`images/<id>`) gets no renditions — there is nothing to derive them from.
 
 Because it writes only what is absent, re-running it is also how a NEWLY
 added variant reaches images uploaded before it existed — deploy first,

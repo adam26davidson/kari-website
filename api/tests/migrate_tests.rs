@@ -3,9 +3,9 @@
 //!
 //! Everything runs against the in-memory store, so the same code path the
 //! `migrate-images` subcommand runs against a real bucket is exercised here
-//! — including the two things that make the migration safe to run twice:
-//! it never regenerates an existing rendition, and it never rewrites HTML
-//! that is already rewritten.
+//! — including what makes it safe to run twice: it never regenerates an
+//! existing rendition. It touches nothing outside `images/` (#906 retired
+//! the published-blog-HTML URL rewrite it used to carry).
 
 mod common;
 
@@ -15,7 +15,6 @@ use std::time::{Duration, SystemTime};
 use common::store::InMemoryStore;
 use kari_website_api::migrate::{migrate_images, run_migrate_images_command};
 use kari_website_api::services::object_store::ObjectStore;
-use serde_json::json;
 
 /// A real encoded PNG, so the thumbnail step has bytes it can decode.
 fn png_bytes(width: u32, height: u32) -> Vec<u8> {
@@ -34,32 +33,14 @@ fn old() -> SystemTime {
 }
 
 /// A bucket whose images predate the derived renditions: one image storing
-/// only its original, a published post whose HTML points at it through S3,
-/// and a draft post whose HTML points at it through the API.
+/// only its original.
 fn unmigrated_variants_store() -> InMemoryStore {
-    InMemoryStore::default()
-        .with_object_tagged(
-            "images/pub.png/original.png",
-            png_bytes(1200, 800),
-            true,
-            old(),
-        )
-        .with_object(
-            "blog-posts-all.json",
-            json!([
-                {"id": "post-pub", "title": "t", "date": "d", "isPublished": true},
-                {"id": "post-draft", "title": "t", "date": "d", "isPublished": false},
-            ])
-            .to_string(),
-        )
-        .with_object(
-            "blog/post-pub.html",
-            r#"<img src="https://s3.example.com/images/pub.png">"#,
-        )
-        .with_object(
-            "blog/post-draft.html",
-            r#"<img src="http://localhost:3000/images/pub.png">"#,
-        )
+    InMemoryStore::default().with_object_tagged(
+        "images/pub.png/original.png",
+        png_bytes(1200, 800),
+        true,
+        old(),
+    )
 }
 
 #[tokio::test]
@@ -73,15 +54,10 @@ async fn dry_run_changes_nothing_but_reports_the_work() {
         report.variants_written,
         vec!["images/pub.png/thumb.jpg", "images/pub.png/background.jpg"]
     );
-    assert_eq!(report.rewritten, vec!["blog/post-pub.html"]);
     assert!(report.failed_variants.is_empty());
     // Nothing was written.
     assert!(!store.contains("images/pub.png/thumb.jpg"));
     assert!(!store.contains("images/pub.png/background.jpg"));
-    assert_eq!(
-        String::from_utf8(store.get("blog/post-pub.html").unwrap().data).unwrap(),
-        r#"<img src="https://s3.example.com/images/pub.png">"#
-    );
 }
 
 #[tokio::test]
@@ -200,42 +176,6 @@ async fn apply_backfills_only_the_variant_a_migrated_image_is_missing() {
 }
 
 #[tokio::test]
-async fn apply_rewrites_published_html_and_leaves_drafts_alone() {
-    let store = Arc::new(unmigrated_variants_store());
-    migrate_images(store.as_ref(), false)
-        .await
-        .expect("migration should succeed");
-
-    assert_eq!(
-        String::from_utf8(store.get("blog/post-pub.html").unwrap().data).unwrap(),
-        r#"<img src="https://s3.example.com/images/pub.png/original.png">"#
-    );
-    // Drafts are served through the API, which resolves the id itself.
-    assert_eq!(
-        String::from_utf8(store.get("blog/post-draft.html").unwrap().data).unwrap(),
-        r#"<img src="http://localhost:3000/images/pub.png">"#
-    );
-}
-
-#[tokio::test]
-async fn apply_leaves_an_unknown_image_reference_untouched() {
-    // An id with no object in the bucket (already GC'd, or hand-edited HTML)
-    // must not be rewritten into a key that certainly does not exist.
-    let store = Arc::new(unmigrated_variants_store().with_object(
-        "blog/post-pub.html",
-        r#"<img src="https://s3/images/gone.png"><img src="https://s3/images/pub.png">"#,
-    ));
-    migrate_images(store.as_ref(), false)
-        .await
-        .expect("migration should succeed");
-
-    assert_eq!(
-        String::from_utf8(store.get("blog/post-pub.html").unwrap().data).unwrap(),
-        r#"<img src="https://s3/images/gone.png"><img src="https://s3/images/pub.png/original.png">"#
-    );
-}
-
-#[tokio::test]
 async fn running_twice_is_the_same_as_running_once() {
     let store = Arc::new(unmigrated_variants_store());
     migrate_images(store.as_ref(), false).await.expect("first");
@@ -247,14 +187,9 @@ async fn running_twice_is_the_same_as_running_once() {
         report.variants_written.is_empty(),
         "nothing left to generate"
     );
-    assert!(report.rewritten.is_empty(), "nothing left to rewrite");
     assert_eq!(
         store.get("images/pub.png/thumb.jpg").unwrap().data,
         after_first
-    );
-    assert_eq!(
-        String::from_utf8(store.get("blog/post-pub.html").unwrap().data).unwrap(),
-        r#"<img src="https://s3.example.com/images/pub.png/original.png">"#
     );
 }
 
@@ -287,39 +222,32 @@ async fn an_undecodable_original_is_reported_and_does_not_abort() {
 }
 
 #[tokio::test]
-async fn a_missing_blog_list_is_not_an_error() {
-    // A fresh site has no posts at all; the image half of the migration must
-    // still run.
-    let store = Arc::new(InMemoryStore::default().with_object_tagged(
-        "images/a.png/original.png",
-        png_bytes(50, 50),
-        true,
-        old(),
-    ));
+async fn blog_content_is_neither_read_nor_rewritten() {
+    // The published-HTML URL rewrite is retired (#906): the backfill must
+    // not depend on the blog manifest — an unreadable one used to abort the
+    // whole command — and blog HTML, even HTML still naming a bare
+    // `/images/<id>` URL, is left byte-for-byte as it was.
+    let bare = r#"<img src="https://s3.example.com/images/pub.png">"#;
+    let store = Arc::new(
+        unmigrated_variants_store()
+            .with_object("blog-posts-all.json", "not json")
+            .with_object("blog/post-pub.html", bare),
+    );
+    store.set_failing_get_for("blog-posts-all.json");
+
     let report = migrate_images(store.as_ref(), false)
         .await
-        .expect("migration should succeed");
+        .expect("the blog manifest is no concern of the backfill");
 
     assert_eq!(
         report.variants_written,
-        vec!["images/a.png/thumb.jpg", "images/a.png/background.jpg"]
+        vec!["images/pub.png/thumb.jpg", "images/pub.png/background.jpg"]
     );
-    assert!(report.rewritten.is_empty());
-}
-
-#[tokio::test]
-async fn an_unreadable_blog_list_aborts_the_migration() {
-    let store = Arc::new(unmigrated_variants_store());
-    store.set_failing_get_for("blog-posts-all.json");
-
-    let err = migrate_images(store.as_ref(), false)
-        .await
-        .expect_err("an unreadable list must abort");
-
-    assert!(
-        err.to_string().contains("blog-posts-all.json"),
-        "got: {err}"
+    assert_eq!(
+        store.get("blog/post-pub.html").unwrap().data,
+        bare.as_bytes()
     );
+    assert_eq!(store.get("blog-posts-all.json").unwrap().data, b"not json");
 }
 
 #[tokio::test]
@@ -372,29 +300,6 @@ async fn a_bare_legacy_key_is_left_alone_and_gets_no_renditions() {
             .collect::<Vec<_>>(),
         Vec::<String>::new(),
         "nothing was written under the stray key"
-    );
-}
-
-#[tokio::test]
-async fn a_reference_to_a_bare_legacy_key_is_left_untouched() {
-    // An id whose ONLY object is the bare pre-#273 key has no
-    // `original.<ext>` and never gets one, so rewriting a published
-    // reference to it would turn a URL that still resolves into a 404.
-    let store = Arc::new(
-        unmigrated_variants_store()
-            .with_object_tagged("images/stray.png", png_bytes(90, 90), true, old())
-            .with_object(
-                "blog/post-pub.html",
-                r#"<img src="https://s3/images/stray.png"><img src="https://s3/images/pub.png">"#,
-            ),
-    );
-    migrate_images(store.as_ref(), false)
-        .await
-        .expect("migration should succeed");
-
-    assert_eq!(
-        String::from_utf8(store.get("blog/post-pub.html").unwrap().data).unwrap(),
-        r#"<img src="https://s3/images/stray.png"><img src="https://s3/images/pub.png/original.png">"#
     );
 }
 

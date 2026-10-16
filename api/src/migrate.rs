@@ -1,40 +1,32 @@
 //! One-shot migration of an existing bucket to the directory-per-image
 //! layout (#273): `migrate-images`, a subcommand of the API binary.
 //!
-//! What it does, in order:
-//! 1. generate every missing derived rendition (`images/<id>/thumb.jpg`,
-//!    `images/<id>/background.jpg`) for every image, with the same
-//!    visibility as its original;
-//! 2. rewrite the S3 URLs embedded in PUBLISHED blog HTML from
-//!    `/images/<id>` to `/images/<id>/original.<ext>` — the only stored
-//!    references that name an object rather than an id. Only ids the bucket
-//!    holds an original for are rewritten, so a reference the migration
-//!    cannot point at a real object keeps the URL it has.
+//! What it does: generate every missing derived rendition
+//! (`images/<id>/thumb.jpg`, `images/<id>/background.jpg`) for every image
+//! the bucket holds an `original.<ext>` for, with the same visibility as that
+//! original. It touches nothing outside `images/`. (The one-time rewrite of
+//! published blog HTML to the directory layout ran on both buckets on
+//! 2026-09-07 and was retired in #906.)
 //!
 //! It is **idempotent**: a rendition that already exists is not regenerated,
-//! and HTML already pointing at `/images/<id>/…` is left alone — so it is
-//! safe (and expected) to run again after a deploy, to catch anything
-//! uploaded in between. That also makes it the way a NEW variant reaches
-//! images uploaded before it existed: re-running the migration backfills
-//! only what is missing.
+//! so it is safe (and expected) to run again after a deploy, to catch
+//! anything uploaded in between. That also makes it the way a NEW variant
+//! reaches images uploaded before it existed: re-running the migration
+//! backfills only what is missing.
 //!
-//! Failure model, deliberately asymmetric: a failed list, put, or an
-//! unreadable/corrupt blog manifest ABORTS, because carrying on would write
-//! into a bucket whose state we no longer know. A rendition that cannot be
-//! produced for one image (an unsupported format, a corrupt upload) is only
-//! REPORTED — the serving path falls back to the original, so a missing
-//! rendition is a slow image, not a broken one.
+//! Failure model, deliberately asymmetric: a failed list or put ABORTS,
+//! because carrying on would write into a bucket whose state we no longer
+//! know. A rendition that cannot be produced for one image (an unsupported
+//! format, a corrupt upload) is only REPORTED — the serving path falls back
+//! to the original, so a missing rendition is a slow image, not a broken
+//! one.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
 
-use crate::models::BlogPost;
-use crate::services::image_keys::{
-    id_from_key, original_key, sanitized_extension, variant_key, ImageVariant,
-};
+use crate::services::image_keys::{id_from_key, original_key, variant_key, ImageVariant};
 use crate::services::object_store::ObjectStore;
-use crate::services::s3::S3Error;
 use crate::services::thumbnail::make_rendition;
 
 /// A failure that aborts the migration before any further write.
@@ -54,8 +46,6 @@ impl Error for MigrationError {}
 pub struct MigrationReport {
     /// Keys of derived renditions generated.
     pub variants_written: Vec<String>,
-    /// Keys of blog HTML documents whose image URLs were rewritten.
-    pub rewritten: Vec<String>,
     /// One line per rendition that could not be produced. Not fatal.
     pub failed_variants: Vec<String>,
 }
@@ -63,7 +53,6 @@ pub struct MigrationReport {
 impl fmt::Display for MigrationReport {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "renditions written:  {}", self.variants_written.len())?;
-        writeln!(f, "blog posts rewritten: {}", self.rewritten.len())?;
         for line in &self.failed_variants {
             writeln!(f, "  ! no rendition: {line}")?;
         }
@@ -106,65 +95,6 @@ async fn survey(store: &dyn ObjectStore) -> Result<BTreeMap<String, ImageState>,
     Ok(images)
 }
 
-/// Rewrite every `/images/<id>` occurrence that is NOT already followed by a
-/// path segment into `/images/<id>/original<ext>`, for the ids in
-/// `known_ids`. Returns `None` when nothing changed.
-///
-/// Ids outside `known_ids` are left exactly as they are: an id the bucket
-/// holds no original for — already swept, hand-edited content, or a stray
-/// object at the bare pre-#273 key `images/<id>` — would only be rewritten
-/// into a key that certainly does not exist, turning a reference that may
-/// still resolve into a 404.
-fn rewrite_image_urls(html: &str, known_ids: &BTreeSet<&str>) -> Option<String> {
-    const MARKER: &str = "/images/";
-    let mut out = String::with_capacity(html.len());
-    let mut rest = html;
-    let mut changed = false;
-    while let Some(pos) = rest.find(MARKER) {
-        let (before, after_marker) = rest.split_at(pos + MARKER.len());
-        out.push_str(before);
-        // Same terminator set the GC's reference extraction uses, so the two
-        // agree on where an id ends.
-        let end = after_marker
-            .find(|c: char| {
-                c.is_whitespace()
-                    || matches!(c, '/' | '"' | '\'' | '`' | '<' | '>' | '?' | '#' | '\\')
-            })
-            .unwrap_or(after_marker.len());
-        let id = &after_marker[..end];
-        out.push_str(id);
-        // Already a directory-layout URL, or an id we know nothing about.
-        let already_migrated = after_marker[end..].starts_with('/');
-        if !already_migrated && known_ids.contains(id) {
-            out.push_str(&format!("/original{}", sanitized_extension(id)));
-            changed = true;
-        }
-        rest = &after_marker[end..];
-    }
-    out.push_str(rest);
-    changed.then_some(out)
-}
-
-/// Ids of every PUBLISHED blog post. Only published content embeds S3 URLs
-/// (a draft's images are served through the API, which resolves the id
-/// itself), so only published HTML can need rewriting.
-async fn published_post_ids(store: &dyn ObjectStore) -> Result<Vec<String>, MigrationError> {
-    const KEY: &str = "blog-posts-all.json";
-    let data = match store.get_object(KEY).await {
-        Ok(data) => data,
-        // A site with no posts at all: nothing to rewrite.
-        Err(S3Error::NotFound) => return Ok(Vec::new()),
-        Err(e) => return Err(MigrationError(format!("failed to fetch {KEY}: {e}"))),
-    };
-    let posts: Vec<BlogPost> = serde_json::from_slice(&data)
-        .map_err(|e| MigrationError(format!("stored {KEY} is invalid: {e}")))?;
-    Ok(posts
-        .into_iter()
-        .filter(|post| post.is_published)
-        .map(|post| post.id)
-        .collect())
-}
-
 /// Generate and store one derived rendition of an image, returning its key.
 ///
 /// `Err` carries a human-readable reason: survivable, recorded in the
@@ -205,8 +135,8 @@ async fn backfill_variant(
 /// Run the migration described in the module docs.
 ///
 /// With `dry_run` nothing is written: the report lists what a real run would
-/// generate and rewrite. A dry run does not decode any image, so it cannot
-/// predict which renditions would fail — only a real run reports those.
+/// generate. A dry run does not decode any image, so it cannot predict which
+/// renditions would fail — only a real run reports those.
 pub async fn migrate_images(
     store: &dyn ObjectStore,
     dry_run: bool,
@@ -214,7 +144,7 @@ pub async fn migrate_images(
     let mut report = MigrationReport::default();
     let images = survey(store).await?;
 
-    // 1. Backfill missing renditions from the stored original.
+    // Backfill missing renditions from the stored original.
     for (id, state) in &images {
         // An id with no original stores nothing a rendition can be derived
         // from — a stray object left beside the prefix, or an image whose
@@ -243,40 +173,6 @@ pub async fn migrate_images(
                 }
             }
         }
-    }
-
-    // 2. Rewrite the S3 URLs in published blog content.
-    // Only ids the bucket actually holds an `original.<ext>` for: the
-    // rewrite points at that object, so an id without one (a stray bare
-    // `images/<id>`, or an image whose original has been swept) must keep
-    // whatever URL it has rather than gain one that 404s.
-    let known_ids: BTreeSet<&str> = images
-        .iter()
-        .filter(|(_, state)| state.has_original)
-        .map(|(id, _)| id.as_str())
-        .collect();
-    for post_id in published_post_ids(store).await? {
-        let key = format!("blog/{post_id}.html");
-        let data = match store.get_object(&key).await {
-            Ok(data) => data,
-            // A listed post with no content object contributes nothing.
-            Err(S3Error::NotFound) => continue,
-            Err(e) => return Err(MigrationError(format!("failed to fetch {key}: {e}"))),
-        };
-        let html = String::from_utf8(data)
-            .map_err(|e| MigrationError(format!("stored {key} is not valid UTF-8: {e}")))?;
-        let Some(rewritten) = rewrite_image_urls(&html, &known_ids) else {
-            continue;
-        };
-        report.rewritten.push(key.clone());
-        if dry_run {
-            continue;
-        }
-        store
-            .put_object(&key, rewritten.into(), true)
-            .await
-            .map_err(|e| MigrationError(format!("failed to rewrite {key}: {e}")))?;
-        tracing::info!("rewrote image urls in {}", key);
     }
 
     Ok(report)
