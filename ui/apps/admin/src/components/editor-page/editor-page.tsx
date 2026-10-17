@@ -27,9 +27,9 @@ import { PageTitle } from "../page-title/page-title";
  * - At `sm` and up the whole header row pins — it is one line, so "Edit
  *   ..." staying with the buttons costs nothing and says what she is
  *   editing.
- * - On a phone only the Save/Close row pins (a 56px strip, widened over
- *   the 8px gutters so the card cannot show beside it) and the title
- *   scrolls away: the stacked pair would park ~110px under the top bar. A
+ * - On a phone only the Save/Close row pins (a 56px strip, widened 8px
+ *   into the 18px gutters so the card, inset the full 18px, cannot show
+ *   beside it) and the title scrolls away: the stacked pair would park ~110px under the top bar. A
  *   sticky element only travels inside its parent, so below `sm` the row
  *   is `contents` and the controls are a direct child of the full-height
  *   column; `-mt-5` gives back the 12px title gap the column's `gap-6`
