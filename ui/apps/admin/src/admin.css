@@ -64,11 +64,16 @@
 
 @media (max-width: 767.98px) {
   .admin-content {
-    /* The list cards carry their own margin; a narrow phone can't spare
-       the full gutter on top of it. The bottom keeps the helper's reserve
-       at full size, though — the gutter is what a phone can't spare, and
-       this is not gutter, it is the floating toggle's own footprint. */
-    padding: 12px 8px calc(12px + var(--admin-helper-reserve));
+    /* A phone can't spare the 32px desktop gutter, but nothing below `sm`
+       adds a horizontal inset of its own (the cards carry no margin), so
+       this side padding is the whole distance between her words and the
+       glass. 18px is what every *Mobile.png board in
+       docs/design/admin-redesign draws, and it keeps the content no
+       tighter-set than the top bar's own 16px inset above it (#918;
+       test/design/phone-gutter.test.ts). The bottom keeps the helper's
+       reserve at full size — that is not gutter, it is the floating
+       toggle's own footprint. */
+    padding: 12px 18px calc(12px + var(--admin-helper-reserve));
   }
 }
 
