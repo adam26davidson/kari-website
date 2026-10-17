@@ -29,11 +29,11 @@ import { PageTitle } from "../page-title/page-title";
  *   editing.
  * - On a phone only the Save/Close row pins (a 56px strip, widened 8px
  *   into the 18px gutters so the card, inset the full 18px, cannot show
- *   beside it) and the title scrolls away: the stacked pair would park ~110px under the top bar. A
- *   sticky element only travels inside its parent, so below `sm` the row
- *   is `contents` and the controls are a direct child of the full-height
- *   column; `-mt-5` gives back the 12px title gap the column's `gap-6`
- *   would otherwise widen.
+ *   beside it) and the title scrolls away: the stacked pair would park
+ *   ~110px under the top bar. A sticky element only travels inside its
+ *   parent, so below `sm` the row is `contents` and the controls are a
+ *   direct child of the full-height column; `-mt-5` gives back the 12px
+ *   title gap the column's `gap-6` would otherwise widen.
  * - The strip is plain paper (`bg-background`), `z-10` — over the card's
  *   fields and the link bubble (`z-2`), under every overlay (dialog
  *   `z-50`, assistant `z-[1000]`). Its padding is cancelled by equal
