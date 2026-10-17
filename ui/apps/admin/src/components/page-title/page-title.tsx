@@ -45,16 +45,14 @@ export function PageTitle({
           content column gains there (admin.css), so the stroke starts on
           paper before the first letter.
 
-          At phone width it does the opposite and starts INSIDE the column.
-          The phone gutter is only 8px, so the old -4px bleed put the
-          stroke's taper 4px from the viewport edge: with no paper in front
-          of it, the widest part of the lower lobe ran straight into the
-          screen edge and the flourish read as a graphic sliding off the
-          page rather than a brush mark. `left-2` puts the taper 16px in —
-          twice the page gutter — which is the least inset at which the
-          stroke visibly begins on paper. It starts under the title's first
-          letter instead of before it, which a stroke sitting below the
-          baseline carries fine.
+          At phone width it bleeds less. The 18px phone gutter (#918) has
+          room for the taper but not for the md bleed: `-left-2` starts the
+          stroke 10px from the viewport edge, where the *Mobile.png boards
+          draw it (~9px), sweeping past the title's first letter as on
+          desktop. Any further left and the taper runs out of paper — with
+          the old 8px gutter a -4px bleed put it 4px from the edge, and the
+          lower lobe read as a graphic sliding off the screen rather than a
+          brush mark (#839).
 
           The minimum width is what makes it a brush stroke rather than a
           blot on the SHORT titles (#234): every section is one or two words
@@ -69,7 +67,7 @@ export function PageTitle({
         aria-hidden="true"
         viewBox="0 0 320 50"
         preserveAspectRatio="none"
-        className="fill-accent pointer-events-none absolute -bottom-4 left-2 h-[1.55em] w-[calc(100%+0.75rem)] min-w-[190px] opacity-[0.125] md:-left-5 md:w-[calc(100%+1.75rem)] md:min-w-[240px]"
+        className="fill-accent pointer-events-none absolute -bottom-4 -left-2 h-[1.55em] w-[calc(100%+0.75rem)] min-w-[190px] opacity-[0.125] md:-left-5 md:w-[calc(100%+1.75rem)] md:min-w-[240px]"
       >
         <path d="M0,32 C60,18 160,4 315,0 C200,9 110,26 44,50 Z" />
       </svg>
