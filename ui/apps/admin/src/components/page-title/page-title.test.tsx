@@ -28,13 +28,18 @@ describe("PageTitle", () => {
 
     const swash = container.querySelector("svg");
     const classes = swash?.getAttribute("class")?.split(/\s+/) ?? [];
-    // The phone content gutter is 8px (admin.css), so any un-prefixed
-    // negative left offset lands the stroke's taper within a few pixels of
-    // the screen edge and it reads as sliding off the page rather than as a
-    // flourish. Bleeding left is for md and up, where there is a 32px
-    // gutter to bleed into.
-    expect(classes).toContain("left-2");
-    expect(classes.filter((c) => /^-left-/.test(c))).toEqual([]);
+    // The phone content gutter is 18px (admin.css; pinned at no less by
+    // test/design/phone-gutter.test.ts). The stroke bleeds 8px of it, so
+    // its taper starts 10px in — where the *Mobile.png boards draw it.
+    // Any deeper bleed lands the taper within a few pixels of the screen
+    // edge and it reads as sliding off the page rather than as a flourish
+    // (#839). The full bleed is for md and up, with its 32px gutter.
+    const phoneLeft = classes.filter((c) => /^-?left-/.test(c));
+    expect(phoneLeft).toHaveLength(1);
+    const bleed = phoneLeft[0].startsWith("-")
+      ? Number(phoneLeft[0].replace("-left-", "")) * 4
+      : 0;
+    expect(bleed).toBeLessThanOrEqual(8);
     expect(classes).toContain("md:-left-5");
   });
 
