@@ -88,20 +88,15 @@
   --radius: 10px;
 
   /* --- The bridge --------------------------------------------------
-     Not everything the admin renders is the admin's own. It imports the
-     shared index.css for the tokens and the `.whole-page` frame, and with
-     them come components written for the public site. Two are left: the
-     `ErrorBoundary` notice (app.tsx) and the `.loading` line (the Suspense
-     fallbacks in admin.tsx and admin-other-works-page.tsx). Those reach
-     their colour and their face through the shared tokens, so the tokens
-     are re-pointed here rather than the components being forked.
-
-     `LoadError` used to be a third, and `SiteButton` sat inside all three;
-     #832 gave the admin its own LoadError (components/load-error/), built
-     on the Card and Button below, which left no SiteButton in this bundle
-     at all and took the `.site-button` override at the foot of this file
-     with it. The two above are the same mismatch waiting for the same
-     treatment — they still wear the public site's notice card.
+     The admin imports the shared index.css for its tokens and the
+     `.whole-page` frame, and nothing else of it renders here any more:
+     #832 gave the admin its own LoadError, #949 its own loading line and
+     error-boundary fallback (components/loading-line/,
+     components/page-error/), so no element in this bundle carries a
+     shared component class. What is still re-pointed below is what the
+     shared stylesheet applies to the document itself — `body`'s face
+     through `--font-body` — plus `--primary-hover`, which the button
+     recipe spends.
 
      `--primary-hover` is the darker green a filled control answers the
      pointer with — `--primary` itself needs no line of its own, because
@@ -113,8 +108,8 @@
 
   /* The face axis, likewise (#483). Every rule in every workspace
      reaches a typeface through one of these two tokens, so re-pointing
-     them is how the shared components above are set in Geist rather than
-     in the public site's Noto Serif JP / Roboto pairing. Both point at
+     them is how `body`'s inherited face (shared index.css) is Geist rather
+     than the public site's Noto Serif JP / Roboto pairing. Both point at
      the interface face: Newsreader is for greetings, page titles and item
      titles, which are the shell's and the pages' business and are asked
      for with the `font-serif` utility rather than taken by

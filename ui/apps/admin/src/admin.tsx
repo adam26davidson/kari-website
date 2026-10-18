@@ -20,6 +20,7 @@ import { AdminPhotographyPage } from "./admin-photography-page/admin-photography
 import { AdminImageGcPage } from "./admin-image-gc-page/admin-image-gc-page";
 import { AdminBackgroundPage } from "./admin-background-page/admin-background-page";
 import { Button } from "./components/ui/button";
+import { LoadingLine } from "./components/loading-line/loading-line";
 import { AdminUiProvider } from "./admin-ui-provider";
 import { AssistantProvider } from "./assistant/assistant-provider";
 import { AssistantWidget } from "./assistant/assistant-widget";
@@ -116,9 +117,7 @@ export function Admin() {
                 element={
                   // Local boundary: keep the shell in place while the page's
                   // lazy chunk loads.
-                  <Suspense
-                    fallback={<div className="loading">Loading...</div>}
-                  >
+                  <Suspense fallback={<LoadingLine />}>
                     <AdminWhatsOnTestPage />
                   </Suspense>
                 }

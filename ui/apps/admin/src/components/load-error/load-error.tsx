@@ -4,6 +4,10 @@ import { Button } from "../ui/button";
 
 interface LoadErrorProps {
   message: string;
+  /** The Stone line under the message: what she can do next. */
+  nextStep?: string;
+  /** The one button's label. */
+  actionLabel?: string;
   onRetry: () => void;
 }
 
@@ -23,14 +27,22 @@ interface LoadErrorProps {
  *
  * `admin-load-error` styles nothing — do not give it a rule. It is the hook
  * e2e/helpers.ts and e2e/admin-whats-on-test.spec.ts find this notice by,
- * the same convention as `admin-data-list-item`.
+ * the same convention as `admin-data-list-item`. Since #949 the route
+ * error boundary renders this card too (through `PageError`), so the hook
+ * also marks a page that crashed while rendering — which is exactly what
+ * `waitForIdle` in e2e/helpers.ts should fail on.
  *
  * Calm rather than alarmed (docs/ui-design-brief.md §1, §3): the filled
  * maroon block is for a warning inside a page she keeps using, whereas this
  * one IS the page, so only the mark carries the colour — the same
  * `CircleAlert` the failed-save toast shows.
  */
-export function LoadError({ message, onRetry }: LoadErrorProps) {
+export function LoadError({
+  message,
+  nextStep = "Nothing on the site has changed — try again in a moment.",
+  actionLabel = "Retry",
+  onRetry,
+}: LoadErrorProps) {
   return (
     <Card
       role="alert"
@@ -46,11 +58,11 @@ export function LoadError({ message, onRetry }: LoadErrorProps) {
             {message}
           </p>
           <p className="text-muted-foreground font-sans text-sm leading-relaxed">
-            Nothing on the site has changed — try again in a moment.
+            {nextStep}
           </p>
         </div>
       </div>
-      <Button onClick={onRetry}>Retry</Button>
+      <Button onClick={onRetry}>{actionLabel}</Button>
     </Card>
   );
 }

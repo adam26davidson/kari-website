@@ -6,11 +6,15 @@ import {
   moveItemByIdByOne,
   removeItemById,
 } from "@kari/shared/utils/data-list-helpers";
-import { formatPostDate, todayAsPostDate } from "@kari/shared/utils/date-helpers";
+import {
+  formatPostDate,
+  todayAsPostDate,
+} from "@kari/shared/utils/date-helpers";
 import { BlogService } from "@kari/shared/services/blog";
 import { ImageService } from "@kari/shared/services/images";
 import { lazyWithRetry } from "@kari/shared/components/error-boundary/lazy-with-retry";
 import { LoadError } from "../components/load-error/load-error";
+import { LoadingLine } from "../components/loading-line/loading-line";
 import { BlogPostRow } from "./components/blog-post-row/blog-post-row";
 import { ItemList } from "../components/item-list/item-list";
 import { deleteConfirmationMessage } from "../delete-confirmation";
@@ -308,9 +312,9 @@ export function AdminOtherWorksPage() {
 
   return openPost ? (
     // Local boundary: the page frame and admin menu stay put while the
-    // editor's chunk arrives. The same quiet "Loading..." treatment the
-    // whats-on-test route uses.
-    <Suspense fallback={<div className="loading">Loading...</div>}>
+    // editor's chunk arrives. The same `LoadingLine` the whats-on-test
+    // route and the staging route use.
+    <Suspense fallback={<LoadingLine />}>
       <BlogPostEditor
         post={openPost}
         content={openPostContent}
