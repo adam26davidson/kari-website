@@ -7,7 +7,7 @@ import {
   FILING_FAILED_MESSAGE,
   RESTORE_FAILED_MESSAGE,
   SEND_FAILED_MESSAGE,
-  SESSION_STORAGE_KEY,
+  SESSION_ID_LOCAL_STORAGE_KEY,
   defaultStorage,
   useAssistantSession,
   type StorageLike,
@@ -168,7 +168,7 @@ describe("useAssistantSession", () => {
       expect.any(AbortSignal),
     );
     // Remembered, so a reload finds the same conversation.
-    expect(storage.getItem(SESSION_STORAGE_KEY)).toBe("s1");
+    expect(storage.getItem(SESSION_ID_LOCAL_STORAGE_KEY)).toBe("s1");
   });
 
   it("reuses the session for later messages", async () => {
@@ -202,7 +202,7 @@ describe("useAssistantSession", () => {
       turnsRemaining: 30,
     });
 
-    const { result } = setup(fakeStorage({ [SESSION_STORAGE_KEY]: "old" }));
+    const { result } = setup(fakeStorage({ [SESSION_ID_LOCAL_STORAGE_KEY]: "old" }));
     act(() => result.current.begin());
 
     await waitFor(() => expect(result.current.phase).toBe("ready"));
@@ -215,7 +215,7 @@ describe("useAssistantSession", () => {
   it("starts fresh when the remembered conversation has ended", async () => {
     available();
     service.getSession.mockRejectedValue(new HttpError("gone", 404));
-    const storage = fakeStorage({ [SESSION_STORAGE_KEY]: "old" });
+    const storage = fakeStorage({ [SESSION_ID_LOCAL_STORAGE_KEY]: "old" });
 
     const { result } = setup(storage);
     act(() => result.current.begin());
@@ -223,7 +223,7 @@ describe("useAssistantSession", () => {
     // Not an error state: she just gets the empty greeting again.
     await waitFor(() => expect(result.current.phase).toBe("ready"));
     expect(result.current.messages).toEqual([]);
-    expect(storage.getItem(SESSION_STORAGE_KEY)).toBeNull();
+    expect(storage.getItem(SESSION_ID_LOCAL_STORAGE_KEY)).toBeNull();
   });
 
   it("stays usable when the remembered conversation cannot be read", async () => {
@@ -239,7 +239,7 @@ describe("useAssistantSession", () => {
       messages: [{ role: "assistant", text: "Fresh start." }],
       turnsRemaining: 39,
     });
-    const storage = fakeStorage({ [SESSION_STORAGE_KEY]: "corrupt" });
+    const storage = fakeStorage({ [SESSION_ID_LOCAL_STORAGE_KEY]: "corrupt" });
 
     const { result } = setup(storage);
     act(() => result.current.begin());
@@ -260,7 +260,7 @@ describe("useAssistantSession", () => {
     ]);
     // Her first message writes a new id over the unreadable one, so the
     // problem cannot outlive the conversation it came from.
-    expect(storage.getItem(SESSION_STORAGE_KEY)).toBe("s2");
+    expect(storage.getItem(SESSION_ID_LOCAL_STORAGE_KEY)).toBe("s2");
   });
 
   it("asks again when she reopens a resting panel", async () => {
@@ -324,7 +324,7 @@ describe("useAssistantSession", () => {
     // paint itself back over the empty panel.
     expect(result.current.messages).toEqual([]);
     expect(result.current.sending).toBe(false);
-    expect(storage.getItem(SESSION_STORAGE_KEY)).toBeNull();
+    expect(storage.getItem(SESSION_ID_LOCAL_STORAGE_KEY)).toBeNull();
     // Nothing to put back in the box either: those words went with it.
     await expect(sent).resolves.toBe(true);
   });
@@ -455,7 +455,7 @@ describe("useAssistantSession", () => {
     // The message is never sent, and the id she just cleared is not written
     // back over the top of the clearing.
     expect(service.sendMessage).not.toHaveBeenCalled();
-    expect(storage.getItem(SESSION_STORAGE_KEY)).toBeNull();
+    expect(storage.getItem(SESSION_ID_LOCAL_STORAGE_KEY)).toBeNull();
     expect(result.current.messages).toEqual([]);
   });
 
@@ -612,7 +612,7 @@ describe("useAssistantSession", () => {
     act(() => result.current.startOver());
 
     expect(result.current.messages).toEqual([]);
-    expect(storage.getItem(SESSION_STORAGE_KEY)).toBeNull();
+    expect(storage.getItem(SESSION_ID_LOCAL_STORAGE_KEY)).toBeNull();
 
     // The next message opens a brand new conversation.
     await act(async () => void (await result.current.send("Again", {})));
@@ -829,7 +829,7 @@ describe("useAssistantSession", () => {
       draft: DRAFT,
     });
 
-    const { result } = setup(fakeStorage({ [SESSION_STORAGE_KEY]: "old" }));
+    const { result } = setup(fakeStorage({ [SESSION_ID_LOCAL_STORAGE_KEY]: "old" }));
     act(() => result.current.begin());
 
     // A decision she was partway through is not lost to a page reload.

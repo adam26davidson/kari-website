@@ -127,6 +127,16 @@ async fn the_tool_is_offered_only_to_a_helper_that_can_file() {
         "{description}"
     );
     assert!(!description.contains("  "), "reindented: {description}");
+    // The body has to stand on its own: the filed issue only LINKS the
+    // conversation privately (#888), so a model told the transcript is
+    // "added" writes bodies that lean on text no reader can see (#921).
+    let body = tools[0]["input_schema"]["properties"]["body"]["description"]
+        .as_str()
+        .expect("a body description");
+    assert!(body.contains("must stand on its own"), "{body}");
+    assert!(body.contains("only linked privately"), "{body}");
+    assert!(!body.contains("added for you"), "{body}");
+    assert!(!body.contains("  "), "reindented: {body}");
 
     // A host with an API key and no GitHub token declares NO tools: a
     // helper that cannot file must not be able to promise a draft.
