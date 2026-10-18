@@ -825,8 +825,12 @@ pub fn tools(can_file: bool, can_read_repo: bool) -> Vec<Value> {
     of the site it concerns. Kari is shown this on the card before she agrees to \
     file it, and the repository is public, so write it in plain sentences she \
     would recognise and put nothing in it she has not seen. Keep any markup \
-    light — it is read as plain text on the card. Do not include the \
-    conversation or the page details; those are added for you.",
+    light — it is read as plain text on the card. The body must stand on its \
+    own: the conversation is not copied into the issue, it is only linked \
+    privately where the maintainer alone can open it, and the page details are \
+    appended separately. So do not paste in either one, and do not lean on the \
+    conversation (\"as discussed\", \"see above\"); say everything the reader \
+    needs here.",
                 },
             },
             "required": ["kind", "title", "summary", "body"],

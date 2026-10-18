@@ -10,7 +10,7 @@ import {
 } from "./assistant-draft-card";
 import { AssistantProvider } from "./assistant-provider";
 import { useAssistantSubject } from "./use-assistant-subject";
-import { SESSION_STORAGE_KEY, type StorageLike } from "./use-assistant-session";
+import { SESSION_ID_LOCAL_STORAGE_KEY, type StorageLike } from "./use-assistant-session";
 import { mockAdminGetToken as getToken } from "../hooks/mock-admin-token";
 
 const { service } = vi.hoisted(() => ({
@@ -366,7 +366,7 @@ describe("AssistantWidget", () => {
       turnsRemaining: 30,
     });
 
-    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    renderWidget({ storage: fakeStorage({ [SESSION_ID_LOCAL_STORAGE_KEY]: "old" }) });
     await openPanel();
 
     expect(
@@ -379,14 +379,14 @@ describe("AssistantWidget", () => {
   it("starts fresh when the remembered conversation has ended", async () => {
     available();
     service.getSession.mockRejectedValue(new HttpError("gone", 404));
-    const storage = fakeStorage({ [SESSION_STORAGE_KEY]: "old" });
+    const storage = fakeStorage({ [SESSION_ID_LOCAL_STORAGE_KEY]: "old" });
 
     renderWidget({ storage });
     await openPanel();
 
     // A dead id is not an error she should ever see.
     expect(await screen.findByText(/^Hi Kari/)).toBeInTheDocument();
-    expect(storage.getItem(SESSION_STORAGE_KEY)).toBeNull();
+    expect(storage.getItem(SESSION_ID_LOCAL_STORAGE_KEY)).toBeNull();
   });
 
   it("still offers a conversation when the remembered one cannot be read", async () => {
@@ -394,7 +394,7 @@ describe("AssistantWidget", () => {
     service.getSession.mockRejectedValue(new HttpError("corrupt", 500));
 
     renderWidget({
-      storage: fakeStorage({ [SESSION_STORAGE_KEY]: "corrupt" }),
+      storage: fakeStorage({ [SESSION_ID_LOCAL_STORAGE_KEY]: "corrupt" }),
     });
     await openPanel();
 
@@ -529,7 +529,7 @@ describe("AssistantWidget", () => {
       draft: null,
     });
 
-    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    renderWidget({ storage: fakeStorage({ [SESSION_ID_LOCAL_STORAGE_KEY]: "old" }) });
     await openPanel();
 
     // The card shows what she needs to judge it by, and asks.
@@ -577,7 +577,7 @@ describe("AssistantWidget", () => {
       },
     });
 
-    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    renderWidget({ storage: fakeStorage({ [SESSION_ID_LOCAL_STORAGE_KEY]: "old" }) });
     await openPanel();
 
     expect(
@@ -599,7 +599,7 @@ describe("AssistantWidget", () => {
       draft: DRAFT,
     });
 
-    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    renderWidget({ storage: fakeStorage({ [SESSION_ID_LOCAL_STORAGE_KEY]: "old" }) });
     await openPanel();
     await screen.findByText(DRAFT.title);
 
@@ -629,7 +629,7 @@ describe("AssistantWidget", () => {
       }),
     );
 
-    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    renderWidget({ storage: fakeStorage({ [SESSION_ID_LOCAL_STORAGE_KEY]: "old" }) });
     await openPanel();
     await screen.findByText(DRAFT.title);
     vi.mocked(Element.prototype.scrollIntoView).mockClear();
@@ -694,7 +694,7 @@ describe("AssistantWidget", () => {
       draft: rewritten,
     });
 
-    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    renderWidget({ storage: fakeStorage({ [SESSION_ID_LOCAL_STORAGE_KEY]: "old" }) });
     await openPanel();
     await screen.findByText(DRAFT.title);
     vi.mocked(Element.prototype.scrollIntoView).mockClear();
@@ -723,7 +723,7 @@ describe("AssistantWidget", () => {
     });
     service.sendMessage.mockRejectedValue(new Error("offline"));
 
-    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    renderWidget({ storage: fakeStorage({ [SESSION_ID_LOCAL_STORAGE_KEY]: "old" }) });
     await openPanel();
     await screen.findByText(DRAFT.title);
     vi.mocked(Element.prototype.scrollIntoView).mockClear();
@@ -758,7 +758,7 @@ describe("AssistantWidget", () => {
       draft: null,
     });
 
-    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    renderWidget({ storage: fakeStorage({ [SESSION_ID_LOCAL_STORAGE_KEY]: "old" }) });
     await openPanel();
     await screen.findByText(DRAFT.title);
 
@@ -781,7 +781,7 @@ describe("AssistantWidget", () => {
     });
     service.fileIssue.mockRejectedValue(new HttpError("no", 503));
 
-    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    renderWidget({ storage: fakeStorage({ [SESSION_ID_LOCAL_STORAGE_KEY]: "old" }) });
     await openPanel();
     await screen.findByText(DRAFT.title);
     await userEvent.click(
@@ -817,7 +817,7 @@ describe("AssistantWidget", () => {
       }),
     );
 
-    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    renderWidget({ storage: fakeStorage({ [SESSION_ID_LOCAL_STORAGE_KEY]: "old" }) });
     await openPanel();
     await screen.findByText(DRAFT.title);
 
@@ -863,7 +863,7 @@ describe("AssistantWidget", () => {
       draft: DRAFT,
     });
 
-    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    renderWidget({ storage: fakeStorage({ [SESSION_ID_LOCAL_STORAGE_KEY]: "old" }) });
     await openPanel();
 
     expect(await screen.findByText(DRAFT.title)).toBeInTheDocument();
@@ -890,7 +890,7 @@ describe("AssistantWidget", () => {
       turnsRemaining: 30,
     });
 
-    renderWidget({ storage: fakeStorage({ [SESSION_STORAGE_KEY]: "old" }) });
+    renderWidget({ storage: fakeStorage({ [SESSION_ID_LOCAL_STORAGE_KEY]: "old" }) });
     await openPanel();
 
     // Rendered as separate lines rather than run together into one

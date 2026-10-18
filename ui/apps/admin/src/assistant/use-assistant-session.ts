@@ -10,7 +10,7 @@ import { HttpError } from "@kari/shared/services/http-error";
 import { TokenGetter } from "@kari/shared/services/http";
 
 /** Where the conversation id is remembered across reloads. */
-export const SESSION_STORAGE_KEY = "kari-admin-assistant-session";
+export const SESSION_ID_LOCAL_STORAGE_KEY = "kari-admin-assistant-session";
 
 /** The slice of `Storage` this hook uses, so tests can substitute a fake. */
 export interface StorageLike {
@@ -37,7 +37,7 @@ export function defaultStorage(): StorageLike | null {
 
 function readId(storage: StorageLike | null): string | null {
   try {
-    return storage?.getItem(SESSION_STORAGE_KEY) ?? null;
+    return storage?.getItem(SESSION_ID_LOCAL_STORAGE_KEY) ?? null;
   } catch {
     return null;
   }
@@ -45,7 +45,7 @@ function readId(storage: StorageLike | null): string | null {
 
 function writeId(storage: StorageLike | null, id: string): void {
   try {
-    storage?.setItem(SESSION_STORAGE_KEY, id);
+    storage?.setItem(SESSION_ID_LOCAL_STORAGE_KEY, id);
   } catch {
     // Ignore: the conversation still works, it just will not be found again
     // after a reload.
@@ -54,7 +54,7 @@ function writeId(storage: StorageLike | null, id: string): void {
 
 function clearId(storage: StorageLike | null): void {
   try {
-    storage?.removeItem(SESSION_STORAGE_KEY);
+    storage?.removeItem(SESSION_ID_LOCAL_STORAGE_KEY);
   } catch {
     // Ignore: a stale id is dropped on the next failed restore anyway.
   }
