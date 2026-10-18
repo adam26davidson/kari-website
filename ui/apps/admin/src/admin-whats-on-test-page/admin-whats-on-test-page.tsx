@@ -123,8 +123,8 @@ export function AdminWhatsOnTestPage() {
       <PageTitle>What&apos;s on test</PageTitle>
       {headSha && (
         <p className="text-muted-foreground font-sans text-sm leading-relaxed">
-          Changes that are on the test site but not on the live site yet. Have a
-          look at them on the test site before they go live.
+          Changes that are on the test site but not on the live site yet. Have
+          a look at them on the test site before they go live.
         </p>
       )}
       {!headSha && (
@@ -174,8 +174,8 @@ export function AdminWhatsOnTestPage() {
           )}
           {data.prod.kind === "found" && data.commits.length === 0 && (
             <p className="whats-on-test-note text-foreground font-sans text-sm leading-relaxed">
-              The test site and the live site are the same right now — nothing
-              is waiting to go live.
+              The test site and the live site are the same right now —
+              nothing is waiting to go live.
             </p>
           )}
           {truncated && (

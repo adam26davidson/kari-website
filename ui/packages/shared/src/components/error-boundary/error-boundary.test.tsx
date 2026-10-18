@@ -51,7 +51,9 @@ describe("ErrorBoundary", () => {
         <Boom />
       </ErrorBoundary>,
     );
-    expect(screen.getByRole("button", { name: "Reload" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Reload" }),
+    ).toBeInTheDocument();
   });
 
   it("reloads the page when the visitor clicks Reload", async () => {
@@ -91,7 +93,9 @@ describe("ErrorBoundary", () => {
       screen.queryByText("Something went wrong displaying this page."),
     ).not.toBeInTheDocument();
     // Recovery path is the same: the existing Reload button.
-    expect(screen.getByRole("button", { name: "Reload" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Reload" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps the generic copy for ordinary render errors", () => {
