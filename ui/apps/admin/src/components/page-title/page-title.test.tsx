@@ -23,18 +23,27 @@ describe("PageTitle", () => {
     );
   });
 
-  it("keeps the swash off the viewport edge at phone width", () => {
+  it("bleeds the swash into the phone gutter, but not off the edge", () => {
     const { container } = render(<PageTitle>Haiga</PageTitle>);
 
     const swash = container.querySelector("svg");
     const classes = swash?.getAttribute("class")?.split(/\s+/) ?? [];
-    // The phone content gutter is 8px (admin.css), so any un-prefixed
-    // negative left offset lands the stroke's taper within a few pixels of
-    // the screen edge and it reads as sliding off the page rather than as a
-    // flourish. Bleeding left is for md and up, where there is a 32px
-    // gutter to bleed into.
-    expect(classes).toContain("left-2");
-    expect(classes.filter((c) => /^-left-/.test(c))).toEqual([]);
+    // The phone content gutter is 18px (admin.css; pinned at no less by
+    // test/design/phone-gutter.test.ts). The stroke bleeds 8px of it, so
+    // its taper starts 10px in — where the *Mobile.png boards draw it,
+    // sweeping past the title's first letter (#918). No bleed at all
+    // starts the stroke at the first letter instead; any deeper bleed
+    // lands the taper within a few pixels of the screen edge and it reads
+    // as sliding off the page rather than as a flourish (#839). The full
+    // bleed is for md and up, with its 32px gutter.
+    const phoneLeft = classes.filter((c) => /^-?left-/.test(c));
+    expect(phoneLeft).toHaveLength(1);
+    const match = /^-left-(\d+(?:\.\d+)?)$/.exec(phoneLeft[0]);
+    // A positive (or zero) inset is no bleed at all.
+    expect(match).not.toBeNull();
+    const bleed = Number(match?.[1]) * 4;
+    expect(bleed).toBeGreaterThan(0);
+    expect(bleed).toBeLessThanOrEqual(8);
     expect(classes).toContain("md:-left-5");
   });
 

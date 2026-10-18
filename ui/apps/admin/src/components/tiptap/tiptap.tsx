@@ -88,6 +88,11 @@ interface ToolbarGroup {
 // is a run of ghost buttons behind a hairline, so the toolbar reads as
 // five short sentences instead of eleven identical glyphs (visual
 // review, PR #829; the 390px wrap remainder is #975).
+// The gap, hairline and gap every toolbar control leads with. MenuBar's
+// row pulls itself left by this (13px) so a lead at the start of a line
+// is clipped away; change one and the row's offset must follow.
+const CONTROL_LEAD = "ml-1.5 border-l pl-1.5";
+
 const TOOLBAR_GROUPS: ToolbarGroup[] = [
   {
     name: "marks",
@@ -353,7 +358,15 @@ const MenuBar = ({
     // convention `data-editor` and `tiptap-container` document. The
     // stylesheet that used to key off it is gone.
     <div className="control-group border-border bg-muted/40 relative w-full rounded-t-lg border-b">
-      <div className="flex flex-row flex-wrap items-center gap-y-1 p-1.5">
+      {/* Every control below wears the same lead — 6px, a hairline, 6px:
+          13px in all — and this row is pulled left by exactly that and
+          clipped 15px into itself, 4px short of where a line's first
+          control begins (the site focus halo is 4px, so it stays whole).
+          The lead of whichever control STARTS a line therefore falls
+          outside the clip, so every wrapped row begins flush with no
+          stray divider, while leads mid-line still draw the hairline
+          between groups (visual review, PR #1088). */}
+      <div className="-ml-[13px] flex flex-row flex-wrap items-center gap-y-1 p-1.5 [clip-path:inset(-1rem_-1rem_-1rem_15px)]">
         {/* Still a native <select> — it keeps the OS picker, the keyboard
             behaviour and the `combobox` role the tests and e2e locate by,
             and needs no extra dependency. What changes is that
@@ -363,7 +376,12 @@ const MenuBar = ({
             borrowed from another program: visual review, PR #852), leaving
             the field skin below to draw the whole control. The chevron is
             then ours, in the toolbar's muted ink. */}
-        <span className="relative mr-1.5 inline-flex items-center">
+        <span
+          className={cn(
+            CONTROL_LEAD,
+            "relative inline-flex items-center border-transparent",
+          )}
+        >
           <select
             aria-label="text style"
             // The one control here with words rather than a glyph, so it
@@ -403,12 +421,15 @@ const MenuBar = ({
         {TOOLBAR_GROUPS.map((group, idx) => (
           // A hairline before each group but the first, and the groups are
           // what the row wraps at: at 390px the toolbar breaks between
-          // sentences rather than mid-word (`WorksEditorMobile.png`).
+          // sentences rather than mid-word (`WorksEditorMobile.png`). The
+          // first keeps the lead but not the line, so the style select
+          // and the marks still read as one run.
           <div
             key={group.name}
             className={cn(
+              CONTROL_LEAD,
               "flex flex-row items-center",
-              idx > 0 && "border-border ml-1.5 border-l pl-1.5",
+              idx > 0 ? "border-border" : "border-transparent",
             )}
           >
             {group.items.map((item) => (

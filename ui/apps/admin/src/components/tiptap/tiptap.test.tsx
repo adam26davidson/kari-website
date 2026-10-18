@@ -96,6 +96,27 @@ describe("Tiptap toolbar", () => {
     expect(toolbarButtons(container)).toHaveLength(11);
   });
 
+  it("starts every wrapped toolbar row flush, with no stray divider", () => {
+    // Visual review, PR #1088: at 390px the row wraps, and a group that
+    // lands at the start of a line used to carry its hairline with it —
+    // each wrapped row began with a divider and an indent, a ragged row
+    // rather than a deliberate one. Every control now carries the SAME
+    // lead (gap, hairline, gap); the row is pulled left by exactly that
+    // lead and clipped just inside it, so whichever control starts a line
+    // has its lead cut off and sits flush. Layout is not observable in
+    // jsdom, so this pins the arrangement that produces it.
+    const { container } = renderTiptap();
+    const row = container.querySelector(".control-group > div")!;
+
+    expect(row).toHaveClass(
+      "-ml-[13px]",
+      "[clip-path:inset(-1rem_-1rem_-1rem_15px)]",
+    );
+    for (const control of row.children) {
+      expect(control).toHaveClass("ml-1.5", "border-l", "pl-1.5");
+    }
+  });
+
   it("omits the toolbar entirely until the editor exists", () => {
     editorState.withheld = true;
     const { container } = renderTiptap();
