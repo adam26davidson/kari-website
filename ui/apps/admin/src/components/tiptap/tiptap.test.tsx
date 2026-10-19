@@ -613,15 +613,67 @@ describe("Tiptap toolbar", () => {
       '<img src="https://x.test/a.png" alt="a">'
     );
 
-    // The paragraph arrives on the editor's first transaction, so this is
-    // what the admin clicking into the post does.
+    // The editor settles the paragraph in as it opens (#962), so it is
+    // there before she clicks — and opening the post is not an edit.
+    // Matched on the tail: the image's own attributes are not pinned here.
+    await waitFor(() => expect(getEditor().getHTML()).toMatch(/<p><\/p>$/));
     await act(async () => {
       getEditor().commands.focus();
     });
 
-    expect(setContent).toHaveBeenLastCalledWith(
-      expect.stringContaining("<p></p>")
+    expect(setContent).not.toHaveBeenCalled();
+  });
+
+  // #962: TrailingNode appends its paragraph on the editor's first
+  // transaction. If that were her first click, merely opening an old post
+  // that ends in a list, heading or image would report changed content and
+  // the page would ask her to save a post she never touched.
+  describe("opening a post is not an edit", () => {
+    const LIST = "<ul><li><p>only item</p></li></ul>";
+
+    it.each([
+      ["a list", LIST, `${LIST}<p></p>`],
+      ["a heading", "<h2>hello</h2>", "<h2>hello</h2><p></p>"],
+      ["a paragraph", "<p>hello</p>", "<p>hello</p>"],
+    ])(
+      "reports no change for a post ending in %s, even once clicked into",
+      async (_, content, settled) => {
+        const { setContent } = renderTiptap(content);
+
+        await waitFor(() => expect(getEditor().getHTML()).toBe(settled));
+        await act(async () => {
+          getEditor().commands.setTextSelection(1);
+        });
+        await act(async () => {
+          getEditor().commands.focus();
+        });
+
+        expect(setContent).not.toHaveBeenCalled();
+      }
     );
+
+    it("still reports her first real edit, paragraph and all", async () => {
+      const { setContent } = renderTiptap(LIST);
+      await waitFor(() =>
+        expect(getEditor().getHTML()).toBe(`${LIST}<p></p>`)
+      );
+
+      await act(async () => {
+        getEditor().chain().focus("end").insertContent("typed").run();
+      });
+
+      expect(setContent).toHaveBeenCalledTimes(1);
+      expect(setContent).toHaveBeenCalledWith(`${LIST}<p>typed</p>`);
+    });
+
+    it("leaves nothing to undo on an untouched post", async () => {
+      renderTiptap(LIST);
+      await waitFor(() =>
+        expect(getEditor().getHTML()).toBe(`${LIST}<p></p>`)
+      );
+
+      expect(getEditor().can().undo()).toBe(false);
+    });
   });
 
   it("ignores ctrl+u: underline is not part of the schema", async () => {
