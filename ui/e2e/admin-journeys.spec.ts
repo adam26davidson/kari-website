@@ -237,9 +237,7 @@ test.describe("haiga", () => {
     // content of a haiga.
     await createNewItem(page);
     await expect(saveButton(page)).toBeDisabled();
-    await page
-      .getByLabel("Publisher (optional)", { exact: true })
-      .fill(marker);
+    await page.getByLabel("Publisher (optional)", { exact: true }).fill(marker);
     await page
       .locator('.data-editor input[type="file"]')
       .setInputFiles(pngFixturePath());
