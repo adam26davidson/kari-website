@@ -2,7 +2,7 @@ import { cn } from "../ui/cn";
 
 /**
  * The small line that names a field on a migrated admin editor: "Title",
- * "Publisher", "Blurb (optional)", "Caption (optional)".
+ * "Publisher (optional)", "Blurb (optional)", "Caption (optional)".
  *
  * Ink at the interface size, one weight up from the value it names — which
  * is what the boards draw. Sampled from `WorksEditor.png`, the "Title",

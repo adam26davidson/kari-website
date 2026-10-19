@@ -171,7 +171,9 @@ test.describe("haiku", () => {
     await page
       .locator(".data-editor textarea")
       .fill(`${marker}\nsecond line\nthird line`);
-    await page.getByLabel("Publisher").fill("e2e publisher");
+    await page
+      .getByLabel("Publisher (optional)", { exact: true })
+      .fill("e2e publisher");
     await saveEditor(page);
     await expectToast(page, "Haiku saved");
     await closeEditor(page);
@@ -235,7 +237,9 @@ test.describe("haiga", () => {
     // content of a haiga.
     await createNewItem(page);
     await expect(saveButton(page)).toBeDisabled();
-    await page.getByLabel("Publisher").fill(marker);
+    await page
+      .getByLabel("Publisher (optional)", { exact: true })
+      .fill(marker);
     await page
       .locator('.data-editor input[type="file"]')
       .setInputFiles(pngFixturePath());
@@ -250,7 +254,9 @@ test.describe("haiga", () => {
     // Edit: the publisher and the uploaded image persisted (the image is
     // served through the API on the admin side).
     await editButton(row).click();
-    const publisher = page.getByLabel("Publisher");
+    const publisher = page.getByLabel("Publisher (optional)", {
+      exact: true,
+    });
     await expect(publisher).toHaveValue(marker);
     await expect(
       page.locator('.photo-picker-image[src*="/images/"]'),
