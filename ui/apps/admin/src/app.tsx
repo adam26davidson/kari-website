@@ -1,10 +1,13 @@
 import { RouteErrorBoundary } from "@kari/shared/components/error-boundary/error-boundary";
 import { Admin } from "./admin";
+import { PageError } from "./components/page-error/page-error";
 
 /**
  * The admin app's outermost frame: the shared `.whole-page` box, which is
  * exactly as tall as the visible viewport (`100dvh`, with a `100vh`
  * fallback — #558) and is what makes the shell's one scroll container work.
+ * The error boundary inside it shows the admin's own failure card
+ * (`PageError`), not the shared notice the public site uses (#949).
  *
  * Everything else that used to be here went in #592. The header bar, the
  * public site's phone menu and the background photo were all inherited from
@@ -26,7 +29,9 @@ import { Admin } from "./admin";
 export function App() {
   return (
     <div className="whole-page">
-      <RouteErrorBoundary>
+      <RouteErrorBoundary
+        renderFallback={(error) => <PageError error={error} />}
+      >
         <Admin />
       </RouteErrorBoundary>
     </div>

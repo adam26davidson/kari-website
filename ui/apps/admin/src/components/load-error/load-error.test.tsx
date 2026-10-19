@@ -29,4 +29,23 @@ describe("LoadError", () => {
     // The card itself, not a wrapper around one.
     expect(alert).toHaveAttribute("data-slot", "card");
   });
+
+  it("lets a caller change the next step and the action label", async () => {
+    const onRetry = vi.fn();
+    render(
+      <LoadError
+        message="failed"
+        nextStep="Reload the page to carry on."
+        actionLabel="Reload"
+        onRetry={onRetry}
+      />,
+    );
+
+    expect(
+      screen.getByText("Reload the page to carry on."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/try again in a moment/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Reload" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
 });

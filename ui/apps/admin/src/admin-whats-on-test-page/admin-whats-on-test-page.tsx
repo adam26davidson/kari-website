@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { LoadError } from "../components/load-error/load-error";
+import { LoadingLine } from "../components/loading-line/loading-line";
 import { useS3Load } from "@kari/shared/hooks/use-s3-load";
 import {
   DeployStatusService,
@@ -144,12 +145,7 @@ export function AdminWhatsOnTestPage() {
           isn&apos;t the test site, so there&apos;s nothing to list here.
         </p>
       )}
-      {headSha && isLoading && (
-        // A quiet line, not the shared `.loading` card: that one is the
-        // public site's white panel with a black drop shadow, and it drops
-        // 80px down the paper.
-        <p className="text-muted-foreground font-sans text-sm">Loading...</p>
-      )}
+      {headSha && isLoading && <LoadingLine />}
       {headSha && !isLoading && loadFailed && (
         <LoadError
           message="Failed to load what's waiting to go live."

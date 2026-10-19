@@ -12,6 +12,12 @@ interface ErrorBoundaryProps {
    * without a full page reload.
    */
   resetKey?: unknown;
+  /**
+   * Supplies the fallback instead of the shared notice; receives the
+   * caught error so a caller can tailor copy, e.g. with
+   * `isChunkLoadError`. The admin passes its own (#949).
+   */
+  renderFallback?: (error: unknown) => ReactNode;
 }
 
 interface ErrorBoundaryState {
@@ -46,6 +52,9 @@ export class ErrorBoundary extends Component<
 
   render() {
     if (this.state.hasError) {
+      if (this.props.renderFallback) {
+        return this.props.renderFallback(this.state.error);
+      }
       // A failed lazy-chunk fetch usually means a redeploy replaced the
       // hashed chunk files this tab's HTML still points at; say so
       // instead of showing the generic message.
@@ -76,7 +85,14 @@ export class ErrorBoundary extends Component<
  * failed to load) doesn't keep showing the error screen after the
  * visitor navigates elsewhere. Must be rendered inside a router.
  */
-export function RouteErrorBoundary({ children }: { children: ReactNode }) {
+export function RouteErrorBoundary({
+  children,
+  renderFallback,
+}: Pick<ErrorBoundaryProps, "children" | "renderFallback">) {
   const { pathname } = useLocation();
-  return <ErrorBoundary resetKey={pathname}>{children}</ErrorBoundary>;
+  return (
+    <ErrorBoundary resetKey={pathname} renderFallback={renderFallback}>
+      {children}
+    </ErrorBoundary>
+  );
 }

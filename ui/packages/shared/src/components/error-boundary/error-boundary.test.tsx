@@ -163,6 +163,23 @@ describe("ErrorBoundary", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("never shown")).not.toBeInTheDocument();
   });
+
+  it("renders a caller-supplied fallback with the caught error", () => {
+    render(
+      <ErrorBoundary
+        renderFallback={(error) => <p>custom: {(error as Error).message}</p>}
+      >
+        <Boom />
+      </ErrorBoundary>,
+    );
+    expect(screen.getByText("custom: boom")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Something went wrong displaying this page."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Reload" }),
+    ).not.toBeInTheDocument();
+  });
 });
 
 describe("RouteErrorBoundary", () => {
@@ -186,6 +203,22 @@ describe("RouteErrorBoundary", () => {
     await user.click(screen.getByRole("link", { name: "Haiku" }));
 
     expect(screen.getByText("haiku page")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Something went wrong displaying this page."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("forwards renderFallback to the boundary", () => {
+    render(
+      <MemoryRouter initialEntries={["/broken"]}>
+        <RouteErrorBoundary renderFallback={() => <p>custom fallback</p>}>
+          <Routes>
+            <Route path="/broken" element={<Boom />} />
+          </Routes>
+        </RouteErrorBoundary>
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("custom fallback")).toBeInTheDocument();
     expect(
       screen.queryByText("Something went wrong displaying this page."),
     ).not.toBeInTheDocument();

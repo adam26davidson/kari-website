@@ -48,8 +48,16 @@ describe("the admin app's frame", () => {
       throw new Error("the admin section exploded");
     });
 
-    renderApp();
+    const { container } = renderApp();
 
-    expect(screen.getByText(/something went wrong/i)).toBeInTheDocument();
+    // The admin's own fallback (#949), not the shared notice card.
+    expect(
+      screen.getByText("Something went wrong showing this page."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reload" })).toHaveAttribute(
+      "data-slot",
+      "button",
+    );
+    expect(container.querySelector(".error-boundary")).toBeNull();
   });
 });
