@@ -555,10 +555,11 @@ export function Tiptap({
         // TrailingNode, by contrast, is on (#671): it keeps an empty
         // paragraph after a document that ends in an image or a list, so
         // the cursor can get past one and the writing can carry on.
-        // The cost is that opening an old post that ends that way and
-        // touching it at all appends that paragraph to the stored HTML
-        // on the next save — accepted, since the alternative is a
-        // trailing image the admin cannot type below.
+        // The paragraph is settled in silently as the editor opens (see
+        // onCreate below), so an untouched old post that ends that way
+        // is saved exactly as loaded; once she genuinely edits it, the
+        // paragraph goes into the stored HTML with the rest — accepted,
+        // since the alternative is a trailing image she cannot type below.
         link: {
           // Link defaults to opening its href on click, and since its
           // other default puts target="_blank" on every anchor, clicking
@@ -598,6 +599,21 @@ export function Tiptap({
         bottom: 5,
         left: 5,
       },
+    },
+    // TrailingNode only appends its paragraph on the editor's first
+    // transaction — which used to be her first click, so merely opening an
+    // old post ending in a list, heading or image reported changed content
+    // and the page asked her to save a post she never touched (#962). One
+    // empty transaction here settles it as the editor opens instead:
+    // preventUpdate keeps it out of onUpdate (so out of setContent) and
+    // addToHistory keeps it out of Ctrl+Z. A post that needs no paragraph
+    // is left exactly as it was.
+    onCreate: ({ editor }) => {
+      editor.view.dispatch(
+        editor.state.tr
+          .setMeta("preventUpdate", true)
+          .setMeta("addToHistory", false)
+      );
     },
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
