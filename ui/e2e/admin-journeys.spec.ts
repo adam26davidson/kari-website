@@ -478,9 +478,10 @@ test.describe("blog (other works)", () => {
     const bubble = page.getByRole("group", { name: "link actions" });
     await expect(bubble).toBeVisible();
 
-    // Both rects in one evaluate, so they come from the same layout pass.
-    // The plugin's offset middleware leaves 8px between the bubble and the
-    // words it belongs to; the placement lands asynchronously, hence poll.
+    // All rects in one evaluate, so they come from the same layout pass.
+    // The bubble hangs BELOW its link, and the plugin's offset middleware
+    // leaves 8px between the words and the bubble; the placement lands
+    // asynchronously, hence poll.
     const measure = () =>
       page.evaluate(() => {
         const a = document
@@ -489,13 +490,24 @@ test.describe("blog (other works)", () => {
         const b = document
           .querySelector('[role="group"][aria-label="link actions"]')!
           .getBoundingClientRect();
-        return { linkTop: a.top, gap: a.top - b.bottom };
+        const toolbar = document
+          .querySelector(".control-group")!
+          .getBoundingClientRect();
+        return {
+          linkTop: a.top,
+          gap: b.top - a.bottom,
+          bubbleTop: b.top,
+          toolbarBottom: toolbar.bottom,
+        };
       });
     await expect
       .poll(async () => Math.round((await measure()).gap))
       .toBeGreaterThanOrEqual(7);
     const before = await measure();
     expect(before.gap).toBeLessThanOrEqual(9);
+    // The link is on the first line: exactly where a bubble placed above
+    // it used to sit on the toolbar's first controls (#989).
+    expect(before.bubbleTop).toBeGreaterThanOrEqual(before.toolbarBottom);
 
     // Scroll the page, not the window: `.admin-content` is what moves.
     await scroller.evaluate((el) => {

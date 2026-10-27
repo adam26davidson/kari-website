@@ -640,8 +640,10 @@ export function Tiptap({
           staying put against the page until the next keystroke (#700).
           Nothing between here and `.admin-content` may become
           `overflow: hidden`/`clip`, or the bubble would be cut off at the
-          card's edge; and no z-index or isolate here either, so it keeps
-          painting over the toolbar as it always has. */}
+          card's edge. The bubble hangs below its link (#989), so it only
+          reaches the toolbar when flip finds no room below and puts it
+          above; no z-index or isolate here, so even then it paints over
+          the toolbar rather than under it. */}
       <EditorContent
         editor={editor}
         className="editor relative w-full flex-1"

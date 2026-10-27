@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import type { ComponentProps } from "react";
 import {
   act,
   fireEvent,
@@ -36,6 +37,22 @@ vi.mock("@tiptap/react", async (importOriginal) => {
   };
 });
 
+// The link bubble's `options` prop, as the plugin wrapper received it on
+// each render. Mocking the `/menus` subpath works for the same reason the
+// `@tiptap/react` mock above does: link-bubble-menu.tsx imports it directly.
+const bubbleOptions = vi.hoisted(() => ({ seen: [] as unknown[] }));
+
+vi.mock("@tiptap/react/menus", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tiptap/react/menus")>();
+  const RecordingBubbleMenu = (
+    props: ComponentProps<typeof actual.BubbleMenu>,
+  ) => {
+    bubbleOptions.seen.push(props.options);
+    return <actual.BubbleMenu {...props} />;
+  };
+  return { ...actual, BubbleMenu: RecordingBubbleMenu };
+});
+
 const getEditor = () => {
   const editor = editorState.editor;
   if (!editor) {
@@ -47,6 +64,7 @@ const getEditor = () => {
 afterEach(() => {
   editorState.withheld = false;
   editorState.editor = null;
+  bubbleOptions.seen = [];
 });
 
 // Toolbar buttons carry a human-facing aria-label, so they can be looked
@@ -798,6 +816,26 @@ describe("Tiptap link bubble menu", () => {
     expect(bubble.parentElement).toBe(wrapper);
     expect(wrapper).toHaveClass("relative");
     expect(bubble.style.position).toBe("absolute");
+  });
+
+  it("places the bubble below its link and hands the plugin one options object", async () => {
+    // Above its link, a first-line link's bubble sat on the toolbar's first
+    // controls (#989); below, it cannot reach the toolbar on any line. The
+    // geometry is asserted by the "link bubble follows its link" journey in
+    // e2e/admin-journeys.spec.ts; jsdom lays nothing out.
+    renderTiptap(LINKED);
+    await focusEditor();
+    expect(bubbleOptions.seen.at(-1)).toMatchObject({ placement: "bottom" });
+
+    // Every transaction re-renders the toolbar, and the plugin wrapper
+    // dispatches an options update whenever the object's identity
+    // changes — so a fresh object per render would feed back on itself.
+    const renders = bubbleOptions.seen.length;
+    await act(async () => {
+      getEditor().commands.setTextSelection(3);
+    });
+    expect(bubbleOptions.seen.length).toBeGreaterThan(renders);
+    expect(bubbleOptions.seen.at(-1)).toBe(bubbleOptions.seen.at(-2));
   });
 
   it("shows the link's address with edit and remove actions", async () => {
