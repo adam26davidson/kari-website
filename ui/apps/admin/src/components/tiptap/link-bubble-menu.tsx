@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react";
 import { Editor } from "@tiptap/react";
 // Tiptap 3 moved the React menu components out of the package root: they
 // pull in floating-ui and the bubble/floating menu extensions, which nobody
@@ -10,6 +11,23 @@ import { Button } from "../ui/button";
 import { shouldShowLinkBubble } from "./link-bubble-visibility";
 
 /**
+ * Below its link, like a link chip in a docs app. The toolbar sits directly
+ * above the post, so a bubble placed above a first-line link used to cover
+ * its first controls (#989); hanging below, it cannot reach the toolbar on
+ * any line. Offset, flip and shift stay the plugin's defaults, so the
+ * bubble only goes above when there is no room below it — which, for a
+ * first-line link clicked at the very bottom of the screen, still puts it
+ * on the toolbar rather than cutting it off.
+ *
+ * Module-level on purpose: the plugin wrapper dispatches an options update
+ * whenever this object's identity changes, and every transaction
+ * re-renders the toolbar, so an inline literal would feed back on itself.
+ */
+const BUBBLE_OPTIONS: NonNullable<
+  ComponentProps<typeof BubbleMenu>["options"]
+> = { placement: "bottom" };
+
+/**
  * The address of the link under the cursor, with the actions for it: open
  * it in a new tab, edit it in the toolbar's link panel, or take it off.
  *
@@ -18,7 +36,8 @@ import { shouldShowLinkBubble } from "./link-bubble-visibility";
  *
  * Position, width, visibility and opacity are set INLINE by the bubble-menu
  * plugin, so nothing here may declare them: floating-ui owns where this
- * sits, and these classes own what it looks like once it gets there.
+ * sits (below its link, see BUBBLE_OPTIONS), and these classes own what
+ * it looks like once it gets there.
  * The plugin's `absolute` coordinates are relative to the `.editor` wrapper
  * in `tiptap.tsx`, which is `relative` for exactly that reason: it keeps
  * the bubble on its link while the page scrolls (#700).
@@ -38,6 +57,7 @@ export const LinkBubbleMenu = ({
     <BubbleMenu
       editor={editor}
       shouldShow={shouldShowLinkBubble}
+      options={BUBBLE_OPTIONS}
       // Narrow enough to sit beside the words it belongs to at 390px,
       // where the plugin's shift middleware nudges it back on screen.
       className="border-border bg-card flex max-w-[280px] items-center gap-2 rounded-lg border p-1.5 shadow-[0_4px_16px_rgba(74,62,40,0.16)]"
