@@ -120,6 +120,16 @@ function withoutArguments(selector: string): string {
   return current;
 }
 
+/**
+ * The utilities a block pulls in through Tailwind's `@apply` — the
+ * idiomatic Tailwind v4 way to give a rule a class's declarations, and one
+ * `declarations()` cannot see, since `@apply overflow-hidden` has no colon.
+ */
+const appliedUtilities = (block: string): string[] =>
+  [...block.matchAll(/@apply\s+([^;}]+)/g)].flatMap((match) =>
+    match[1].trim().split(/\s+/),
+  );
+
 // `:has(…)`, `:not(…)` and friends are dropped first: `.admin-content:has(
 // [data-slot="editor"])` styles the scroller, not the editor inside it.
 const targetsChain = (selector: string) =>
@@ -146,11 +156,14 @@ describe("the link bubble's ancestors", () => {
   it("are given no clipping declaration by any stylesheet", () => {
     const clipping = RULES.filter((rule) =>
       targetsChain(rule.selector),
-    ).flatMap((rule) =>
-      declarations(rule.block)
+    ).flatMap((rule) => [
+      ...declarations(rule.block)
         .filter((decl) => clipsDeclaration(decl.property, decl.value))
         .map((decl) => `${label(rule)}: ${decl.property}: ${decl.value}`),
-    );
+      ...appliedUtilities(rule.block)
+        .filter(clips)
+        .map((utility) => `${label(rule)}: @apply ${utility}`),
+    ]);
     expect(clipping).toEqual([]);
   });
 });
@@ -188,6 +201,28 @@ describe("the clipping-utility matcher", () => {
     "[overflow:visible]",
   ])("lets %s through", (utility) => {
     expect(clips(utility)).toBe(false);
+  });
+});
+
+describe("the @apply reader", () => {
+  it("splits every @apply statement into its utilities", () => {
+    expect(
+      appliedUtilities(
+        "color: red; @apply rounded-lg sm:overflow-hidden;\n" +
+          "  @apply\n    truncate !contain-paint",
+      ),
+    ).toEqual([
+      "rounded-lg",
+      "sm:overflow-hidden",
+      "truncate",
+      "!contain-paint",
+    ]);
+  });
+
+  it("finds nothing in a block without one", () => {
+    expect(appliedUtilities("overflow: visible; position: relative")).toEqual(
+      [],
+    );
   });
 });
 
