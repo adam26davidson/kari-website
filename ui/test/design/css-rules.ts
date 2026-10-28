@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 // apps/public, apps/admin and packages/shared alike. Resolved from this
 // file's own location so the paths never depend on the working directory
 // vitest happens to run in.
-const UI_ROOT = fileURLToPath(new URL("../..", import.meta.url));
+export const UI_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 /** Where the stylesheets live, as ui-relative directory paths. */
 const SOURCE_DIRS = [

@@ -48,7 +48,8 @@ import { PageTitle } from "../page-title/page-title";
  *   an editor is open (admin.css), and as ProseMirror's scroll margin
  *   (tiptap.tsx).
  * Sticky stops working under any ancestor with non-visible overflow; keep
- * `.admin-content` the only one.
+ * `.admin-content` the only one (pinned, with the link bubble's same need,
+ * by test/design/link-bubble-clipping.test.ts).
  *
  * `data-editor` and `data-editor-item-controls` style nothing: they are
  * how the admin e2e journeys find an open editor and its Save and Close
