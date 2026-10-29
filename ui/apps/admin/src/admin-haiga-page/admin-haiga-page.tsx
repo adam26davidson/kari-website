@@ -18,7 +18,10 @@ import { useAssistantSubject } from "../assistant/use-assistant-subject";
 import { useAdminToken } from "../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
-import { LIST_CHANGE_FAILED_MESSAGE } from "../save-failure";
+import {
+  LIST_CHANGE_FAILED_MESSAGE,
+  saveFailureMessage,
+} from "../save-failure";
 import { useListUrls } from "../use-list-urls";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 
@@ -167,7 +170,10 @@ export function AdminHaigaPage() {
         fileName = newFileName;
       } catch (error) {
         console.error(error);
-        notify("Failed to save haiga image", "error");
+        notify(
+          saveFailureMessage(error, "Failed to save haiga image"),
+          "error",
+        );
         return;
       }
     }

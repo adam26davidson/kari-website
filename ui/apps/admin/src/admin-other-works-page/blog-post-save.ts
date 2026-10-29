@@ -7,6 +7,7 @@ import {
   getImageFileName,
   s3ImageUrl,
 } from "@kari/shared/utils/image-management-helpers";
+import { saveFailureMessage } from "../save-failure";
 
 // Shown when a failed publish/unpublish could not fully restore the
 // previous state; storage stays mixed until the same save is retried.
@@ -561,7 +562,10 @@ export async function saveBlogPost(
     // Planning/upload failures abort before the transaction starts, with
     // the previous state fully intact.
     console.error(error);
-    deps.notify("Failed to save other works item", "error");
+    deps.notify(
+      saveFailureMessage(error, "Failed to save other works item"),
+      "error",
+    );
     return { outcome: "failed", rollbackIncomplete: false };
   }
 

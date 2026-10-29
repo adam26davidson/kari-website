@@ -26,6 +26,37 @@
 export const MAX_UPLOAD_BYTES = 25_000_000;
 
 /**
+ * What to do next about a photo that is too big — shared by the pick-time
+ * check and the server-side refusal so both give her the same advice.
+ */
+const SMALLER_PHOTO_ADVICE =
+  "Please pick a smaller one, or export a reduced-size copy from your " +
+  "photo app and try again — the site resizes it for the web from there.";
+
+/**
+ * Shown when the server refused an upload as too large (HTTP 413). It names
+ * no figure: nginx may sit below the API's ceiling (#714), so a refused
+ * photo can be smaller than MAX_UPLOAD_BYTES, and all the server confirmed
+ * is "too big".
+ */
+export const UPLOAD_TOO_LARGE_MESSAGE =
+  "This photo is too big to upload. " + SMALLER_PHOTO_ADVICE;
+
+/**
+ * `POST /images` answered 413; `message` is shown to the admin verbatim.
+ *
+ * It lives here rather than beside `ImageService` because the page tests
+ * mock `services/images` wholesale, and an error class exported from there
+ * would be mocked away in exactly the tests that check `instanceof`.
+ */
+export class UploadTooLargeError extends Error {
+  constructor() {
+    super(UPLOAD_TOO_LARGE_MESSAGE);
+    this.name = "UploadTooLargeError";
+  }
+}
+
+/**
  * Returns an admin-readable reason `file` cannot be uploaded because of its
  * size, or null when its size is fine.
  */
@@ -37,8 +68,7 @@ export function uploadSizeProblem(file: File): string | null {
   // from the limit it is describing, as it did before #706.
   return (
     `This photo is too big to upload (over ${MAX_UPLOAD_BYTES / 1_000_000}` +
-    " MB). Please pick a smaller one, or export a reduced-size copy " +
-    "from your photo app and try again — the site resizes it for the " +
-    "web from there."
+    " MB). " +
+    SMALLER_PHOTO_ADVICE
   );
 }

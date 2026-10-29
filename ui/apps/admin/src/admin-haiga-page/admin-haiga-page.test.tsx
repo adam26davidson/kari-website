@@ -6,6 +6,10 @@ import { HaigaService } from "@kari/shared/services/haiga";
 import { TokenGetter } from "@kari/shared/services/http";
 import { ImageService } from "@kari/shared/services/images";
 import {
+  UPLOAD_TOO_LARGE_MESSAGE,
+  UploadTooLargeError,
+} from "@kari/shared/utils/upload-size";
+import {
   answerYes,
   navigateInTest,
   renderAdminPage,
@@ -122,6 +126,19 @@ describe("AdminHaigaPage image replacement", () => {
         "Failed to save haiga image",
         "error",
       ),
+    );
+    expect(HaigaService.updateList).not.toHaveBeenCalled();
+    expect(savedHaiga.image).toBe("old.png");
+  });
+
+  it("says the photo was too big when the site refuses the upload", async () => {
+    vi.mocked(ImageService.upload).mockRejectedValue(new UploadTooLargeError());
+    const { notify } = await openEditorAndPickImage();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith(UPLOAD_TOO_LARGE_MESSAGE, "error"),
     );
     expect(HaigaService.updateList).not.toHaveBeenCalled();
     expect(savedHaiga.image).toBe("old.png");

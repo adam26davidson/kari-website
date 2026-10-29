@@ -3,6 +3,10 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AdminBackgroundPage } from "./admin-background-page";
 import { ImageService } from "@kari/shared/services/images";
+import {
+  UPLOAD_TOO_LARGE_MESSAGE,
+  UploadTooLargeError,
+} from "@kari/shared/utils/upload-size";
 import { SiteSettingsService } from "@kari/shared/services/site-settings";
 import {
   BackgroundImageError,
@@ -319,6 +323,18 @@ describe("AdminBackgroundPage saving", () => {
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
+    );
+    expect(SiteSettingsService.update).not.toHaveBeenCalled();
+  });
+
+  it("says the photo was too big when the site refuses the upload", async () => {
+    vi.mocked(ImageService.upload).mockRejectedValue(new UploadTooLargeError());
+    const { notify } = await renderAndPickFile();
+
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith(UPLOAD_TOO_LARGE_MESSAGE, "error"),
     );
     expect(SiteSettingsService.update).not.toHaveBeenCalled();
   });

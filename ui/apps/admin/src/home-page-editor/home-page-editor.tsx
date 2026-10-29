@@ -13,7 +13,7 @@ import { ImageService } from "@kari/shared/services/images";
 import { HomePageService } from "@kari/shared/services/home-page";
 import { LoadError } from "../components/load-error/load-error";
 import { useAdminUi } from "../admin-ui-context";
-import { SAVE_FAILED_MESSAGE } from "../save-failure";
+import { saveFailureMessage } from "../save-failure";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 import { useAssistantSubject } from "../assistant/use-assistant-subject";
 import { SitePreview } from "../components/site-preview/site-preview";
@@ -108,7 +108,7 @@ export function HomePageEditor() {
       notify("Home page saved");
     } catch (error) {
       console.error(error);
-      notify(SAVE_FAILED_MESSAGE, "error");
+      notify(saveFailureMessage(error), "error");
     } finally {
       hideLoading();
     }
