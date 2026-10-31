@@ -3,7 +3,7 @@ import {
   BackgroundImageError,
   validateBackgroundImage,
 } from "./background-image";
-import { MAX_UPLOAD_BYTES } from "./upload-size";
+import { MAX_UPLOAD_BYTES, uploadSizeProblem } from "./upload-size";
 
 /** A stand-in ImageBitmap with just the members the helper uses. */
 function fakeBitmap(width: number, height: number) {
@@ -46,13 +46,17 @@ describe("validateBackgroundImage", () => {
     );
   });
 
-  it("rejects a file the API's body limit would refuse", async () => {
+  it("surfaces the shared upload-size problem as its own error", async () => {
+    // The limit and its wording belong to upload-size.ts and are pinned in
+    // upload-size.test.ts; this only proves the backstop delegates to it.
     mockBitmap(8000, 6000);
     const file = fileOfSize(MAX_UPLOAD_BYTES + 1);
+    const problem = uploadSizeProblem(file);
+    if (problem === null) throw new Error("expected an oversized file");
 
-    await expect(validateBackgroundImage(file)).rejects.toThrow(
-      /too big to upload/,
-    );
+    const result = validateBackgroundImage(file);
+    await expect(result).rejects.toThrow(BackgroundImageError);
+    await expect(result).rejects.toThrow(problem);
   });
 
   it("accepts a huge camera original without touching a canvas", async () => {
@@ -67,30 +71,5 @@ describe("validateBackgroundImage", () => {
     expect(toBlob).not.toHaveBeenCalled();
     // The decoded pixels are released as soon as they have proved readable.
     expect(bitmap.close).toHaveBeenCalled();
-  });
-
-  it("accepts a DSLR-sized original the old 9 MB ceiling refused", async () => {
-    // #706: with the browser-side downscale gone, a 20 MB camera JPEG is
-    // sent as-is — it must not be blocked before it ever reaches the API.
-    mockBitmap(8256, 5504);
-    await expect(
-      validateBackgroundImage(fileOfSize(20_000_000, "dslr.jpg")),
-    ).resolves.toBeUndefined();
-  });
-
-  it("names the real ceiling when it refuses a file", async () => {
-    // The number in the message is derived from MAX_UPLOAD_BYTES; pinning it
-    // here catches the copy drifting away from the limit again.
-    mockBitmap(8000, 6000);
-    await expect(
-      validateBackgroundImage(fileOfSize(MAX_UPLOAD_BYTES + 1)),
-    ).rejects.toThrow(/over 25 MB/);
-  });
-
-  it("accepts a file exactly on the upload limit", async () => {
-    mockBitmap(2000, 1500);
-    await expect(
-      validateBackgroundImage(fileOfSize(MAX_UPLOAD_BYTES)),
-    ).resolves.toBeUndefined();
   });
 });
