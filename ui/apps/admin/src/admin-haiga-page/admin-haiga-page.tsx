@@ -24,6 +24,7 @@ import {
 } from "../save-failure";
 import { useListUrls } from "../use-list-urls";
 import { useUnsavedChanges } from "../use-unsaved-changes";
+import { reportUploadProgress } from "../upload-feedback";
 
 const LIST_PATH = "/haiga";
 
@@ -129,9 +130,8 @@ export function AdminHaigaPage() {
     // The haiku lines of a haiga live inside its artwork, so many carry
     // none here; those fall back to the untitled wording.
     const haiga = haigaList.find((item) => item.id === id);
-    confirm(
-      deleteConfirmationMessage("haiga", ...(haiga?.lines ?? [])),
-      () => deleteHaiga(id),
+    confirm(deleteConfirmationMessage("haiga", ...(haiga?.lines ?? [])), () =>
+      deleteHaiga(id),
     );
   };
 
@@ -149,7 +149,12 @@ export function AdminHaigaPage() {
   const uploadImage = async (file: File | null) => {
     showLoading("Uploading image...");
     try {
-      return await ImageService.upload(file, true, getAccessTokenSilently);
+      return await ImageService.upload(
+        file,
+        true,
+        getAccessTokenSilently,
+        reportUploadProgress(showLoading),
+      );
     } finally {
       hideLoading();
     }

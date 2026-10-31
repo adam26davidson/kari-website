@@ -14,7 +14,7 @@ import { useAdminUi } from "../admin-ui-context";
 import { saveFailureMessage } from "../save-failure";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 import { useAssistantSubject } from "../assistant/use-assistant-subject";
-import { uploadFeedback } from "../upload-feedback";
+import { reportUploadProgress } from "../upload-feedback";
 import { apiImageUrl } from "@kari/shared/utils/image-management-helpers";
 import { validateBackgroundImage } from "@kari/shared/utils/background-image";
 import defaultBackground from "@kari/shared/assets/petals_on_ground.webp";
@@ -131,10 +131,7 @@ export function AdminBackgroundPage() {
           imageFile,
           true,
           getAccessTokenSilently,
-          (sent) => {
-            const feedback = uploadFeedback(sent);
-            showLoading(feedback.message, feedback.progress);
-          },
+          reportUploadProgress(showLoading),
         );
         if (!newFileName) {
           throw new Error("Failed to upload image");
@@ -214,9 +211,9 @@ export function AdminBackgroundPage() {
               Site background
             </h3>
             <p className="text-muted-foreground max-w-[60ch] font-sans text-sm leading-relaxed">
-              The photo shown behind every page of the site. Upload a new
-              image or pick an already-uploaded one; large photos are
-              automatically resized so the site stays fast.
+              The photo shown behind every page of the site. Upload a new image
+              or pick an already-uploaded one; large photos are automatically
+              resized so the site stays fast.
             </p>
             {showingDefault ? (
               <div className="flex flex-col items-start gap-2">
@@ -295,7 +292,10 @@ export function AdminBackgroundPage() {
             )}
           </Card>
           <Card className="min-w-0 p-5 sm:p-6">
-            <HeaderColorsSection settings={settings} onChange={updateSettings} />
+            <HeaderColorsSection
+              settings={settings}
+              onChange={updateSettings}
+            />
           </Card>
           <Card className="min-w-0 p-5 sm:p-6 lg:col-span-2">
             <FontPairingSection settings={settings} onChange={updateSettings} />

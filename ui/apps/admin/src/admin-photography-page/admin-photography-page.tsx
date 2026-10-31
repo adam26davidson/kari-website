@@ -28,6 +28,7 @@ import {
 } from "../save-failure";
 import { useListUrls } from "../use-list-urls";
 import { useUnsavedChanges } from "../use-unsaved-changes";
+import { reportUploadProgress } from "../upload-feedback";
 
 const LIST_PATH = "/photography";
 
@@ -201,6 +202,15 @@ export function AdminPhotographyPage() {
     try {
       showLoading("Uploading images...");
       editedPost.images = [];
+      // Counted up front so the overlay can say "photo 2 of 3" from the
+      // first byte. Picking a file clears the row's stored name
+      // (photography-post-editor's setImageFile), so a row carrying a file
+      // is never "in the original" and this is exactly the set the loop
+      // below uploads.
+      const uploadCount = editorImages.filter(
+        (entry) => entry.file !== null,
+      ).length;
+      let uploaded = 0;
       for (const entry of editorImages) {
         const newImage = { image: entry.image, blurb: entry.blurb };
         const isInOriginal = originalPost.images.some((img) => {
@@ -208,10 +218,15 @@ export function AdminPhotographyPage() {
         });
         if (!isInOriginal && entry.file) {
           // image was not in original and must be added
+          uploaded += 1;
           const fileName = await ImageService.upload(
             entry.file,
             true,
             getAccessTokenSilently,
+            reportUploadProgress(showLoading, {
+              index: uploaded,
+              count: uploadCount,
+            }),
           );
           if (!fileName) {
             throw new Error("Failed to upload image");

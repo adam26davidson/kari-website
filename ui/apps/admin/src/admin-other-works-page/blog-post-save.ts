@@ -1,5 +1,5 @@
 import { BlogPost } from "@kari/shared/models";
-import { TokenGetter } from "@kari/shared/services/http";
+import { TokenGetter, UploadProgress } from "@kari/shared/services/http";
 import {
   apiImageUrl,
   changeImageUrlToApi,
@@ -8,6 +8,7 @@ import {
   s3ImageUrl,
 } from "@kari/shared/utils/image-management-helpers";
 import { saveFailureMessage } from "../save-failure";
+import { reportUploadProgress } from "../upload-feedback";
 
 // Shown when a failed publish/unpublish could not fully restore the
 // previous state; storage stays mixed until the same save is retried.
@@ -34,6 +35,7 @@ export interface BlogPostSaveDeps {
     file: File,
     isPublished: boolean,
     getToken: TokenGetter,
+    onProgress?: UploadProgress,
   ) => Promise<string | null>;
   /** `ImageService.setPublished`. */
   setImagePublished: (
@@ -51,7 +53,7 @@ export interface BlogPostSaveDeps {
    * when the API call fails.
    */
   restoreList: () => Promise<void>;
-  showLoading: (message: string) => void;
+  showLoading: (message: string, progress?: number) => void;
   notify: (message: string, type?: "success" | "error") => void;
 }
 
@@ -202,8 +204,16 @@ async function uploadAddedImages(
     }
   }
 
+  // Each distinct file is sent once, so the overlay counts files, not imgs.
+  let index = 0;
   for (const { file, images } of uploads.values()) {
-    const fileName = await deps.uploadImage(file, isPublished, deps.getToken);
+    index += 1;
+    const fileName = await deps.uploadImage(
+      file,
+      isPublished,
+      deps.getToken,
+      reportUploadProgress(deps.showLoading, { index, count: uploads.size }),
+    );
     if (!fileName) {
       throw new Error("Failed to upload image");
     }
@@ -283,8 +293,7 @@ async function rollBackImageFlips(
 }
 
 type FlipImagesResult =
-  | { ok: true }
-  | { ok: false; error: unknown; rollbackIncomplete: boolean };
+  { ok: true } | { ok: false; error: unknown; rollbackIncomplete: boolean };
 
 /**
  * Flip each image's visibility one at a time, flipping the already-
