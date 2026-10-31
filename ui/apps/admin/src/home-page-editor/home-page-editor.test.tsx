@@ -189,6 +189,27 @@ describe("HomePageEditor photo replacement", () => {
     expect(HomePageService.update).not.toHaveBeenCalled();
   });
 
+  it("narrates the upload as it goes", async () => {
+    vi.mocked(ImageService.upload).mockImplementation(
+      async (_file, _published, _token, onProgress) => {
+        onProgress?.(0.4);
+        onProgress?.(1);
+        return "new.png";
+      },
+    );
+    const { adminUi, notify } = await renderAndPickImage();
+    adminUi.showLoading.mockClear();
+
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() => expect(notify).toHaveBeenCalledWith("Home page saved"));
+    expect(adminUi.showLoading.mock.calls.slice(0, 3)).toEqual([
+      ["Updating home page data..."],
+      ["Sending your photo to the site...", 0.4],
+      ["Nearly there — resizing your photo for the site...", undefined],
+    ]);
+  });
+
   it("saves the new photo and leaves the replaced object in storage", async () => {
     const { notify } = await renderAndPickImage();
 

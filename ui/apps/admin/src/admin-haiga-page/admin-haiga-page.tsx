@@ -130,8 +130,9 @@ export function AdminHaigaPage() {
     // The haiku lines of a haiga live inside its artwork, so many carry
     // none here; those fall back to the untitled wording.
     const haiga = haigaList.find((item) => item.id === id);
-    confirm(deleteConfirmationMessage("haiga", ...(haiga?.lines ?? [])), () =>
-      deleteHaiga(id),
+    confirm(
+      deleteConfirmationMessage("haiga", ...(haiga?.lines ?? [])),
+      () => deleteHaiga(id),
     );
   };
 

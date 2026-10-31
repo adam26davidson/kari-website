@@ -293,7 +293,8 @@ async function rollBackImageFlips(
 }
 
 type FlipImagesResult =
-  { ok: true } | { ok: false; error: unknown; rollbackIncomplete: boolean };
+  | { ok: true }
+  | { ok: false; error: unknown; rollbackIncomplete: boolean };
 
 /**
  * Flip each image's visibility one at a time, flipping the already-

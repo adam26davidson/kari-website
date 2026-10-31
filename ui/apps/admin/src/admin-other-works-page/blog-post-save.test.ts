@@ -244,7 +244,12 @@ describe("saveBlogPost transaction outcomes", () => {
       );
 
       expect(result.outcome).toBe("saved");
-      expect(deps.uploadImage).toHaveBeenCalledWith(file, false, deps.getToken);
+      expect(deps.uploadImage).toHaveBeenCalledWith(
+        file,
+        false,
+        deps.getToken,
+        expect.any(Function),
+      );
       // Unpublished post: the patched src uses the API host.
       expect(deps.updateContent).toHaveBeenCalledWith(
         "b1",
@@ -307,6 +312,65 @@ describe("saveBlogPost transaction outcomes", () => {
       );
     });
 
+    // Each upload reports half-way and then all-sent, as the real XHR
+    // upload would, so the overlay's words can be read back.
+    const narratingUpload = (deps: BlogPostSaveDeps) =>
+      vi.mocked(deps.uploadImage).mockImplementation(
+        async (_file, _published, _token, onProgress) => {
+          onProgress?.(0.5);
+          onProgress?.(1);
+          return "uploaded.png";
+        },
+      );
+
+    it("counts the photos on the overlay when a save sends several", async () => {
+      const deps = makeDeps();
+      narratingUpload(deps);
+      await saveBlogPost(
+        makeArgs(deps, {
+          originalContent: "",
+          newContent:
+            img("data:image/png;base64,AAAA", "pending-1") +
+            img("data:image/png;base64,BBBB", "pending-2"),
+          pendingImageFiles: new Map([
+            ["pending-1", new File(["one"], "one.png")],
+            ["pending-2", new File(["two"], "two.png")],
+          ]),
+        }),
+      );
+
+      expect(vi.mocked(deps.showLoading).mock.calls).toEqual([
+        ["Uploading images..."],
+        ["Sending photo 1 of 2 to the site...", 0.5],
+        ["Resizing photo 1 of 2 for the site...", undefined],
+        ["Sending photo 2 of 2 to the site...", 0.5],
+        ["Nearly there — resizing photo 2 of 2 for the site...", undefined],
+        ["Saving other works item content..."],
+      ]);
+    });
+
+    it("narrates copies of one pending image as a single photo", async () => {
+      // Pasted copies share one file and one upload (#505), so the overlay
+      // must not count them as two photos.
+      const deps = makeDeps();
+      narratingUpload(deps);
+      const pasted = "data:image/png;base64,AAAA";
+      await saveBlogPost(
+        makeArgs(deps, {
+          originalContent: "",
+          newContent: img(pasted, "pending-1") + img(pasted, "pending-1"),
+          pendingImageFiles: new Map([
+            ["pending-1", new File(["img"], "fresh.png")],
+          ]),
+        }),
+      );
+
+      expect(vi.mocked(deps.showLoading).mock.calls.slice(1, 3)).toEqual([
+        ["Sending your photo to the site...", 0.5],
+        ["Nearly there — resizing your photo for the site...", undefined],
+      ]);
+    });
+
     it("uploads each distinct pending image separately", async () => {
       const deps = makeDeps();
       vi.mocked(deps.uploadImage)
@@ -334,12 +398,14 @@ describe("saveBlogPost transaction outcomes", () => {
         first,
         false,
         deps.getToken,
+        expect.any(Function),
       );
       expect(deps.uploadImage).toHaveBeenNthCalledWith(
         2,
         second,
         false,
         deps.getToken,
+        expect.any(Function),
       );
       expect(deps.updateContent).toHaveBeenCalledWith(
         "b1",

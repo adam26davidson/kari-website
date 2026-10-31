@@ -66,7 +66,7 @@ async function renderPage(initialEntry?: string) {
 // replacement file for its image — the state right before the user hits
 // save.
 async function openEditorAndReplaceImage() {
-  const { container, notify } = await renderPage();
+  const { container, notify, adminUi } = await renderPage();
   fireEvent.click(rowButton("Edit"));
   // Opening the editor is a navigation now; wait for it to render.
   await screen.findByLabelText("Title");
@@ -76,7 +76,7 @@ async function openEditorAndReplaceImage() {
       files: [new File(["img"], "next.png", { type: "image/png" })],
     },
   });
-  return { notify };
+  return { notify, adminUi };
 }
 
 beforeEach(() => {
@@ -191,6 +191,67 @@ describe("AdminPhotographyPage image replacement", () => {
     );
     // The published list entry itself was replaced, never mutated in place.
     expect(savedPost.images).toEqual([{ image: "old.png", blurb: "a photo" }]);
+  });
+});
+
+describe("AdminPhotographyPage upload progress", () => {
+  beforeEach(() => {
+    vi.mocked(ImageService.upload).mockImplementation(
+      async (_file, _published, _token, onProgress) => {
+        onProgress?.(0.4);
+        onProgress?.(1);
+        return "new.png";
+      },
+    );
+  });
+
+  it("narrates a single photo the same way the other pages do", async () => {
+    const { adminUi, notify } = await openEditorAndReplaceImage();
+    adminUi.showLoading.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("Photography post saved"),
+    );
+    expect(adminUi.showLoading.mock.calls.slice(0, 3)).toEqual([
+      ["Uploading images..."],
+      ["Sending your photo to the site...", 0.4],
+      ["Nearly there — resizing your photo for the site...", undefined],
+    ]);
+  });
+
+  it("counts the photos when a save sends several", async () => {
+    savedPost.images = [
+      { image: "old1.png", blurb: "first" },
+      { image: "old2.png", blurb: "second" },
+    ];
+    vi.mocked(PhotographyService.getListFromApi).mockResolvedValue([savedPost]);
+    const { container, notify, adminUi } = await renderPage();
+    fireEvent.click(rowButton("Edit"));
+    await screen.findByLabelText("Title");
+    for (const input of container.querySelectorAll('input[type="file"]')) {
+      fireEvent.change(input, {
+        target: {
+          files: [new File(["img"], "next.png", { type: "image/png" })],
+        },
+      });
+    }
+    adminUi.showLoading.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith("Photography post saved"),
+    );
+    expect(ImageService.upload).toHaveBeenCalledTimes(2);
+    expect(adminUi.showLoading.mock.calls.slice(0, 5)).toEqual([
+      ["Uploading images..."],
+      ["Sending photo 1 of 2 to the site...", 0.4],
+      ["Resizing photo 1 of 2 for the site...", undefined],
+      ["Sending photo 2 of 2 to the site...", 0.4],
+      ["Nearly there — resizing photo 2 of 2 for the site...", undefined],
+    ]);
   });
 });
 

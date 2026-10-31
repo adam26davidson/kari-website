@@ -211,9 +211,9 @@ export function AdminBackgroundPage() {
               Site background
             </h3>
             <p className="text-muted-foreground max-w-[60ch] font-sans text-sm leading-relaxed">
-              The photo shown behind every page of the site. Upload a new image
-              or pick an already-uploaded one; large photos are automatically
-              resized so the site stays fast.
+              The photo shown behind every page of the site. Upload a new
+              image or pick an already-uploaded one; large photos are
+              automatically resized so the site stays fast.
             </p>
             {showingDefault ? (
               <div className="flex flex-col items-start gap-2">
@@ -292,10 +292,7 @@ export function AdminBackgroundPage() {
             )}
           </Card>
           <Card className="min-w-0 p-5 sm:p-6">
-            <HeaderColorsSection
-              settings={settings}
-              onChange={updateSettings}
-            />
+            <HeaderColorsSection settings={settings} onChange={updateSettings} />
           </Card>
           <Card className="min-w-0 p-5 sm:p-6 lg:col-span-2">
             <FontPairingSection settings={settings} onChange={updateSettings} />
