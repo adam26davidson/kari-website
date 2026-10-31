@@ -3,6 +3,10 @@ import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HomePageEditor } from "./home-page-editor";
 import { ImageService } from "@kari/shared/services/images";
+import {
+  UPLOAD_TOO_LARGE_MESSAGE,
+  UploadTooLargeError,
+} from "@kari/shared/utils/upload-size";
 import { HomePageService } from "@kari/shared/services/home-page";
 import {
   answerNo,
@@ -154,6 +158,18 @@ describe("HomePageEditor photo replacement", () => {
 
     await waitFor(() =>
       expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
+    );
+    expect(HomePageService.update).not.toHaveBeenCalled();
+  });
+
+  it("says the photo was too big when the site refuses the upload", async () => {
+    vi.mocked(ImageService.upload).mockRejectedValue(new UploadTooLargeError());
+    const { notify } = await renderAndPickImage();
+
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith(UPLOAD_TOO_LARGE_MESSAGE, "error"),
     );
     expect(HomePageService.update).not.toHaveBeenCalled();
   });

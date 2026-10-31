@@ -11,15 +11,12 @@ import { ImageService } from "@kari/shared/services/images";
 import { SiteSettingsService } from "@kari/shared/services/site-settings";
 import { LoadError } from "../components/load-error/load-error";
 import { useAdminUi } from "../admin-ui-context";
-import { SAVE_FAILED_MESSAGE } from "../save-failure";
+import { saveFailureMessage } from "../save-failure";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 import { useAssistantSubject } from "../assistant/use-assistant-subject";
 import { uploadFeedback } from "../upload-feedback";
 import { apiImageUrl } from "@kari/shared/utils/image-management-helpers";
-import {
-  BackgroundImageError,
-  validateBackgroundImage,
-} from "@kari/shared/utils/background-image";
+import { validateBackgroundImage } from "@kari/shared/utils/background-image";
 import defaultBackground from "@kari/shared/assets/petals_on_ground.webp";
 import { HeaderColorsSection } from "./header-colors-section";
 import { FontPairingSection } from "./font-pairing-section";
@@ -172,12 +169,7 @@ export function AdminBackgroundPage() {
       notify(saveMessage(newSettings, savedSettings));
     } catch (error) {
       console.error(error);
-      notify(
-        error instanceof BackgroundImageError
-          ? error.message
-          : SAVE_FAILED_MESSAGE,
-        "error",
-      );
+      notify(saveFailureMessage(error), "error");
     } finally {
       hideLoading();
     }

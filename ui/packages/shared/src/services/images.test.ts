@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { GcReport, ImageService } from "./images";
 import {
+  UPLOAD_TOO_LARGE_MESSAGE,
+  UploadTooLargeError,
+} from "../utils/upload-size";
+import {
   getToken,
   mockFetchOnce,
   setupServiceTestHooks,
@@ -96,6 +100,15 @@ describe("ImageService.upload", () => {
       name: "HttpError",
       status: 500,
     });
+  });
+
+  it("turns a 413 into the shared too-big message instead of a status code", async () => {
+    stubXhr({ status: 413 });
+    const file = new File(["x"], "photo.png", { type: "image/png" });
+    const failure = ImageService.upload(file, true, getToken);
+    await expect(failure).rejects.toBeInstanceOf(UploadTooLargeError);
+    await expect(failure).rejects.toThrow(UPLOAD_TOO_LARGE_MESSAGE);
+    await expect(failure).rejects.not.toThrow(/HTTP|413/);
   });
 
   it("tells the caller how much of the file has been sent", async () => {

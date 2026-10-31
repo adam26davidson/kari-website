@@ -8,6 +8,7 @@ import {
   ensureOk,
   readErrorText,
 } from "./http";
+import { UploadTooLargeError } from "../utils/upload-size";
 
 const API_IMAGES_URL = import.meta.env.VITE_API_URL + "/images";
 
@@ -80,6 +81,15 @@ export class ImageService {
       formData,
       onProgress,
     );
+    // The body limit (the API's RequestBodyLimitLayer, or nginx in front of
+    // it) answers 413 with nothing usable to read, and ensureOk would put
+    // "HTTP 413" in front of her (design brief, principle 3). Turn it into
+    // the plain-language message the pick-time check gives. Must come
+    // before ensureOk, which throws for every non-OK status.
+    if (response.status === 413) {
+      console.error("Failed to upload image", response.status);
+      throw new UploadTooLargeError();
+    }
     ensureOk(response, "Failed to upload image");
 
     // Use the name the server stored the image under, falling back to

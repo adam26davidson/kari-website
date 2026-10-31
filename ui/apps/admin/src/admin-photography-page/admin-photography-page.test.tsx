@@ -6,6 +6,10 @@ import { PhotographyService } from "@kari/shared/services/photography";
 import { TokenGetter } from "@kari/shared/services/http";
 import { ImageService } from "@kari/shared/services/images";
 import {
+  UPLOAD_TOO_LARGE_MESSAGE,
+  UploadTooLargeError,
+} from "@kari/shared/utils/upload-size";
+import {
   answerYes,
   navigateInTest,
   renderAdminPage,
@@ -145,6 +149,19 @@ describe("AdminPhotographyPage image replacement", () => {
         "Failed to save photography post images",
         "error",
       ),
+    );
+    expect(PhotographyService.updateList).not.toHaveBeenCalled();
+    expect(savedPost.images).toEqual([{ image: "old.png", blurb: "a photo" }]);
+  });
+
+  it("says the photo was too big when the site refuses the upload", async () => {
+    vi.mocked(ImageService.upload).mockRejectedValue(new UploadTooLargeError());
+    const { notify } = await openEditorAndReplaceImage();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(notify).toHaveBeenCalledWith(UPLOAD_TOO_LARGE_MESSAGE, "error"),
     );
     expect(PhotographyService.updateList).not.toHaveBeenCalled();
     expect(savedPost.images).toEqual([{ image: "old.png", blurb: "a photo" }]);

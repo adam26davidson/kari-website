@@ -7,6 +7,10 @@ import {
   saveBlogPost,
 } from "./blog-post-save";
 import { BlogPost } from "@kari/shared/models";
+import {
+  UPLOAD_TOO_LARGE_MESSAGE,
+  UploadTooLargeError,
+} from "@kari/shared/utils/upload-size";
 
 const apiImg = (id: string) => `https://api.test.local/images/${id}`;
 // Public URLs name the original inside the image's own directory (#273).
@@ -364,6 +368,28 @@ describe("saveBlogPost transaction outcomes", () => {
       expect(deps.saveList).not.toHaveBeenCalled();
       expect(deps.notify).toHaveBeenCalledWith(
         "Failed to save other works item",
+        "error",
+      );
+    });
+
+    it("says the photo was too big when the site refuses an upload", async () => {
+      const deps = makeDeps();
+      vi.mocked(deps.uploadImage).mockRejectedValue(new UploadTooLargeError());
+      const result = await saveBlogPost(
+        makeArgs(deps, {
+          originalContent: "",
+          newContent: img("data:image/png;base64,AAAA", "pending-1"),
+          pendingImageFiles: new Map([
+            ["pending-1", new File(["img"], "fresh.png")],
+          ]),
+        }),
+      );
+
+      expect(result).toEqual({ outcome: "failed", rollbackIncomplete: false });
+      expect(deps.updateContent).not.toHaveBeenCalled();
+      expect(deps.saveList).not.toHaveBeenCalled();
+      expect(deps.notify).toHaveBeenCalledWith(
+        UPLOAD_TOO_LARGE_MESSAGE,
         "error",
       );
     });
