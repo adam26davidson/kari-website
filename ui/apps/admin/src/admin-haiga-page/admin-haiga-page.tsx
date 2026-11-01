@@ -24,6 +24,7 @@ import {
 } from "../save-failure";
 import { useListUrls } from "../use-list-urls";
 import { useUnsavedChanges } from "../use-unsaved-changes";
+import { reportUploadProgress } from "../upload-feedback";
 
 const LIST_PATH = "/haiga";
 
@@ -149,7 +150,12 @@ export function AdminHaigaPage() {
   const uploadImage = async (file: File | null) => {
     showLoading("Uploading image...");
     try {
-      return await ImageService.upload(file, true, getAccessTokenSilently);
+      return await ImageService.upload(
+        file,
+        true,
+        getAccessTokenSilently,
+        reportUploadProgress(showLoading),
+      );
     } finally {
       hideLoading();
     }

@@ -55,7 +55,7 @@ async function openEditorAndPickImage() {
       files: [new File(["img"], "next.png", { type: "image/png" })],
     },
   });
-  return { notify };
+  return { notify, adminUi };
 }
 
 describe("AdminHaigaPage image replacement", () => {
@@ -73,6 +73,29 @@ describe("AdminHaigaPage image replacement", () => {
     // file; spy on the setup.ts polyfill so restoreAllMocks undoes this.
     vi.spyOn(window.URL, "createObjectURL").mockReturnValue("blob:preview");
     vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  it("narrates the upload as it goes", async () => {
+    vi.mocked(ImageService.upload).mockImplementation(
+      async (_file, _published, _token, onProgress) => {
+        onProgress?.(0.4);
+        onProgress?.(1);
+        return "new.png";
+      },
+    );
+    const { adminUi } = await openEditorAndPickImage();
+    adminUi.showLoading.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(HaigaService.updateList).toHaveBeenCalled());
+    // The list save that follows shows its own message; only the upload's
+    // part is pinned here.
+    expect(adminUi.showLoading.mock.calls.slice(0, 3)).toEqual([
+      ["Uploading image..."],
+      ["Sending your photo to the site...", 0.4],
+      ["Nearly there — resizing your photo for the site...", undefined],
+    ]);
   });
 
   it("keeps the old image when saving the list fails", async () => {

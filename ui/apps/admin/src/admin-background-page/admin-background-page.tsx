@@ -14,7 +14,7 @@ import { useAdminUi } from "../admin-ui-context";
 import { saveFailureMessage } from "../save-failure";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 import { useAssistantSubject } from "../assistant/use-assistant-subject";
-import { uploadFeedback } from "../upload-feedback";
+import { reportUploadProgress } from "../upload-feedback";
 import { apiImageUrl } from "@kari/shared/utils/image-management-helpers";
 import { validateBackgroundImage } from "@kari/shared/utils/background-image";
 import defaultBackground from "@kari/shared/assets/petals_on_ground.webp";
@@ -131,10 +131,7 @@ export function AdminBackgroundPage() {
           imageFile,
           true,
           getAccessTokenSilently,
-          (sent) => {
-            const feedback = uploadFeedback(sent);
-            showLoading(feedback.message, feedback.progress);
-          },
+          reportUploadProgress(showLoading),
         );
         if (!newFileName) {
           throw new Error("Failed to upload image");

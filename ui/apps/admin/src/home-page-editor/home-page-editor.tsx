@@ -18,6 +18,7 @@ import { useUnsavedChanges } from "../use-unsaved-changes";
 import { useAssistantSubject } from "../assistant/use-assistant-subject";
 import { SitePreview } from "../components/site-preview/site-preview";
 import { PreviewOverrides } from "@kari/shared/utils/preview-channel";
+import { reportUploadProgress } from "../upload-feedback";
 
 export function HomePageEditor() {
   const { isLoading, showLoading, hideLoading, notify } = useAdminUi();
@@ -87,10 +88,13 @@ export function HomePageEditor() {
         // Upload the replacement first — the JSON is only written after
         // the upload has succeeded, so a failure at any step leaves the
         // published home page intact.
+        // A big photo can take a while to send, so the overlay follows
+        // it: a filling bar, then a word about the resizing (#712).
         const newFileName = await ImageService.upload(
           imageFile,
           true,
           getAccessTokenSilently,
+          reportUploadProgress(showLoading),
         );
         if (!newFileName) {
           throw new Error("Failed to upload image");
