@@ -460,7 +460,7 @@ describe("AdminHaigaPage list rows", () => {
 
     expect(await screen.findByRole("img", { name: "haiga" })).toHaveAttribute(
       "src",
-      "https://api.test.local/images/a.png?size=thumb",
+      "https://api.test.local/images/a.png?size=thumb"
     );
   });
 
@@ -570,7 +570,9 @@ describe("AdminHaigaPage routing", () => {
     expect(
       await screen.findByRole("button", { name: "Edit" }),
     ).toBeInTheDocument();
-    await waitFor(() => expect(router.state.location.pathname).toBe("/haiga"));
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe("/haiga"),
+    );
   });
 
   it("returns to the list on browser back", async () => {
