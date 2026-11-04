@@ -16,6 +16,8 @@ import {
   waitUntilClean,
 } from "../admin-ui-test-helpers";
 import { SAVE_FAILED_MESSAGE } from "../save-failure";
+import { AdminUiProvider } from "../admin-ui-provider";
+import { HomePageData } from "@kari/shared/models";
 
 vi.mock("@kari/shared/services/images", () => ({
   ImageService: {
@@ -115,6 +117,22 @@ describe("HomePageEditor initial load", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows no editor until its data has arrived", async () => {
+    // Its starting state is an empty photo and blurb; drawn before the
+    // load answers, that is an empty editor she could save over the real
+    // home page with.
+    let answer!: (data: HomePageData) => void;
+    vi.mocked(HomePageService.getFromApi).mockReturnValueOnce(
+      new Promise((resolve) => (answer = resolve)),
+    );
+
+    renderPage();
+
+    expect(screen.queryByText("Save")).not.toBeInTheDocument();
+    answer({ photo: "old.png", blurb: "hello" });
+    expect(await screen.findByDisplayValue("hello")).toBeInTheDocument();
+  });
+
   it("retries the load and recovers when Retry is clicked", async () => {
     vi.mocked(HomePageService.getFromApi).mockRejectedValueOnce(
       new Error("network down"),
@@ -129,6 +147,45 @@ describe("HomePageEditor initial load", () => {
 });
 
 describe("HomePageEditor photo replacement", () => {
+  it("keeps the editor in place under the overlay while it saves", async () => {
+    // The real provider, so its one isLoading flag goes up for the save
+    // the way it does in the admin. Unmounting the form under it threw
+    // away her scroll position and reloaded the preview (#997).
+    let finishUpload!: (name: string) => void;
+    vi.mocked(ImageService.upload).mockReturnValueOnce(
+      new Promise((resolve) => (finishUpload = resolve)),
+    );
+    const { container } = renderAdminPage(
+      <AdminUiProvider>
+        <HomePageEditor />
+      </AdminUiProvider>,
+      "/:section",
+      "/home",
+    );
+    const blurb = await screen.findByDisplayValue("hello");
+    fireEvent.change(
+      container.querySelector('input[type="file"]') as HTMLInputElement,
+      {
+        target: {
+          files: [new File(["img"], "next.png", { type: "image/png" })],
+        },
+      },
+    );
+
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() =>
+      expect(document.querySelector(".admin-loading")).toBeInTheDocument(),
+    );
+    expect(blurb).toBeInTheDocument();
+    finishUpload("new.png");
+    await waitFor(() =>
+      expect(document.querySelector(".admin-loading")).not.toBeInTheDocument(),
+    );
+    // The same element, not a fresh copy remounted after the save.
+    expect(screen.getByDisplayValue("hello")).toBe(blurb);
+  });
+
   it("keeps the old photo when saving the JSON fails", async () => {
     vi.mocked(HomePageService.update).mockRejectedValueOnce(
       new Error("Failed to save home page data (HTTP 500)"),
