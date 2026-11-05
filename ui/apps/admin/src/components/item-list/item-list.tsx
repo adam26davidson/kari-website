@@ -172,8 +172,13 @@ export function ItemList<T extends { id: string }>({
                   design brief §3). The move arrows stay icons —
                   directional, low-consequence, and "Move up" is what the
                   arrow already says. */}
-              <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-                {/* 44px tall and tighter horizontally below `sm`: the
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                {/* Right-pinned at every width: below `sm` the controls
+                    are their own line under the content, and the
+                    *ListMobile boards pin that line to the card's right
+                    edge (#1005).
+
+                    44px tall and tighter horizontally below `sm`: the
                     touch-target floor the legacy phone rule also held these
                     to, and the padding that keeps all four controls on ONE
                     line inside a 390px card rather than wrapping Delete
