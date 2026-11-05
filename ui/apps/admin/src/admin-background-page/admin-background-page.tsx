@@ -72,7 +72,7 @@ const saveMessage = (next: SiteSettings, previous: SiteSettings) => {
 };
 
 export function AdminBackgroundPage() {
-  const { isLoading, showLoading, hideLoading, notify } = useAdminUi();
+  const { showLoading, hideLoading, notify } = useAdminUi();
   const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SETTINGS);
   // The last loaded or saved settings — the baseline the form is compared
   // against to decide whether there are unsaved edits.
@@ -81,6 +81,12 @@ export function AdminBackgroundPage() {
   const [existingImages, setExistingImages] = useState<Array<string>>([]);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
+  // Set once the first load has answered, and never cleared. The form is
+  // held back until then — its starting state is the empty defaults, which
+  // must never be on screen to save — but NOT while the overlay is up for
+  // a save: that unmounted the page under the overlay, throwing away her
+  // scroll position (#997). The other admin pages stay mounted the same way.
+  const [loaded, setLoaded] = useState(false);
   const getAccessTokenSilently = useAdminToken();
 
   const dirty = !!imageFile || !sameSettings(settings, savedSettings);
@@ -100,6 +106,7 @@ export function AdminBackgroundPage() {
       setSettings(loadedSettings);
       setSavedSettings(loadedSettings);
       setExistingImages(images);
+      setLoaded(true);
     } catch (error) {
       // Never show an empty editor after a failed load — saving it would
       // overwrite the real settings.
@@ -197,124 +204,126 @@ export function AdminBackgroundPage() {
   const updateSettings = (change: Partial<SiteSettings>) =>
     setSettings({ ...settings, ...change });
 
+  if (!loaded) {
+    return null;
+  }
+
   return (
-    !isLoading && (
-      <div className="mx-auto flex w-full max-w-[1080px] flex-col gap-7">
-        <PageTitle>Appearance</PageTitle>
-        {/* Two columns of cards on a wide screen, one calm column below it
-            — what the boards draw (Appearance.png / AppearanceMobile.png).
-            Fonts spans both because its four samples need the width more
-            than anything else on the page does. */}
-        <div className="grid min-w-0 gap-6 lg:grid-cols-2">
-          <Card className="flex min-w-0 flex-col items-start gap-4 p-5 sm:p-6">
-            <h3 className="text-foreground font-serif text-xl italic">
-              Site background
-            </h3>
-            <p className="text-muted-foreground max-w-[60ch] font-sans text-sm leading-relaxed">
-              The photo shown behind every page of the site. Upload a new
-              image or pick an already-uploaded one; large photos are
-              automatically resized so the site stays fast.
-            </p>
-            {showingDefault ? (
-              <div className="flex flex-col items-start gap-2">
-                <img
-                  src={defaultBackground}
-                  alt="Default background"
-                  className="border-border max-h-40 max-w-full rounded-lg border object-contain sm:max-w-56"
-                />
-                <span className="text-muted-foreground font-sans text-sm">
-                  Default background
-                </span>
-              </div>
-            ) : (
-              // Only offered when there is something to put back: a reset
-              // that changes nothing is a button that does nothing.
-              <Button variant="secondary" onClick={useDefault}>
-                Use the default background
-              </Button>
-            )}
-            <PhotoPicker
-              imageFile={imageFile}
-              fileName={settings.backgroundPhoto}
-              setImageFile={setImageFile}
-            />
-            {existingImages.length > 0 && (
-              // Folded away rather than the boards' open grid: they draw
-              // five sample tiles, the real listing can be dozens, and an
-              // always-open grid would swamp the card (design brief §1).
-              // Same chevron panel the image-cleanup page uses.
-              <details className="border-border group w-full min-w-0 rounded-lg border">
-                <summary className="text-foreground flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-sans text-sm font-medium [&::-webkit-details-marker]:hidden">
-                  Pick an already-uploaded image ({existingImages.length})
-                  {/* Decorative: <summary> already announces itself as
-                      expandable and says which way it is. */}
-                  <ChevronRight
-                    aria-hidden="true"
-                    className="text-muted-foreground size-4 shrink-0 transition-transform group-open:rotate-90"
-                  />
-                </summary>
-                <div className="flex flex-wrap gap-2 px-4 pb-4">
-                  {existingImages.map((name) => {
-                    const picked =
-                      !imageFile && settings.backgroundPhoto === name;
-                    return (
-                      <button
-                        key={name}
-                        type="button"
-                        // `aria-pressed` rather than a class alone: the
-                        // green ring says "this is the one" to anyone
-                        // looking, and this says it to anyone listening.
-                        aria-pressed={picked}
-                        className={cn(
-                          "cursor-pointer rounded-md leading-[0] ring-offset-2",
-                          "ring-offset-card transition-shadow",
-                          picked
-                            ? "ring-primary ring-2"
-                            : "hover:ring-primary/60 hover:ring-2",
-                        )}
-                        onClick={() => pickExisting(name)}
-                        aria-label={`Use ${name} as the background`}
-                      >
-                        <img
-                          src={apiImageUrl(name, "thumb")}
-                          alt={name}
-                          loading="lazy"
-                          decoding="async"
-                          width={96}
-                          height={96}
-                          className="bg-muted size-24 rounded-md object-cover"
-                        />
-                      </button>
-                    );
-                  })}
-                </div>
-              </details>
-            )}
-          </Card>
-          <Card className="min-w-0 p-5 sm:p-6">
-            <HeaderColorsSection settings={settings} onChange={updateSettings} />
-          </Card>
-          <Card className="min-w-0 p-5 sm:p-6 lg:col-span-2">
-            <FontPairingSection settings={settings} onChange={updateSettings} />
-          </Card>
-        </div>
-        {/* The page's one Save, under everything it saves. Column-REVERSE
-            on a phone: the boards put the full-width Save above the line
-            explaining it, so the button stays where her thumb is and the
-            caption reads as a footnote to it. */}
-        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-muted-foreground text-center font-sans text-sm sm:text-left">
-            Changes appear on your site once you save.
+    <div className="mx-auto flex w-full max-w-[1080px] flex-col gap-7">
+      <PageTitle>Appearance</PageTitle>
+      {/* Two columns of cards on a wide screen, one calm column below it
+          — what the boards draw (Appearance.png / AppearanceMobile.png).
+          Fonts spans both because its four samples need the width more
+          than anything else on the page does. */}
+      <div className="grid min-w-0 gap-6 lg:grid-cols-2">
+        <Card className="flex min-w-0 flex-col items-start gap-4 p-5 sm:p-6">
+          <h3 className="text-foreground font-serif text-xl italic">
+            Site background
+          </h3>
+          <p className="text-muted-foreground max-w-[60ch] font-sans text-sm leading-relaxed">
+            The photo shown behind every page of the site. Upload a new image or
+            pick an already-uploaded one; large photos are automatically resized
+            so the site stays fast.
           </p>
-          {/* `admin-button` styles nothing: it is the e2e journeys' hook
-              for Save (see the hook-class note in e2e/helpers.ts). The
-              width utilities are the boards' full-width-on-a-phone
-              Save. */}
-          <Button className="admin-button w-full sm:w-auto" onClick={saveData}>
-            Save
-          </Button>
-        </div>
+          {showingDefault ? (
+            <div className="flex flex-col items-start gap-2">
+              <img
+                src={defaultBackground}
+                alt="Default background"
+                className="border-border max-h-40 max-w-full rounded-lg border object-contain sm:max-w-56"
+              />
+              <span className="text-muted-foreground font-sans text-sm">
+                Default background
+              </span>
+            </div>
+          ) : (
+            // Only offered when there is something to put back: a reset
+            // that changes nothing is a button that does nothing.
+            <Button variant="secondary" onClick={useDefault}>
+              Use the default background
+            </Button>
+          )}
+          <PhotoPicker
+            imageFile={imageFile}
+            fileName={settings.backgroundPhoto}
+            setImageFile={setImageFile}
+          />
+          {existingImages.length > 0 && (
+            // Folded away rather than the boards' open grid: they draw
+            // five sample tiles, the real listing can be dozens, and an
+            // always-open grid would swamp the card (design brief §1).
+            // Same chevron panel the image-cleanup page uses.
+            <details className="border-border group w-full min-w-0 rounded-lg border">
+              <summary className="text-foreground flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-sans text-sm font-medium [&::-webkit-details-marker]:hidden">
+                Pick an already-uploaded image ({existingImages.length})
+                {/* Decorative: <summary> already announces itself as
+                    expandable and says which way it is. */}
+                <ChevronRight
+                  aria-hidden="true"
+                  className="text-muted-foreground size-4 shrink-0 transition-transform group-open:rotate-90"
+                />
+              </summary>
+              <div className="flex flex-wrap gap-2 px-4 pb-4">
+                {existingImages.map((name) => {
+                  const picked =
+                    !imageFile && settings.backgroundPhoto === name;
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      // `aria-pressed` rather than a class alone: the
+                      // green ring says "this is the one" to anyone
+                      // looking, and this says it to anyone listening.
+                      aria-pressed={picked}
+                      className={cn(
+                        "cursor-pointer rounded-md leading-[0] ring-offset-2",
+                        "ring-offset-card transition-shadow",
+                        picked
+                          ? "ring-primary ring-2"
+                          : "hover:ring-primary/60 hover:ring-2",
+                      )}
+                      onClick={() => pickExisting(name)}
+                      aria-label={`Use ${name} as the background`}
+                    >
+                      <img
+                        src={apiImageUrl(name, "thumb")}
+                        alt={name}
+                        loading="lazy"
+                        decoding="async"
+                        width={96}
+                        height={96}
+                        className="bg-muted size-24 rounded-md object-cover"
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            </details>
+          )}
+        </Card>
+        <Card className="min-w-0 p-5 sm:p-6">
+          <HeaderColorsSection settings={settings} onChange={updateSettings} />
+        </Card>
+        <Card className="min-w-0 p-5 sm:p-6 lg:col-span-2">
+          <FontPairingSection settings={settings} onChange={updateSettings} />
+        </Card>
       </div>
-    )
+      {/* The page's one Save, under everything it saves. Column-REVERSE
+          on a phone: the boards put the full-width Save above the line
+          explaining it, so the button stays where her thumb is and the
+          caption reads as a footnote to it. */}
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-muted-foreground text-center font-sans text-sm sm:text-left">
+          Changes appear on your site once you save.
+        </p>
+        {/* `admin-button` styles nothing: it is the e2e journeys' hook
+            for Save (see the hook-class note in e2e/helpers.ts). The
+            width utilities are the boards' full-width-on-a-phone
+            Save. */}
+        <Button className="admin-button w-full sm:w-auto" onClick={saveData}>
+          Save
+        </Button>
+      </div>
+    </div>
   );
 }

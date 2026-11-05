@@ -21,7 +21,7 @@ import { PreviewOverrides } from "@kari/shared/utils/preview-channel";
 import { reportUploadProgress } from "../upload-feedback";
 
 export function HomePageEditor() {
-  const { isLoading, showLoading, hideLoading, notify } = useAdminUi();
+  const { showLoading, hideLoading, notify } = useAdminUi();
   const { name } = useAdminAccount();
   const [homePageData, setHomePageData] = useState<HomePageData>({
     photo: "",
@@ -36,6 +36,13 @@ export function HomePageEditor() {
   const getAccessTokenSilently = useAdminToken();
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
+  // Set once the first load has answered, and never cleared. The form is
+  // held back until then — its starting state is the empty defaults, which
+  // must never be on screen to save — but NOT while the overlay is up for
+  // a save: that unmounted the editor under the overlay, throwing away her
+  // scroll position and reloading the preview (#997). The other admin
+  // pages stay mounted the same way.
+  const [loaded, setLoaded] = useState(false);
   const blurbId = useId();
 
   // The form is dirty when its fields differ from the loaded data or a
@@ -65,6 +72,7 @@ export function HomePageEditor() {
       const data = await HomePageService.getFromApi(getAccessTokenSilently);
       setHomePageData(data);
       setSavedHomePageData(data);
+      setLoaded(true);
     } catch (error) {
       // Never show an empty editor after a failed load — saving it would
       // overwrite the real data.
@@ -127,63 +135,62 @@ export function HomePageEditor() {
     );
   }
 
+  if (!loaded) {
+    return null;
+  }
+
   return (
-    !isLoading && (
-      // `home-page-editor` is not styling — it is how the e2e home journey
-      // finds this page's textarea (e2e/admin-journeys.spec.ts).
-      <div className="home-page-editor mx-auto flex w-full max-w-[720px] flex-col gap-8">
-        <PageTitle>{greetingFor(new Date().getHours(), name)}</PageTitle>
-        <Card className="flex flex-col gap-6 p-5 sm:p-8">
-          <div className="flex flex-col gap-2">
-            {/* No `htmlFor`: the picker is a composite, not one
-                control. */}
-            <FieldLabel>Your photo</FieldLabel>
-            <PhotoPicker
-              imageFile={imageFile}
-              fileName={homePageData.photo}
-              setImageFile={setImageFile}
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <FieldLabel htmlFor={blurbId}>Your welcome text</FieldLabel>
-            <Textarea
-              id={blurbId}
-              value={homePageData.blurb}
-              onChange={(e) => {
-                setHomePageData({
-                  ...homePageData,
-                  blurb: e.target.value,
-                });
-              }}
-            />
-          </div>
-          {/* Column-REVERSE on a phone: the boards put the full-width Save
-              above the line explaining it, so the button stays where her
-              thumb is and the caption reads as a footnote to it. */}
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-muted-foreground text-center font-sans text-sm sm:text-left">
-              Changes appear on your site once you save.
-            </p>
-            {/* `admin-button` styles nothing: it is the e2e journeys' hook
-                for Save (see the hook-class note in e2e/helpers.ts). The
-                width utilities are the boards' full-width-on-a-phone
-                Save. */}
-            <Button
-              className="admin-button w-full sm:w-auto"
-              onClick={saveData}
-            >
-              Save
-            </Button>
-          </div>
-        </Card>
-        {/* Below the form, not beside it: the boards give this column one
-            card at a time, and on a phone there is no "beside". */}
-        <SitePreview
-          path="/"
-          description="This is how your home page will look with the changes above. It updates as you type, before you save."
-          overrides={previewOverrides}
-        />
-      </div>
-    )
+    // `home-page-editor` is not styling — it is how the e2e home journey
+    // finds this page's textarea (e2e/admin-journeys.spec.ts).
+    <div className="home-page-editor mx-auto flex w-full max-w-[720px] flex-col gap-8">
+      <PageTitle>{greetingFor(new Date().getHours(), name)}</PageTitle>
+      <Card className="flex flex-col gap-6 p-5 sm:p-8">
+        <div className="flex flex-col gap-2">
+          {/* No `htmlFor`: the picker is a composite, not one
+              control. */}
+          <FieldLabel>Your photo</FieldLabel>
+          <PhotoPicker
+            imageFile={imageFile}
+            fileName={homePageData.photo}
+            setImageFile={setImageFile}
+          />
+        </div>
+        <div className="flex flex-col gap-2">
+          <FieldLabel htmlFor={blurbId}>Your welcome text</FieldLabel>
+          <Textarea
+            id={blurbId}
+            value={homePageData.blurb}
+            onChange={(e) => {
+              setHomePageData({
+                ...homePageData,
+                blurb: e.target.value,
+              });
+            }}
+          />
+        </div>
+        {/* Column-REVERSE on a phone: the boards put the full-width Save
+            above the line explaining it, so the button stays where her
+            thumb is and the caption reads as a footnote to it. */}
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-muted-foreground text-center font-sans text-sm sm:text-left">
+            Changes appear on your site once you save.
+          </p>
+          {/* `admin-button` styles nothing: it is the e2e journeys' hook
+              for Save (see the hook-class note in e2e/helpers.ts). The
+              width utilities are the boards' full-width-on-a-phone
+              Save. */}
+          <Button className="admin-button w-full sm:w-auto" onClick={saveData}>
+            Save
+          </Button>
+        </div>
+      </Card>
+      {/* Below the form, not beside it: the boards give this column one
+          card at a time, and on a phone there is no "beside". */}
+      <SitePreview
+        path="/"
+        description="This is how your home page will look with the changes above. It updates as you type, before you save."
+        overrides={previewOverrides}
+      />
+    </div>
   );
 }

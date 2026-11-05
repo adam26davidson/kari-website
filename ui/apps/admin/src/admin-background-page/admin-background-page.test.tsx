@@ -23,6 +23,8 @@ import {
   FONT_PAIRINGS,
 } from "@kari/shared/utils/fonts";
 import { SAVE_FAILED_MESSAGE } from "../save-failure";
+import { AdminUiProvider } from "../admin-ui-provider";
+import { SiteSettings } from "@kari/shared/models";
 
 /** Any pairing that is not the built-in one. */
 const CUSTOM_PAIRING = FONT_PAIRINGS[1];
@@ -135,6 +137,23 @@ describe("AdminBackgroundPage initial load", () => {
     expect(screen.queryByText("Save")).not.toBeInTheDocument();
   });
 
+  it("shows no editor until the settings have arrived", async () => {
+    // Its starting state is the empty default settings; drawn before the
+    // load answers, that is an editor she could save over the real
+    // appearance with.
+    let answer!: (settings: SiteSettings) => void;
+    vi.mocked(SiteSettingsService.getFromApi).mockReturnValueOnce(
+      new Promise((resolve) => (answer = resolve)),
+    );
+
+    renderPage();
+
+    await waitFor(() => expect(ImageService.list).toHaveBeenCalled());
+    expect(screen.queryByText("Save")).not.toBeInTheDocument();
+    answer({ backgroundPhoto: "current.webp" });
+    expect(await screen.findByText("Site background")).toBeInTheDocument();
+  });
+
   it("retries the load and recovers when Retry is clicked", async () => {
     vi.mocked(ImageService.list).mockRejectedValueOnce(
       new Error("network down"),
@@ -209,6 +228,39 @@ describe("AdminBackgroundPage initial load", () => {
 });
 
 describe("AdminBackgroundPage saving", () => {
+  it("keeps the page in place under the overlay while it saves", async () => {
+    // The real provider, so its one isLoading flag goes up for the save
+    // the way it does in the admin. Unmounting the page under it threw
+    // away her scroll position — Save sits below all three cards (#997).
+    let finishUpdate!: () => void;
+    vi.mocked(SiteSettingsService.update).mockReturnValueOnce(
+      new Promise((resolve) => (finishUpdate = () => resolve(undefined))),
+    );
+    renderAdminPage(
+      <AdminUiProvider>
+        <AdminBackgroundPage />
+      </AdminUiProvider>,
+      "/:section",
+      "/background",
+    );
+    const title = await screen.findByRole("heading", { name: "Appearance" });
+    await screen.findByText(/Pick an already-uploaded image/);
+    fireEvent.click(screen.getByLabelText("Use other.jpg as the background"));
+
+    fireEvent.click(screen.getByText("Save"));
+
+    await waitFor(() =>
+      expect(document.querySelector(".admin-loading")).toBeInTheDocument(),
+    );
+    expect(title).toBeInTheDocument();
+    finishUpdate();
+    await waitFor(() =>
+      expect(document.querySelector(".admin-loading")).not.toBeInTheDocument(),
+    );
+    // The same element, not a fresh copy remounted after the save.
+    expect(screen.getByRole("heading", { name: "Appearance" })).toBe(title);
+  });
+
   it("publishes a picked existing image before referencing it", async () => {
     const { notify } = await renderLoaded();
 
