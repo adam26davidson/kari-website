@@ -127,6 +127,19 @@ describe("ItemList", () => {
     expect(remove.parentElement).toHaveClass("gap-2");
   });
 
+  // Every *ListMobile.png board pins the controls to the card's right edge
+  // on the row's second line, at phone width too (#1005). A breakpoint-
+  // prefixed `sm:justify-end` left them hugging the left edge below 640px,
+  // so the un-prefixed class is what must be there.
+  it("pins each row's controls to the right at every width", () => {
+    renderList();
+
+    const controls = screen.getAllByRole("button", { name: "Edit" })[0]
+      .parentElement;
+    expect(controls).toHaveClass("justify-end");
+    expect(controls?.className).not.toMatch(/\bsm:justify-end\b/);
+  });
+
   it.each([
     ["onEdit", "Edit"],
     ["onDelete", "Delete"],
