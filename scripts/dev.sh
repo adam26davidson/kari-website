@@ -173,7 +173,7 @@ export REPO_DIR="$PWD"
 # gives you the real login against this same stack.
 export KARI_DEV_AUTH=1
 
-# Run the API from the repo root on purpose: dotenv only finds api/.env when
+# Run the API from the repo root on purpose: dotenvy only finds api/.env when
 # the cwd is api/, so the exports above are the API's entire configuration.
 cargo run --manifest-path api/Cargo.toml --features dev-auth &
 pids+=($!)

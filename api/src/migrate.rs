@@ -195,13 +195,13 @@ pub async fn run_migrate_images_command(
 ) -> i32 {
     let apply = args.iter().any(|arg| arg == "--apply");
 
-    // `dotenv` has already loaded api/.env, which points at the local S3
+    // `dotenvy` has already loaded api/.env, which points at the local S3
     // — running the migration against a dev stack while believing it is
     // pointed at a real bucket is the easiest mistake to make here, so it
     // takes an explicit flag.
     let local = endpoint.contains("localhost") || endpoint.contains("127.0.0.1");
     if local && !args.iter().any(|arg| arg == "--allow-local") {
-        // Note the working directory in the recipe: `dotenv` searches the cwd
+        // Note the working directory in the recipe: `dotenvy` searches the cwd
         // and its ancestors, so from `api/` it finds `api/.env` and refills
         // AWS_ENDPOINT_URL/AWS_REGION/the local S3 keys even when the caller
         // just unset them with `env -u`. Running cargo from the repo root
@@ -214,7 +214,7 @@ pub async fn run_migrate_images_command(
              to load, to target a real bucket:\n  \
              BUCKET_NAME=<bucket> cargo run --manifest-path api/Cargo.toml \
              -- migrate-images [--apply]\n\
-             (running this from api/ cannot work: dotenv reloads api/.env, \
+             (running this from api/ cannot work: dotenvy reloads api/.env, \
              so `env -u` does not stick.)"
         );
         return 2;
