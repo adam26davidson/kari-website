@@ -140,6 +140,21 @@ describe("ItemList", () => {
     expect(controls?.className).not.toMatch(/\bsm:justify-end\b/);
   });
 
+  // A row shows her own text — a first line, a publisher, a title — and a
+  // long name with no spaces (a pasted URL or filename) has no break
+  // opportunity under the default `overflow-wrap: normal`, so it ran out
+  // past the card at 390px and at desktop width alike (#1007). `anywhere`,
+  // not `break-word`: only `anywhere` also lowers the min-content width, so
+  // the `w-fit` title buttons on the photography and other-works rows
+  // shrink to the cell instead of sizing to the unbroken run. Set once on
+  // the cell, inherited by whatever `renderItem` puts in it.
+  it("wraps a long unbroken name inside the row's content cell", () => {
+    renderList({ items: [{ id: "w", name: "W".repeat(60) }] });
+
+    const cell = screen.getByText("W".repeat(60)).parentElement;
+    expect(cell).toHaveClass("min-w-0", "[overflow-wrap:anywhere]");
+  });
+
   it.each([
     ["onEdit", "Edit"],
     ["onDelete", "Delete"],

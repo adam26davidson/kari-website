@@ -161,7 +161,17 @@ export function ItemList<T extends { id: string }>({
               data-slot="list-row"
               className="admin-data-list-item flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
             >
-              <div className="min-w-0 sm:flex-1">{renderItem(item)}</div>
+              {/* `overflow-wrap: anywhere`, inherited by everything
+                  `renderItem` puts here: the row shows her own text, and a
+                  long name with no spaces (a pasted URL or filename) would
+                  otherwise run out past the card at every width (#1007).
+                  `anywhere` rather than `break-word` because only it also
+                  lowers the min-content width, which is what lets the
+                  `w-fit` title buttons shrink to the cell. Same rule as
+                  the delete dialog's title (#773). */}
+              <div className="min-w-0 [overflow-wrap:anywhere] sm:flex-1">
+                {renderItem(item)}
+              </div>
               {/* Order matters: edit (the one she reaches for most) first,
                   delete last and in the danger maroon.
 
