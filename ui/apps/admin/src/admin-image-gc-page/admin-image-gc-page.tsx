@@ -192,6 +192,9 @@ function PreviewSummary({ report }: { report: GcReport }) {
   );
 }
 
+// The next step after any failed run, shared by the toast and the banner.
+const TRY_PREVIEWING_AGAIN = "Try previewing again in a moment.";
+
 export function AdminImageGcPage() {
   const getAccessTokenSilently = useAdminToken();
   const { showLoading, hideLoading, confirm, notify } = useAdminUi();
@@ -224,13 +227,14 @@ export function AdminImageGcPage() {
       // Keep the failure visible on the page (the toast disappears); a
       // stale report from before the failure must not look current.
       setReport(null);
-      setError(
-        dryRun
-          ? "Couldn't preview the cleanup — the site may be busy or offline."
-          : "Couldn't finish deleting the unused images — the site may be" +
-              " busy or offline.",
-      );
-      notify("Image cleanup failed", "error");
+      const whatHappened = dryRun
+        ? "Couldn't preview the cleanup — the site may be busy or offline."
+        : "Couldn't finish deleting the unused images — the site may be" +
+          " busy or offline.";
+      setError(whatHappened);
+      // Previewing again is the true next step on both paths — even after
+      // a delete that stopped partway, the new preview shows what is left.
+      notify(`${whatHappened} ${TRY_PREVIEWING_AGAIN}`, "error");
     } finally {
       hideLoading();
     }
@@ -264,7 +268,7 @@ export function AdminImageGcPage() {
         >
           {error}
           <p className="mt-1.5">
-            Nothing further was deleted. Try previewing again in a moment.
+            Nothing further was deleted. {TRY_PREVIEWING_AGAIN}
           </p>
         </div>
       )}

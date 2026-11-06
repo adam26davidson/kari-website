@@ -176,10 +176,7 @@ export function AdminHaigaPage() {
         fileName = newFileName;
       } catch (error) {
         console.error(error);
-        notify(
-          saveFailureMessage(error, "Failed to save haiga image"),
-          "error",
-        );
+        notify(saveFailureMessage(error), "error");
         return;
       }
     }

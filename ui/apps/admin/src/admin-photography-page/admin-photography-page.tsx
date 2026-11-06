@@ -237,10 +237,7 @@ export function AdminPhotographyPage() {
       }
     } catch (error) {
       console.error(error);
-      notify(
-        saveFailureMessage(error, "Failed to save photography post images"),
-        "error",
-      );
+      notify(saveFailureMessage(error), "error");
       hideLoading();
       return;
     }

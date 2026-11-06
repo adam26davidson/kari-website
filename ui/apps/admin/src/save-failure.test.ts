@@ -7,7 +7,7 @@ import {
 } from "@kari/shared/utils/upload-size";
 import { SAVE_FAILED_MESSAGE, saveFailureMessage } from "./save-failure";
 
-const FALLBACK = "Failed to save haiga image";
+const FALLBACK = "A page's own failure message";
 
 describe("saveFailureMessage", () => {
   it("tells her the photo was too big, whatever the page's fallback", () => {

@@ -370,7 +370,13 @@ describe("AdminImageGcPage failures", () => {
     vi.mocked(ImageService.gc).mockRejectedValue(serverError);
     await clickPreview();
 
-    expect(notify).toHaveBeenCalledWith("Image cleanup failed", "error");
+    // The toast says the same thing, plus the next step, for the moment
+    // before she reads the page (design brief §5).
+    expect(notify).toHaveBeenCalledWith(
+      "Couldn't preview the cleanup — the site may be busy or offline." +
+        " Try previewing again in a moment.",
+      "error",
+    );
     const alert = screen.getByRole("alert");
     // What happened, in her words (design brief §3, §5)...
     expect(alert.textContent).toContain(
@@ -393,7 +399,7 @@ describe("AdminImageGcPage failures", () => {
 
   it("says in plain words that deleting failed", async () => {
     vi.mocked(ImageService.gc).mockResolvedValue(dryRunReport);
-    const { adminUi } = renderPage();
+    const { adminUi, notify } = renderPage();
     await clickPreview();
     fireEvent.click(screen.getByText("Delete 2 unused images"));
 
@@ -412,6 +418,13 @@ describe("AdminImageGcPage failures", () => {
         " offline.",
     );
     expect(alert.textContent).not.toMatch(/HTTP|500|GC|\{|error"/);
+    // Previewing again is the true next step even if some images were
+    // already removed: the new preview shows what is left.
+    expect(notify).toHaveBeenCalledWith(
+      "Couldn't finish deleting the unused images — the site may be busy or" +
+        " offline. Try previewing again in a moment.",
+      "error",
+    );
   });
 
   it("clears the error once a later run succeeds", async () => {
