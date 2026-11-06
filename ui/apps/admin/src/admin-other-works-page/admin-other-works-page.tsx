@@ -20,7 +20,10 @@ import { useAssistantSubject } from "../assistant/use-assistant-subject";
 import { useAdminToken } from "../hooks/use-admin-token";
 import { useAdminUi } from "../admin-ui-context";
 import { useAdminList } from "../use-admin-list";
-import { LIST_CHANGE_FAILED_MESSAGE } from "../save-failure";
+import {
+  CREATE_INCOMPLETE_MESSAGE,
+  LIST_CHANGE_FAILED_MESSAGE,
+} from "../save-failure";
 import { useListUrls } from "../use-list-urls";
 import { useUnsavedChanges } from "../use-unsaved-changes";
 import { saveBlogPost } from "./blog-post-save";
@@ -208,7 +211,7 @@ export function AdminOtherWorksPage() {
       await BlogService.updateContent(id, "", false, getAccessTokenSilently);
     } catch (error) {
       console.error(error);
-      notify("Failed to create other works item", "error");
+      notify(CREATE_INCOMPLETE_MESSAGE, "error");
       return;
     } finally {
       hideLoading();

@@ -127,10 +127,7 @@ describe("AdminPhotographyPage image replacement", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to save photography post images",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
     );
     expect(PhotographyService.updateList).not.toHaveBeenCalled();
     expect(savedPost.images).toEqual([{ image: "old.png", blurb: "a photo" }]);
@@ -145,10 +142,7 @@ describe("AdminPhotographyPage image replacement", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to save photography post images",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
     );
     expect(PhotographyService.updateList).not.toHaveBeenCalled();
     expect(savedPost.images).toEqual([{ image: "old.png", blurb: "a photo" }]);

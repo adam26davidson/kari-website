@@ -127,10 +127,7 @@ describe("AdminHaigaPage image replacement", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to save haiga image",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
     );
     expect(HaigaService.updateList).not.toHaveBeenCalled();
     expect(savedHaiga.image).toBe("old.png");
@@ -145,10 +142,7 @@ describe("AdminHaigaPage image replacement", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to save haiga image",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
     );
     expect(HaigaService.updateList).not.toHaveBeenCalled();
     expect(savedHaiga.image).toBe("old.png");

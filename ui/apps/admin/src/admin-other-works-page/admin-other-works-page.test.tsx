@@ -16,6 +16,7 @@ import {
   restoreHostTimeZoneAfterEach,
 } from "@kari/shared/test/timezone";
 import {
+  CREATE_INCOMPLETE_MESSAGE,
   LIST_CHANGE_FAILED_MESSAGE,
   SAVE_FAILED_MESSAGE,
 } from "../save-failure";
@@ -162,10 +163,7 @@ describe("AdminOtherWorksPage image removal on save", () => {
     fireEvent.click(rowButton("Save"));
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to save other works item",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
     );
   });
 
@@ -397,10 +395,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
-        expect(notify).toHaveBeenCalledWith(
-          "Failed to save other works item",
-          "error",
-        ),
+        expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
       );
       // a.png was flipped public, so it must be flipped back private; the
       // draft content and list must never have been touched.
@@ -422,10 +417,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
-        expect(notify).toHaveBeenCalledWith(
-          "Failed to save other works item",
-          "error",
-        ),
+        expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
       );
       // The failed PUT left the draft content object untouched; both
       // images return to private and the list is never flipped.
@@ -584,10 +576,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
-        expect(notify).toHaveBeenCalledWith(
-          "Failed to save other works item",
-          "error",
-        ),
+        expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
       );
       // The published content object is untouched (the PUT failed), so
       // restoring the list restores the previous state exactly.
@@ -683,10 +672,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
-        expect(notify).toHaveBeenCalledWith(
-          "Failed to save other works item",
-          "error",
-        ),
+        expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
       );
       // a.png went private and comes back public...
       expect(callsOf(ImageService.setPublished)).toEqual([
@@ -722,10 +708,7 @@ describe("AdminOtherWorksPage publish/unpublish atomicity", () => {
       fireEvent.click(rowButton("Save"));
 
       await waitFor(() =>
-        expect(notify).toHaveBeenCalledWith(
-          "Failed to save other works item",
-          "error",
-        ),
+        expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
       );
       // Content goes first on a no-flip save: the failed PUT must not
       // leave new metadata (title/date) pointing at old content, so the
@@ -889,11 +872,11 @@ describe("AdminOtherWorksPage creation", () => {
     await answerYes(adminUi);
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to create other works item",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(CREATE_INCOMPLETE_MESSAGE, "error"),
     );
+    // The list save with the empty draft already went through, which is
+    // why the toast tells her about the untitled item left behind.
+    expect(BlogService.updateList).toHaveBeenCalled();
     // The editor must not open without its content object.
     expect(screen.queryByPlaceholderText("post content")).toBeNull();
   });
@@ -1238,10 +1221,7 @@ describe("AdminOtherWorksPage image upload on save", () => {
     fireEvent.click(rowButton("Save"));
 
     await waitFor(() =>
-      expect(notify).toHaveBeenCalledWith(
-        "Failed to save other works item",
-        "error",
-      ),
+      expect(notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error"),
     );
     // Nothing was saved or deleted for a post whose upload failed.
     expect(BlogService.updateContent).not.toHaveBeenCalled();

@@ -11,6 +11,7 @@ import {
   UPLOAD_TOO_LARGE_MESSAGE,
   UploadTooLargeError,
 } from "@kari/shared/utils/upload-size";
+import { SAVE_FAILED_MESSAGE } from "../save-failure";
 
 const apiImg = (id: string) => `https://api.test.local/images/${id}`;
 // Public URLs name the original inside the image's own directory (#273).
@@ -211,10 +212,7 @@ describe("saveBlogPost transaction outcomes", () => {
 
       expect(result).toEqual({ outcome: "failed", rollbackIncomplete: false });
       expect(deps.saveList).not.toHaveBeenCalled();
-      expect(deps.notify).toHaveBeenCalledWith(
-        "Failed to save other works item",
-        "error",
-      );
+      expect(deps.notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error");
     });
 
     it("reports rolledBack without its own toast when the list save fails", async () => {
@@ -432,10 +430,7 @@ describe("saveBlogPost transaction outcomes", () => {
       expect(result).toEqual({ outcome: "failed", rollbackIncomplete: false });
       expect(deps.updateContent).not.toHaveBeenCalled();
       expect(deps.saveList).not.toHaveBeenCalled();
-      expect(deps.notify).toHaveBeenCalledWith(
-        "Failed to save other works item",
-        "error",
-      );
+      expect(deps.notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error");
     });
 
     it("says the photo was too big when the site refuses an upload", async () => {
@@ -635,10 +630,7 @@ describe("saveBlogPost transaction outcomes", () => {
 
       expect(result).toEqual({ outcome: "failed", rollbackIncomplete: false });
       expect(deps.restoreList).toHaveBeenCalledOnce();
-      expect(deps.notify).toHaveBeenCalledWith(
-        "Failed to save other works item",
-        "error",
-      );
+      expect(deps.notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error");
     });
 
     it("marks the rollback incomplete when the list restore fails too", async () => {
@@ -707,10 +699,7 @@ describe("saveBlogPost transaction outcomes", () => {
         deps.getToken,
       ]);
       expect(deps.restoreList).toHaveBeenCalledOnce();
-      expect(deps.notify).toHaveBeenCalledWith(
-        "Failed to save other works item",
-        "error",
-      );
+      expect(deps.notify).toHaveBeenCalledWith(SAVE_FAILED_MESSAGE, "error");
     });
   });
 });

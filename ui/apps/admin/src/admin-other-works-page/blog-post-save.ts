@@ -7,7 +7,7 @@ import {
   getImageFileName,
   s3ImageUrl,
 } from "@kari/shared/utils/image-management-helpers";
-import { saveFailureMessage } from "../save-failure";
+import { SAVE_FAILED_MESSAGE, saveFailureMessage } from "../save-failure";
 import { reportUploadProgress } from "../upload-feedback";
 
 // Shown when a failed publish/unpublish could not fully restore the
@@ -572,19 +572,19 @@ export async function saveBlogPost(
     // Planning/upload failures abort before the transaction starts, with
     // the previous state fully intact.
     console.error(error);
-    deps.notify(
-      saveFailureMessage(error, "Failed to save other works item"),
-      "error",
-    );
+    deps.notify(saveFailureMessage(error), "error");
     return { outcome: "failed", rollbackIncomplete: false };
   }
 
   if (result.outcome === "failed") {
+    // A complete rollback has already put everything back by the time this
+    // toasts, and the editor stays open with her edits, so the editors'
+    // save-failed message is true here too.
     console.error(result.error);
     deps.notify(
       result.rollbackIncomplete
         ? ROLLBACK_INCOMPLETE_MESSAGE
-        : "Failed to save other works item",
+        : SAVE_FAILED_MESSAGE,
       "error",
     );
     return { outcome: "failed", rollbackIncomplete: result.rollbackIncomplete };
