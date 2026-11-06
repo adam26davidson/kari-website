@@ -17,7 +17,7 @@ use tower_http::cors::CorsLayer;
 #[tokio::main]
 async fn main() {
     // Load environment variables
-    dotenv::dotenv().ok();
+    dotenvy::dotenv().ok();
 
     // Structured request/error logging (RUST_LOG overrides the default)
     tracing_subscriber::fmt()

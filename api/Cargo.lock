@@ -145,7 +145,7 @@ dependencies = [
  "bytes-utils",
  "fastrand",
  "http 1.5.0",
- "http-body 1.1.0",
+ "http-body",
  "percent-encoding",
  "pin-project-lite",
  "tracing",
@@ -179,7 +179,7 @@ dependencies = [
  "hex",
  "hmac",
  "http 1.5.0",
- "http-body 1.1.0",
+ "http-body",
  "lru",
  "percent-encoding",
  "regex-lite",
@@ -265,12 +265,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aws-sig-auth"
-version = "0.60.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c471d4d8afed170d5bb40a2835159314b346f8bd20379a5e821c3dbb22e43b9"
-
-[[package]]
 name = "aws-sigv4"
 version = "1.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -320,7 +314,7 @@ dependencies = [
  "crc-fast",
  "hex",
  "http 1.5.0",
- "http-body 1.1.0",
+ "http-body",
  "http-body-util",
  "md-5",
  "pin-project-lite",
@@ -354,7 +348,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "http 1.5.0",
- "http-body 1.1.0",
+ "http-body",
  "http-body-util",
  "percent-encoding",
  "pin-project-lite",
@@ -374,8 +368,8 @@ dependencies = [
  "bytes",
  "h2",
  "http 1.5.0",
- "http-body 1.1.0",
- "hyper 1.11.1",
+ "http-body",
+ "hyper",
  "hyper-rustls",
  "hyper-util",
  "indexmap",
@@ -471,7 +465,7 @@ dependencies = [
  "bytes",
  "fastrand",
  "http 1.5.0",
- "http-body 1.1.0",
+ "http-body",
  "http-body-util",
  "pin-project-lite",
  "tokio",
@@ -528,7 +522,7 @@ dependencies = [
  "bytes-utils",
  "futures-core",
  "http 1.5.0",
- "http-body 1.1.0",
+ "http-body",
  "http-body-util",
  "itoa",
  "num-integer",
@@ -579,9 +573,9 @@ dependencies = [
  "form_urlencoded",
  "futures-util",
  "http 1.5.0",
- "http-body 1.1.0",
+ "http-body",
  "http-body-util",
- "hyper 1.11.1",
+ "hyper",
  "hyper-util",
  "itoa",
  "matchit",
@@ -611,7 +605,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "http 1.5.0",
- "http-body 1.1.0",
+ "http-body",
  "http-body-util",
  "mime",
  "pin-project-lite",
@@ -1047,10 +1041,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "dotenv"
-version = "0.15.0"
+name = "dotenvy"
+version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77c90badedccf4105eca100756a0b1289e191f6fcbdadd3cee1d2f614f97da8f"
+checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
 name = "dunce"
@@ -1432,17 +1426,6 @@ dependencies = [
 
 [[package]]
 name = "http-body"
-version = "0.4.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ceab25649e9960c0311ea418d17bee82c0dcec1bd053b5f9a66e265a693bed2"
-dependencies = [
- "bytes",
- "http 0.2.12",
- "pin-project-lite",
-]
-
-[[package]]
-name = "http-body"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca2a8f2913ee65f60facd6a5905613afaa448497a0230cc41ce022d93290bc2c"
@@ -1460,7 +1443,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "http 1.5.0",
- "http-body 1.1.0",
+ "http-body",
  "pin-project-lite",
 ]
 
@@ -1489,28 +1472,6 @@ dependencies = [
 
 [[package]]
 name = "hyper"
-version = "0.14.32"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41dfc780fdec9373c01bae43289ea34c972e40ee3c9f6b3c8801a35f35586ce7"
-dependencies = [
- "bytes",
- "futures-channel",
- "futures-core",
- "futures-util",
- "http 0.2.12",
- "http-body 0.4.6",
- "httparse",
- "httpdate",
- "itoa",
- "pin-project-lite",
- "tokio",
- "tower-service",
- "tracing",
- "want",
-]
-
-[[package]]
-name = "hyper"
 version = "1.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27b501faa50e7a26c3d3560ca625132f4078a17771f4810baf70475ae48cbe43"
@@ -1521,7 +1482,7 @@ dependencies = [
  "futures-core",
  "h2",
  "http 1.5.0",
- "http-body 1.1.0",
+ "http-body",
  "httparse",
  "httpdate",
  "itoa",
@@ -1538,7 +1499,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dfa8e654703247911e29c23fbeaa261834bd9bb74efba2f9acddc37bfb127f53"
 dependencies = [
  "http 1.5.0",
- "hyper 1.11.1",
+ "hyper",
  "hyper-util",
  "rustls",
  "rustls-native-certs",
@@ -1558,9 +1519,9 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "http 1.5.0",
- "http-body 1.1.0",
+ "http-body",
  "httparse",
- "hyper 1.11.1",
+ "hyper",
  "ipnet",
  "libc",
  "percent-encoding",
@@ -1822,16 +1783,14 @@ dependencies = [
  "async-trait",
  "aws-config",
  "aws-sdk-s3",
- "aws-sig-auth",
  "aws-smithy-mocks",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "axum",
  "bytes",
- "dotenv",
+ "dotenvy",
  "futures",
  "http-body-util",
- "hyper 0.14.32",
  "image",
  "jsonwebtoken",
  "mime_guess",
@@ -2433,9 +2392,9 @@ dependencies = [
  "bytes",
  "futures-core",
  "http 1.5.0",
- "http-body 1.1.0",
+ "http-body",
  "http-body-util",
- "hyper 1.11.1",
+ "hyper",
  "hyper-rustls",
  "hyper-util",
  "js-sys",
@@ -3134,7 +3093,7 @@ dependencies = [
  "bytes",
  "futures-util",
  "http 1.5.0",
- "http-body 1.1.0",
+ "http-body",
  "pin-project-lite",
  "tower",
  "tower-layer",
@@ -3151,7 +3110,7 @@ dependencies = [
  "bitflags",
  "bytes",
  "http 1.5.0",
- "http-body 1.1.0",
+ "http-body",
  "http-body-util",
  "percent-encoding",
  "pin-project-lite",
