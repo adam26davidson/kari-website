@@ -417,6 +417,15 @@ describe("AdminImageGcPage failures", () => {
       "Couldn't finish deleting the unused images — the site may be busy or" +
         " offline.",
     );
+    // The API stops at the first failed delete, so earlier images may
+    // already be gone: the banner must not claim nothing was deleted, and
+    // says that another run finishes the job (#1049).
+    expect(alert.textContent).not.toContain("Nothing further was deleted");
+    expect(alert.textContent).toContain(
+      "Some of the unused images may already have been deleted. Try" +
+        " previewing again in a moment, then delete what is left to finish" +
+        " the cleanup.",
+    );
     expect(alert.textContent).not.toMatch(/HTTP|500|GC|\{|error"/);
     // Previewing again is the true next step even if some images were
     // already removed: the new preview shows what is left.

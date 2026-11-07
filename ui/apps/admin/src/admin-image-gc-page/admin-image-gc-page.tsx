@@ -195,6 +195,12 @@ function PreviewSummary({ report }: { report: GcReport }) {
 // The next step after any failed run, shared by the toast and the banner.
 const TRY_PREVIEWING_AGAIN = "Try previewing again in a moment.";
 
+/** A failed run, as the banner tells it: what happened, then what next. */
+interface GcFailure {
+  whatHappened: string;
+  whatNext: string;
+}
+
 export function AdminImageGcPage() {
   const getAccessTokenSilently = useAdminToken();
   const { showLoading, hideLoading, confirm, notify } = useAdminUi();
@@ -205,7 +211,7 @@ export function AdminImageGcPage() {
   // remembered, and re-previewing — the page's only refresh — would leave a
   // picture that loads fine now stuck behind its placeholder.
   const [run, setRun] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<GcFailure | null>(null);
 
   const runGc = async (dryRun: boolean) => {
     showLoading(
@@ -231,7 +237,18 @@ export function AdminImageGcPage() {
         ? "Couldn't preview the cleanup — the site may be busy or offline."
         : "Couldn't finish deleting the unused images — the site may be" +
           " busy or offline.";
-      setError(whatHappened);
+      // A failed preview deleted nothing. A failed delete may have stopped
+      // partway — the API removes images one by one and stops at the first
+      // that fails — so it must not claim nothing was deleted, and running
+      // the cleanup again is what finishes the job (#1049).
+      setError({
+        whatHappened,
+        whatNext: dryRun
+          ? `Nothing further was deleted. ${TRY_PREVIEWING_AGAIN}`
+          : "Some of the unused images may already have been deleted. Try" +
+            " previewing again in a moment, then delete what is left to" +
+            " finish the cleanup.",
+      });
       // Previewing again is the true next step on both paths — even after
       // a delete that stopped partway, the new preview shows what is left.
       notify(`${whatHappened} ${TRY_PREVIEWING_AGAIN}`, "error");
@@ -266,10 +283,8 @@ export function AdminImageGcPage() {
           role="alert"
           className="bg-destructive text-destructive-foreground rounded-lg px-4 py-3 font-sans text-sm"
         >
-          {error}
-          <p className="mt-1.5">
-            Nothing further was deleted. {TRY_PREVIEWING_AGAIN}
-          </p>
+          {error.whatHappened}
+          <p className="mt-1.5">{error.whatNext}</p>
         </div>
       )}
       {report && (
