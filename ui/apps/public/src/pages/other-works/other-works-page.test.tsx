@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { OtherWorksPage } from "./other-works-page";
 import { BlogService } from "@kari/shared/services/blog";
+import { BlogPostOverride } from "@kari/shared/utils/preview-channel";
+import { PreviewOverridesContext } from "../../preview/preview-overrides-context";
 
 vi.mock("@kari/shared/services/blog", () => ({
   BlogService: {
@@ -27,11 +29,13 @@ const posts = [
   },
 ];
 
-function renderPage() {
+function renderPage(blogPost?: BlogPostOverride) {
   return render(
-    <MemoryRouter>
-      <OtherWorksPage />
-    </MemoryRouter>,
+    <PreviewOverridesContext.Provider value={{ blogPost }}>
+      <MemoryRouter>
+        <OtherWorksPage />
+      </MemoryRouter>
+    </PreviewOverridesContext.Provider>,
   );
 }
 
@@ -84,5 +88,39 @@ describe("OtherWorksPage", () => {
       screen.queryByText("Failed to load posts."),
     ).not.toBeInTheDocument();
     expect(BlogService.getPublicListFromS3).toHaveBeenCalledTimes(2);
+  });
+
+  // The admin's in-editor site preview (#1053): the list a click away from
+  // the framed /blog/:id must agree with the draft it shows.
+  it("shows the admin's unsaved title in place of the deployed one", async () => {
+    renderPage({ ...posts[0], title: "Draft Title", content: "<p>x</p>" });
+
+    const draft = await screen.findByRole("link", { name: "Draft Title" });
+    expect(draft).toHaveAttribute("href", "/blog/post-1");
+    expect(
+      screen.queryByRole("link", { name: "First Post" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Second Post" }),
+    ).toBeInTheDocument();
+  });
+
+  // A new post is unpublished from creation, and the deployed list drops
+  // unpublished posts; the pane still shows it, as OtherWorksItem does.
+  it("lists an unpublished draft the deployed list does not have", async () => {
+    renderPage({
+      id: "post-3",
+      title: "Unpublished Draft",
+      date: "2026-03-01T00:00:00.000Z",
+      isPublished: false,
+      content: "",
+    });
+
+    const links = await screen.findAllByRole("link");
+    expect(links.map((link) => link.textContent)).toEqual([
+      "First Post",
+      "Second Post",
+      "Unpublished Draft",
+    ]);
   });
 });
