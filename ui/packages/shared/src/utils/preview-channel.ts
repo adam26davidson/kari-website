@@ -93,10 +93,11 @@ export interface BlogPostOverride extends BlogPost {
  * key per page, all optional: an editor sends only its own page, and the
  * site falls back to the deployed data for the rest.
  *
- * The list pages (haiku, haiga, photography) take ONE item, spliced into
- * the deployed list by `id`; `blogPost` takes over `/blog/:id` for its own
- * id only. A new page joins by adding a key here, a `SitePreview` in its
- * editor and a fallback in its public page (#239, #859).
+ * The list pages (haiku, haiga, photography, other works) take ONE item,
+ * spliced into the deployed list by `id`; `blogPost` also takes over
+ * `/blog/:id` for its own id. A new page joins by adding a key here, a
+ * `SitePreview` in its editor and a fallback in its public page (#239,
+ * #859, #1053).
  */
 export interface PreviewOverrides {
   homePage?: HomePageOverride;
