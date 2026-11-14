@@ -275,7 +275,13 @@ body {
 /* Fade-and-rise entrance used by the home page card's children and the
    public data list. The delay is opted into per element with an explicit
    .fade-in-delay-N class so reordering siblings can't silently change an
-   element's timing (the delays used to be keyed by :nth-child position). */
+   element's timing (the delays used to be keyed by :nth-child position).
+
+   Purely decorative, so it plays only for visitors with no motion
+   preference (#1058). The hidden starting state lives inside the same
+   gate: under prefers-reduced-motion: reduce the element is simply
+   visible, rather than stuck at the static opacity: 0 with no animation
+   to lift it. */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -287,9 +293,11 @@ body {
   }
 }
 
-.fade-in {
-  opacity: 0;
-  animation: fadeIn 0.8s ease-out forwards;
+@media (prefers-reduced-motion: no-preference) {
+  .fade-in {
+    opacity: 0;
+    animation: fadeIn 0.8s ease-out forwards;
+  }
 }
 
 .fade-in-delay-1 {
