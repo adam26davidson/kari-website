@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useObjectUrl } from "./use-object-url";
 
-const aFile = (name: string) => new File(["pixels"], name);
+const aFile = (name: string) =>
+  new File(["pixels"], name, { type: "image/png", lastModified: 1 });
 
 describe("useObjectUrl", () => {
   it("returns null when there is no file", () => {
@@ -34,6 +35,28 @@ describe("useObjectUrl", () => {
 
     expect(revoke).toHaveBeenCalledWith("blob:one");
     expect(result.current).toBe("blob:two");
+  });
+
+  it("keeps the URL when a new File object has the same content", () => {
+    // What the site preview sees on every debounced send: postMessage
+    // structured-clones the draft, so the framed page gets a NEW File for
+    // the photo she has not changed (#1054).
+    const create = vi
+      .spyOn(URL, "createObjectURL")
+      .mockReturnValueOnce("blob:one")
+      .mockReturnValueOnce("blob:two");
+    const revoke = vi.spyOn(URL, "revokeObjectURL");
+
+    const { result, rerender } = renderHook(
+      ({ file }: { file: File | null }) => useObjectUrl(file),
+      { initialProps: { file: aFile("kari.png") } },
+    );
+    rerender({ file: aFile("kari.png") });
+    rerender({ file: aFile("kari.png") });
+
+    expect(result.current).toBe("blob:one");
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(revoke).not.toHaveBeenCalled();
   });
 
   it("drops back to null, revoking, when the file is cleared", () => {
