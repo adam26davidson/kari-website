@@ -46,8 +46,15 @@ export function useObjectUrls(
     for (const [key, url] of made.current) {
       if (!next.has(key)) URL.revokeObjectURL(url);
     }
+    const changed =
+      next.size !== made.current.size ||
+      [...next].some(([key, url]) => made.current.get(key) !== url);
     made.current = next;
-    setUrls(next);
+    // Only a real change re-renders. A list with the same files in it —
+    // the next preview send, or `useObjectUrl` handed a fresh clone —
+    // leaves the URLs as they were, and setting a new Map anyway would
+    // re-render the caller for nothing.
+    if (changed) setUrls(next);
   }, [files]);
 
   // Unmount. Under StrictMode's simulated unmount/remount the list effect
