@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate, useParams } from "react-router";
 import { BlogPost } from "@kari/shared/models";
@@ -83,27 +83,41 @@ export function AdminOtherWorksPage() {
   // doesn't kick off a second fetch while one is pending.
   const loadingIdRef = useRef<string | null>(null);
 
-  const openPostFromList = async (item: BlogPost) => {
-    showLoading("Loading content...");
-    try {
-      const content = await BlogService.getContent(
-        item.id,
-        getAccessTokenSilently,
-      );
-      setPendingImageFiles(new Map());
-      setOriginalOpenPostContent(content);
-      setOpenPostContent(content);
-      setOpenPost({ ...item });
-    } catch (error) {
-      // Never open the editor with missing content — saving it would
-      // overwrite the real content.
-      console.error(error);
-      notify("Failed to load content", "error");
-      navigate(listUrl, { replace: true });
-    } finally {
-      hideLoading();
-    }
-  };
+  // Memoised so the URL-sync effect below can list it honestly: beyond
+  // `navigate` and `listUrl` (already that effect's deps), it reads only the
+  // token getter (stable by `useAdminToken`'s contract, #876), the
+  // `useAdminUi` callbacks and state setters, none of which change (#1067).
+  const openPostFromList = useCallback(
+    async (item: BlogPost) => {
+      showLoading("Loading content...");
+      try {
+        const content = await BlogService.getContent(
+          item.id,
+          getAccessTokenSilently,
+        );
+        setPendingImageFiles(new Map());
+        setOriginalOpenPostContent(content);
+        setOpenPostContent(content);
+        setOpenPost({ ...item });
+      } catch (error) {
+        // Never open the editor with missing content — saving it would
+        // overwrite the real content.
+        console.error(error);
+        notify("Failed to load content", "error");
+        navigate(listUrl, { replace: true });
+      } finally {
+        hideLoading();
+      }
+    },
+    [
+      getAccessTokenSilently,
+      showLoading,
+      hideLoading,
+      notify,
+      navigate,
+      listUrl,
+    ],
+  );
 
   // The editor is URL-driven: /admin/other-works/:id fetches that post's
   // content and opens a copy, navigating back to /admin/other-works closes
@@ -128,9 +142,7 @@ export function AdminOtherWorksPage() {
     openPostFromList(item).finally(() => {
       loadingIdRef.current = null;
     });
-    // openPostFromList depends on stable services/context only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, openPost, loaded, postList, navigate, listUrl]);
+  }, [id, openPost, loaded, postList, navigate, listUrl, openPostFromList]);
 
   // Dirty when the open copy's fields, its content, or its pending image
   // files differ from what is saved.

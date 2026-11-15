@@ -81,6 +81,19 @@ beforeEach(() => {
 });
 
 describe("HomePageEditor initial load", () => {
+  it("loads once on mount, not again as she edits", async () => {
+    // The load effect lists its dependencies honestly instead of
+    // suppressing exhaustive-deps; they are all identity-stable, so the
+    // re-renders an edit causes must not refetch (#1067).
+    renderPage();
+    const blurb = await screen.findByLabelText("Your welcome text");
+
+    fireEvent.change(blurb, { target: { value: "hello again" } });
+    expect(await screen.findByDisplayValue("hello again")).toBeInTheDocument();
+
+    expect(HomePageService.getFromApi).toHaveBeenCalledTimes(1);
+  });
+
   it("shows a load error instead of an empty editor when the load fails", async () => {
     vi.mocked(HomePageService.getFromApi).mockRejectedValueOnce(
       new Error("network down"),

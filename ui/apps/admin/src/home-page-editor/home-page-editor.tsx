@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { Card } from "../components/ui/card";
 import { Textarea } from "../components/ui/textarea";
 import { Button } from "../components/ui/button";
@@ -65,7 +65,7 @@ export function HomePageEditor() {
     [homePageData, imageFile],
   );
 
-  const fetchHomePageData = async () => {
+  const fetchHomePageData = useCallback(async () => {
     showLoading("Loading home page data...");
     setLoadFailed(false);
     try {
@@ -81,12 +81,15 @@ export function HomePageEditor() {
     } finally {
       hideLoading();
     }
-  };
+  }, [getAccessTokenSilently, showLoading, hideLoading]);
 
+  // Every dependency is identity-stable for the page's life — the token
+  // getter by `useAdminToken`'s contract (#876), the `useAdminUi`
+  // callbacks by the provider's `useCallback([])`s, the state setters by
+  // React — so this runs once, on mount (#1067).
   useEffect(() => {
     fetchHomePageData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchHomePageData]);
 
   const saveData = async () => {
     showLoading("Updating home page data...");

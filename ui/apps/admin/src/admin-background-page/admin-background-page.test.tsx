@@ -106,6 +106,17 @@ beforeEach(() => {
 });
 
 describe("AdminBackgroundPage initial load", () => {
+  it("loads once on mount, not again as she edits", async () => {
+    // The load effect lists its dependencies honestly instead of
+    // suppressing exhaustive-deps; they are all identity-stable, so the
+    // re-renders picking a file causes must not refetch (#1067).
+    await renderAndPickFile();
+    await waitFor(() => expect(window.URL.createObjectURL).toHaveBeenCalled());
+
+    expect(SiteSettingsService.getFromApi).toHaveBeenCalledTimes(1);
+    expect(ImageService.list).toHaveBeenCalledTimes(1);
+  });
+
   it("shows an Appearance page title over the three sections", async () => {
     // The sidebar item says "Appearance" and the page holds three settings,
     // so the first heading on screen has to name the page rather than one
