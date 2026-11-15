@@ -373,24 +373,25 @@ async fn gc_skips_a_whole_prefix_when_any_rendition_is_recent() {
 
 #[tokio::test]
 async fn gc_keeps_an_image_referenced_by_a_directory_layout_url() {
-    // Published blog HTML rewritten by the migration points at
-    // `/images/<id>/original.<ext>`; that must protect the whole prefix.
+    // The admin writes published blog HTML pointing at
+    // `/images/<id>/original.<ext>` (since #455); that must protect the
+    // whole prefix.
     let old = SystemTime::now() - Duration::from_secs(24 * 60 * 60);
     let (store, app) = setup_with(
         seeded_store()
             .with_object(
                 // Overrides the seeded published post's content.
                 "blog/post-2.html",
-                r#"<img src="https://s3/images/rewritten.jpg/original.jpg">"#,
+                r#"<img src="https://s3/images/admin-written.jpg/original.jpg">"#,
             )
-            .with_object_modified_at("images/rewritten.jpg/original.jpg", "bytes", old)
-            .with_object_modified_at("images/rewritten.jpg/thumb.jpg", "thumb", old),
+            .with_object_modified_at("images/admin-written.jpg/original.jpg", "bytes", old)
+            .with_object_modified_at("images/admin-written.jpg/thumb.jpg", "thumb", old),
     );
     let (status, body) = send(app, gc_request(Some(false), true)).await;
 
     assert_eq!(status, StatusCode::OK);
     assert!(ids(&body, "deleted").is_empty(), "body: {body}");
-    assert!(store.contains("images/rewritten.jpg/original.jpg"));
+    assert!(store.contains("images/admin-written.jpg/original.jpg"));
 }
 
 #[tokio::test]
