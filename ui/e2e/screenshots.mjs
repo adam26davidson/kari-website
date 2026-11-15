@@ -26,8 +26,9 @@
 // at the preview (4173) or at a dev.sh stack on other ports as needed.
 //
 // Each route is captured at desktop (1280px), tablet (834px), and mobile
-// (390px) widths. Animations are disabled and images awaited, so captures
-// are stable.
+// (390px) widths. Contexts request reduced motion (which the public
+// site's fade-ins honour, #1058), animations are awaited in every frame and
+// images are awaited, so captures are stable.
 //
 // Horizontal overflow — the page being wider than the viewport — is also
 // asserted programmatically at every captured width, plus a few extra
@@ -213,11 +214,13 @@ async function waitForFrameImages(frame) {
  * Waits for entrance animations (.fade-in) to finish so text isn't captured
  * mid-transition at partial opacity.
  *
- * In every frame. The public site's fade-ins do not honour the context's
- * `reducedMotion`, and `document.getAnimations()` sees only its own
- * document — so awaiting the top page alone photographed the admin
+ * In every frame, because `document.getAnimations()` sees only its own
+ * document — awaiting the top page alone once photographed the admin
  * editors' site-preview iframe mid-fade: a see-through card over a sharp
  * background, and the home blurb (1s delay) not yet visible at all (#859).
+ * The fade-ins now honour the context's `reducedMotion` (#1058), so under
+ * this script's contexts there is normally nothing to wait for; the wait
+ * stays as a backstop for any animation that is not gated that way.
  *
  * @param {import("@playwright/test").Page} page
  */
