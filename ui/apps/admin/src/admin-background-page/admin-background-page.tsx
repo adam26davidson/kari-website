@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -95,7 +95,7 @@ export function AdminBackgroundPage() {
   // the helper's own page map uses the same one.
   useAssistantSubject({ what: "appearance", dirty });
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     showLoading("Loading the site's appearance...");
     setLoadFailed(false);
     try {
@@ -115,12 +115,15 @@ export function AdminBackgroundPage() {
     } finally {
       hideLoading();
     }
-  };
+  }, [getAccessTokenSilently, showLoading, hideLoading]);
 
+  // Every dependency is identity-stable for the page's life — the token
+  // getter by `useAdminToken`'s contract (#876), the `useAdminUi`
+  // callbacks by the provider's `useCallback([])`s, the state setters by
+  // React — so this runs once, on mount (#1067).
   useEffect(() => {
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchData]);
 
   const saveData = async () => {
     showLoading("Saving the site's appearance...");

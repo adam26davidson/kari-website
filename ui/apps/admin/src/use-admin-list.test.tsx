@@ -92,6 +92,19 @@ describe("useAdminList loaded flag", () => {
 });
 
 describe("useAdminList loading", () => {
+  it("loads once on mount, not again as the page re-renders", async () => {
+    // The load effect lists its dependencies honestly instead of
+    // suppressing exhaustive-deps; they are all identity-stable, so a
+    // re-render must not refetch (#1067).
+    renderWithAdminUi(<Host />);
+    expect(await screen.findByText("alpha")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("set-local"));
+    expect(await screen.findByText("local-only")).toBeInTheDocument();
+
+    expect(getList).toHaveBeenCalledTimes(1);
+  });
+
   it("loads the list on mount inside the loading overlay", async () => {
     const { adminUi } = renderWithAdminUi(<Host />);
 

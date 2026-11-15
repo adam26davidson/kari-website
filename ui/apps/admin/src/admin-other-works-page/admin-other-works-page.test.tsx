@@ -132,6 +132,19 @@ beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
+describe("AdminOtherWorksPage loading", () => {
+  it("fetches the list and the open post once, not again as she edits", async () => {
+    // The URL-sync effect lists the memoised openPostFromList instead of
+    // suppressing exhaustive-deps; everything it reads is identity-stable,
+    // so the re-renders an edit causes must not refetch (#1067).
+    await openEditorAndRemoveImage();
+    expect(await screen.findByDisplayValue("<p>hello</p>")).toBeInTheDocument();
+
+    expect(BlogService.getListFromApi).toHaveBeenCalledTimes(1);
+    expect(BlogService.getContent).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("AdminOtherWorksPage image removal on save", () => {
   it("keeps the image when saving the list fails", async () => {
     vi.mocked(BlogService.updateList).mockRejectedValue(

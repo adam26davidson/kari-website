@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAdminToken } from "./hooks/use-admin-token";
 import { TokenGetter } from "@kari/shared/services/http";
 import { useAdminUi } from "./admin-ui-context";
@@ -55,7 +55,7 @@ export function useAdminList<T extends { id: string }>({
   const [loaded, setLoaded] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     showLoading(`Loading ${noun}...`);
     setLoadFailed(false);
     try {
@@ -70,12 +70,16 @@ export function useAdminList<T extends { id: string }>({
       setLoaded(true);
       hideLoading();
     }
-  };
+  }, [noun, getList, getAccessTokenSilently, showLoading, hideLoading]);
 
+  // `noun` and `getList` are a literal and a static service method at every
+  // caller; the rest is identity-stable for the page's life — the token
+  // getter by `useAdminToken`'s contract (#876), the `useAdminUi`
+  // callbacks by the provider's `useCallback([])`s — so this runs once, on
+  // mount (#1067). Keep it that way rather than suppressing the lint rule.
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [load]);
 
   const saveList = async (
     newList: Array<T>,
