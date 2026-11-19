@@ -1,7 +1,7 @@
 /* The admin app's Tailwind v4 entry stylesheet and design tokens (#592).
    ---------------------------------------------------------------------
    Imported LAST in src/main.tsx, after the shared index.css, and that
-   order is load-bearing: the `:root` below re-points three of the shared
+   order is load-bearing: the `:root` below re-points two of the shared
    site's tokens for this app only (see "The bridge"), and two equally
    specific `:root` rules are settled by source order.
 
@@ -106,15 +106,14 @@
      recipe, via `--color-primary-hover` below. */
   --primary-hover: #24462f;
 
-  /* The face axis, likewise (#483). Every rule in every workspace
-     reaches a typeface through one of these two tokens, so re-pointing
-     them is how `body`'s inherited face (shared index.css) is Geist rather
-     than the public site's Noto Serif JP / Roboto pairing. Both point at
-     the interface face: Newsreader is for greetings, page titles and item
-     titles, which are the shell's and the pages' business and are asked
-     for with the `font-serif` utility rather than taken by
+  /* The face axis, likewise (#483): re-pointing `--font-body` is how
+     `body`'s inherited face (shared index.css) is Geist rather than the
+     public site's Noto Serif JP / Roboto pairing. Its sibling `--font-ui`
+     is not bridged: only shared component rules spend it, and none of
+     them renders here (#1095). Newsreader is for greetings, page titles
+     and item titles, which are the shell's and the pages' business and
+     are asked for with the `font-serif` utility rather than taken by
      inheritance. */
-  --font-ui: var(--font-sans);
   --font-body: var(--font-sans);
 }
 
