@@ -7,7 +7,7 @@ import { createBrowserRouter } from "react-router";
 import { RouterProvider } from "react-router/dom";
 import { AdminAuthProvider } from "./auth/admin-auth";
 import "@kari/shared/styles/index.css";
-// After the shared stylesheet, always: theme.css re-points three of its
+// After the shared stylesheet, always: theme.css re-points two of its
 // tokens for this app (see the file's own note), and two equally specific
 // `:root` rules are decided by source order.
 import "./styles/theme.css";
