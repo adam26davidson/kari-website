@@ -1,4 +1,4 @@
-import { test, expect, Locator, Page } from "@playwright/test";
+import { test, expect, Locator, Page, Request } from "@playwright/test";
 import {
   adminListItem,
   adminListItems,
@@ -292,6 +292,73 @@ test.describe("haiga", () => {
       marker,
       readySelector: ".haiga-list-item-image",
     });
+  });
+
+  test("a server-refused upload shows the too-big toast and keeps the edit", async ({
+    page,
+  }) => {
+    // The seeded stack cannot produce a real 413: every picker refuses an
+    // oversized file before uploading (#711) and the API's body limit sits
+    // above the client's. So stub the upload POST to answer 413 and check
+    // the real wiring end to end — ImageService.upload → UploadTooLarge-
+    // Error → saveFailureMessage → the toast (#992, #1129). The per-surface
+    // behaviour is pinned in vitest. The URL carries `?isPublished=…`, so
+    // match on the pathname rather than a `**/images` glob (which is
+    // $-anchored and would never fire).
+    const isUpload = (url: URL) => url.pathname === "/images";
+    const listWrites: string[] = [];
+    const onRequest = (request: Request) => {
+      if (request.method() === "PUT") listWrites.push(request.url());
+    };
+    await page.route(isUpload, (route) =>
+      route.request().method() === "POST"
+        ? route.fulfill({ status: 413 })
+        : route.fallback(),
+    );
+
+    await openAdminSection(page, "Haiga");
+    // Creating persists an empty haiga; the save below must not touch it.
+    await createNewItem(page);
+    const editorUrl = page.url();
+    const publisher = page.getByLabel("Publisher (optional)", {
+      exact: true,
+    });
+    await publisher.fill(marker);
+    await page
+      .locator('.data-editor input[type="file"]')
+      .setInputFiles(pngFixturePath());
+    await expect(page.locator(".photo-picker-image")).toBeVisible();
+
+    page.on("request", onRequest);
+    const upload = page.waitForRequest(
+      (request) =>
+        request.method() === "POST" && isUpload(new URL(request.url())),
+    );
+    await saveEditor(page);
+    await upload;
+
+    // The plain-language server-refusal copy — not the pick-time "over
+    // 25 MB" check (which has digits) and no status code in front of her.
+    await expectToast(page, /too big to upload/);
+    expect(await page.locator(".admin-toast").textContent()).not.toMatch(/\d/);
+    await waitForIdle(page);
+    page.off("request", onRequest);
+
+    // Nothing was written, and the editor still holds what she typed and
+    // picked, so she can simply try again.
+    expect(listWrites).toEqual([]);
+    expect(page.url()).toBe(editorUrl);
+    await expect(page.locator(".data-editor")).toBeVisible();
+    await expect(publisher).toHaveValue(marker);
+    await expect(page.locator(".photo-picker-image")).toBeVisible();
+
+    // Once the server accepts it, the same untouched edit saves — which
+    // also gives the created haiga its marker so afterEach cleans it up.
+    await page.unroute(isUpload);
+    await saveEditor(page);
+    await expectToast(page, "Haiga saved");
+    await closeEditor(page);
+    await expect(adminListItem(page, marker)).toBeVisible();
   });
 });
 
