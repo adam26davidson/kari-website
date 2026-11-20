@@ -878,6 +878,53 @@ describe("Tiptap link bubble menu", () => {
     expect(setContent).not.toHaveBeenCalled();
   });
 
+  it("leaves no empty bubble behind when edit is pressed mid-selection", async () => {
+    // #1123: selecting text arms the plugin's 250 ms update debounce, and
+    // opening the link panel unmounts the bubble. bubble-menu 3.31.4 left
+    // that timer running past destroy(), so it fired afterwards and put
+    // the dead menu's element back in the editor: an empty, visible,
+    // focusable (tabIndex 0) "link actions" group that nothing ever
+    // removed, one more per occurrence. Fake timers make the window exact.
+    vi.useFakeTimers();
+    try {
+      const { container } = renderTiptap(
+        '<p><a href="https://x.test/">hello</a> world</p>',
+      );
+      await focusEditor();
+      // Counted by selector, not by role: an orphan is empty, so it is
+      // the element itself, not its contents, that has to be found.
+      const groups = () =>
+        container.querySelectorAll(
+          '.editor [role="group"][aria-label="link actions"]',
+        );
+      expect(groups()).toHaveLength(1);
+
+      // A non-empty selection inside the link, then "edit" at once, while
+      // the debounce is still pending.
+      act(() => {
+        getEditor().commands.setTextSelection({ from: 1, to: 4 });
+      });
+      fireEvent.click(getButton("edit"));
+      expect(getLinkInput()).toBeInTheDocument();
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(groups()).toHaveLength(0);
+
+      // Closing the panel brings back one bubble, and only one.
+      fireEvent.keyDown(getLinkInput(), { key: "Escape" });
+      await focusEditor();
+      act(() => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(queryLinkInput()).toBeNull();
+      expect(groups()).toHaveLength(1);
+      expect(groups()[0].children.length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("strips the link from the remove action", async () => {
     const user = userEvent.setup();
     const { setContent } = renderTiptap(LINKED);
