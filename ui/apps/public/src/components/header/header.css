@@ -131,14 +131,12 @@
   text-decoration: none;
   margin: 0px 0px 2px 0px;
   color: var(--header-nav-color, white);
-  transition: opacity 0.5s;
   text-align: center;
   white-space: nowrap;
 }
 
 .pages .active {
   font-weight: bold;
-  opacity: 1;
 }
 
 /* The underline follows the link colour: it is the same mark, drawn under
@@ -147,6 +145,5 @@
 .pages a:hover {
   margin-bottom: 0px;
   border-bottom: 2px solid var(--header-nav-color, white);
-  opacity: 1;
   cursor: pointer;
 }
