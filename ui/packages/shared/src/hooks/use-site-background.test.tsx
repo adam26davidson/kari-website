@@ -432,4 +432,50 @@ describe("useSiteBackground fonts", () => {
     // dropping it would cost a fresh swap on the next mount.
     expect(linkedPairings()).toEqual(["shippori"]);
   });
+
+  it("does not fetch again when a re-render passes the same flag", async () => {
+    // The public app passes a literal, so the effect must stay mount-only
+    // even though applyFonts is now an honest dependency (#1176).
+    vi.mocked(SiteSettingsService.getFromS3).mockResolvedValue({
+      backgroundPhoto: "",
+      fontPairing: "shippori",
+    });
+
+    const { rerender } = renderHook(() =>
+      useSiteBackground({ applyFonts: true }),
+    );
+    await waitFor(() => expect(fontProperties()[0]).toBe(SHIPPORI.bodyFamily));
+
+    rerender();
+
+    expect(SiteSettingsService.getFromS3).toHaveBeenCalledOnce();
+  });
+
+  it("applies the pairing when a caller turns fonts on after mounting", async () => {
+    // No caller does this today, but the effect must not keep a stale
+    // closure over the flag if one ever does (#1176).
+    vi.mocked(SiteSettingsService.getFromS3).mockResolvedValue({
+      backgroundPhoto: "",
+      fontPairing: "shippori",
+    });
+
+    const { rerender } = renderHook(
+      ({ applyFonts }) => useSiteBackground({ applyFonts }),
+      { initialProps: { applyFonts: false } },
+    );
+    await waitFor(() =>
+      expect(SiteSettingsService.getFromS3).toHaveBeenCalledOnce(),
+    );
+    expect(fontProperties()).toEqual(["", "", ""]);
+
+    rerender({ applyFonts: true });
+
+    await waitFor(() =>
+      expect(fontProperties()).toEqual([
+        SHIPPORI.bodyFamily,
+        SHIPPORI.uiFamily,
+        String(SHIPPORI.displayWeight),
+      ]),
+    );
+  });
 });
