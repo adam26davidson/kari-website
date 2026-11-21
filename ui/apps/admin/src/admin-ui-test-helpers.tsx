@@ -1,5 +1,5 @@
-import { expect, Mock, vi } from "vitest";
-import { useContext } from "react";
+import { expect, Mock, onTestFinished, vi } from "vitest";
+import { Profiler, useContext } from "react";
 import { act, render, waitFor } from "@testing-library/react";
 import {
   createMemoryRouter,
@@ -69,6 +69,7 @@ export function renderAdminPage(
     subject.current = context.subject;
     return null;
   }
+  const loopGuard = renderLoopGuard();
   const router = createMemoryRouter(
     [
       {
@@ -76,7 +77,9 @@ export function renderAdminPage(
         element: (
           <AdminUiContext.Provider value={adminUi}>
             <AssistantProvider>
-              {ui}
+              <Profiler id="admin-page" onRender={loopGuard.onCommit}>
+                {ui}
+              </Profiler>
               <AssistantSubjectProbe />
             </AssistantProvider>
           </AdminUiContext.Provider>
@@ -86,7 +89,71 @@ export function renderAdminPage(
     { initialEntries: [initialEntry] },
   );
   const utils = render(<RouterProvider router={router} />);
+  loopGuard.check();
   return { ...utils, adminUi, router, subject };
+}
+
+/**
+ * Commits a page may make without the event loop turning before the
+ * guard calls it a render loop. Real renders settle in a handful; React's
+ * own nested-update limit is 50.
+ */
+const RENDER_LOOP_LIMIT = 200;
+
+// Captured at import, before any test can install fake timers: the guard's
+// reset must fire whenever the real event loop turns, not when a test
+// advances its fake clock.
+const realSetTimeout = globalThis.setTimeout;
+
+/**
+ * Turns a page's render loop (an effect that sets fresh state on every
+ * render) into a named test failure instead of a hang (#1175).
+ *
+ * Such a loop runs synchronously inside `render()`/`act()`, so it starves
+ * the event loop: vitest's test timeout can never fire, and React 19 only
+ * console.errors "Maximum update depth exceeded" for passive-effect loops
+ * — which page tests mock away. So the guard counts the page's commits
+ * and resets the count whenever a macrotask gets to run; a loop never lets
+ * one run. Past the limit it throws from the Profiler callback, which
+ * React routes to the router's error boundary, unmounting the page and
+ * ending the loop. The error is then rethrown where the test will see it:
+ * straight after the initial render, or when the test finishes.
+ */
+function renderLoopGuard() {
+  let commits = 0;
+  let resetPending = false;
+  let error: Error | null = null;
+  let reported = false;
+  // Throws the loop error once, so a loop caught after the initial render
+  // is not reported a second time when the test finishes.
+  const check = () => {
+    if (!error || reported) return;
+    reported = true;
+    throw error;
+  };
+  onTestFinished(check);
+  return {
+    check,
+    onCommit() {
+      if (!resetPending) {
+        resetPending = true;
+        realSetTimeout(() => {
+          commits = 0;
+          resetPending = false;
+        });
+      }
+      commits += 1;
+      if (commits > RENDER_LOOP_LIMIT && !error) {
+        error = new Error(
+          `Render loop: the page committed ${commits} times without ` +
+            "yielding to the event loop. Look for an effect that sets " +
+            "state to a fresh value ({}, [], new Map()) on every render, " +
+            "or a hook dependency whose identity changes every render.",
+        );
+        throw error;
+      }
+    },
+  };
 }
 
 /**
