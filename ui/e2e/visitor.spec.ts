@@ -245,6 +245,20 @@ async function expectShellIsTheOnlyScroller(
   { card, layers }: { card: string; layers: string[] },
 ) {
   const shell = page.locator(".content");
+  // Measure the card at rest. The list card is itself a `.fade-in` (and the
+  // home card's children are), which rises 10px into place after a delay,
+  // and `boundingBox()` includes that transform: caught in the animation's
+  // first frames, a card resting 8px inside the shell reads 1.66px past
+  // its bottom edge (#825). Waiting for the entrance animations, rather
+  // than widening the slop below, keeps every assertion here exact.
+  await page
+    .locator(card)
+    .first()
+    .evaluate((el) =>
+      Promise.all(
+        el.getAnimations({ subtree: true }).map((a) => a.finished),
+      ),
+    );
   const shellBox = await shell.boundingBox();
   const cardBox = await page.locator(card).first().boundingBox();
   if (!shellBox || !cardBox) throw new Error("the page did not render");
