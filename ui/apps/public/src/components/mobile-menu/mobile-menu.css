@@ -12,7 +12,6 @@
 .mobile-menu a {
   margin: 20px;
   color: black;
-  transition: opacity 0.5s;
   text-align: center;
   font-size: var(--text-xl);
   font-weight: var(--display-weight);
