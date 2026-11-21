@@ -167,7 +167,7 @@ export function useSiteBackground(
         document.body.style.removeProperty(property);
       }
     };
-    // applyFonts is a compile-time choice per app, never a changing value.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // Mount-only in practice: callers pass a literal, and a boolean dep is
+    // stable under Object.is. A flip re-runs cleanup and re-applies.
+  }, [applyFonts]);
 }
