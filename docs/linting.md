@@ -37,8 +37,8 @@ definition of clean.
 ## The shell test harnesses
 
 CI's `shell-lint` job also runs the shell test harnesses
-`automation/dispatch-test.sh`, `scripts/setup-worktree-test.sh` and
-`scripts/lint-workflows-test.sh`.
+`automation/dispatch-test.sh`, `scripts/setup-worktree-test.sh`,
+`scripts/dev-api-test.sh` and `scripts/lint-workflows-test.sh`.
 
 Changing the lint script? Re-run its tests:
 `bash scripts/lint-workflows-test.sh` (needs jq plus either python3 +

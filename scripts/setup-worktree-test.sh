@@ -4,15 +4,18 @@
 # whenever either script changes:
 #   bash scripts/setup-worktree-test.sh
 #
-# Each case builds a throwaway "repo" (scripts/ + ui/ with a lockfile) and
-# runs the real script against stub `npm`/`npx`/`cargo`/`docker` on PATH, so
-# the assertions are about what the script would actually invoke — no
-# network, no install, no containers.
+# Each case builds a throwaway "repo" (a git repo with scripts/, ui/ with a
+# lockfile, and a minimal api/) and runs the real script against stub
+# `npm`/`npx`/`cargo`/`rustc`/`docker` on PATH, so the assertions are about
+# what the script would actually invoke — no network, no install, no
+# containers. dev.sh starts the API through scripts/dev-api.sh, whose binary
+# cache is pointed at a temp dir (KARI_API_CACHE_DIR), never the real one.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SETUP="$HERE/setup-worktree.sh"
 DEV="$HERE/dev.sh"
+DEV_API="$HERE/dev-api.sh"
 FAILURES=0
 
 # Temp dirs are recorded in a file rather than in a shell array because the
@@ -87,14 +90,26 @@ cat > "$STUB_BIN/node" <<'EOF'
 #!/usr/bin/env bash
 echo "$PWD: node $*" >>"$STUB_LOG"
 EOF
-# dev.sh shells out to these two as well. `cargo run` is the API server, so
-# it runs until stopped like the vite ones. `docker` fails on purpose: the
+# dev.sh shells out to these as well. dev-api.sh builds the API with
+# `cargo build` (after reading `rustc -Vv` for its cache key) and then runs
+# the binary, so the stub build writes a fake API binary that logs its start
+# and runs until stopped like the vite ones. `docker` fails on purpose: the
 # delegation under test happens before the stack starts, so a failing docker
 # stops each dev.sh case right after setup — fast, offline, no containers.
 cat > "$STUB_BIN/cargo" <<'EOF'
 #!/usr/bin/env bash
 echo "$PWD: cargo $*" >>"$STUB_LOG"
-exec stub-serve
+if [ "${1:-}" = build ]; then
+  mkdir -p "$CARGO_TARGET_DIR/debug"
+  printf '%s\n' '#!/usr/bin/env bash' \
+    'echo "$PWD: api binary started" >>"$STUB_LOG"' 'exec stub-serve' \
+    > "$CARGO_TARGET_DIR/debug/kari-website-api"
+  chmod +x "$CARGO_TARGET_DIR/debug/kari-website-api"
+fi
+EOF
+cat > "$STUB_BIN/rustc" <<'EOF'
+#!/usr/bin/env bash
+echo "rustc 1.0.0-stub"
 EOF
 cat > "$STUB_BIN/docker" <<'EOF'
 #!/usr/bin/env bash
@@ -168,12 +183,16 @@ chmod +x "$NO_NPM_BIN/node"
 new_repo() {
   local repo
   repo="$(tmpdir)"
-  mkdir -p "$repo/scripts" "$repo/ui"
+  mkdir -p "$repo/scripts" "$repo/ui" "$repo/api/src"
   cp "$SETUP" "$repo/scripts/setup-worktree.sh"
   cp "$DEV" "$repo/scripts/dev.sh"
-  chmod +x "$repo/scripts/setup-worktree.sh" "$repo/scripts/dev.sh"
+  cp "$DEV_API" "$repo/scripts/dev-api.sh"
+  chmod +x "$repo/scripts"/*.sh
   echo '{"name":"ui"}' > "$repo/ui/package.json"
   echo '{"lockfileVersion":3}' > "$repo/ui/package-lock.json"
+  echo '[package]' > "$repo/api/Cargo.toml"
+  echo 'fn main() {}' > "$repo/api/src/main.rs"
+  git -C "$repo" init -q
   : > "$repo/stub.log"
   echo "$repo"
 }
@@ -221,6 +240,7 @@ start_dev() { # <repo> [args...] — launch dev.sh; stdout+stderr in <repo>/out
   STUB_LOG="$repo/stub.log" STUB_STOP="$repo/stop" \
     PATH="${STUB_PATH:-$STUB_BIN}:$PATH" \
     KARI_API_PORT=31000 KARI_S3_PORT=39000 \
+    KARI_API_CACHE_DIR="$repo/api-cache" \
     timeout 60 bash "$repo/scripts/dev.sh" "$@" > "$repo/out" 2>&1 &
   DEV_PID=$!
 }
@@ -440,11 +460,12 @@ expect_not_contains "$r/stub.log" "docker" \
 #     Started without the admin one, the public header's "Admin" link — a
 #     plain link out of the SPA — lands on nothing.
 #     The three server lines are named once and used for both the wait and
-#     the assertions, so the two can never drift apart.
+#     the assertions, so the two can never drift apart. The API comes from
+#     dev-api.sh's cache (#304), not `cargo run`.
 r="$(new_repo)"
 public_dev="$r/ui: npm run dev"
 admin_dev="$r/ui: npm run dev:admin"
-api_run="$r: cargo run --manifest-path api/Cargo.toml"
+api_run="$r: api binary started"
 STUB_PATH="$AWS_BIN" start_dev "$r" --aws
 wait_for_lines "$r/stub.log" "$public_dev" "$admin_dev" "$api_run"
 stop_dev "$r"
@@ -453,6 +474,9 @@ expect_eq "$(grep -cxF "$public_dev" "$r/stub.log")" 1 \
 expect_contains "$r/stub.log" "$admin_dev" \
   "dev.sh starts the admin app's dev server"
 expect_contains "$r/stub.log" "$api_run" "dev.sh starts the API"
+expect_contains "$r/stub.log" "$r: cargo build --manifest-path api/Cargo.toml" \
+  "dev.sh builds the API through dev-api.sh"
+expect_not_contains "$r/stub.log" "cargo run" "dev.sh no longer uses cargo run"
 expect_contains "$r/out" "Admin:" "dev.sh names the admin URL at startup"
 expect_eq "$(cat "$r/exit-code")" 0 "dev.sh exits 0 once the stack stops"
 

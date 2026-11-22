@@ -41,6 +41,44 @@ ephemeral). It prints the chosen URLs at startup and wires them into the
 UI/API via env vars, so N stacks can run in parallel and `docker compose
 down` in one worktree never touches another's stack.
 
+### The API binary is cached across worktrees
+
+dev.sh starts the API through `scripts/dev-api.sh` (#304), not `cargo
+run`. That script hashes everything the binary is built from — every
+non-ignored file under `api/` in this worktree (uncommitted edits
+included), `rustc -Vv`, the `dev-auth` feature and `RUSTFLAGS` — and runs
+the binary cached under that hash in
+`~/.cache/kari-website/api/bin/<hash>/`, shared by every worktree:
+
+- **Hit** (some worktree already built this exact `api/`): the API starts
+  at once, with no cargo at all. This is the normal case for a UI-only
+  worktree.
+- **Miss**: it builds into one shared target dir
+  (`~/.cache/kari-website/api/target`) under a lock, so third-party crates
+  are compiled once for every worktree and only the API crate itself is
+  rebuilt — always from scratch, because cargo's freshness check for a
+  local crate is mtime-based and would otherwise trust another
+  worktree's artifacts. A second worktree that misses while a build runs
+  prints `Waiting for another worktree's API build to finish...` and then
+  waits; if it wanted the same source it gets that build for free. The
+  very first build on a machine is still a full cold one (minutes).
+
+Because a miss always rebuilds the API crate from scratch, without
+incremental state, restarting `dev.sh` after editing API source costs a
+full crate compile (about 10s on the dev host) rather than an incremental
+one. For API work, keep using `cargo watch -x 'run --features
+dev-auth'` in `api/`, which builds in the worktree's own `api/target`.
+
+Knobs: `KARI_API_CACHE_DIR` moves the cache (it defaults under
+`$XDG_CACHE_HOME` when that is set); `KARI_API_CACHE_KEEP` is how many
+binaries are kept, most recently used first (default 3, about 300 MB
+each); `KARI_API_CACHE_MAX_MB` is the size above which the shared target
+is wiped before the next build (default 4000 — a fresh one measured 1.7G,
+so this leaves room for a few dependency bumps). Deleting the whole cache
+dir is always safe — the next stack just rebuilds. Never point your own
+`CARGO_TARGET_DIR` at it: only `dev-api.sh`, holding its lock, may write
+there.
+
 ## Dev servers
 
 - `npm run dev` starts the PUBLIC site's dev server. Like the rest of the
