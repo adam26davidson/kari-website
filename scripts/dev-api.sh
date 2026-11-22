@@ -29,7 +29,7 @@
 #                          deleting it is always safe
 #   KARI_API_CACHE_KEEP    binaries kept, most recently used first (3)
 #   KARI_API_CACHE_MAX_MB  the shared target is wiped before a build when it
-#                          is larger than this (16000)
+#                          is larger than this (4000)
 #
 # Tests: scripts/dev-api-test.sh
 set -euo pipefail
@@ -63,7 +63,7 @@ done
 
 cache="${KARI_API_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/kari-website/api}"
 keep="${KARI_API_CACHE_KEEP:-3}"
-max_mb="${KARI_API_CACHE_MAX_MB:-16000}"
+max_mb="${KARI_API_CACHE_MAX_MB:-4000}"
 features=dev-auth
 bin_name=kari-website-api
 target="$cache/target"

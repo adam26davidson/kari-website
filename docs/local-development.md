@@ -63,17 +63,19 @@ the binary cached under that hash in
   waits; if it wanted the same source it gets that build for free. The
   very first build on a machine is still a full cold one (minutes).
 
-Because only the API crate is rebuilt on a miss, and without incremental
-state, restarting `dev.sh` after editing API source is slower than the old
-`cargo run`. For API work, keep using `cargo watch -x 'run --features
+Because a miss always rebuilds the API crate from scratch, without
+incremental state, restarting `dev.sh` after editing API source costs a
+full crate compile (about 10s on the dev host) rather than an incremental
+one. For API work, keep using `cargo watch -x 'run --features
 dev-auth'` in `api/`, which builds in the worktree's own `api/target`.
 
 Knobs: `KARI_API_CACHE_DIR` moves the cache (it defaults under
 `$XDG_CACHE_HOME` when that is set); `KARI_API_CACHE_KEEP` is how many
-binaries are kept, most recently used first (default 3);
-`KARI_API_CACHE_MAX_MB` is the size above which the shared target is wiped
-before the next build (default MAXMB). Deleting the whole cache dir is
-always safe — the next stack just rebuilds. Never point your own
+binaries are kept, most recently used first (default 3, about 300 MB
+each); `KARI_API_CACHE_MAX_MB` is the size above which the shared target
+is wiped before the next build (default 4000 — a fresh one measured 1.7G,
+so this leaves room for a few dependency bumps). Deleting the whole cache
+dir is always safe — the next stack just rebuilds. Never point your own
 `CARGO_TARGET_DIR` at it: only `dev-api.sh`, holding its lock, may write
 there.
 
