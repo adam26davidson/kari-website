@@ -72,6 +72,11 @@ jobs:
       - name: Worktree setup tests
         run: bash scripts/setup-worktree-test.sh
 
+      # Stubs cargo/rustc and points KARI_API_CACHE_DIR at a temp dir, so it
+      # never builds anything or touches a real cache.
+      - name: Dev API cache tests
+        run: bash scripts/dev-api-test.sh
+
       # The lint above only proves this repo is clean; this proves the lint
       # would still catch a repo that is not (#337). It needs jq plus one
       # YAML→JSON backend, and takes whichever of python3 + PyYAML or the

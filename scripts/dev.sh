@@ -22,6 +22,12 @@
 # UI dependencies are installed by scripts/setup-worktree.sh, which this
 # script runs first; tests for that delegation live in
 # scripts/setup-worktree-test.sh.
+#
+# The API is started through scripts/dev-api.sh (issue #304), which runs a
+# binary cached by a hash of this worktree's api/ source, shared by every
+# worktree under ~/.cache/kari-website/api: a worktree whose api/ matches one
+# already built starts the API with no compile at all. Its tests live in
+# scripts/dev-api-test.sh.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -175,7 +181,8 @@ export KARI_DEV_AUTH=1
 
 # Run the API from the repo root on purpose: dotenvy only finds api/.env when
 # the cwd is api/, so the exports above are the API's entire configuration.
-cargo run --manifest-path api/Cargo.toml --features dev-auth &
+# (dev-api.sh cds to the repo root and execs the binary, so that holds.)
+scripts/dev-api.sh &
 pids+=($!)
 
 # No --mode flag: .env.development targets local S3 too (issue #246),
