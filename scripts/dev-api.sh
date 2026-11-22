@@ -120,7 +120,7 @@ bin="$cache/bin/$key/$bin_name"
 # prune can delete bin/<key> in between. touch -c, so such a prune never
 # leaves a stray regular file at bin/<key>.
 run_api() {
-  trap - EXIT INT TERM
+  trap - EXIT HUP INT QUIT TERM
   # The LRU stamp the pruning below sorts by.
   touch -c "$cache/bin/$key"
   # A failed exec exits the shell under errexit even with execfail set.
@@ -156,16 +156,26 @@ if [ -x "$bin" ]; then
 fi
 
 # Forward a stop to the whole build (cargo and its rustc children), so
-# dev.sh's teardown during a build leaves no compile running against the
-# shared target after the lock is released.
-on_signal() {
+# dev.sh's teardown, a Ctrl-C, or a closed terminal/SSH session (HUP) during
+# a build leaves no compile running against the shared target after the lock
+# is released. The build runs in its own session (below), so a signal sent to
+# dev.sh's process group or terminal reaches it only through this trap.
+# SIGKILL cannot be trapped: a dev-api.sh killed with -9 mid-build orphans
+# cargo, which keeps compiling into the shared target until it finishes. That
+# residue is harmless to correctness — the next build's `cargo clean -p` and
+# `cargo build` wait on cargo's own lock on the target directory, so they
+# cannot interleave with it — it only costs the orphan's CPU time.
+on_signal() { # <exit code>
   if [ -n "$child" ]; then
     kill -TERM -- "-$child" 2> /dev/null || true
     wait "$child" 2> /dev/null || true
   fi
-  exit 143
+  exit "$1"
 }
-trap on_signal INT TERM
+trap 'on_signal 129' HUP
+trap 'on_signal 130' INT
+trap 'on_signal 131' QUIT
+trap 'on_signal 143' TERM
 
 # cargo in its own process group (setsid) so on_signal can stop all of it,
 # without the lock fd (a surviving child must not hold the lock), and without

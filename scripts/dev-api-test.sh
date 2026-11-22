@@ -352,31 +352,37 @@ expect_contains "$b/out" "Waiting for another worktree's API build" \
 expect_contains "$b/stub.log" "api ran: race  from $c/bin/" \
   "the waiting worktree runs the first one's build"
 
-# 12. TERM during a build stops the compile and publishes nothing.
-c="$(tmpdir)"
-r="$(new_repo term)"
-export STUB_BUILDING="$c.building" STUB_RELEASE="$c.never" \
-  STUB_PIDFILE="$c.pid"
-start_api "$r" "$c"
-wait_for "$STUB_BUILDING"
-kill -TERM "$BG_PID"
-wait "$BG_PID"
-expect_eq "$?" 143 "TERM during a build exits 143"
-unset STUB_BUILDING STUB_RELEASE STUB_PIDFILE
-read -r cargo_pid compile_pid < "$c.pid"
-for p in "cargo:$cargo_pid" "its compile child:$compile_pid"; do
-  if kill -0 "${p##*:}" 2> /dev/null; then
-    echo "FAIL: TERM during a build leaves ${p%:*} running"
-    FAILURES=$((FAILURES + 1))
-    kill "${p##*:}"
-  else
-    echo "ok: TERM during a build stops ${p%:*}"
-  fi
+# 12. TERM (dev.sh's teardown) or HUP (a closed terminal or SSH session)
+#     during a build stops the whole compile and publishes nothing. (INT and
+#     QUIT are trapped too, but a non-interactive shell starts background
+#     jobs with them ignored, so this harness cannot deliver them.)
+for sig in TERM:143 HUP:129; do
+  name="${sig%:*}" code="${sig#*:}"
+  c="$(tmpdir)"
+  r="$(new_repo "sig-$name")"
+  export STUB_BUILDING="$c.building" STUB_RELEASE="$c.never" \
+    STUB_PIDFILE="$c.pid"
+  start_api "$r" "$c"
+  wait_for "$STUB_BUILDING"
+  kill -"$name" "$BG_PID"
+  wait "$BG_PID"
+  expect_eq "$?" "$code" "$name during a build exits $code"
+  unset STUB_BUILDING STUB_RELEASE STUB_PIDFILE
+  read -r cargo_pid compile_pid < "$c.pid"
+  for p in "cargo:$cargo_pid" "its compile child:$compile_pid"; do
+    if kill -0 "${p##*:}" 2> /dev/null; then
+      echo "FAIL: $name during a build leaves ${p%:*} running"
+      FAILURES=$((FAILURES + 1))
+      kill "${p##*:}"
+    else
+      echo "ok: $name during a build stops ${p%:*}"
+    fi
+  done
+  expect_not_contains "$r/stub.log" "never released" \
+    "$name during a build stops it at once, not at the stub's deadline"
+  expect_eq "$(key_dirs "$c")" 0 "$name during a build publishes nothing"
+  rm -f "$c.building" "$c.pid"
 done
-expect_not_contains "$r/stub.log" "never released" \
-  "TERM during a build stops it at once, not at the stub's deadline"
-expect_eq "$(key_dirs "$c")" 0 "TERM during a build publishes nothing"
-rm -f "$c.building" "$c.pid"
 
 # 13. A caller's KARI_COMMIT_SHA never reaches the build (version.rs bakes it
 #     in; a local binary must report none).
