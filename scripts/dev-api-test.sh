@@ -83,6 +83,18 @@ out="$CARGO_TARGET_DIR/debug/kari-website-api"
 } > "$out"
 chmod +x "$out"
 EOF
+# Stub touch: with STUB_PRUNE_ON_TOUCH set, the first touch run deletes every
+# published binary first — another worktree's prune landing between the
+# script's lock-free -x check and its exec.
+cat > "$STUB_BIN/touch" <<EOF
+#!/usr/bin/env bash
+if [ -n "\${STUB_PRUNE_ON_TOUCH:-}" ] && [ ! -e "\$STUB_PRUNE_ON_TOUCH" ]; then
+  : > "\$STUB_PRUNE_ON_TOUCH"
+  find "\$KARI_API_CACHE_DIR/bin" -mindepth 1 -maxdepth 1 -type d \\
+    ! -name '.*' -exec rm -rf {} +
+fi
+exec $(command -v touch) "\$@"
+EOF
 chmod +x "$STUB_BIN"/*
 
 expect_contains() { # <file> <needle> <test-name>
@@ -427,6 +439,43 @@ STUB_LOG="$r/stub.log" PATH="$NO_FLOCK_BIN" KARI_API_CACHE_DIR="$c" \
 echo $? > "$r/exit-code"
 expect_contains "$r/out" "flock is required" "a missing flock is named"
 expect_eq "$(cat "$r/exit-code")" 1 "a missing flock exits 1"
+
+# 16. A failing `git ls-files` (here: no repository at all) exits non-zero
+#     before building, publishing or running anything — a key without the
+#     source list would let every such worktree run one shared binary.
+c="$(tmpdir)"
+r="$(new_repo nogitA)"
+b="$(new_repo nogitB)"
+rm -rf "$r/.git" "$b/.git"
+GIT_CEILING_DIRECTORIES="$(dirname "$r")" run_api "$r" "$c"
+expect_eq "$(cat "$r/exit-code")" 1 "a failing git ls-files exits 1"
+expect_contains "$r/out" "git ls-files failed" \
+  "a failing git ls-files is reported"
+expect_eq "$(count "$r/stub.log" "cargo")" 0 \
+  "a failing git ls-files builds nothing"
+expect_eq "$(key_dirs "$c")" 0 "a failing git ls-files publishes nothing"
+GIT_CEILING_DIRECTORIES="$(dirname "$b")" run_api "$b" "$c"
+expect_eq "$(cat "$b/exit-code")" 1 \
+  "a second git-less worktree also exits 1"
+expect_not_contains "$b/stub.log" "api ran" \
+  "a second git-less worktree runs no cached binary"
+
+# 17. A hit whose binary is pruned by another worktree between the -x check
+#     and the exec rebuilds and runs, instead of failing, and leaves no stray
+#     file at bin/<key>.
+c="$(tmpdir)"
+r="$(new_repo pruned)"
+run_api "$r" "$c"
+reset "$r"
+STUB_PRUNE_ON_TOUCH="$c.pruned" run_api "$r" "$c"
+expect_eq "$(cat "$r/exit-code")" 0 "a hit lost to a prune still exits 0"
+expect_eq "$(count "$r/stub.log" "cargo build")" 1 \
+  "a hit lost to a prune rebuilds"
+expect_contains "$r/stub.log" "api ran: pruned  from $c/bin/" \
+  "a hit lost to a prune runs the rebuilt binary"
+expect_eq "$(find "$c/bin" -mindepth 1 -maxdepth 1 -type f | wc -l)" 0 \
+  "a hit lost to a prune leaves no stray file in bin/"
+rm -f "$c.pruned"
 
 echo
 if [ "$FAILURES" -gt 0 ]; then

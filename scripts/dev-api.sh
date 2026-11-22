@@ -70,34 +70,44 @@ target="$cache/target"
 
 # The cache key: a hash of everything the binary is built from. Deleted
 # tracked files are still listed by `git ls-files -c`; their absence is part
-# of the key rather than an error from hashing a missing file.
+# of the key rather than an error from hashing a missing file. A failing
+# `git ls-files` is fatal: without the file list the key would hash no source
+# at all, and every broken worktree would share (and run) one binary.
 api_key() {
-  local files=() present=() f
-  mapfile -d '' files < <(git ls-files -co --exclude-standard -z -- api |
-    sort -z)
+  local list files=() present=() deleted=() f rc=0
+  list="$(mktemp)"
+  git ls-files -co --exclude-standard -z -- api > "$list" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    rm -f "$list"
+    echo "git ls-files failed (exit $rc) in $PWD; cannot key the API" \
+      "cache without the api/ source list." >&2
+    return 1
+  fi
+  mapfile -d '' files < <(sort -z "$list")
+  rm -f "$list"
   for f in "${files[@]}"; do
     if [ -f "$f" ]; then
       present+=("$f")
     else
-      printf 'deleted %s\n' "$f"
+      deleted+=("deleted $f")
     fi
-  done > "$key_input"
+  done
   {
     echo "features=$features"
     echo "rustflags=${RUSTFLAGS:-}"
     rustc -Vv
-    cat "$key_input"
+    if [ "${#deleted[@]}" -gt 0 ]; then
+      printf '%s\n' "${deleted[@]}"
+    fi
     if [ "${#present[@]}" -gt 0 ]; then
       sha256sum -- "${present[@]}"
     fi
   } | sha256sum | cut -c1-32
 }
 
-key_input="$(mktemp)"
 child=
 staging=
 on_exit() {
-  rm -f "$key_input"
   if [ -n "$staging" ]; then rm -rf "$staging"; fi
 }
 trap on_exit EXIT
@@ -105,16 +115,29 @@ trap on_exit EXIT
 key="$(api_key)"
 bin="$cache/bin/$key/$bin_name"
 
-run_api() { # exec the cached binary; never returns
-  rm -f "$key_input"
+# exec the cached binary. Returns 1 only if it vanished after the caller's
+# -x check: the hit path below runs without the lock, so another worktree's
+# prune can delete bin/<key> in between. touch -c, so such a prune never
+# leaves a stray regular file at bin/<key>.
+run_api() {
   trap - EXIT INT TERM
   # The LRU stamp the pruning below sorts by.
-  touch "$cache/bin/$key"
+  touch -c "$cache/bin/$key"
+  # A failed exec exits the shell under errexit even with execfail set.
+  shopt -s execfail
+  set +e
   exec "$bin" "$@"
+  set -e
+  shopt -u execfail
+  trap on_exit EXIT
+  echo "The cached API binary $bin disappeared before it could start" \
+    "(pruned by another worktree)." >&2
+  return 1
 }
 
 if [ -x "$bin" ]; then
-  run_api "$@"
+  # A lost race with a prune falls through to the build below.
+  run_api "$@" || echo "Building it again." >&2
 fi
 
 # --- miss: build under the lock -------------------------------------------
