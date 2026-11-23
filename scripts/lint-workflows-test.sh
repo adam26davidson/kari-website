@@ -42,15 +42,39 @@ trap cleanup EXIT
 # rather than in every stub dir because only one case wants a broken one,
 # and its stub dir comes first. Built first of all: the YAML→JSON probe
 # below runs under this same PATH.
+#
+# THE ALLOWED-COMMAND LIST. When the lint (or a stub) starts calling a new
+# external utility, add it here — anything missing is caught by the
+# command_not_found_handle guard below, which fails the case and names this
+# list (#357, #385).
+CORE_BIN_CMDS=(bash dirname find grep jq sed sort)
 CORE_BIN="$(mktemp -d)"
 WORKDIRS+=("$CORE_BIN")
-for cmd in bash dirname find grep jq sed sort; do
+for cmd in "${CORE_BIN_CMDS[@]}"; do
   cmd_path="$(command -v "$cmd")" || {
     echo "this harness needs $cmd on PATH" >&2
     exit 1
   }
   ln -s "$cmd_path" "$CORE_BIN/$cmd"
 done
+
+# The guard. The lint has no `set -e`, so a command missing from the PATH
+# above is not a failure on its own: a bare `command not found` lands in one
+# case's output, and if the result was unused the case passes regardless.
+# Every bash the lint starts — itself, its subshells, the stubs — sources
+# $BASH_ENV first, and bash calls command_not_found_handle in place of the
+# missing command, so the handler records each one for run_lint to fail on.
+# A tool the lint probes with `command -v` (actionlint, shellcheck, yq,
+# docker) is never executed when absent, so it never reaches the handler.
+MISSING_GUARD="$(mktemp)"
+WORKDIRS+=("$MISSING_GUARD")
+cat > "$MISSING_GUARD" <<'EOF'
+command_not_found_handle() {
+  echo "$1" >> "$MISSING_LOG"
+  echo "harness: $1: not on the lint's PATH" >&2
+  return 127
+}
+EOF
 
 # --- YAML→JSON, for the stubs ----------------------------------------------
 # The stubs standing in for yq do a real conversion, so the assertions stay
@@ -184,6 +208,12 @@ exit 3
 EOF
 chmod +x "$BROKEN_JQ_BIN/docker" "$BROKEN_JQ_BIN/yq" "$BROKEN_JQ_BIN/jq"
 
+# Docker and nothing else: every tool has to come from its image.
+DOCKER_ONLY_BIN="$(mktemp -d)"
+WORKDIRS+=("$DOCKER_ONLY_BIN")
+cp "$STUB_BIN/docker" "$DOCKER_ONLY_BIN/"
+chmod +x "$DOCKER_ONLY_BIN/docker"
+
 NO_ACTIONLINT_BIN="$(mktemp -d)"
 WORKDIRS+=("$NO_ACTIONLINT_BIN")
 cp "$STUB_BIN/docker" "$STUB_BIN/yq" "$NO_ACTIONLINT_BIN/"
@@ -211,11 +241,23 @@ new_repo() {
 }
 
 run_lint() { # <repo> [args...] — stdout+stderr in <repo>/out
-  local repo="$1"
+  local repo="$1" missing
   shift
-  STUB_LOG="$repo/stub.log" PATH="${STUB_PATH:-$NO_ACTIONLINT_BIN}:$CORE_BIN" \
+  : > "$repo/missing.log"
+  STUB_LOG="$repo/stub.log" MISSING_LOG="$repo/missing.log" \
+    BASH_ENV="$MISSING_GUARD" \
+    PATH="${STUB_PATH:-$NO_ACTIONLINT_BIN}:$CORE_BIN" \
     bash "$repo/scripts/lint-workflows.sh" "$@" > "$repo/out" 2>&1
   echo $? > "$repo/exit-code"
+  # Set only by the case that proves this guard fires.
+  [ -n "${EXPECT_MISSING:-}" ] && return
+  if [ -s "$repo/missing.log" ]; then
+    missing="$(sort -u "$repo/missing.log" | tr '\n' ' ')"
+    echo "FAIL: the lint called ${missing}which the harness does not put" \
+      "on its PATH. It runs on stubs plus: ${CORE_BIN_CMDS[*]} — add the" \
+      "command to CORE_BIN_CMDS in scripts/lint-workflows-test.sh."
+    FAILURES=$((FAILURES + 1))
+  fi
 }
 
 expect_contains() { # <file> <needle> <test-name>
@@ -245,6 +287,40 @@ expect_eq() { # <actual> <expected> <test-name>
     echo "FAIL: $3 — expected '$2', got '$1'"
     FAILURES=$((FAILURES + 1))
   fi
+}
+
+# Which copy of each tool a run used — the PATH one or the pinned image —
+# is asserted through this one table, so the two branches cannot drift
+# apart: #352 had to add a `-x` that only one of them had been checked for.
+# A row is the tool, how its pin appears in the docker stub's log, and the
+# flags every invocation must carry whichever copy runs.
+TOOLS=(actionlint shellcheck yq)
+tool_row() { # <tool> — sets $image and $flags
+  case "$1" in
+    actionlint) image="rhysd/actionlint:" flags="-color" ;;
+    shellcheck) image="koalaman/shellcheck:" flags="-x" ;;
+    yq) image="mikefarah/yq:" flags="-o=json" ;;
+  esac
+}
+
+expect_tool() { # <repo> <tool> <image|local> <test-name>
+  local log="$1/stub.log" tool="$2" want="$3" name="$4" image flags flag
+  local local_runs image_runs runs other
+  tool_row "$tool"
+  local_runs="$(grep "^$tool " "$log")"
+  image_runs="$(grep '^docker ' "$log" | grep -F -- "$image")"
+  if [ "$want" = image ]; then
+    runs="$image_runs" other="$local_runs"
+  else
+    runs="$local_runs" other="$image_runs"
+  fi
+  expect_eq "$([ -n "$runs" ] && echo ran)" ran \
+    "$name: $tool runs from its $want copy"
+  expect_eq "$other" "" "$name: $tool runs from no other copy"
+  for flag in $flags; do
+    expect_eq "$(grep -vF -- " $flag" <<< "$runs")" "" \
+      "$name: every $tool run passes $flag"
+  done
 }
 
 # A workflow whose every job is well-formed, used as the "clean" baseline.
@@ -377,25 +453,14 @@ good_workflow "$r" ci
 STUB_ACTIONLINT_EXIT=1 run_lint "$r"
 expect_not_contains "$r/exit-code" "0" "actionlint failure fails the script"
 
-# 8. actionlint runs from the pinned docker image when it is not installed,
-#    with the repo mounted.
+# 8. The image fallbacks mount the repo. (Which copy of each tool runs, and
+#    with which flags, is the tool matrix further down.)
 r="$(new_repo)"
 good_workflow "$r" ci
 run_lint "$r"
-expect_contains "$r/stub.log" "rhysd/actionlint:" \
-  "actionlint falls back to its pinned docker image"
 expect_contains "$r/stub.log" "$r:/repo" "the docker fallback mounts the repo"
 
-# 9. A locally installed actionlint is preferred over the image.
-r="$(new_repo)"
-good_workflow "$r" ci
-STUB_PATH="$STUB_BIN" run_lint "$r"
-expect_contains "$r/stub.log" "actionlint " \
-  "a local actionlint is used directly"
-expect_not_contains "$r/stub.log" "rhysd/actionlint" \
-  "a local actionlint skips the docker image"
-
-# 10. Without yq the parse falls back to the yq image, and still flags jobs.
+# 10. The parse from the yq image still flags jobs.
 r="$(new_repo)"
 cat > "$r/.github/workflows/ci.yml" <<'EOF'
 name: CI
@@ -407,8 +472,6 @@ jobs:
       - run: echo build
 EOF
 STUB_PATH="$NO_YQ_BIN" run_lint "$r"
-expect_contains "$r/stub.log" "mikefarah/yq" \
-  "the parse falls back to the yq image"
 expect_not_contains "$r/exit-code" "0" "the docker parse still flags a bad job"
 
 # 11. A tree with no workflows is a setup mistake, not a pass.
@@ -486,32 +549,8 @@ good_workflow "$r" ci
 STUB_SHELLCHECK_EXIT=1 run_lint "$r"
 expect_not_contains "$r/exit-code" "0" "a shellcheck finding fails the script"
 
-# 18. Sourced files are followed (-x), so a hook that sources a shared
-#     env.sh is not reported as an unfollowable source.
-r="$(new_repo)"
-good_workflow "$r" ci
-run_lint "$r"
-expect_contains "$r/stub.log" " -x " "shellcheck follows sourced files"
-
-# 19. shellcheck runs from its pinned docker image when not installed.
-r="$(new_repo)"
-good_workflow "$r" ci
-run_lint "$r"
-expect_contains "$r/stub.log" "koalaman/shellcheck:" \
-  "shellcheck falls back to its pinned docker image"
-
-# 20. A locally installed shellcheck is preferred over the image.
-r="$(new_repo)"
-good_workflow "$r" ci
-STUB_PATH="$STUB_BIN" run_lint "$r"
-expect_contains "$r/stub.log" "shellcheck " \
-  "a local shellcheck is used directly"
-expect_not_contains "$r/stub.log" "koalaman/shellcheck" \
-  "a local shellcheck skips the docker image"
-# The -x case above only covers the image invocation; the two flag lists
-# are written out separately, so each needs its own assertion.
-expect_contains "$r/stub.log" " -x " \
-  "a local shellcheck also follows sourced files"
+# (18-20, which copy of shellcheck runs and that both follow sourced files
+#  with -x, are the tool matrix below.)
 
 # 21. No severity filter. shellcheck's `info` tier holds SC2086 and friends,
 #     so a `--severity` floor would trade real bugs for quiet — including
@@ -600,50 +639,34 @@ expect_eq "$(cat "$r/exit-code")" 0 \
 # probe so a run answers with the pins and nothing else — that is what CI
 # passes, which makes the pins the single source of truth for "clean".
 
-# 27. --images ignores an installed actionlint and runs the pin.
-r="$(new_repo)"
-good_workflow "$r" ci
-STUB_PATH="$STUB_BIN" run_lint "$r" --images
-expect_eq "$(cat "$r/exit-code")" 0 "--images on a clean tree exits 0"
-expect_contains "$r/stub.log" "rhysd/actionlint:" \
-  "--images runs actionlint from the pin"
-expect_not_contains "$r/stub.log" "actionlint " \
-  "--images ignores the installed actionlint"
-
-# 28. ... and an installed shellcheck, which is the skew that motivated the
-#     flag.
-expect_contains "$r/stub.log" "koalaman/shellcheck:" \
-  "--images runs shellcheck from the pin"
-expect_not_contains "$r/stub.log" "shellcheck -x" \
-  "--images ignores the installed shellcheck"
-
-# 29. ... and an installed yq: one probe left in place is one version the
-#     pins do not describe.
-expect_contains "$r/stub.log" "mikefarah/yq" \
-  "--images runs the YAML parse from the pin"
-expect_not_contains "$r/stub.log" "yq -o=json" \
-  "--images ignores the installed yq"
-
-# 30. The env var is equivalent, so CI (or a shell profile) can force the
-#     pins without editing every call site.
-r="$(new_repo)"
-good_workflow "$r" ci
-KARI_LINT_FORCE_IMAGES=1 STUB_PATH="$STUB_BIN" run_lint "$r"
-expect_eq "$(cat "$r/exit-code")" 0 "KARI_LINT_FORCE_IMAGES=1 exits 0"
-expect_contains "$r/stub.log" "koalaman/shellcheck:" \
-  "KARI_LINT_FORCE_IMAGES=1 runs shellcheck from the pin"
-expect_not_contains "$r/stub.log" "shellcheck -x" \
-  "KARI_LINT_FORCE_IMAGES=1 ignores the installed shellcheck"
-
-# 31. A falsy value leaves the fast path alone: an exported 0 must not cost
-#     every local run three image pulls.
-r="$(new_repo)"
-good_workflow "$r" ci
-KARI_LINT_FORCE_IMAGES=0 STUB_PATH="$STUB_BIN" run_lint "$r"
-expect_contains "$r/stub.log" "shellcheck -x" \
-  "KARI_LINT_FORCE_IMAGES=0 still prefers the installed shellcheck"
-expect_not_contains "$r/stub.log" "koalaman/shellcheck" \
-  "KARI_LINT_FORCE_IMAGES=0 pulls no image"
+# 27. The tool matrix: for each combination of installed tools and forcing
+#     switch, which copy of every tool ran, and that it ran with its flags
+#     (the table is tool_row above). Each tool is probed on its own, so a
+#     missing one falls back without dragging the others along; --images and
+#     a truthy KARI_LINT_FORCE_IMAGES skip every probe, since one probe left
+#     in place is one version the pins do not describe; a falsy value leaves
+#     the fast path alone, so an exported 0 does not cost three image pulls.
+tool_case() { # <name> <stub dir> <FORCE_IMAGES value> <arg> <want per TOOL>
+  local name="$1" stub="$2" force="$3" arg="$4" r tool
+  shift 4
+  r="$(new_repo)"
+  good_workflow "$r" ci
+  KARI_LINT_FORCE_IMAGES="$force" STUB_PATH="$stub" \
+    run_lint "$r" ${arg:+"$arg"}
+  expect_eq "$(cat "$r/exit-code")" 0 "$name: a clean tree exits 0"
+  for tool in "${TOOLS[@]}"; do
+    expect_tool "$r" "$tool" "$1" "$name"
+    shift
+  done
+}
+tool_case "nothing installed" "$DOCKER_ONLY_BIN" "" "" image image image
+tool_case "everything installed" "$STUB_BIN" "" "" local local local
+tool_case "only yq installed" "$NO_ACTIONLINT_BIN" "" "" image image local
+tool_case "only actionlint installed" "$NO_YQ_BIN" "" "" local image image
+tool_case "--images" "$STUB_BIN" "" --images image image image
+tool_case "KARI_LINT_FORCE_IMAGES=1" "$STUB_BIN" 1 "" image image image
+tool_case "KARI_LINT_FORCE_IMAGES=true" "$STUB_BIN" true "" image image image
+tool_case "KARI_LINT_FORCE_IMAGES=0" "$STUB_BIN" 0 "" local local local
 
 # 32. Forcing the pins without docker fails, and fails before running
 #     anything: silently falling back to the local binaries would hand back
