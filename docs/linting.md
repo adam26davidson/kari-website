@@ -21,10 +21,16 @@ one of those files or when a local run disagrees with CI.
    `# renovate: datasource=docker` comment that `renovate.json`'s
    customManager keys off (without it the pin is invisible to Renovate).
    Pin-shaped lines inside a heredoc body are skipped — they are text a
-   script prints, not assignments. The check is a line scan, not a shell
-   parser, so a `<<WORD` inside a string reads as a heredoc opener; one
-   that never closes fails the check rather than exempting the rest of
-   the file.
+   script prints, not assignments. Every delimiter form closes its
+   heredoc: bare (`<<EOF`), quoted with any characters (`<<"END-X"`,
+   `<<'a.b'`), backslash-quoted (`<<\EOF`) and tab-stripped (`<<-EOF`);
+   a `<<` inside a one-line `((...))` or `$((...))` is a left shift and
+   opens nothing. The check is a line scan, not a shell parser, so some
+   shapes still misread: a `<<WORD` inside a string, or in arithmetic it
+   cannot see (`let`, `$[...]`, a `((` spanning lines), reads as an
+   opener, and a partly quoted delimiter (`E"O"F`) is read short. A
+   misread heredoc never closes, and that fails the check rather than
+   exempting the rest of the file.
 5. No line of a `*.sh` file or of any YAML under `.github/` is longer than
    80 characters (AGENTS.md's line-width convention), counted in
    characters rather than bytes, so `—` is one column.

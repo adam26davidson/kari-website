@@ -788,12 +788,56 @@ run_lint "$r"
 expect_not_contains "$r/exit-code" "0" "an unclosed heredoc exits non-zero"
 expect_contains "$r/out" "never closed" "an unclosed heredoc says so"
 
+# 30. Every delimiter shell accepts closes its heredoc: a quoted one may
+#     hold any character, and `<<\WORD` quotes it with a backslash. A
+#     delimiter misread as shorter never closes, which fails the lint on
+#     correct shell.
+r="$(new_repo)"
+good_workflow "$r" ci
+extra_script "$r" scripts/delims.sh "cat <<\"END-X\"
+$pin
+END-X
+cat <<'a.b'
+$pin
+a.b
+$pin"
+extra_script "$r" scripts/backslash.sh "cat <<\\EOF
+$pin
+EOF
+$pin"
+run_lint "$r"
+expect_not_contains "$r/out" "never closed" \
+  "a quoted delimiter with a non-word character closes its heredoc"
+expect_not_contains "$r/out" "scripts/delims.sh:3:" \
+  "a pin in a heredoc with a double-quoted delimiter is not flagged"
+expect_not_contains "$r/out" "scripts/delims.sh:6:" \
+  "a pin in a heredoc with a single-quoted dotted delimiter is not flagged"
+expect_contains "$r/out" "scripts/delims.sh:8:" \
+  "a pin after the quoted-delimiter heredocs is still flagged"
+expect_not_contains "$r/out" "scripts/backslash.sh:3:" \
+  "a pin in a backslash-quoted heredoc is not flagged"
+expect_contains "$r/out" "scripts/backslash.sh:5:" \
+  "a pin after the backslash-quoted heredoc is still flagged"
+
+# 31. `<<` inside arithmetic is a left shift, not a heredoc opener.
+r="$(new_repo)"
+good_workflow "$r" ci
+extra_script "$r" scripts/shift.sh "echo \"\$((1 << bits))\"
+(( mask = 1<<width ))
+echo \$(( (1 << n) - 1 ))
+$pin"
+run_lint "$r"
+expect_not_contains "$r/out" "never closed" \
+  "an arithmetic left shift opens no heredoc"
+expect_contains "$r/out" "scripts/shift.sh:5:" \
+  "a pin after an arithmetic shift is still flagged"
+
 # --- 80-column lines (#338) -------------------------------------------------
 
 printf -v cols80 '%80s' ''
 cols80="${cols80// /x}"
 
-# 30. A shell script line of 81 characters fails, naming file and line; one
+# 32. A shell script line of 81 characters fails, naming file and line; one
 #     of exactly 80 is fine.
 r="$(new_repo)"
 good_workflow "$r" ci
@@ -807,7 +851,7 @@ expect_contains "$r/out" "80 characters" \
   "an 81-character line names the limit"
 expect_not_contains "$r/out" "fits.sh" "an 80-character line is fine"
 
-# 31. Width is counted in characters, not bytes: an em dash is three bytes
+# 33. Width is counted in characters, not bytes: an em dash is three bytes
 #     of UTF-8 and one column.
 r="$(new_repo)"
 good_workflow "$r" ci
@@ -820,7 +864,7 @@ run_lint "$r"
 expect_contains "$r/out" "scripts/wide.sh:2:" \
   "an 81-character line holding multibyte characters fails"
 
-# 32. Workflow and composite-action YAML is held to the same width.
+# 34. Workflow and composite-action YAML is held to the same width.
 r="$(new_repo)"
 good_workflow "$r" ci
 printf '# %s\n' "$cols80" >> "$r/.github/workflows/ci.yml"
@@ -835,7 +879,7 @@ expect_contains "$r/out" ".github/actions/stack/action.yml:2:" \
 
 # --- the harness's own PATH guard (#357, #385) ------------------------------
 
-# 33. A lint that calls something off CORE_BIN_CMDS is caught even when, as
+# 35. A lint that calls something off CORE_BIN_CMDS is caught even when, as
 #     here, it discards the result and the lint itself still passes — which
 #     is exactly why the guard cannot rely on the lint failing.
 r="$(new_repo)"

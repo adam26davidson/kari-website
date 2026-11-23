@@ -281,11 +281,20 @@ fi
 # heredocs, opened on a line that is not a comment — a pin quoted inside
 # an ordinary multi-line string is still flagged; telling those apart needs
 # a shell parser, not a line scan. For the same reason a `<<WORD` inside a
-# string reads as an opener, and a heredoc still open at the end of the
-# file fails the check rather than silently exempting the rest of it.
+# string, or inside arithmetic that is not a `((...))` on one line (`let`,
+# `$[...]`, or a `((` spanning lines), reads as an opener; so does a
+# delimiter only partly quoted (`E"O"F`), which is then misread. A heredoc
+# still open at the end of the file fails the check rather than silently
+# exempting the rest of it.
 pin_re='^[[:space:]]*[A-Za-z_]*IMAGE=.*:[A-Za-z0-9]'
-# `<<WORD`, `<< 'WORD'`, `<<-"WORD"` — but not the here-string `<<<`.
-heredoc_re="(^|[^<])<<(-?)[[:space:]]*[\"']?([A-Za-z_][A-Za-z0-9_]*)"
+# `<<WORD`, `<< 'WORD'`, `<<-"END-X"`, `<<\WORD` — but not the here-string
+# `<<<`. A quoted delimiter may hold any character but its quote; a bare
+# one runs to the next blank or shell metacharacter.
+heredoc_re="(^|[^<])<<(-?)[[:space:]]*"
+heredoc_re+="('([^']+)'|\"([^\"]+)\"|\\\\?([^[:space:]|&;()<>'\"\\\\]+))"
+# A `((...))` on one line, `$((` included: its `<<` is a left shift. The
+# body may hold single parens, `$(( (1 << n) - 1 ))`, but not `))`.
+arith_re='\(\(([^)]|\)[^)])*\)\)'
 tab=$'\t'
 echo "==> annotated docker-image pins"
 for script in "${shell_scripts[@]}"; do
@@ -306,10 +315,15 @@ for script in "${shell_scripts[@]}"; do
           "this line" >&2
         status=1
       fi
+      scan="$line"
+      while [[ $scan =~ $arith_re ]]; do
+        scan="${scan/"${BASH_REMATCH[0]}"/ }"
+      done
       # The comment test goes first: each =~ resets BASH_REMATCH.
-      if [[ ! $line =~ ^[[:space:]]*# && $line =~ $heredoc_re ]]; then
+      if [[ ! $scan =~ ^[[:space:]]*# && $scan =~ $heredoc_re ]]; then
         strip_tabs="${BASH_REMATCH[2]}"
-        terminator="${BASH_REMATCH[3]}"
+        # Exactly one of the three delimiter forms matched.
+        terminator="${BASH_REMATCH[4]}${BASH_REMATCH[5]}${BASH_REMATCH[6]}"
       fi
     fi
     previous="$line"
