@@ -34,7 +34,7 @@ aws-config = "1.13.3"
 # picks `default-https-client` (hyper 1 / rustls 0.23 / aws-lc-rs), so this
 # removes dead code, not the client S3 calls actually use.
 aws-sdk-s3 = { version = "1.161.0", default-features = false, features = ["sigv4a", "http-1x", "default-https-client", "rt-tokio"] }
-aws-smithy-types = "1.9.4"
+aws-smithy-types = "1.9.5"
 async-trait = "0.1.92"
 mime_guess = "2.0.5"
 uuid = { version = "1.27.0", features = ["v4"] }
