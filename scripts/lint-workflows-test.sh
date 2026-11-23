@@ -693,6 +693,167 @@ expect_contains "$r/out" "--images" "--help documents --images"
 expect_contains "$r/out" "KARI_LINT_FORCE_IMAGES" \
   "--help documents the env var"
 
+# --- local composite actions carry a step-level timeout (#387) -------------
+# A composite action's own steps cannot set timeout-minutes (a GitHub
+# limitation), so the calling step is the only place its setup can be
+# bounded separately from the job.
+
+# 34. A `uses: ./...` step without one is named, with its job; third-party
+#     actions and local callers that set one are not flagged.
+r="$(new_repo)"
+cat > "$r/.github/workflows/ci.yml" <<'EOF'
+name: CI
+on: [push]
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bounded stack
+        timeout-minutes: 12
+        uses: ./.github/actions/bounded
+      - name: Unbounded stack
+        uses: ./.github/actions/unbounded
+EOF
+run_lint "$r"
+expect_not_contains "$r/exit-code" "0" \
+  "a local action step without timeout-minutes exits non-zero"
+expect_contains "$r/out" "e2e: step \"Unbounded stack\"" \
+  "an unbounded local action step names its job and step"
+expect_contains "$r/out" "./.github/actions/unbounded" \
+  "an unbounded local action step names the action"
+expect_not_contains "$r/out" '"Bounded stack"' \
+  "a local action step with a timeout is not flagged"
+expect_not_contains "$r/out" "checkout" \
+  "a third-party action step needs no timeout"
+
+# 35. An unnamed step is identified by position, and the value has to be a
+#     positive integer like the job-level one.
+r="$(new_repo)"
+cat > "$r/.github/workflows/ci.yml" <<'EOF'
+name: CI
+on: [push]
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - run: echo first
+      - uses: ./.github/actions/stack
+        timeout-minutes: 0
+EOF
+run_lint "$r"
+expect_not_contains "$r/exit-code" "0" \
+  "a local action step timeout of 0 exits non-zero"
+expect_contains "$r/out" "e2e: step 2" "an unnamed step is named by position"
+expect_contains "$r/out" "positive integer" \
+  "a bad step timeout explains the requirement"
+
+# --- image pins quoted inside heredocs (#338) -------------------------------
+
+# 36. A pin-shaped line in a heredoc body is text, not an assignment, so it
+#     needs no annotation — but the check resumes after the terminator, and
+#     a here-string (<<<) opens nothing.
+r="$(new_repo)"
+good_workflow "$r" ci
+extra_script "$r" scripts/usage.sh "cat <<'USAGE'
+  $pin scripts/usage.sh
+USAGE
+cat <<-EOF
+	$pin
+	EOF
+grep -q x <<< \"\$1\"
+$pin"
+run_lint "$r"
+expect_not_contains "$r/out" "scripts/usage.sh:3:" \
+  "a pin in a quoted heredoc is not flagged"
+expect_not_contains "$r/out" "scripts/usage.sh:6:" \
+  "a pin in a tab-stripped heredoc is not flagged"
+expect_contains "$r/out" "scripts/usage.sh:9:" \
+  "a pin after the heredocs and a here-string is still flagged"
+
+# 37. A `<<WORD` in a comment opens nothing, and a heredoc that never closes
+#     fails loudly: a line scan that misread an opener must not quietly
+#     exempt the rest of the file.
+# Built from a variable so this file's own source holds no unclosed opener.
+open='cat <''<EOF'
+r="$(new_repo)"
+good_workflow "$r" ci
+extra_script "$r" scripts/open.sh "# write it with $open
+$pin"
+run_lint "$r"
+expect_contains "$r/out" "scripts/open.sh:3:" \
+  "a heredoc opener in a comment opens nothing"
+extra_script "$r" scripts/open.sh "$open
+never closed"
+run_lint "$r"
+expect_not_contains "$r/exit-code" "0" "an unclosed heredoc exits non-zero"
+expect_contains "$r/out" "never closed" "an unclosed heredoc says so"
+
+# --- 80-column lines (#338) -------------------------------------------------
+
+printf -v cols80 '%80s' ''
+cols80="${cols80// /x}"
+
+# 37. A shell script line of 81 characters fails, naming file and line; one
+#     of exactly 80 is fine.
+r="$(new_repo)"
+good_workflow "$r" ci
+extra_script "$r" scripts/fits.sh "#${cols80:1}"
+extra_script "$r" scripts/wide.sh "#$cols80"
+run_lint "$r"
+expect_not_contains "$r/exit-code" "0" "an 81-character line exits non-zero"
+expect_contains "$r/out" "scripts/wide.sh:2:" \
+  "an 81-character line names its file and line"
+expect_contains "$r/out" "80 characters" \
+  "an 81-character line names the limit"
+expect_not_contains "$r/out" "fits.sh" "an 80-character line is fine"
+
+# 38. Width is counted in characters, not bytes: an em dash is three bytes
+#     of UTF-8 and one column.
+r="$(new_repo)"
+good_workflow "$r" ci
+extra_script "$r" scripts/fits.sh "#—${cols80:2}"
+run_lint "$r"
+expect_eq "$(cat "$r/exit-code")" 0 \
+  "an 80-character line holding multibyte characters is fine"
+extra_script "$r" scripts/wide.sh "#—${cols80:1}"
+run_lint "$r"
+expect_contains "$r/out" "scripts/wide.sh:2:" \
+  "an 81-character line holding multibyte characters fails"
+
+# 39. Workflow and composite-action YAML is held to the same width.
+r="$(new_repo)"
+good_workflow "$r" ci
+printf '# %s\n' "$cols80" >> "$r/.github/workflows/ci.yml"
+mkdir -p "$r/.github/actions/stack"
+printf 'name: stack\n# %s\n' "$cols80" > "$r/.github/actions/stack/action.yml"
+run_lint "$r"
+expect_not_contains "$r/exit-code" "0" "a wide workflow line exits non-zero"
+expect_contains "$r/out" ".github/workflows/ci.yml:14:" \
+  "a wide workflow line names its file and line"
+expect_contains "$r/out" ".github/actions/stack/action.yml:2:" \
+  "a wide composite-action line names its file and line"
+
+# --- the harness's own PATH guard (#357, #385) ------------------------------
+
+# 40. A lint that calls something off CORE_BIN_CMDS is caught even when, as
+#     here, it discards the result and the lint itself still passes — which
+#     is exactly why the guard cannot rely on the lint failing.
+r="$(new_repo)"
+good_workflow "$r" ci
+{
+  echo '#!/usr/bin/env bash'
+  echo 'not-a-core-command > /dev/null 2>&1'
+  tail -n +2 "$LINT"
+} > "$r/scripts/lint-workflows.sh"
+EXPECT_MISSING=1 run_lint "$r"
+expect_eq "$(cat "$r/exit-code")" 0 \
+  "the guard case's lint passes on its own"
+expect_contains "$r/missing.log" "not-a-core-command" \
+  "the PATH guard records a command missing from CORE_BIN_CMDS"
+
 echo
 if [ "$FAILURES" -eq 0 ]; then
   echo "All checks passed."

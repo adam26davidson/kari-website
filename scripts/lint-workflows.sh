@@ -182,20 +182,43 @@ for wf in "${workflows[@]}"; do
   # A jq failure has to fail the lint: an unreadable file must never look
   # like a file with nothing to report.
   if ! problems="$(jq -r '
+    def bad_timeout:
+      (type) != "number" or floor != . or . <= 0;
     (.jobs // {})
     | to_entries[]
     | select((.value | type) == "object")
     # Reusable-workflow callers cannot set timeout-minutes.
     | select(.value | has("uses") | not)
     | .key as $job
-    | .value["timeout-minutes"] as $t
-    | if $t == null then
-        "\($job): no job-level timeout-minutes"
-      elif ($t | type) != "number" or ($t | floor) != $t or $t <= 0 then
-        "\($job): timeout-minutes must be a positive integer, got"
-          + " \($t | tojson)"
-      else empty
-      end
+    | .value as $spec
+    | ($spec["timeout-minutes"] as $t
+      | if $t == null then
+          "\($job): no job-level timeout-minutes"
+        elif ($t | bad_timeout) then
+          "\($job): timeout-minutes must be a positive integer, got"
+            + " \($t | tojson)"
+        else empty
+        end),
+      # A composite action cannot bound its own steps, so the step calling
+      # a local one is the only place its setup can be (issue #387).
+      ($spec.steps // []
+      | if type == "array" then to_entries[] else empty end
+      | select((.value | type) == "object")
+      | select(.value.uses | type == "string" and startswith("./"))
+      # Named steps by name, unnamed ones by their 1-based position.
+      | (.value.name // .value.id) as $n
+      | "\($job): step \(if $n then $n | tojson else .key + 1 end)"
+        as $step
+      | .value["timeout-minutes"] as $t
+      | if $t == null then
+          "\($step) uses \(.value.uses) with no step-level"
+            + " timeout-minutes — a composite action cannot bound its"
+            + " own steps, so the calling step has to"
+        elif ($t | bad_timeout) then
+          "\($step): timeout-minutes must be a positive integer, got"
+            + " \($t | tojson)"
+        else empty
+        end)
   ' <<< "$json")"; then
     echo "$wf: the timeout check could not read its jobs" >&2
     status=1
@@ -247,27 +270,88 @@ fi
 # assignments from arguments or other variables, which have nothing to
 # track. Renovate reads the comment on the line above, so that is where the
 # annotation has to be.
+#
+# Heredoc bodies are skipped: a pin-shaped line there is text a script
+# prints (a usage message, a generated file), not an assignment. Only
+# heredocs, opened on a line that is not a comment — a pin quoted inside
+# an ordinary multi-line string is still flagged; telling those apart needs
+# a shell parser, not a line scan. For the same reason a `<<WORD` inside a
+# string reads as an opener, and a heredoc still open at the end of the
+# file fails the check rather than silently exempting the rest of it.
+pin_re='^[[:space:]]*[A-Za-z_]*IMAGE=.*:[A-Za-z0-9]'
+# `<<WORD`, `<< 'WORD'`, `<<-"WORD"` — but not the here-string `<<<`.
+heredoc_re="(^|[^<])<<(-?)[[:space:]]*[\"']?([A-Za-z_][A-Za-z0-9_]*)"
+tab=$'\t'
 echo "==> annotated docker-image pins"
 for script in "${shell_scripts[@]}"; do
-  while IFS=: read -r lineno _; do
-    [ -n "$lineno" ] || continue
-    previous=""
-    [ "$lineno" -gt 1 ] && previous="$(sed -n "$((lineno - 1))p" "$script")"
-    case "$previous" in
-      *"# renovate:"*) ;;
-      *)
+  lineno=0
+  previous=""
+  terminator=""
+  strip_tabs=""
+  while IFS= read -r line || [ -n "$line" ]; do
+    lineno=$((lineno + 1))
+    if [ -n "$terminator" ]; then
+      # `<<-` strips leading tabs from the body, terminator included.
+      [ -n "$strip_tabs" ] && line="${line#"${line%%[!"$tab"]*}"}"
+      [ "$line" = "$terminator" ] && terminator=""
+    else
+      if [[ $line =~ $pin_re ]] && [[ $previous != *"# renovate:"* ]]; then
         echo "$script:$lineno: pinned image is invisible to renovate —" \
           "add a '# renovate: datasource=docker' comment directly above" \
           "this line" >&2
         status=1
-        ;;
-    esac
-  done < <(grep -n '^[[:space:]]*[A-Za-z_]*IMAGE=.*:[A-Za-z0-9]' "$script")
+      fi
+      # The comment test goes first: each =~ resets BASH_REMATCH.
+      if [[ ! $line =~ ^[[:space:]]*# && $line =~ $heredoc_re ]]; then
+        strip_tabs="${BASH_REMATCH[2]}"
+        terminator="${BASH_REMATCH[3]}"
+      fi
+    fi
+    previous="$line"
+  done < "$script"
+  if [ -n "$terminator" ]; then
+    echo "$script: the heredoc ended by '$terminator' is never closed, so" \
+      "the pin check cannot tell where its body ends" >&2
+    status=1
+  fi
 done
+
+# --- 5. line width ---------------------------------------------------------
+# The 80-column convention (AGENTS.md "Code Style Guidelines"), over every
+# shell script above and every YAML file under .github. Counted in
+# characters, not bytes, so an em dash is one column: in the C locale each
+# byte is a character to grep, and a UTF-8 character is one byte outside
+# 0x80-0xBF followed by any number inside it — so this pattern counts
+# characters the same way on every machine, whatever its locale. There is
+# no exemption marker: docs/linting.md says how to wrap each kind of line.
+max_width=80
+wide_re=$'^([^\x80-\xbf][\x80-\xbf]*){'"$((max_width + 1))"'}'
+yaml_files=()
+while IFS= read -r file; do
+  yaml_files+=("$file")
+done < <(find .github \( -name '*.yml' -o -name '*.yaml' \) -print | sort)
+
+width_files=("${shell_scripts[@]}" "${yaml_files[@]}")
+echo "==> line width (${#width_files[@]} files, $max_width columns)"
+wide_lines="$(LC_ALL=C grep -HnE -- "$wide_re" "${width_files[@]}")"
+case $? in
+  0)
+    while IFS=: read -r file lineno _; do
+      echo "$file:$lineno: longer than $max_width characters" >&2
+    done <<< "$wide_lines"
+    status=1
+    ;;
+  1) ;; # no wide lines
+  *)
+    echo "the line-width check could not read its files" >&2
+    status=1
+    ;;
+esac
 
 if [ "$status" -eq 0 ]; then
   echo "OK: actionlint and shellcheck clean, $checked jobs all set a" \
-    "job-level timeout, every image pin annotated for renovate."
+    "job-level timeout, every image pin annotated for renovate, every" \
+    "line within $max_width columns."
 else
   echo "Lint failed — see the findings above." >&2
 fi
