@@ -134,8 +134,9 @@ the exception in the doc.
 - Shell or workflow changes (any `*.sh`, including `automation/`, and
   `.github/workflows/*`): `./scripts/lint-workflows.sh`. It is exactly what
   CI's `shell-lint` job runs — actionlint over the workflows, the
-  job-level `timeout-minutes` assertion, shellcheck over every `*.sh` in
-  the repo, and the renovate annotation on every pinned docker image — and
+  `timeout-minutes` assertions, shellcheck over every `*.sh` in the repo,
+  the renovate annotation on every pinned docker image, and the 80-column
+  limit on every `*.sh` and `.github` YAML line — and
   it needs nothing installed, falling back to pinned docker images when a
   tool is missing from PATH. Don't hand-roll a `docker run
   koalaman/shellcheck` instead. CI passes `--images`, which uses the pins

@@ -82,9 +82,10 @@ cat > "$STUB_BIN/npx" <<'EOF'
 #!/usr/bin/env bash
 echo "$PWD: npx $*" >>"$STUB_LOG"
 echo "npm notice run kari-website@0.0.0 npx" >&2
-echo "BEWARE: your OS is not officially supported by Playwright; downloading fallback build for ubuntu24.04-x64."
-echo "BEWARE: your OS is not officially supported by Playwright; downloading fallback build for ubuntu24.04-x64."
-echo "BEWARE: your OS is not officially supported by Playwright; downloading fallback build for ubuntu24.04-x64."
+for _ in 1 2 3; do
+  echo "BEWARE: your OS is not officially supported by Playwright;" \
+    "downloading fallback build for ubuntu24.04-x64."
+done
 EOF
 cat > "$STUB_BIN/node" <<'EOF'
 #!/usr/bin/env bash
@@ -146,7 +147,8 @@ cat > "$NPX_COLD_BIN/npx" <<'EOF'
 #!/usr/bin/env bash
 echo "$PWD: npx $*" >>"$STUB_LOG"
 echo "npm notice run kari-website@0.0.0 npx" >&2
-echo "BEWARE: your OS is not officially supported by Playwright; downloading fallback build for ubuntu24.04-x64."
+echo "BEWARE: your OS is not officially supported by Playwright;" \
+  "downloading fallback build for ubuntu24.04-x64."
 echo "Downloading Chromium 140.0.1 from https://cdn.playwright.dev"
 echo "Chromium 140.0.1 downloaded to /home/u/.cache/ms-playwright/chromium-1200"
 EOF

@@ -251,15 +251,22 @@ jobs:
           set -o pipefail
           # --fail-under-lines is the coverage ratchet: pinned just below the
           # current number; bump it when coverage rises (see CLAUDE.md).
-          cargo llvm-cov --json --summary-only --fail-under-lines 90 --output-path coverage.json
+          cargo llvm-cov --json --summary-only --fail-under-lines 90 \
+            --output-path coverage.json
           cargo llvm-cov report | tee coverage-report.txt
 
       - name: Build coverage comment
         run: |
-          ui_lines=$(jq -r '.total.lines.pct' ui/coverage/coverage-summary.json)
-          ui_funcs=$(jq -r '.total.functions.pct' ui/coverage/coverage-summary.json)
-          api_lines=$(jq -r '(.data[0].totals.lines.percent * 10 | round) / 10' api/coverage.json)
-          api_funcs=$(jq -r '(.data[0].totals.functions.percent * 10 | round) / 10' api/coverage.json)
+          ui_summary=ui/coverage/coverage-summary.json
+          ui_lines=$(jq -r '.total.lines.pct' "$ui_summary")
+          ui_funcs=$(jq -r '.total.functions.pct' "$ui_summary")
+          api_pct() { # <lines|functions> — to one decimal place
+            jq -r --arg m "$1" \
+              '(.data[0].totals[$m].percent * 10 | round) / 10' \
+              api/coverage.json
+          }
+          api_lines=$(api_pct lines)
+          api_funcs=$(api_pct functions)
           # One row per npm workspace (#593). The UI ratchet floors are
           # per-workspace, and a floor may only be tightened from CI's own
           # numbers -- V8 line accounting differs between CI's Node 22 and a
@@ -272,9 +279,13 @@ jobs:
               ([$files[].value[$metric].covered] | add) * 1000
               / ([$files[].value[$metric].total] | add) | round / 10;
             ["apps/public", "apps/admin", "packages/shared"][] as $ws
-            | [to_entries[] | select(.key | contains("/" + $ws + "/"))] as $files
-            | "| ↳ `\($ws)` | \(pct($files; "lines"))% | \(pct($files; "functions"))% |"
-          ' ui/coverage/coverage-summary.json)
+            | [to_entries[] | select(.key | contains("/" + $ws + "/"))]
+              as $files
+            | "| ↳ `\($ws)` | \(pct($files; "lines"))% | "
+              + "\(pct($files; "functions"))% |"
+          ' "$ui_summary")
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          run_url+="/actions/runs/$GITHUB_RUN_ID"
           {
             echo "## Test coverage"
             echo ""
@@ -284,7 +295,7 @@ jobs:
             echo "$ws_rows"
             echo "| API (Rust) | ${api_lines}% | ${api_funcs}% |"
             echo ""
-            echo "Per-file breakdown in the [job summary](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+            echo "Per-file breakdown in the [job summary]($run_url)."
           } > coverage-comment.md
           {
             cat coverage-comment.md

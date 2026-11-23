@@ -4,9 +4,9 @@ name: Visual review
 # stack as the e2e job (local S3 + seed + API + test-mode preview), captures
 # screenshots of the public pages and the admin pages
 # (ui/e2e/screenshots.mjs — the test bundle signs itself in since #266, so
-# no Auth0 credentials are involved), and
-# has Claude review them for visual defects — overflow, clipped images, illegible
-# text, broken mobile layout — that behavioral tests can't catch. Findings
+# no Auth0 credentials are involved), and has Claude review them for visual
+# defects — overflow, clipped images, illegible text, broken mobile layout —
+# that behavioral tests can't catch. Findings
 # are posted as an advisory sticky PR comment; this job never blocks a
 # merge on a design judgment.
 #
@@ -55,6 +55,10 @@ jobs:
     timeout-minutes: 30
     env:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # This run's page, which the review links its screenshots to.
+      RUN_URL: >-
+        ${{ format('{0}/{1}/actions/runs/{2}', github.server_url,
+        github.repository, github.run_id) }}
     steps:
       # All later steps gate on this so the job is a cheap no-op until the
       # secret exists (and on forks, where secrets are never available).
@@ -65,7 +69,8 @@ jobs:
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::Skipping visual review — no CLAUDE_CODE_OAUTH_TOKEN secret."
+            echo "::notice::Skipping visual review — no" \
+              "CLAUDE_CODE_OAUTH_TOKEN secret."
           fi
 
       - uses: actions/checkout@v7
@@ -175,7 +180,7 @@ jobs:
             Order the list most-severe first. This review is advisory;
             keep it short and concrete. End the file with the line:
             "*Automated visual review of [this run's
-            screenshots](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+            screenshots](${{ env.RUN_URL }}).
             Advisory only — it does not block merging.*"
 
       - name: Comment review on PR

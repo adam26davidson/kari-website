@@ -47,8 +47,8 @@ EOF
 # binary, embedding main.rs as it is at the end of the build.
 cat > "$STUB_BIN/cargo" <<'EOF'
 #!/usr/bin/env bash
-echo "$PWD: cargo $* target=${CARGO_TARGET_DIR:-} sha=${KARI_COMMIT_SHA-unset}" \
-  >>"$STUB_LOG"
+echo "$PWD: cargo $* target=${CARGO_TARGET_DIR:-}" \
+  "sha=${KARI_COMMIT_SHA-unset}" >>"$STUB_LOG"
 [ "${1:-}" = build ] || exit 0
 if [ -n "${STUB_RELEASE:-}" ]; then
   # The wait runs in a child process, as real compiles run in rustc children
@@ -203,6 +203,9 @@ reset() { # <repo>
   : > "$1/stub.log"
 }
 
+# How the cargo stub logs this repo's manifest flag, in the cases below.
+manifest="--manifest-path api/Cargo.toml"
+
 # 1. A miss builds into the shared target with the dev-auth feature and this
 #    repo's manifest, cleaning the local crate first, then runs the copy
 #    published under bin/ — never the shared target/debug binary.
@@ -211,10 +214,10 @@ r="$(new_repo A)"
 run_api "$r" "$c" -- --flag
 expect_eq "$(cat "$r/exit-code")" 0 "a miss exits 0 once the API exits"
 expect_contains "$r/stub.log" \
-  "$r: cargo clean -p kari-website-api --manifest-path api/Cargo.toml target=$c/target" \
+  "$r: cargo clean -p kari-website-api $manifest target=$c/target" \
   "a miss cleans the local crate in the shared target"
 expect_contains "$r/stub.log" \
-  "$r: cargo build --manifest-path api/Cargo.toml --features dev-auth target=$c/target" \
+  "$r: cargo build $manifest --features dev-auth target=$c/target" \
   "a miss builds with dev-auth into the shared target"
 expect_before "$r/stub.log" "cargo clean" "cargo build" \
   "the clean comes before the build"
@@ -389,7 +392,8 @@ done
 c="$(tmpdir)"
 r="$(new_repo sha)"
 KARI_COMMIT_SHA=deadbeef run_api "$r" "$c"
-expect_contains "$r/stub.log" "cargo build --manifest-path api/Cargo.toml --features dev-auth target=$c/target sha=unset" \
+expect_contains "$r/stub.log" \
+  "cargo build $manifest --features dev-auth target=$c/target sha=unset" \
   "KARI_COMMIT_SHA is not visible to cargo"
 
 # 14. Pruning: KARI_API_CACHE_KEEP bounds the binaries (most recent kept),

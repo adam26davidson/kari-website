@@ -47,7 +47,7 @@ trap cleanup EXIT
 # external utility, add it here — anything missing is caught by the
 # command_not_found_handle guard below, which fails the case and names this
 # list (#357, #385).
-CORE_BIN_CMDS=(bash dirname find grep jq sed sort)
+CORE_BIN_CMDS=(bash dirname find grep jq sort)
 CORE_BIN="$(mktemp -d)"
 WORKDIRS+=("$CORE_BIN")
 for cmd in "${CORE_BIN_CMDS[@]}"; do
@@ -460,7 +460,7 @@ good_workflow "$r" ci
 run_lint "$r"
 expect_contains "$r/stub.log" "$r:/repo" "the docker fallback mounts the repo"
 
-# 10. The parse from the yq image still flags jobs.
+# 9. The parse from the yq image still flags jobs.
 r="$(new_repo)"
 cat > "$r/.github/workflows/ci.yml" <<'EOF'
 name: CI
@@ -474,13 +474,13 @@ EOF
 STUB_PATH="$NO_YQ_BIN" run_lint "$r"
 expect_not_contains "$r/exit-code" "0" "the docker parse still flags a bad job"
 
-# 11. A tree with no workflows is a setup mistake, not a pass.
+# 10. A tree with no workflows is a setup mistake, not a pass.
 r="$(new_repo)"
 run_lint "$r"
 expect_not_contains "$r/exit-code" "0" "no workflow files exits non-zero"
 expect_contains "$r/out" "no workflow files" "no workflow files says so"
 
-# 12. A workflow file with no jobs at all would make the timeout check
+# 11. A workflow file with no jobs at all would make the timeout check
 #     vacuous — fail instead of silently reporting success.
 r="$(new_repo)"
 cat > "$r/.github/workflows/ci.yml" <<'EOF'
@@ -492,7 +492,7 @@ run_lint "$r"
 expect_not_contains "$r/exit-code" "0" "a workflow with no jobs exits non-zero"
 expect_contains "$r/out" "no jobs" "a workflow with no jobs says so"
 
-# 13. A timeout check that cannot run fails the lint. Without this the
+# 12. A timeout check that cannot run fails the lint. Without this the
 #     check degrades silently: no output reads exactly like nothing to fix.
 r="$(new_repo)"
 good_workflow "$r" ci
@@ -501,7 +501,7 @@ expect_not_contains "$r/exit-code" "0" "a broken timeout check exits non-zero"
 expect_contains "$r/out" "could not read its jobs" \
   "a broken timeout check says which file it gave up on"
 
-# 14. --help documents usage without running any tool.
+# 13. --help documents usage without running any tool.
 r="$(new_repo)"
 good_workflow "$r" ci
 run_lint "$r" --help
@@ -510,7 +510,7 @@ expect_contains "$r/out" "usage: scripts/lint-workflows.sh" \
   "--help prints usage"
 expect_eq "$(wc -c < "$r/stub.log")" 0 "--help runs no tools"
 
-# 15. Unknown options are rejected rather than silently ignored.
+# 14. Unknown options are rejected rather than silently ignored.
 r="$(new_repo)"
 good_workflow "$r" ci
 run_lint "$r" --wat
@@ -530,7 +530,7 @@ ${3:-echo hello}
 EOF
 }
 
-# 16. The clean run announces the shellcheck pass and hands it every shell
+# 15. The clean run announces the shellcheck pass and hands it every shell
 #     script in the tree, the linter itself included.
 r="$(new_repo)"
 good_workflow "$r" ci
@@ -543,16 +543,13 @@ expect_contains "$r/stub.log" "automation/dispatch.sh" \
 expect_contains "$r/stub.log" "scripts/lint-workflows.sh" \
   "shellcheck is handed the linter itself"
 
-# 17. shellcheck's findings fail the script, like actionlint's do.
+# 16. shellcheck's findings fail the script, like actionlint's do.
 r="$(new_repo)"
 good_workflow "$r" ci
 STUB_SHELLCHECK_EXIT=1 run_lint "$r"
 expect_not_contains "$r/exit-code" "0" "a shellcheck finding fails the script"
 
-# (18-20, which copy of shellcheck runs and that both follow sourced files
-#  with -x, are the tool matrix below.)
-
-# 21. No severity filter. shellcheck's `info` tier holds SC2086 and friends,
+# 17. No severity filter. shellcheck's `info` tier holds SC2086 and friends,
 #     so a `--severity` floor would trade real bugs for quiet — including
 #     quiet about the version-skew false positives it is tempting to reach
 #     for it over (see the disable on cleanup() above). Those get a
@@ -568,7 +565,7 @@ STUB_PATH="$STUB_BIN" run_lint "$r"
 expect_not_contains "$r/stub.log" "--severity" \
   "a local shellcheck runs with no severity filter"
 
-# 22. Dependency and build trees are not ours to lint — thousands of vendored
+# 18. Dependency and build trees are not ours to lint — thousands of vendored
 #     scripts would drown the real findings (and slow the check to a crawl).
 r="$(new_repo)"
 good_workflow "$r" ci
@@ -589,7 +586,7 @@ expect_not_contains "$r/stub.log" ".claude" \
 # and would otherwise flag this harness's own fixture text.
 pin='PINNED_IMAGE="busybox:1.36"'
 
-# 23. A pinned image with no `# renovate:` annotation above it is invisible
+# 19. A pinned image with no `# renovate:` annotation above it is invisible
 #     to renovate and would rot silently, so the lint rejects it.
 r="$(new_repo)"
 good_workflow "$r" ci
@@ -601,7 +598,7 @@ expect_contains "$r/out" "scripts/thing.sh" \
 expect_contains "$r/out" "renovate" \
   "an unannotated image pin says what is missing"
 
-# 24. With the annotation renovate needs, the same pin is fine.
+# 20. With the annotation renovate needs, the same pin is fine.
 r="$(new_repo)"
 good_workflow "$r" ci
 extra_script "$r" scripts/thing.sh "# renovate: datasource=docker
@@ -609,7 +606,7 @@ $pin"
 run_lint "$r"
 expect_eq "$(cat "$r/exit-code")" 0 "an annotated image pin is accepted"
 
-# 25. The annotation has to be the renovate one — an ordinary comment above
+# 21. The annotation has to be the renovate one — an ordinary comment above
 #     the pin must not satisfy the check.
 r="$(new_repo)"
 good_workflow "$r" ci
@@ -619,7 +616,7 @@ run_lint "$r"
 expect_not_contains "$r/exit-code" "0" \
   "an ordinary comment does not satisfy the annotation check"
 
-# 26. An assignment with no pinned tag (an image chosen at runtime) has
+# 22. An assignment with no pinned tag (an image chosen at runtime) has
 #     nothing for renovate to track, so it must not be flagged.
 r="$(new_repo)"
 good_workflow "$r" ci
@@ -639,7 +636,7 @@ expect_eq "$(cat "$r/exit-code")" 0 \
 # probe so a run answers with the pins and nothing else — that is what CI
 # passes, which makes the pins the single source of truth for "clean".
 
-# 27. The tool matrix: for each combination of installed tools and forcing
+# 23. The tool matrix: for each combination of installed tools and forcing
 #     switch, which copy of every tool ran, and that it ran with its flags
 #     (the table is tool_row above). Each tool is probed on its own, so a
 #     missing one falls back without dragging the others along; --images and
@@ -668,7 +665,7 @@ tool_case "KARI_LINT_FORCE_IMAGES=1" "$STUB_BIN" 1 "" image image image
 tool_case "KARI_LINT_FORCE_IMAGES=true" "$STUB_BIN" true "" image image image
 tool_case "KARI_LINT_FORCE_IMAGES=0" "$STUB_BIN" 0 "" local local local
 
-# 32. Forcing the pins without docker fails, and fails before running
+# 24. Forcing the pins without docker fails, and fails before running
 #     anything: silently falling back to the local binaries would hand back
 #     exactly the answer the flag was used to avoid.
 r="$(new_repo)"
@@ -684,7 +681,7 @@ expect_eq "$(wc -c < "$r/stub.log")" 0 \
 STUB_PATH="$NO_DOCKER_BIN" run_lint "$r"
 expect_eq "$(cat "$r/exit-code")" 0 "the same tree without --images is clean"
 
-# 33. --help documents the flag; an undiscoverable switch is one nobody
+# 25. --help documents the flag; an undiscoverable switch is one nobody
 #     reaches for when a local run disagrees with CI.
 r="$(new_repo)"
 good_workflow "$r" ci
@@ -698,7 +695,7 @@ expect_contains "$r/out" "KARI_LINT_FORCE_IMAGES" \
 # limitation), so the calling step is the only place its setup can be
 # bounded separately from the job.
 
-# 34. A `uses: ./...` step without one is named, with its job; third-party
+# 26. A `uses: ./...` step without one is named, with its job; third-party
 #     actions and local callers that set one are not flagged.
 r="$(new_repo)"
 cat > "$r/.github/workflows/ci.yml" <<'EOF'
@@ -728,7 +725,7 @@ expect_not_contains "$r/out" '"Bounded stack"' \
 expect_not_contains "$r/out" "checkout" \
   "a third-party action step needs no timeout"
 
-# 35. An unnamed step is identified by position, and the value has to be a
+# 27. An unnamed step is identified by position, and the value has to be a
 #     positive integer like the job-level one.
 r="$(new_repo)"
 cat > "$r/.github/workflows/ci.yml" <<'EOF'
@@ -752,7 +749,7 @@ expect_contains "$r/out" "positive integer" \
 
 # --- image pins quoted inside heredocs (#338) -------------------------------
 
-# 36. A pin-shaped line in a heredoc body is text, not an assignment, so it
+# 28. A pin-shaped line in a heredoc body is text, not an assignment, so it
 #     needs no annotation — but the check resumes after the terminator, and
 #     a here-string (<<<) opens nothing.
 r="$(new_repo)"
@@ -773,7 +770,7 @@ expect_not_contains "$r/out" "scripts/usage.sh:6:" \
 expect_contains "$r/out" "scripts/usage.sh:9:" \
   "a pin after the heredocs and a here-string is still flagged"
 
-# 37. A `<<WORD` in a comment opens nothing, and a heredoc that never closes
+# 29. A `<<WORD` in a comment opens nothing, and a heredoc that never closes
 #     fails loudly: a line scan that misread an opener must not quietly
 #     exempt the rest of the file.
 # Built from a variable so this file's own source holds no unclosed opener.
@@ -796,7 +793,7 @@ expect_contains "$r/out" "never closed" "an unclosed heredoc says so"
 printf -v cols80 '%80s' ''
 cols80="${cols80// /x}"
 
-# 37. A shell script line of 81 characters fails, naming file and line; one
+# 30. A shell script line of 81 characters fails, naming file and line; one
 #     of exactly 80 is fine.
 r="$(new_repo)"
 good_workflow "$r" ci
@@ -810,7 +807,7 @@ expect_contains "$r/out" "80 characters" \
   "an 81-character line names the limit"
 expect_not_contains "$r/out" "fits.sh" "an 80-character line is fine"
 
-# 38. Width is counted in characters, not bytes: an em dash is three bytes
+# 31. Width is counted in characters, not bytes: an em dash is three bytes
 #     of UTF-8 and one column.
 r="$(new_repo)"
 good_workflow "$r" ci
@@ -823,7 +820,7 @@ run_lint "$r"
 expect_contains "$r/out" "scripts/wide.sh:2:" \
   "an 81-character line holding multibyte characters fails"
 
-# 39. Workflow and composite-action YAML is held to the same width.
+# 32. Workflow and composite-action YAML is held to the same width.
 r="$(new_repo)"
 good_workflow "$r" ci
 printf '# %s\n' "$cols80" >> "$r/.github/workflows/ci.yml"
@@ -838,7 +835,7 @@ expect_contains "$r/out" ".github/actions/stack/action.yml:2:" \
 
 # --- the harness's own PATH guard (#357, #385) ------------------------------
 
-# 40. A lint that calls something off CORE_BIN_CMDS is caught even when, as
+# 33. A lint that calls something off CORE_BIN_CMDS is caught even when, as
 #     here, it discards the result and the lint itself still passes — which
 #     is exactly why the guard cannot rely on the lint failing.
 r="$(new_repo)"

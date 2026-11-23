@@ -4,7 +4,7 @@
 #
 #   scripts/lint-workflows.sh
 #
-# Four checks, all of which CI runs through this same script:
+# Five checks, all of which CI runs through this same script:
 #
 #   1. actionlint — workflow schema, action inputs, ${{ }} expressions, and
 #      a shellcheck pass over each embedded `run:` script.
@@ -12,7 +12,9 @@
 #      `timeout-minutes`. Without one a hung step runs toward GitHub's
 #      6-hour default (see the comment at the top of ci.yml). Jobs that call
 #      a reusable workflow (`uses:` at the job level) are exempt: Actions
-#      rejects timeout-minutes on those.
+#      rejects timeout-minutes on those. Every step that calls a local
+#      action (`uses: ./...`) needs a step-level one as well: a composite
+#      action cannot bound its own steps (issue #387).
 #   3. shellcheck over every *.sh in the repo (scripts/, automation/, the
 #      CodeDeploy hooks). actionlint only sees the shell embedded in
 #      workflows; these are the scripts that shell calls out to. Findings
@@ -23,7 +25,10 @@
 #   4. Annotated image pins — every pinned docker image in those scripts
 #      needs a `# renovate: datasource=docker` comment above it, which is
 #      what renovate.json's customManager keys off. Without one the pin is
-#      invisible to renovate and rots silently (issue #327).
+#      invisible to renovate and rots silently (issue #327). Pin-shaped
+#      lines inside heredocs are text, not pins, and are skipped.
+#   5. Line width — no line of a shell script or of the YAML under .github
+#      is over 80 characters, the convention AGENTS.md sets (issue #338).
 #
 # Nothing has to be installed locally: whenever a binary is missing from
 # PATH, actionlint/shellcheck run from their images and the YAML parse from
