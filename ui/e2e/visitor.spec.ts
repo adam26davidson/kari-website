@@ -363,11 +363,13 @@ test("home page: the shell is the only thing that scrolls (desktop)", async ({
 test("home page: the shell is the only thing that scrolls (mobile)", async ({
   page,
 }) => {
-  // The column card is short on a phone — the seeded photo shrinks to the
-  // card's width — so it takes a squat viewport to push it past the shell:
-  // at 390px wide the card measures MOBILE_CARD_PX against a shell of
-  // MOBILE_SHELL_PX at this height.
-  await page.setViewportSize({ width: 390, height: 400 });
+  // The column card is short on a phone — the seeded landscape photo
+  // shrinks to the card's width — so it takes a squat window to push it
+  // past the shell: at 390px wide the card is ~355px tall at any height,
+  // and the shell under the header is the viewport minus ~67px. 340px
+  // leaves a ~273px shell, so the card overflows by ~80px; 844 (a real
+  // phone) fits it with 400px to spare and would prove nothing.
+  await page.setViewportSize({ width: 390, height: 340 });
   await expectHomeShellIsTheOnlyScroller(page);
 });
 
