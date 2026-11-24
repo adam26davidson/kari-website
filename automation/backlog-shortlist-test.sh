@@ -221,7 +221,8 @@ work="$(new_work)"
   issue 216 16 ""                             # left in maintainer
 } >"$work/response.ndjson"
 run_shortlist "$work"
-expect_eq "$(jq -c '.user_feedback | map(.number)' "$work/out")" "[210,211,212]" \
+expect_eq "$(jq -c '.user_feedback | map(.number)' "$work/out")" \
+  "[210,211,212]" \
   "user-feedback: takes every ready one, whatever else it carries"
 expect_eq "$(jq -c '.priority | map(.number)' "$work/out")" "[213]" \
   "user-feedback: the maintainer's own label still comes first"
@@ -244,7 +245,8 @@ work="$(new_work)"
   issue 222 03 "user-feedback"
 } >"$work/response.ndjson"
 PRODUCT_LIMIT=1 TOOLING_LIMIT=1 run_shortlist "$work"
-expect_eq "$(jq -c '.user_feedback | map(.number)' "$work/out")" "[220,221,222]" \
+expect_eq "$(jq -c '.user_feedback | map(.number)' "$work/out")" \
+  "[220,221,222]" \
   "user-feedback: uncapped, like priority and bugs"
 
 # --- unblocks: from bodies, from comments, open blockers only -----------
@@ -292,9 +294,14 @@ work="$(new_work)"
   issue 321 06 "has-dependencies" "dep" \
     "Part of #212. **Blocked by #319** (admin app split)."
 } >"$work/response.ndjson"
-comments_for "$work" 321 \
-  "Dependency repointed: #319 was closed in favour of three sequenced sub-issues. This issue's real prerequisite is now #320, which itself depends on #318. Keep \`has-dependencies\` until #320 ships." \
-  "backlog-grooming: re-pointing this issue's blocker. The live blocker is **#320**: until Tailwind and shadcn are installed there is nothing here to rebuild against."
+repointed="Dependency repointed: #319 was closed in favour of three"
+repointed+=" sequenced sub-issues. This issue's real prerequisite is now #320,"
+repointed+=" which itself depends on #318. Keep \`has-dependencies\` until #320"
+repointed+=" ships."
+grooming="backlog-grooming: re-pointing this issue's blocker. The live"
+grooming+=" blocker is **#320**: until Tailwind and shadcn are installed there"
+grooming+=" is nothing here to rebuild against."
+comments_for "$work" 321 "$repointed" "$grooming"
 run_shortlist "$work"
 expect_eq "$(jq -c '.product | map({number, unblocks})' "$work/out")" \
   '[{"number":320,"unblocks":1}]' \

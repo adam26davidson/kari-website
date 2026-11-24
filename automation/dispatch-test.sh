@@ -83,20 +83,24 @@ EOF
 run_dispatch() { # <workdir> [args...] — output in <workdir>/out
   local work="$1"
   shift
+  local inhibit="${KARI_AUTOMATION_INHIBIT_BIN:-/nonexistent/systemd-inhibit}"
+  local run_bin="${KARI_AUTOMATION_SYSTEMD_RUN_BIN:-/nonexistent/systemd-run}"
+  local systemctl="${KARI_AUTOMATION_SYSTEMCTL_BIN:-/nonexistent/systemctl}"
+  local bg_ceiling="${KARI_AUTOMATION_BG_WAIT_CEILING_MS:-5400000}"
   KARI_AUTOMATION_STATE_DIR="$work/state" \
   KARI_AUTOMATION_AGENTS_DIR="$work/agents" \
   KARI_AUTOMATION_PAUSE_FILE="$work/PAUSE" \
   KARI_AUTOMATION_CLAUDE_BIN="${STUB_CLAUDE:-$TRIPWIRE_CLAUDE}" \
   KARI_AUTOMATION_JQ_BIN="${STUB_JQ:-jq}" \
   KARI_AUTOMATION_DUE_TOLERANCE="${DUE_TOLERANCE:-}" \
-  KARI_AUTOMATION_INHIBIT_BIN="${KARI_AUTOMATION_INHIBIT_BIN:-/nonexistent/systemd-inhibit}" \
-  KARI_AUTOMATION_SYSTEMD_RUN_BIN="${KARI_AUTOMATION_SYSTEMD_RUN_BIN:-/nonexistent/systemd-run}" \
-  KARI_AUTOMATION_SYSTEMCTL_BIN="${KARI_AUTOMATION_SYSTEMCTL_BIN:-/nonexistent/systemctl}" \
+  KARI_AUTOMATION_INHIBIT_BIN="$inhibit" \
+  KARI_AUTOMATION_SYSTEMD_RUN_BIN="$run_bin" \
+  KARI_AUTOMATION_SYSTEMCTL_BIN="$systemctl" \
   KARI_AUTOMATION_SELF_UPDATE="${SELF_UPDATE:-0}" \
   KARI_TELEGRAM_BOT_TOKEN='' KARI_TELEGRAM_CHAT_ID='' \
   KARI_AUTOMATION_TELEGRAM_BIN="${STUB_TELEGRAM:-$QUIET_TELEGRAM}" \
   KARI_AUTOMATION_LOCK_ALERT_SLACK="${KARI_AUTOMATION_LOCK_ALERT_SLACK:-1800}" \
-  KARI_AUTOMATION_BG_WAIT_CEILING_MS="${KARI_AUTOMATION_BG_WAIT_CEILING_MS:-5400000}" \
+  KARI_AUTOMATION_BG_WAIT_CEILING_MS="$bg_ceiling" \
     bash "$DISPATCH" "$@" >"$work/out" 2>&1
   echo $? >"$work/exit-code"
 }
@@ -613,7 +617,8 @@ expect_file "$STUB_OUT.fable" \
 STUB_INHIBIT="$STUB_DIR/inhibit-stub"
 cat >"$STUB_INHIBIT" <<'EOF'
 #!/usr/bin/env bash
-# Records its own flags, then runs the wrapped command so the launch still works.
+# Records its own flags, then runs the wrapped command so the launch still
+# works.
 args=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -1042,7 +1047,8 @@ DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=1 run_launch "$w"
 expect_eq "$(head_of "$CLONE")" "$(head_of "$ORIGIN" main)" \
   "tick fast-forwards the clone to origin/main"
 expect_contains "$w/out" "self-update:" "tick reports the fast-forward"
-expect_contains "$w/out" "run issue-pipeline" "tick still launches after updating"
+expect_contains "$w/out" "run issue-pipeline" \
+  "tick still launches after updating"
 
 # 12b. Already current: quiet, no self-update line.
 DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=1 run_launch "$w"
@@ -1073,7 +1079,8 @@ write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
 DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=1 run_launch "$w"
 expect_eq "$(head_of "$CLONE")" "$before" "diverged clone keeps its commits"
 expect_contains "$w/out" "cannot fast-forward" "divergence is reported"
-expect_contains "$w/out" "run issue-pipeline" "tick still launches when diverged"
+expect_contains "$w/out" "run issue-pipeline" \
+  "tick still launches when diverged"
 
 # 12e. Remote unreachable: warns, ticks on the current checkout.
 w="$(new_work)"
@@ -1081,7 +1088,8 @@ new_repo_pair "$w"
 rm -rf "$ORIGIN"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
 DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=1 run_launch "$w"
-expect_contains "$w/out" "fetch of origin/main failed" "fetch failure is reported"
+expect_contains "$w/out" "fetch of origin/main failed" \
+  "fetch failure is reported"
 expect_contains "$w/out" "run issue-pipeline" "tick still launches offline"
 expect_eq "$(cat "$w/exit-code")" 0 "fetch failure does not fail the tick"
 
@@ -1091,8 +1099,10 @@ new_repo_pair "$w"
 push_upstream_commit "$w"
 before="$(head_of "$CLONE")"
 write_agent "$w" issue-pipeline.md issue-pipeline true 1h fable
-DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=1 run_dispatch "$w" --dry-run
-DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=1 run_dispatch "$w" --status
+DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=1 \
+  run_dispatch "$w" --dry-run
+DISPATCH="$CLONE/automation/dispatch.sh" SELF_UPDATE=1 \
+  run_dispatch "$w" --status
 expect_eq "$(head_of "$CLONE")" "$before" "diagnostic modes do not update"
 expect_no_launch "diagnostic modes reach no launch"
 
@@ -1182,11 +1192,11 @@ expect_contains "$w/stub-out" "--output-format json" \
 expect_contains "$log" "a warning on stderr" "stderr still streams to the log"
 expect_contains "$log" "Run summary: merged #1, claimed #2." \
   "the result text is folded into the log"
+tokens="input=10 output=40 cache_read=3000 cache_create=200"
 expect_contains "$log" \
-  "usage: cost_usd=1.25 turns=7 duration_s=61 input=10 output=40 cache_read=3000 cache_create=200 error=false" \
+  "usage: cost_usd=1.25 turns=7 duration_s=61 $tokens error=false" \
   "the usage line sums the session"
-expect_contains "$log" \
-  "usage claude-fable-5: cost_usd=1.25 input=10 output=40 cache_read=3000 cache_create=200" \
+expect_contains "$log" "usage claude-fable-5: cost_usd=1.25 $tokens" \
   "one usage line per model"
 expect_eq "$(tail -n1 "$log")" "tick exited 0" \
   "the trailer still closes the log after the usage lines"

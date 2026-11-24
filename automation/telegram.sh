@@ -42,7 +42,8 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-STATE_DIR="${KARI_AUTOMATION_STATE_DIR:-$HOME/.local/state/kari-website-automation}"
+STATE_DIR="${KARI_AUTOMATION_STATE_DIR:-}"
+STATE_DIR="${STATE_DIR:-$HOME/.local/state/kari-website-automation}"
 PAUSE_FILE="${KARI_AUTOMATION_PAUSE_FILE:-$REPO_ROOT/automation/PAUSE}"
 DISPATCH_BIN="${KARI_TELEGRAM_DISPATCH_BIN:-$REPO_ROOT/automation/dispatch.sh}"
 CURL="${KARI_TELEGRAM_CURL:-curl}"

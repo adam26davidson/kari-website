@@ -85,8 +85,8 @@ DEPENDENT_LIMIT="${KARI_SHORTLIST_DEPENDENT_LIMIT:-50}"
 # the read is complete however large the backlog grows. A gh failure
 # fails the assignment and, via set -e, the script — Phase B must stop
 # on a partial view, never act on one.
-raw="$("$GH_BIN" api --paginate \
-  'repos/{owner}/{repo}/issues?state=open&sort=created&direction=asc&per_page=100' \
+query='state=open&sort=created&direction=asc&per_page=100'
+raw="$("$GH_BIN" api --paginate "repos/{owner}/{repo}/issues?$query" \
   --jq '.[]')"
 
 # The blocked issues, oldest first — the only ones whose comments say
@@ -140,7 +140,8 @@ printf '%s\n' "$raw" | "$JQ_BIN" -s \
   def blocker_refs:
     [ ascii_downcase
       | splits("[.\n]")
-      | select(test("depends on|depend on|dependent on|blocked by|blocked on|waiting on|waits on|blocker|prerequisite"))
+      | select(test("depends on|depend on|dependent on|blocked by|"
+          + "blocked on|waiting on|waits on|blocker|prerequisite"))
       | scan("#([0-9]+)")
       | .[0]
       | tonumber

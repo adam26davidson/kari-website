@@ -26,7 +26,9 @@ permissions:
 # before a job starts, so it does not count against these.)
 jobs:
   build:
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     # Observed: ~5 min (two frontend builds + an aarch64 cross-compile).
     timeout-minutes: 30
@@ -52,7 +54,8 @@ jobs:
           # Baked into both bundles so the app knows which commit it runs
           # (the staging build's /admin/whats-on-test page compares it against
           # the latest successful production deployment).
-          VITE_COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          VITE_COMMIT_SHA: >-
+            ${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           npm ci
           npm run build:staging
@@ -82,9 +85,11 @@ jobs:
       - name: Assemble deploy bundles
         run: |
           for env in test prod; do
-            rm -rf "bundle-$env" && mkdir -p "bundle-$env/scripts" "bundle-$env/repo"
+            rm -rf "bundle-$env" &&
+              mkdir -p "bundle-$env/scripts" "bundle-$env/repo"
             cp -r scripts/deploy "bundle-$env/scripts/deploy"
-            cp api/target/aarch64-unknown-linux-gnu/release/kari-website-api "bundle-$env/kari-website-api"
+            cp api/target/aarch64-unknown-linux-gnu/release/kari-website-api \
+              "bundle-$env/kari-website-api"
             # The admin helper's read-only view of the codebase
             # (api/src/services/repo_tools.rs). HEAD is the commit this run
             # checked out — the exact one being deployed — so the snapshot
@@ -141,15 +146,16 @@ jobs:
           # upload/download-artifact drops file modes; CodeDeploy executes the
           # hook scripts directly, so restore the executable bit first.
           chmod +x bundle/scripts/deploy/*.sh
+          BUCKET=kari-website-deploy-336231940806
           KEY="kari-website/test/${GITHUB_SHA}.zip"
           aws deploy push \
             --application-name kari-website \
-            --s3-location "s3://kari-website-deploy-336231940806/${KEY}" \
+            --s3-location "s3://${BUCKET}/${KEY}" \
             --source bundle
           DID=$(aws deploy create-deployment \
             --application-name kari-website \
             --deployment-group-name kari-website-test \
-            --s3-location "bucket=kari-website-deploy-336231940806,key=${KEY},bundleType=zip" \
+            --s3-location "bucket=${BUCKET},key=${KEY},bundleType=zip" \
             --file-exists-behavior OVERWRITE \
             --description "GHA test ${GITHUB_SHA}" \
             --query deploymentId --output text)
@@ -187,15 +193,16 @@ jobs:
       - name: Upload bundle and create prod deployment
         run: |
           chmod +x bundle/scripts/deploy/*.sh
+          BUCKET=kari-website-deploy-336231940806
           KEY="kari-website/${GITHUB_SHA}.zip"
           aws deploy push \
             --application-name kari-website \
-            --s3-location "s3://kari-website-deploy-336231940806/${KEY}" \
+            --s3-location "s3://${BUCKET}/${KEY}" \
             --source bundle
           DID=$(aws deploy create-deployment \
             --application-name kari-website \
             --deployment-group-name kari-website-cd \
-            --s3-location "bucket=kari-website-deploy-336231940806,key=${KEY},bundleType=zip" \
+            --s3-location "bucket=${BUCKET},key=${KEY},bundleType=zip" \
             --file-exists-behavior OVERWRITE \
             --description "GHA ${GITHUB_SHA}" \
             --query deploymentId --output text)

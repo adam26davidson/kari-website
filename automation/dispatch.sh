@@ -69,7 +69,8 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AGENTS_DIR="${KARI_AUTOMATION_AGENTS_DIR:-$REPO_ROOT/automation/agents}"
-STATE_DIR="${KARI_AUTOMATION_STATE_DIR:-$HOME/.local/state/kari-website-automation}"
+STATE_DIR="${KARI_AUTOMATION_STATE_DIR:-}"
+STATE_DIR="${STATE_DIR:-$HOME/.local/state/kari-website-automation}"
 PAUSE_FILE="${KARI_AUTOMATION_PAUSE_FILE:-$REPO_ROOT/automation/PAUSE}"
 CLAUDE_BIN="${KARI_AUTOMATION_CLAUDE_BIN:-claude}"
 JQ_BIN="${KARI_AUTOMATION_JQ_BIN:-jq}"
@@ -103,7 +104,8 @@ RETRY_COST_LIMIT="${KARI_AUTOMATION_RETRY_COST_LIMIT:-2}"
 # the top of every tick, and sent the mechanical alerts below. Nothing on
 # this path may fail a tick — an unconfigured or unreachable transport
 # means a fleet that runs silently, never a fleet that stops.
-TELEGRAM_BIN="${KARI_AUTOMATION_TELEGRAM_BIN:-$REPO_ROOT/automation/telegram.sh}"
+TELEGRAM_BIN="${KARI_AUTOMATION_TELEGRAM_BIN:-}"
+TELEGRAM_BIN="${TELEGRAM_BIN:-$REPO_ROOT/automation/telegram.sh}"
 ALERT_INTERVAL="${KARI_TELEGRAM_ALERT_INTERVAL:-4h}"
 # Extra seconds on top of the background-wait ceiling before a held lock
 # reads as a hang. The ceiling only bounds how long claude waits for
@@ -774,7 +776,8 @@ self_update() {
     return 0
   fi
   if ! git -C "$REPO_ROOT" fetch -q origin main 2>/dev/null; then
-    echo "warn: fetch of origin/main failed; running on the current checkout" >&2
+    echo "warn: fetch of origin/main failed; running on the current" \
+      "checkout" >&2
     return 0
   fi
   local before after
@@ -863,7 +866,8 @@ for agent_file in "$AGENTS_DIR"/*.md; do
 
   now="$(date +%s)"
   last=0
-  [ -f "$STATE_DIR/$name.last-run" ] && last="$(cat "$STATE_DIR/$name.last-run")"
+  [ -f "$STATE_DIR/$name.last-run" ] &&
+    last="$(cat "$STATE_DIR/$name.last-run")"
   # Clamped so a tolerance wider than the interval just means "every poll"
   # rather than a negative threshold.
   due_after=$((secs - DUE_TOLERANCE))

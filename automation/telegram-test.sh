@@ -85,8 +85,8 @@ EOF
 
 # TOKEN/CHAT_ID are overridable per call (TOKEN= exercises the
 # unconfigured no-op). CURL_LOG, RESPONSE_DIR, GH_LOG and DISPATCH_LOG
-# ride along in the environment: telegram.sh execs the stubs directly, so the prefix's
-# environment is what they see.
+# ride along in the environment: telegram.sh execs the stubs directly, so
+# the prefix's environment is what they see.
 run_telegram() { # <workdir> [args...] — stdout in <workdir>/out, stderr in err
   local work="$1"
   shift

@@ -120,7 +120,9 @@ runs:
         # Exact match only, deliberately: a restore-keys near-miss would
         # restore a stale browser build that then has to be downloaded
         # anyway, paying the restore for nothing.
-        key: playwright-browsers-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+        key: >-
+          ${{ format('playwright-browsers-{0}-{1}', runner.os,
+          steps.playwright-version.outputs.version) }}
 
     - name: Install Playwright browsers
       if: steps.playwright-cache.outputs.cache-hit != 'true'

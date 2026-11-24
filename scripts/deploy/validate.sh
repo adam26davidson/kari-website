@@ -6,7 +6,8 @@ set -e
 # shellcheck source=scripts/deploy/env.sh
 . "$(dirname "$0")/env.sh"
 for i in $(seq 1 15); do
-  code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${API_PORT}/health" || true)
+  code=$(curl -s -o /dev/null -w "%{http_code}" \
+    "http://127.0.0.1:${API_PORT}/health" || true)
   if [ "$code" = "200" ]; then
     echo "API healthy (HTTP 200) after ${i} attempt(s)"
     exit 0
