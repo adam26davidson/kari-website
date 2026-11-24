@@ -328,15 +328,15 @@ test("list pages: the shell is the only thing that scrolls (mobile)", async ({
   });
 });
 
-test("home page: the shell is the only thing that scrolls (desktop)", async ({
-  page,
-}) => {
-  // Desktop width on purpose: it is the cheapest viewport that overflows.
-  // The card lays its 400px-capped photo out BESIDE the blurb here, so a
-  // 420px-tall window cannot fit it; the centring this guards against is
-  // `.home-page`'s and applies at every width (#634 dropped the mobile
-  // `justify-content: flex-start` override), so one width proves it.
-  await page.setViewportSize({ width: 1000, height: 420 });
+// The home page runs at both widths. The centring this guards against is
+// `.home-page`'s and is unconditional (#634 dropped the mobile
+// `justify-content: flex-start` override), but below 768px the wrapper
+// also carries `.mobile` and the card lays out in a column — a selector
+// space the desktop case never enters, and the static grower check in
+// `test/design/scroll-containers.test.ts` only reads the bare `.home-page`
+// rule. So a `.home-page.mobile` height or alignment override could clip
+// the phone layout while the desktop case stays green (#956).
+async function expectHomeShellIsTheOnlyScroller(page: Page) {
   await page.goto("/");
   const photo = page.locator(".home-page-photo");
   await expect(photo).toBeVisible();
@@ -349,6 +349,28 @@ test("home page: the shell is the only thing that scrolls (desktop)", async ({
     card: ".home-page-card",
     layers: [".home-page"],
   });
+}
+
+test("home page: the shell is the only thing that scrolls (desktop)", async ({
+  page,
+}) => {
+  // The card lays its 400px-capped photo out BESIDE the blurb here, so a
+  // 420px-tall window cannot fit it.
+  await page.setViewportSize({ width: 1000, height: 420 });
+  await expectHomeShellIsTheOnlyScroller(page);
+});
+
+test("home page: the shell is the only thing that scrolls (mobile)", async ({
+  page,
+}) => {
+  // The column card is short on a phone — the seeded landscape photo
+  // shrinks to the card's width — so it takes a squat window to push it
+  // past the shell: at 390px wide the card is ~355px tall at any height,
+  // and the shell under the header is the viewport minus ~67px. 340px
+  // leaves a ~273px shell, so the card overflows by ~80px; 844 (a real
+  // phone) fits it with 400px to spare and would prove nothing.
+  await page.setViewportSize({ width: 390, height: 340 });
+  await expectHomeShellIsTheOnlyScroller(page);
 });
 
 // The site-wide keyboard focus ring (#501). jsdom cannot decide
